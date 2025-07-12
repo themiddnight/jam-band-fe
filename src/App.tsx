@@ -1,9 +1,9 @@
-import Piano from './components/Piano';
+import Keyboard from "./components/VirtualKeyboard";
 
 function App() {
   return (
     <div>
-      <Piano />
+      <Keyboard />
     </div>
   );
 }
