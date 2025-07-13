@@ -55,6 +55,8 @@ export default function Keyboard({
     handleVirtualKeyRelease,
     handleTriadPress,
     handleTriadRelease,
+    handleModifierPress,
+    handleModifierRelease,
   } = virtualKeyboard;
 
   // Create a keyboard state object that matches the interface expected by useKeyboardKeyboard
@@ -141,6 +143,8 @@ export default function Keyboard({
           onKeyRelease={handleVirtualKeyRelease}
           onTriadPress={handleTriadPress}
           onTriadRelease={handleTriadRelease}
+          onModifierPress={handleModifierPress}
+          onModifierRelease={handleModifierRelease}
         />
       );
     } else if (mainMode === "simple") {

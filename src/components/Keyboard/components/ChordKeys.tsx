@@ -12,6 +12,8 @@ interface ChordKeysProps {
   onKeyRelease: (key: KeyboardKey) => void;
   onTriadPress: (index: number) => void;
   onTriadRelease: (index: number) => void;
+  onModifierPress: (modifier: string) => void;
+  onModifierRelease: (modifier: string) => void;
 }
 
 export const ChordKeys: React.FC<ChordKeysProps> = ({
@@ -24,6 +26,8 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
   onKeyRelease,
   onTriadPress,
   onTriadRelease,
+  onModifierPress,
+  onModifierRelease,
 }) => {
   return (
     <div className="flex justify-around gap-3 flex-wrap">
@@ -120,7 +124,10 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
           Chord Modifiers (hold while playing triads)
         </p>
         <div className="flex gap-2 mb-4">
-          <div
+          <button
+            onMouseDown={() => onModifierPress("i")}
+            onMouseUp={() => onModifierRelease("i")}
+            onMouseLeave={() => onModifierRelease("i")}
             className={`px-2 py-1 rounded text-xs ${
               chordModifiers.has("i")
                 ? "bg-yellow-500 text-black"
@@ -128,8 +135,11 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
             }`}
           >
             I (dom7)
-          </div>
-          <div
+          </button>
+          <button
+            onMouseDown={() => onModifierPress("o")}
+            onMouseUp={() => onModifierRelease("o")}
+            onMouseLeave={() => onModifierRelease("o")}
             className={`px-2 py-1 rounded text-xs ${
               chordModifiers.has("o")
                 ? "bg-yellow-500 text-black"
@@ -137,11 +147,14 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
             }`}
           >
             O (maj7)
-          </div>
+          </button>
         </div>
 
         <div className="flex gap-2 mb-4">
-          <div
+          <button
+            onMouseDown={() => onModifierPress("n")}
+            onMouseUp={() => onModifierRelease("n")}
+            onMouseLeave={() => onModifierRelease("n")}
             className={`px-2 py-1 rounded text-xs ${
               chordModifiers.has("n")
                 ? "bg-green-500 text-black"
@@ -149,8 +162,11 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
             }`}
           >
             N (sus2)
-          </div>
-          <div
+          </button>
+          <button
+            onMouseDown={() => onModifierPress("m")}
+            onMouseUp={() => onModifierRelease("m")}
+            onMouseLeave={() => onModifierRelease("m")}
             className={`px-2 py-1 rounded text-xs ${
               chordModifiers.has("m")
                 ? "bg-green-500 text-black"
@@ -158,8 +174,11 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
             }`}
           >
             M (sus4)
-          </div>
-          <div
+          </button>
+          <button
+            onMouseDown={() => onModifierPress(".")}
+            onMouseUp={() => onModifierRelease(".")}
+            onMouseLeave={() => onModifierRelease(".")}
             className={`px-2 py-1 rounded text-xs ${
               chordModifiers.has(".")
                 ? "bg-blue-500 text-black"
@@ -167,7 +186,7 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
             }`}
           >
             . (maj/min)
-          </div>
+          </button>
         </div>
       </div>
       

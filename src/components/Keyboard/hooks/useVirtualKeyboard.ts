@@ -34,35 +34,119 @@ export const useVirtualKeyboard = (
       scaleType: Scale,
       degree: number,
       numNotes: number,
-      voicing: number = 0
+      voicing: number = 0,
+      modifiers: Set<string> = new Set()
     ): string[] => {
-      const baseOctave = currentOctave + voicing;
+      const allNotes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+      const getNoteIndex = (note: string) => {
+        if (!note) return 0;
+        const noteName = note.slice(0, -1);
+        const octave = parseInt(note.slice(-1));
+        return allNotes.indexOf(noteName) + octave * 12;
+      };
+      const getNoteFromIndex = (index: number) => {
+        const noteName = allNotes[index % 12];
+        const octave = Math.floor(index / 12);
+        return `${noteName}${octave}`;
+      };
+
+      const baseOctave = 3 + voicing;
       const scaleNotes = getScaleNotes(root, scaleType, baseOctave);
-      const rootNote = scaleNotes[degree % 7];
+      const wideScaleNotes = [
+          ...getScaleNotes(root, scaleType, baseOctave-1), 
+          ...scaleNotes, 
+          ...getScaleNotes(root, scaleType, baseOctave+1)
+        ];
 
-      const chordNotes: string[] = [rootNote];
+      const rootNoteOfChord = scaleNotes[degree % 7];
 
-      // Build the basic triad (or more)
-      for (let i = 1; i < numNotes; i++) {
-        const noteIndex = (degree + i * 2) % 7;
-        const note = scaleNotes[noteIndex];
+      const scaleNoteNames = getScaleNotes(root, scaleType, 0).map(n => n.slice(0, -1));
 
-        // Ensure notes are in the correct octave relative to the root
-        const rootNoteNumber = parseInt(rootNote.match(/(\d+)/)?.[0] || "0");
-        const currentNoteNumber = parseInt(note.match(/(\d+)/)?.[0] || "0");
+      // Determine original quality from diatonic interval
+      const rootNoteName = scaleNoteNames[degree % 7];
+      const thirdNoteNameFromScale = scaleNoteNames[(degree + 2) % 7];
 
-        if (currentNoteNumber < rootNoteNumber) {
-          chordNotes.push(
-            note.replace(/\d+/, (currentNoteNumber + 1).toString())
-          );
-        } else {
-          chordNotes.push(note);
+      const rootPitch = allNotes.indexOf(rootNoteName);
+      let thirdPitch = allNotes.indexOf(thirdNoteNameFromScale);
+      if (thirdPitch < rootPitch) thirdPitch += 12;
+
+      const semitoneInterval = thirdPitch - rootPitch;
+      const isOriginallyMajor = semitoneInterval === 4;
+
+      let finalThirdNoteName = thirdNoteNameFromScale;
+
+      if (modifiers.has(".")) {
+        if (isOriginallyMajor) { // originally major, change to minor
+          finalThirdNoteName = allNotes[(allNotes.indexOf(thirdNoteNameFromScale) - 1 + 12) % 12];
+        } else { // originally minor/dim, change to major
+          finalThirdNoteName = allNotes[(allNotes.indexOf(thirdNoteNameFromScale) + 1) % 12];
         }
       }
+      
+      const fifthDegree = (degree + 4) % 7;
+      const fifthNoteName = scaleNoteNames[fifthDegree];
+      
+      let chordNotes: string[] = [rootNoteOfChord];
 
-      return chordNotes;
+      const getNoteByName = (name: string, referenceNote: string) => {
+        const note = wideScaleNotes.find(n => n.startsWith(name) && getNoteIndex(n) >= getNoteIndex(referenceNote));
+        if (!note) {
+            let noteIndex = getNoteIndex(referenceNote) - allNotes.indexOf(referenceNote.slice(0,-1)) + allNotes.indexOf(name);
+            if (noteIndex < getNoteIndex(referenceNote)) noteIndex += 12;
+            return getNoteFromIndex(noteIndex);
+        }
+        return note;
+      };
+      
+      const thirdNote = getNoteByName(finalThirdNoteName, rootNoteOfChord);
+      const fifthNote = getNoteByName(fifthNoteName, rootNoteOfChord);
+      
+      if (modifiers.has("n")) {
+        const secondDegree = (degree + 1) % 7;
+        const secondNoteName = scaleNoteNames[secondDegree];
+        chordNotes.push(getNoteByName(secondNoteName, rootNoteOfChord));
+      } else if (modifiers.has("m")) {
+        const fourthDegree = (degree + 3) % 7;
+        const fourthNoteName = scaleNoteNames[fourthDegree];
+        chordNotes.push(getNoteByName(fourthNoteName, rootNoteOfChord));
+      } else {
+        chordNotes.push(thirdNote);
+      }
+      chordNotes.push(fifthNote);
+
+      chordNotes = [...new Set(chordNotes)];
+      chordNotes.sort((a,b) => getNoteIndex(a) - getNoteIndex(b));
+      
+      const finalChordNotes = chordNotes.map(note => {
+        const noteIndex = getNoteIndex(note);
+        const noteOctave = Math.floor(noteIndex / 12);
+        if (noteOctave < baseOctave) {
+          return getNoteFromIndex(noteIndex + 12);
+        }
+        if (noteOctave > baseOctave) {
+            return getNoteFromIndex(noteIndex - 12);
+        }
+        return note;
+      });
+
+      if (modifiers.has("i")) {
+        const rootNoteIndex = getNoteIndex(rootNoteOfChord);
+        let seventhNoteIndex = rootNoteIndex + 10;
+        const highestNoteIndex = getNoteIndex(finalChordNotes[finalChordNotes.length-1]);
+        if (seventhNoteIndex <= highestNoteIndex) seventhNoteIndex += 12;
+        finalChordNotes.push(getNoteFromIndex(seventhNoteIndex));
+      }
+      if (modifiers.has("o")) {
+        const rootNoteIndex = getNoteIndex(rootNoteOfChord);
+        let seventhNoteIndex = rootNoteIndex + 11;
+        const highestNoteIndex = getNoteIndex(finalChordNotes[finalChordNotes.length-1]);
+        if (seventhNoteIndex <= highestNoteIndex) seventhNoteIndex += 12;
+        finalChordNotes.push(getNoteFromIndex(seventhNoteIndex));
+      }
+
+      return finalChordNotes;
     },
-    [getScaleNotes, currentOctave]
+    [getScaleNotes]
   );
 
   const generateVirtualKeys = useCallback((): KeyboardKey[] => {
@@ -178,7 +262,7 @@ export const useVirtualKeyboard = (
         chordTriadKeys.some((k) => k === key.keyboardKey)
       ) {
         const keyIndex = chordTriadKeys.indexOf(key.keyboardKey!);
-        const chord = getChord(rootNote, scale, keyIndex, 3, chordVoicing);
+        const chord = getChord(rootNote, scale, keyIndex, 3, chordVoicing, chordModifiers);
         onPlayNotes(chord, velocity, true); // isKeyHeld = true for chord keys
       } else {
         onPlayNotes([key.note], velocity, true); // isKeyHeld = true for virtual key presses
@@ -193,6 +277,7 @@ export const useVirtualKeyboard = (
       chordVoicing,
       velocity,
       onPlayNotes,
+      chordModifiers,
     ]
   );
 
@@ -225,12 +310,24 @@ export const useVirtualKeyboard = (
     [mainMode, simpleMode, activeTriadChords, onReleaseKeyHeldNote]
   );
 
+  const handleModifierPress = useCallback((modifier: string) => {
+    setChordModifiers((prev) => new Set(prev).add(modifier));
+  }, []);
+
+  const handleModifierRelease = useCallback((modifier: string) => {
+    setChordModifiers((prev) => {
+      const newSet = new Set(prev);
+      newSet.delete(modifier);
+      return newSet;
+    });
+  }, []);
+
   const handleTriadPress = useCallback(
     (index: number) => {
-      const chord = getChord(rootNote, scale, index, 3, chordVoicing);
+      const chord = getChord(rootNote, scale, index, 3, chordVoicing, chordModifiers);
       onPlayNotes(chord, velocity, true); // isKeyHeld = true for triad presses
     },
-    [rootNote, scale, getChord, chordVoicing, velocity, onPlayNotes]
+    [rootNote, scale, getChord, chordVoicing, velocity, onPlayNotes, chordModifiers]
   );
 
   const handleTriadRelease = useCallback(
@@ -276,5 +373,7 @@ export const useVirtualKeyboard = (
     handleVirtualKeyRelease,
     handleTriadPress,
     handleTriadRelease,
+    handleModifierPress,
+    handleModifierRelease,
   };
 };
