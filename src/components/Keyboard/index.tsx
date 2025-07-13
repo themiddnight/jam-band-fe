@@ -1,13 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
-import { useVirtualKeyboard, chordTriadKeys } from "./hooks/useVirtualKeyboard";
-import { useKeyboardKeyboard } from "./hooks/useKeyboardKeyboard";
+import { useEffect, useState } from "react";
+import { useVirtualKeyboard } from "./hooks/useVirtualKeyboard";
+import { useKeyboardKeysController } from "./hooks/useKeyboardKeysController";
 import { MelodyKeys } from "./components/MelodyKeys";
 import { ChordKeys } from "./components/ChordKeys";
 import { AdvancedKeys } from "./components/AdvancedKeys";
-import type { MainMode, SimpleMode, KeyboardKey } from "./types/keyboard";
 import type { Scale } from "../../hooks/useScaleState";
 
-export interface VirtualKeyboardProps {
+export interface Props {
   // Scale state - the core functionality
   scaleState: {
     rootNote: string;
@@ -23,35 +22,40 @@ export interface VirtualKeyboardProps {
   onSustainChange: (sustain: boolean) => void;
 }
 
-export default function VirtualKeyboard({
+export default function Keyboard({
   scaleState,
   onPlayNotes,
   onStopNotes,
   onStopSustainedNotes,
   onReleaseKeyHeldNote,
   onSustainChange,
-}: VirtualKeyboardProps) {
-  // Internal state management
-  const [mainMode, setMainMode] = useState<MainMode>("simple");
-  const [simpleMode, setSimpleMode] = useState<SimpleMode>("melody");
-  const [currentOctave, setCurrentOctave] = useState<number>(2);
-  const [velocity, setVelocity] = useState<number>(0.7);
+}: Props) {
   const [sustain, setSustain] = useState<boolean>(false);
   const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
   const [heldKeys, setHeldKeys] = useState<Set<string>>(new Set());
-  const [chordVoicing, setChordVoicing] = useState<number>(0);
-  const [chordModifiers, setChordModifiers] = useState<Set<string>>(new Set());
-  const [pressedTriads, setPressedTriads] = useState<Set<number>>(new Set());
-  const [activeTriadChords, setActiveTriadChords] = useState<Map<number, string[]>>(new Map());
 
   const virtualKeyboard = useVirtualKeyboard(
-    mainMode,
-    simpleMode,
     scaleState.getScaleNotes,
     scaleState.rootNote,
     scaleState.scale,
-    currentOctave
+    onPlayNotes,
+    onReleaseKeyHeldNote
   );
+
+  const {
+    mainMode, setMainMode,
+    simpleMode, setSimpleMode,
+    currentOctave, setCurrentOctave,
+    velocity, setVelocity,
+    chordVoicing, setChordVoicing,
+    chordModifiers, setChordModifiers,
+    pressedTriads, setPressedTriads,
+    activeTriadChords, setActiveTriadChords,
+    handleVirtualKeyPress,
+    handleVirtualKeyRelease,
+    handleTriadPress,
+    handleTriadRelease,
+  } = virtualKeyboard;
 
   // Create a keyboard state object that matches the interface expected by useKeyboardKeyboard
   const keyboardState = {
@@ -96,17 +100,21 @@ export default function VirtualKeyboard({
     },
   };
 
-  const { handleKeyDown, handleKeyUp } = useKeyboardKeyboard(keyboardState, scaleState, {
-    ...virtualKeyboard,
-    chordVoicing,
-    setChordVoicing,
-    chordModifiers,
-    setChordModifiers,
-    pressedTriads,
-    setPressedTriads,
-    activeTriadChords,
-    setActiveTriadChords,
-  });
+  const { handleKeyDown, handleKeyUp } = useKeyboardKeysController(
+    keyboardState,
+    scaleState,
+    {
+      ...virtualKeyboard,
+      chordVoicing,
+      setChordVoicing,
+      chordModifiers,
+      setChordModifiers,
+      pressedTriads,
+      setPressedTriads,
+      activeTriadChords,
+      setActiveTriadChords,
+    }
+  );
 
   useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
@@ -117,39 +125,6 @@ export default function VirtualKeyboard({
       window.removeEventListener("keyup", handleKeyUp);
     };
   }, [handleKeyDown, handleKeyUp]);
-
-  const handleVirtualKeyPress = useCallback((key: KeyboardKey) => {
-    if (
-      mainMode === "simple" &&
-      simpleMode === "chord" &&
-      chordTriadKeys.some((k) => k === key.keyboardKey)
-    ) {
-      const keyIndex = chordTriadKeys.indexOf(key.keyboardKey!);
-      const chord = virtualKeyboard.getChord(
-        scaleState.rootNote,
-        scaleState.scale,
-        keyIndex,
-        3,
-        chordVoicing,
-        chordModifiers
-      );
-      onPlayNotes(chord, velocity, true); // isKeyHeld = true for chord keys
-    } else {
-      onPlayNotes([key.note], velocity, true); // isKeyHeld = true for virtual key presses
-    }
-  }, [mainMode, simpleMode, scaleState, virtualKeyboard, chordVoicing, chordModifiers, velocity, onPlayNotes]);
-
-  const handleTriadPress = useCallback((index: number) => {
-    const chord = virtualKeyboard.getChord(
-      scaleState.rootNote,
-      scaleState.scale,
-      index,
-      3,
-      chordVoicing,
-      chordModifiers
-    );
-    onPlayNotes(chord, velocity, true); // isKeyHeld = true for triad presses
-  }, [scaleState, virtualKeyboard, chordVoicing, chordModifiers, velocity, onPlayNotes]);
 
   const virtualKeys = virtualKeyboard.generateVirtualKeys();
 
@@ -163,7 +138,9 @@ export default function VirtualKeyboard({
           chordModifiers={chordModifiers}
           scale={scaleState.scale}
           onKeyPress={handleVirtualKeyPress}
+          onKeyRelease={handleVirtualKeyRelease}
           onTriadPress={handleTriadPress}
+          onTriadRelease={handleTriadRelease}
         />
       );
     } else if (mainMode === "simple") {
@@ -172,6 +149,7 @@ export default function VirtualKeyboard({
           virtualKeys={virtualKeys}
           pressedKeys={pressedKeys}
           onKeyPress={handleVirtualKeyPress}
+          onKeyRelease={handleVirtualKeyRelease}
         />
       );
     } else {
@@ -180,14 +158,15 @@ export default function VirtualKeyboard({
           virtualKeys={virtualKeys}
           pressedKeys={pressedKeys}
           onKeyPress={handleVirtualKeyPress}
+          onKeyRelease={handleVirtualKeyRelease}
         />
       );
     }
   };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-lg mb-6 w-full max-w-4xl">
-      <div className="flex justify-around gap-6 mb-6">
+    <div className="bg-white p-3 rounded-lg shadow-lg w-full max-w-4xl">
+      <div className="flex justify-around gap-3 mb-3 flex-wrap">
         <div className="space-y-4">
           <h3 className="font-semibold text-gray-700">Mode Controls</h3>
           <div className="flex gap-2">
@@ -274,13 +253,13 @@ export default function VirtualKeyboard({
                 <div className="flex items-center gap-2">
                   <span className="text-sm">Voicing: {chordVoicing}</span>
                   <button
-                    onClick={() => setChordVoicing(Math.max(-2, chordVoicing - 1))}
+                    onClick={() => setChordVoicing(Math.max(0, chordVoicing - 1))}
                     className="px-2 py-1 bg-gray-200 rounded text-sm"
                   >
                     C (-)
                   </button>
                   <button
-                    onClick={() => setChordVoicing(Math.min(2, chordVoicing + 1))}
+                    onClick={() => setChordVoicing(Math.min(5, chordVoicing + 1))}
                     className="px-2 py-1 bg-gray-200 rounded text-sm"
                   >
                     V (+)

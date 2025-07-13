@@ -4,12 +4,14 @@ interface AdvancedKeysProps {
   virtualKeys: KeyboardKey[];
   pressedKeys: Set<string>;
   onKeyPress: (key: KeyboardKey) => void;
+  onKeyRelease: (key: KeyboardKey) => void;
 }
 
 export const AdvancedKeys: React.FC<AdvancedKeysProps> = ({
   virtualKeys,
   pressedKeys,
   onKeyPress,
+  onKeyRelease,
 }) => {
   return (
     <div className="relative flex justify-center">
@@ -20,6 +22,8 @@ export const AdvancedKeys: React.FC<AdvancedKeysProps> = ({
             <button
               key={`${key.note}-${key.keyboardKey}`}
               onMouseDown={() => onKeyPress(key)}
+              onMouseUp={() => onKeyRelease(key)}
+              onMouseLeave={() => onKeyRelease(key)}
               className={`
               w-12 h-40 border-2 border-gray-300 bg-white hover:bg-gray-100 
               transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1
@@ -45,6 +49,8 @@ export const AdvancedKeys: React.FC<AdvancedKeysProps> = ({
             <button
               key={`${key.note}-${key.keyboardKey}`}
               onMouseDown={() => onKeyPress(key)}
+              onMouseUp={() => onKeyRelease(key)}
+              onMouseLeave={() => onKeyRelease(key)}
               className={`
               absolute w-8 h-24 bg-black hover:bg-gray-800 border border-gray-600
               transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1

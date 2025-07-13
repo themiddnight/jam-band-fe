@@ -1,5 +1,5 @@
 import type { Scale } from "../../../hooks/useScaleState";
-import { chordTriadKeys } from "../hooks/useVirtualKeyboard";
+import { chordTriadKeys } from "../../../constants/virtualKeyboardKeys";
 import type { KeyboardKey } from "../types/keyboard";
 
 interface ChordKeysProps {
@@ -9,7 +9,9 @@ interface ChordKeysProps {
   chordModifiers: Set<string>;
   scale: Scale;
   onKeyPress: (key: KeyboardKey) => void;
+  onKeyRelease: (key: KeyboardKey) => void;
   onTriadPress: (index: number) => void;
+  onTriadRelease: (index: number) => void;
 }
 
 export const ChordKeys: React.FC<ChordKeysProps> = ({
@@ -19,10 +21,12 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
   chordModifiers,
   scale,
   onKeyPress,
+  onKeyRelease,
   onTriadPress,
+  onTriadRelease,
 }) => {
   return (
-    <div className="flex justify-around gap-4">
+    <div className="flex justify-around gap-3 flex-wrap">
       {/* Keys */}
       <div className="flex flex-col gap-4">
         {/* Triads */}
@@ -49,6 +53,8 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
                 <button
                   key={key}
                   onMouseDown={() => onTriadPress(index)}
+                  onMouseUp={() => onTriadRelease(index)}
+                  onMouseLeave={() => onTriadRelease(index)}
                   className={`w-12 h-20 border-2 border-gray-300 bg-purple-100 hover:bg-purple-200 
                           transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1
                           ${
@@ -86,6 +92,8 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
               <button
                 key={`${key.note}-${key.keyboardKey}`}
                 onMouseDown={() => onKeyPress(key)}
+                onMouseUp={() => onKeyRelease(key)}
+                onMouseLeave={() => onKeyRelease(key)}
                 className={`
                   w-12 h-20 border-2 border-gray-300 bg-white hover:bg-gray-100 
                   transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1

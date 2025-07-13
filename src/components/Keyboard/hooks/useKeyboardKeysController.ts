@@ -5,9 +5,14 @@ import {
   melodyAdvancedKeys, 
   chordRootKeys, 
   chordTriadKeys 
-} from "./useVirtualKeyboard";
+} from "../../../constants/virtualKeyboardKeys";
+import type {
+  KeyboardState,
+  ScaleState,
+  VirtualKeyboardState,
+} from "../../../types/keyboard";
 
-export const useKeyboardKeyboard = (keyboardState: any, scaleState: any, virtualKeyboard: any) => {
+export const useKeyboardKeysController = (keyboardState: KeyboardState, scaleState: ScaleState, virtualKeyboard: VirtualKeyboardState) => {
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
@@ -75,14 +80,14 @@ export const useKeyboardKeyboard = (keyboardState: any, scaleState: any, virtual
       // Voicing controls (c, v)
       if (key === "c") {
         if (keyboardState.mainMode === "simple" && keyboardState.simpleMode === "chord") {
-          virtualKeyboard.setChordVoicing((prev: number) => Math.max(-2, prev - 1));
+          virtualKeyboard.setChordVoicing((prev: number) => Math.max(0, prev - 1));
         }
         return;
       }
 
       if (key === "v") {
         if (keyboardState.mainMode === "simple" && keyboardState.simpleMode === "chord") {
-          virtualKeyboard.setChordVoicing((prev: number) => Math.min(2, prev + 1));
+          virtualKeyboard.setChordVoicing((prev: number) => Math.min(5, prev + 1));
         }
         return;
       }

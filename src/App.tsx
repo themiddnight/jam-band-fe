@@ -1,165 +1,161 @@
-import { useState, useRef, useEffect } from "react";
-import Soundfont from "soundfont-player";
-import VirtualKeyboard from "./components/VirtualKeyboard";
+import { useRef, useEffect } from "react";
+import Keyboard from "./components/Keyboard";
+import Guitar from "./components/Guitar";
+import Bass from "./components/Bass";
+import Drumpad from "./components/Drumpad";
+import Drumset from "./components/Drumset";
 import ScaleSelector from "./components/ScaleSelector";
+import InstrumentSelector from "./components/InstrumentSelector";
+import MidiStatus from "./components/MidiStatus";
 import { useScaleState } from "./hooks/useScaleState";
+import { useMidiController } from "./hooks/useMidiController";
+import { useInstrument } from "./hooks/useInstrument";
+import { ControlType } from "./types";
 
 export default function App() {
-  const [instrument, setInstrument] = useState<any>(null);
-  const [sustain, setSustain] = useState<boolean>(false);
-  const audioContext = useRef<AudioContext | null>(null);
-  const sustainedNotes = useRef<Set<any>>(new Set());
-  const activeNotes = useRef<Map<string, any>>(new Map());
-  const keyHeldNotes = useRef<Set<string>>(new Set());
-
   const scaleState = useScaleState();
+  const {
+    instrument,
+    currentInstrument,
+    isLoadingInstrument,
+    loadInstrument,
+    playNotes,
+    stopNotes,
+    stopSustainedNotes,
+    releaseKeyHeldNote,
+    setSustainState,
+    handleInstrumentChange,
+    getCurrentInstrumentControlType,
+    handleMidiNoteOn,
+    handleMidiNoteOff,
+    handleMidiControlChange,
+    handleMidiSustainChange,
+  } = useInstrument();
+
+  const handlersRef = useRef({
+    onNoteOn: handleMidiNoteOn,
+    onNoteOff: handleMidiNoteOff,
+    onControlChange: handleMidiControlChange,
+    onSustainChange: handleMidiSustainChange,
+  });
 
   useEffect(() => {
-    const initializeAudio = async () => {
-      try {
-        audioContext.current = new (window.AudioContext ||
-          (window as any).webkitAudioContext)();
-        const keyboard = await Soundfont.instrument(
-          audioContext.current,
-          "acoustic_grand_piano",
-        );
-        setInstrument(keyboard);
-      } catch (error) {
-        console.error("Failed to load keyboard instrument:", error);
-      }
+    handlersRef.current = {
+      onNoteOn: handleMidiNoteOn,
+      onNoteOff: handleMidiNoteOff,
+      onControlChange: handleMidiControlChange,
+      onSustainChange: handleMidiSustainChange,
+    };
+  }, [
+    handleMidiNoteOn,
+    handleMidiNoteOff,
+    handleMidiControlChange,
+    handleMidiSustainChange,
+  ]);
+
+  // Initialize MIDI controller
+  const midiController = useMidiController({
+    onNoteOn: (note, velocity) => handlersRef.current.onNoteOn(note, velocity),
+    onNoteOff: (note) => handlersRef.current.onNoteOff(note),
+    onControlChange: (controller) =>
+      handlersRef.current.onControlChange(controller),
+    onPitchBend: () => null,
+    onSustainChange: (sustain) => handlersRef.current.onSustainChange(sustain),
+  });
+
+  const renderInstrumentControl = () => {
+    const controlType = getCurrentInstrumentControlType();
+    const commonProps = {
+      scaleState: {
+        rootNote: scaleState.rootNote,
+        scale: scaleState.scale,
+        getScaleNotes: scaleState.getScaleNotes,
+      },
+      onPlayNotes: playNotes,
+      onStopNotes: stopNotes,
+      onStopSustainedNotes: stopSustainedNotes,
+      onReleaseKeyHeldNote: releaseKeyHeldNote,
+      onSustainChange: setSustainState,
     };
 
-    initializeAudio();
-
-    return () => {
-      if (audioContext.current) {
-        audioContext.current.close();
-      }
-    };
-  }, []);
-
-  const playNotes = (notes: string[], velocity: number, isKeyHeld: boolean = false) => {
-    if (instrument && audioContext.current?.state === "running") {
-      notes.forEach((note) => {
-        const existingNote = activeNotes.current.get(note);
-        if (existingNote && existingNote.stop) {
-          existingNote.stop();
-        }
-
-        const playedNote = instrument.play(
-          note,
-          audioContext.current!.currentTime,
-          { gain: velocity }
-        );
-
-        activeNotes.current.set(note, playedNote);
-
-        // Track key-held notes (highest priority)
-        if (isKeyHeld) {
-          keyHeldNotes.current.add(note);
-        }
-
-        // Only add to sustained notes if NOT held by a key AND sustain is active
-        if (!isKeyHeld && sustain) {
-          sustainedNotes.current.add(playedNote);
-        }
-
-        // Only auto-stop notes that are not held by keys and not sustained
-        if (!isKeyHeld && !sustain) {
-          setTimeout(() => {
-            // Only stop if the note is still active and not being held
-            if (activeNotes.current.has(note) && !keyHeldNotes.current.has(note)) {
-              if (playedNote && playedNote.stop) {
-                playedNote.stop();
-              }
-              activeNotes.current.delete(note);
-            }
-          }, 300);
-        }
-      });
-    } else if (audioContext.current?.state === "suspended") {
-      audioContext.current.resume();
+    // Show initialization button if no instrument is loaded
+    if (!instrument && !isLoadingInstrument) {
+      return (
+        <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-4xl text-center">
+          <h3 className="text-xl font-semibold text-gray-800 mb-4">
+            Initialize Audio
+          </h3>
+          <p className="text-gray-600 mb-4">
+            Click the button below to initialize the audio system and load the
+            instrument.
+          </p>
+          <button
+            onClick={() => {
+              loadInstrument(currentInstrument);
+            }}
+            className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium"
+          >
+            Initialize Audio & Load Instrument
+          </button>
+          <p className="text-xs text-gray-500 mt-4">
+            This is required due to browser autoplay policies.
+          </p>
+        </div>
+      );
     }
-  };
 
-  const stopNotes = (notes: string[]) => {
-    notes.forEach((note) => {
-      const activeNote = activeNotes.current.get(note);
-      if (activeNote && activeNote.stop) {
-        activeNote.stop();
-        activeNotes.current.delete(note);
-        sustainedNotes.current.delete(activeNote);
-      }
-      // Remove from key-held notes
-      keyHeldNotes.current.delete(note);
-    });
-  };
-
-  const stopSustainedNotes = () => {
-    // Stop all sustained notes (only those not held by keys)
-    sustainedNotes.current.forEach((note) => {
-      if (note && note.stop) {
-        note.stop();
-      }
-    });
-    sustainedNotes.current.clear();
-
-    // Stop all notes that are not being held by keys
-    activeNotes.current.forEach((note, noteName) => {
-      if (!keyHeldNotes.current.has(noteName) && note && note.stop) {
-        note.stop();
-      }
-    });
-    
-    // Remove from activeNotes only those not held by keys
-    const notesToRemove: string[] = [];
-    activeNotes.current.forEach((_note, noteName) => {
-      if (!keyHeldNotes.current.has(noteName)) {
-        notesToRemove.push(noteName);
-      }
-    });
-    notesToRemove.forEach(noteName => activeNotes.current.delete(noteName));
-  };
-
-  const releaseKeyHeldNote = (note: string) => {
-    keyHeldNotes.current.delete(note);
-    
-    // If the note is not being sustained, stop it
-    const activeNote = activeNotes.current.get(note);
-    if (activeNote && activeNote.stop && !sustain) {
-      activeNote.stop();
-      activeNotes.current.delete(note);
+    // Show loading indicator
+    if (isLoadingInstrument) {
+      return (
+        <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-4xl text-center">
+          <h3 className="text-xl font-semibold text-gray-800 mb-4">
+            Loading Instrument...
+          </h3>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="text-gray-600 mt-4">
+            Loading {currentInstrument.replace(/_/g, " ")}...
+          </p>
+        </div>
+      );
     }
-  };
 
-  const setSustainState = (newSustain: boolean) => {
-    setSustain(newSustain);
-    if (!newSustain) {
-      stopSustainedNotes();
+    switch (controlType) {
+      case ControlType.Guitar:
+        return <Guitar {...commonProps} />;
+      case ControlType.Bass:
+        return <Bass {...commonProps} />;
+      case ControlType.Drumpad:
+        return <Drumpad {...commonProps} />;
+      case ControlType.Drumset:
+        return <Drumset {...commonProps} />;
+      case ControlType.Keyboard:
+      default:
+        return <Keyboard {...commonProps} />;
     }
   };
 
   return (
-    <div className="flex flex-col items-center p-8 bg-gray-100 min-h-screen">
-      <ScaleSelector
-        rootNote={scaleState.rootNote}
-        scale={scaleState.scale}
-        onRootNoteChange={scaleState.setRootNote}
-        onScaleChange={scaleState.setScale}
-      />
+    <div className="flex flex-col items-center p-3 bg-gray-100 min-h-screen">
+      <div className="flex gap-3 flex-wrap w-full max-w-4xl mb-3">
+        <ScaleSelector
+          rootNote={scaleState.rootNote}
+          scale={scaleState.scale}
+          onRootNoteChange={scaleState.setRootNote}
+          onScaleChange={scaleState.setScale}
+        />
+        <InstrumentSelector
+          currentInstrument={currentInstrument}
+          onInstrumentChange={handleInstrumentChange}
+          isLoading={isLoadingInstrument}
+        />
+        <MidiStatus
+          isConnected={midiController.isConnected}
+          getMidiInputs={midiController.getMidiInputs}
+          onRequestAccess={midiController.requestMidiAccess}
+        />
+      </div>
 
-      <VirtualKeyboard
-        scaleState={{
-          rootNote: scaleState.rootNote,
-          scale: scaleState.scale,
-          getScaleNotes: scaleState.getScaleNotes,
-        }}
-        onPlayNotes={playNotes}
-        onStopNotes={stopNotes}
-        onStopSustainedNotes={stopSustainedNotes}
-        onReleaseKeyHeldNote={releaseKeyHeldNote}
-        onSustainChange={setSustainState}
-      />
+      {renderInstrumentControl()}
     </div>
   );
 }

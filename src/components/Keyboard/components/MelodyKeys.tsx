@@ -4,12 +4,14 @@ interface MelodyKeysProps {
   virtualKeys: KeyboardKey[];
   pressedKeys: Set<string>;
   onKeyPress: (key: KeyboardKey) => void;
+  onKeyRelease: (key: KeyboardKey) => void;
 }
 
 export const MelodyKeys: React.FC<MelodyKeysProps> = ({
   virtualKeys,
   pressedKeys,
   onKeyPress,
+  onKeyRelease,
 }) => {
   return (
     <div className="text-center">
@@ -23,6 +25,8 @@ export const MelodyKeys: React.FC<MelodyKeysProps> = ({
               <button
                 key={`${key.note}-${key.keyboardKey}`}
                 onMouseDown={() => onKeyPress(key)}
+                onMouseUp={() => onKeyRelease(key)}
+                onMouseLeave={() => onKeyRelease(key)}
                 className={`
                   w-12 h-24 border-2 border-gray-300 bg-blue-50 hover:bg-blue-100 
                   transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1
@@ -49,6 +53,8 @@ export const MelodyKeys: React.FC<MelodyKeysProps> = ({
               <button
                 key={`${key.note}-${key.keyboardKey}`}
                 onMouseDown={() => onKeyPress(key)}
+                onMouseUp={() => onKeyRelease(key)}
+                onMouseLeave={() => onKeyRelease(key)}
                 className={`
                   w-12 h-24 border-2 border-gray-300 bg-white hover:bg-gray-100 
                   transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1
