@@ -12,7 +12,7 @@ export const AdvancedKeys: React.FC<AdvancedKeysProps> = ({
   onKeyPress,
 }) => {
   return (
-    <div className="relative">
+    <div className="relative flex justify-center">
       <div className="relative flex">
         {virtualKeys
           .filter((key) => !key.isBlack)
@@ -31,6 +31,7 @@ export const AdvancedKeys: React.FC<AdvancedKeysProps> = ({
             `}
               style={{ zIndex: 1 }}
             >
+              <div className="w-full h-full" />
               <span className="text-xs text-gray-600 font-bold">
                 {key.keyboardKey?.toUpperCase()}
               </span>
@@ -54,10 +55,11 @@ export const AdvancedKeys: React.FC<AdvancedKeysProps> = ({
               }
             `}
               style={{
-                left: `${key.position * 48 - 16}px`,
+                left: `${key.position * 48 + 8}px`,
                 zIndex: 2,
               }}
             >
+              <div className="w-full h-full" />
               <span className="text-xs text-white font-bold">
                 {key.keyboardKey?.toUpperCase()}
               </span>

@@ -15,7 +15,7 @@ export default function ScaleSelector({
   onScaleChange,
 }: ScaleSelectorProps) {
   return (
-    <div className="space-y-4">
+    <div className="flex justify-center items-center gap-4 bg-white p-6 rounded-lg shadow-lg mb-6 w-full max-w-4xl">
       <h3 className="font-semibold text-gray-700">Scale</h3>
       <div className="flex gap-2">
         <select

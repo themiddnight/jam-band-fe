@@ -141,16 +141,12 @@ export default function App() {
 
   return (
     <div className="flex flex-col items-center p-8 bg-gray-100 min-h-screen">
-      <h2 className="text-3xl font-bold mb-8 text-gray-800">Keyboard Player</h2>
-
-      <div className="bg-white p-6 rounded-lg shadow-lg mb-6 w-full max-w-4xl">
-        <ScaleSelector
-          rootNote={scaleState.rootNote}
-          scale={scaleState.scale}
-          onRootNoteChange={scaleState.setRootNote}
-          onScaleChange={scaleState.setScale}
-        />
-      </div>
+      <ScaleSelector
+        rootNote={scaleState.rootNote}
+        scale={scaleState.scale}
+        onRootNoteChange={scaleState.setRootNote}
+        onScaleChange={scaleState.setScale}
+      />
 
       <VirtualKeyboard
         scaleState={{

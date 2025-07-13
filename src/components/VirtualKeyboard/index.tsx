@@ -14,7 +14,7 @@ export interface VirtualKeyboardProps {
     scale: Scale;
     getScaleNotes: (root: string, scaleType: Scale, octave: number) => string[];
   };
-  
+
   // Audio control - the core functionality
   onPlayNotes: (notes: string[], velocity: number, isKeyHeld: boolean) => void;
   onStopNotes: (notes: string[]) => void;
@@ -34,7 +34,7 @@ export default function VirtualKeyboard({
   // Internal state management
   const [mainMode, setMainMode] = useState<MainMode>("simple");
   const [simpleMode, setSimpleMode] = useState<SimpleMode>("melody");
-  const [currentOctave, setCurrentOctave] = useState<number>(4);
+  const [currentOctave, setCurrentOctave] = useState<number>(2);
   const [velocity, setVelocity] = useState<number>(0.7);
   const [sustain, setSustain] = useState<boolean>(false);
   const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
@@ -187,27 +187,25 @@ export default function VirtualKeyboard({
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-lg mb-6 w-full max-w-4xl">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+      <div className="flex justify-around gap-6 mb-6">
         <div className="space-y-4">
           <h3 className="font-semibold text-gray-700">Mode Controls</h3>
           <div className="flex gap-2">
             <button
               onClick={() => setMainMode("simple")}
-              className={`px-4 py-2 rounded ${
-                mainMode === "simple"
+              className={`px-4 py-2 rounded ${mainMode === "simple"
                   ? "bg-blue-500 text-white"
                   : "bg-gray-200"
-              }`}
+                }`}
             >
               Simple
             </button>
             <button
               onClick={() => setMainMode("advanced")}
-              className={`px-4 py-2 rounded ${
-                mainMode === "advanced"
+              className={`px-4 py-2 rounded ${mainMode === "advanced"
                   ? "bg-blue-500 text-white"
                   : "bg-gray-200"
-              }`}
+                }`}
             >
               Advanced
             </button>
@@ -217,21 +215,19 @@ export default function VirtualKeyboard({
             <div className="flex gap-2">
               <button
                 onClick={() => setSimpleMode("melody")}
-                className={`px-3 py-1 text-sm rounded ${
-                  simpleMode === "melody"
+                className={`px-3 py-1 text-sm rounded ${simpleMode === "melody"
                     ? "bg-green-500 text-white"
                     : "bg-gray-200"
-                }`}
+                  }`}
               >
                 Melody (/)
               </button>
               <button
                 onClick={() => setSimpleMode("chord")}
-                className={`px-3 py-1 text-sm rounded ${
-                  simpleMode === "chord"
+                className={`px-3 py-1 text-sm rounded ${simpleMode === "chord"
                     ? "bg-green-500 text-white"
                     : "bg-gray-200"
-                }`}
+                  }`}
               >
                 Chord (/)
               </button>
@@ -241,37 +237,57 @@ export default function VirtualKeyboard({
 
         <div className="space-y-4">
           <h3 className="font-semibold text-gray-700">Controls</h3>
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className="text-sm">Octave: {currentOctave}</span>
-              <button
-                onClick={() => setCurrentOctave(Math.max(0, currentOctave - 1))}
-                className="px-2 py-1 bg-gray-200 rounded text-sm"
-              >
-                Z (-)
-              </button>
-              <button
-                onClick={() => setCurrentOctave(Math.min(8, currentOctave + 1))}
-                className="px-2 py-1 bg-gray-200 rounded text-sm"
-              >
-                X (+)
-              </button>
-            </div>
+          <div className="flex items-start gap-4">
+            <div className="space-y-2">
 
-            <div className="flex items-center gap-2">
-              <span className="text-sm">
-                Velocity: {Math.round(velocity * 9)}
-              </span>
-              <input
-                type="range"
-                min="1"
-                max="9"
-                value={Math.round(velocity * 9)}
-                onChange={(e) => setVelocity(parseInt(e.target.value) / 9)}
-                className="w-20"
-              />
-            </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm">
+                  Velocity: {Math.round(velocity * 9)}
+                </span>
+                <input
+                  type="range"
+                  min="1"
+                  max="9"
+                  value={Math.round(velocity * 9)}
+                  onChange={(e) => setVelocity(parseInt(e.target.value) / 9)}
+                  className="w-20"
+                />
+              </div>
 
+              <div className="flex items-center gap-2">
+                <span className="text-sm">Octave: {currentOctave}</span>
+                <button
+                  onClick={() => setCurrentOctave(Math.max(0, currentOctave - 1))}
+                  className="px-2 py-1 bg-gray-200 rounded text-sm"
+                >
+                  Z (-)
+                </button>
+                <button
+                  onClick={() => setCurrentOctave(Math.min(8, currentOctave + 1))}
+                  className="px-2 py-1 bg-gray-200 rounded text-sm"
+                >
+                  X (+)
+                </button>
+              </div>
+
+              {mainMode === "simple" && simpleMode === "chord" && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">Voicing: {chordVoicing}</span>
+                  <button
+                    onClick={() => setChordVoicing(Math.max(-2, chordVoicing - 1))}
+                    className="px-2 py-1 bg-gray-200 rounded text-sm"
+                  >
+                    C (-)
+                  </button>
+                  <button
+                    onClick={() => setChordVoicing(Math.min(2, chordVoicing + 1))}
+                    className="px-2 py-1 bg-gray-200 rounded text-sm"
+                  >
+                    V (+)
+                  </button>
+                </div>
+              )}
+            </div>
             <button
               onMouseDown={() => {
                 setSustain(true);
@@ -281,54 +297,19 @@ export default function VirtualKeyboard({
                 setSustain(false);
                 onSustainChange(false);
               }}
-              className={`px-4 py-2 rounded ${
-                sustain ? "bg-yellow-500 text-white" : "bg-gray-200"
-              }`}
+              className={`px-4 py-2 rounded ${sustain ? "bg-yellow-500 text-white" : "bg-gray-200"
+                }`}
             >
               Sustain (Space)
             </button>
 
-            {mainMode === "simple" && simpleMode === "chord" && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm">Voicing: {chordVoicing}</span>
-                <button
-                  onClick={() => setChordVoicing(Math.max(-2, chordVoicing - 1))}
-                  className="px-2 py-1 bg-gray-200 rounded text-sm"
-                >
-                  C (-)
-                </button>
-                <button
-                  onClick={() => setChordVoicing(Math.min(2, chordVoicing + 1))}
-                  className="px-2 py-1 bg-gray-200 rounded text-sm"
-                >
-                  V (+)
-                </button>
-              </div>
-            )}
           </div>
         </div>
 
-        <div className="space-y-4">
-          <h3 className="font-semibold text-gray-700">Current Scale</h3>
-          <div className="text-sm text-gray-600">
-            <p>Root: <span className="font-semibold">{scaleState.rootNote}</span></p>
-            <p>Scale: <span className="font-semibold capitalize">{scaleState.scale}</span></p>
-          </div>
-        </div>
       </div>
 
       <div className="bg-black p-4 rounded-lg shadow-2xl">
         {renderVirtualKeyboard()}
-
-        <div className="mt-4 text-center">
-          <p className="text-white text-sm">
-            {mainMode === "simple"
-              ? simpleMode === "melody"
-                ? "Play melody notes"
-                : "Play root notes and chords"
-              : "Play chromatic notes"}
-          </p>
-        </div>
       </div>
     </div>
   );

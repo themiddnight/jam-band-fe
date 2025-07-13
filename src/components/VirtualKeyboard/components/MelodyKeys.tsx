@@ -14,7 +14,7 @@ export const MelodyKeys: React.FC<MelodyKeysProps> = ({
   return (
     <div className="text-center">
       <p className="text-white text-sm mb-2">Scale Notes</p>
-      <div className="space-y-2">
+      <div className="space-y-3">
         {/* Upper row */}
         <div className="flex gap-1 justify-center">
           {virtualKeys
@@ -50,7 +50,7 @@ export const MelodyKeys: React.FC<MelodyKeysProps> = ({
                 key={`${key.note}-${key.keyboardKey}`}
                 onMouseDown={() => onKeyPress(key)}
                 className={`
-                  w-12 h-32 border-2 border-gray-300 bg-white hover:bg-gray-100 
+                  w-12 h-24 border-2 border-gray-300 bg-white hover:bg-gray-100 
                   transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1
                   ${
                     pressedKeys.has(key.note)
