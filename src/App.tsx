@@ -137,6 +137,11 @@ export default function App() {
   return (
     <div className="flex flex-col items-center p-3 bg-gray-100 min-h-screen">
       <div className="flex gap-3 flex-wrap w-full max-w-4xl mb-3">
+        <MidiStatus
+          isConnected={midiController.isConnected}
+          getMidiInputs={midiController.getMidiInputs}
+          onRequestAccess={midiController.requestMidiAccess}
+        />
         <ScaleSelector
           rootNote={scaleState.rootNote}
           scale={scaleState.scale}
@@ -147,11 +152,6 @@ export default function App() {
           currentInstrument={currentInstrument}
           onInstrumentChange={handleInstrumentChange}
           isLoading={isLoadingInstrument}
-        />
-        <MidiStatus
-          isConnected={midiController.isConnected}
-          getMidiInputs={midiController.getMidiInputs}
-          onRequestAccess={midiController.requestMidiAccess}
         />
       </div>
 

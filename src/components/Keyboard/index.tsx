@@ -31,6 +31,8 @@ export default function Keyboard({
   onSustainChange,
 }: Props) {
   const [sustain, setSustain] = useState<boolean>(false);
+  const [sustainToggle, setSustainToggle] = useState<boolean>(false);
+  const [hasSustainedNotes, setHasSustainedNotes] = useState<boolean>(false);
   const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
   const [heldKeys, setHeldKeys] = useState<Set<string>>(new Set());
 
@@ -66,6 +68,8 @@ export default function Keyboard({
     currentOctave,
     velocity,
     sustain,
+    sustainToggle,
+    hasSustainedNotes,
     pressedKeys,
     heldKeys,
     setHeldKeys,
@@ -77,11 +81,26 @@ export default function Keyboard({
       setSustain(newSustain);
       onSustainChange(newSustain);
     },
+    setSustainToggle: (newSustainToggle: boolean) => {
+      setSustainToggle(newSustainToggle);
+      if (newSustainToggle) {
+        setSustain(true);
+        onSustainChange(true);
+      } else {
+        setSustain(false);
+        onSustainChange(false);
+        onStopSustainedNotes();
+      }
+    },
     setPressedKeys,
     playNote: (note: string, vel: number = velocity, isKeyHeld: boolean = false) => {
       onPlayNotes([note], vel, isKeyHeld);
       if (isKeyHeld) {
         setPressedKeys(new Set([...pressedKeys, note]));
+      }
+      // When toggle is active and we play a note, it will be sustained
+      if (sustainToggle && !isKeyHeld) {
+        setHasSustainedNotes(true);
       }
     },
     stopNote: (note: string) => {
@@ -95,10 +114,16 @@ export default function Keyboard({
       const newPressedKeys = new Set(pressedKeys);
       newPressedKeys.delete(note);
       setPressedKeys(newPressedKeys);
+      // When toggle is active and we release a key, check if we should turn off sustained notes
+      if (sustainToggle && newPressedKeys.size === 0) {
+        setHasSustainedNotes(false);
+      }
     },
     stopSustainedNotes: () => {
       onStopSustainedNotes();
       setSustain(false);
+      setHasSustainedNotes(false);
+      // Don't turn off toggle mode when stopping sustained notes
     },
   };
 
@@ -257,13 +282,13 @@ export default function Keyboard({
                 <div className="flex items-center gap-2">
                   <span className="text-sm">Voicing: {chordVoicing}</span>
                   <button
-                    onClick={() => setChordVoicing(Math.max(0, chordVoicing - 1))}
+                    onClick={() => setChordVoicing(Math.max(-2, chordVoicing - 1))}
                     className="px-2 py-1 bg-gray-200 rounded text-sm"
                   >
                     C (-)
                   </button>
                   <button
-                    onClick={() => setChordVoicing(Math.min(5, chordVoicing + 1))}
+                    onClick={() => setChordVoicing(Math.min(4, chordVoicing + 1))}
                     className="px-2 py-1 bg-gray-200 rounded text-sm"
                   >
                     V (+)
@@ -273,17 +298,43 @@ export default function Keyboard({
             </div>
             <button
               onMouseDown={() => {
-                setSustain(true);
-                onSustainChange(true);
+                if (sustainToggle) {
+                  // If toggle mode is active, sustain button only stops current sustained notes
+                  onStopSustainedNotes();
+                } else {
+                  // Normal momentary sustain behavior
+                  setSustain(true);
+                  onSustainChange(true);
+                }
               }}
               onMouseUp={() => {
-                setSustain(false);
-                onSustainChange(false);
+                if (!sustainToggle) {
+                  // Only stop sustain on button release if not in toggle mode
+                  setSustain(false);
+                  onSustainChange(false);
+                }
               }}
-              className={`px-4 py-2 rounded ${sustain ? "bg-yellow-500 text-white" : "bg-gray-200"
+              className={`px-4 py-2 rounded ${(sustain && !sustainToggle) || (sustainToggle && hasSustainedNotes) ? "bg-yellow-500 text-white" : "bg-gray-200"
                 }`}
             >
               Sustain (Space)
+            </button>
+            <button
+              onClick={() => {
+                setSustainToggle(!sustainToggle);
+                if (!sustainToggle) {
+                  setSustain(true);
+                  onSustainChange(true);
+                } else {
+                  setSustain(false);
+                  onSustainChange(false);
+                  onStopSustainedNotes();
+                }
+              }}
+              className={`px-4 py-2 rounded ${sustainToggle ? "bg-green-500 text-white" : "bg-gray-200"
+                }`}
+            >
+              Toggle Sustain (')
             </button>
 
           </div>

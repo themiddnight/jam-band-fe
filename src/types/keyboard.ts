@@ -15,8 +15,12 @@ export interface KeyboardState {
   simpleMode: "melody" | "chord";
   currentOctave: number;
   velocity: number;
+  sustain: boolean;
+  sustainToggle: boolean;
+  hasSustainedNotes: boolean;
   heldKeys: Set<string>;
   setSustain: (sustain: boolean) => void;
+  setSustainToggle: (sustainToggle: boolean) => void;
   setHeldKeys: React.Dispatch<React.SetStateAction<Set<string>>>;
   setSimpleMode: React.Dispatch<React.SetStateAction<"melody" | "chord">>;
   setCurrentOctave: React.Dispatch<React.SetStateAction<number>>;
@@ -41,7 +45,6 @@ export interface VirtualKeyboardState {
     root: string,
     scaleType: Scale,
     degree: number,
-    numNotes: number,
     voicing?: number,
     modifiers?: Set<string>
   ) => string[];

@@ -1,10 +1,10 @@
 import { useCallback } from "react";
-import { 
-  melodySimpleKeys, 
-  melodySimpleKeysUpper, 
-  melodyAdvancedKeys, 
-  chordRootKeys, 
-  chordTriadKeys 
+import {
+  melodySimpleKeys,
+  melodySimpleKeysUpper,
+  melodyAdvancedKeys,
+  chordRootKeys,
+  chordTriadKeys,
 } from "../../../constants/virtualKeyboardKeys";
 import type {
   KeyboardState,
@@ -12,7 +12,11 @@ import type {
   VirtualKeyboardState,
 } from "../../../types/keyboard";
 
-export const useKeyboardKeysController = (keyboardState: KeyboardState, scaleState: ScaleState, virtualKeyboard: VirtualKeyboardState) => {
+export const useKeyboardKeysController = (
+  keyboardState: KeyboardState,
+  scaleState: ScaleState,
+  virtualKeyboard: VirtualKeyboardState
+) => {
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
@@ -20,9 +24,23 @@ export const useKeyboardKeysController = (keyboardState: KeyboardState, scaleSta
       if (key === " ") {
         event.preventDefault();
         if (!keyboardState.heldKeys.has(key)) {
-          keyboardState.setSustain(true);
-          keyboardState.setHeldKeys((prev: Set<string>) => new Set(prev).add(key));
+          if (keyboardState.sustainToggle) {
+            // If toggle mode is active, spacebar only stops current sustained notes
+            keyboardState.stopSustainedNotes();
+          } else {
+            // Normal momentary sustain behavior
+            keyboardState.setSustain(true);
+          }
+          keyboardState.setHeldKeys((prev: Set<string>) =>
+            new Set(prev).add(key)
+          );
         }
+        return;
+      }
+
+      if (key === "'") {
+        event.preventDefault();
+        keyboardState.setSustainToggle(!keyboardState.sustainToggle);
         return;
       }
 
@@ -38,7 +56,9 @@ export const useKeyboardKeysController = (keyboardState: KeyboardState, scaleSta
         keyboardState.mainMode === "simple" &&
         keyboardState.simpleMode === "chord"
       ) {
-        virtualKeyboard.setChordModifiers((prev: Set<string>) => new Set(prev).add(key));
+        virtualKeyboard.setChordModifiers((prev: Set<string>) =>
+          new Set(prev).add(key)
+        );
         return;
       }
 
@@ -61,7 +81,9 @@ export const useKeyboardKeysController = (keyboardState: KeyboardState, scaleSta
 
       if (key === "/") {
         if (keyboardState.mainMode === "simple") {
-          keyboardState.setSimpleMode((prev: string) => (prev === "melody" ? "chord" : "melody"));
+          keyboardState.setSimpleMode((prev: string) =>
+            prev === "melody" ? "chord" : "melody"
+          );
         }
         return;
       }
@@ -79,15 +101,25 @@ export const useKeyboardKeysController = (keyboardState: KeyboardState, scaleSta
 
       // Voicing controls (c, v)
       if (key === "c") {
-        if (keyboardState.mainMode === "simple" && keyboardState.simpleMode === "chord") {
-          virtualKeyboard.setChordVoicing((prev: number) => Math.max(0, prev - 1));
+        if (
+          keyboardState.mainMode === "simple" &&
+          keyboardState.simpleMode === "chord"
+        ) {
+          virtualKeyboard.setChordVoicing((prev: number) =>
+            Math.max(-2, prev - 1)
+          );
         }
         return;
       }
 
       if (key === "v") {
-        if (keyboardState.mainMode === "simple" && keyboardState.simpleMode === "chord") {
-          virtualKeyboard.setChordVoicing((prev: number) => Math.min(5, prev + 1));
+        if (
+          keyboardState.mainMode === "simple" &&
+          keyboardState.simpleMode === "chord"
+        ) {
+          virtualKeyboard.setChordVoicing((prev: number) =>
+            Math.min(4, prev + 1)
+          );
         }
         return;
       }
@@ -98,35 +130,75 @@ export const useKeyboardKeysController = (keyboardState: KeyboardState, scaleSta
           // Lower row keys
           if (melodySimpleKeys.includes(key)) {
             const keyIndex = melodySimpleKeys.indexOf(key);
-            const scaleNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, keyboardState.currentOctave);
+            const scaleNotes = scaleState.getScaleNotes(
+              scaleState.rootNote,
+              scaleState.scale,
+              keyboardState.currentOctave
+            );
             if (keyIndex < scaleNotes.length) {
-              keyboardState.playNote(scaleNotes[keyIndex], keyboardState.velocity, true);
+              keyboardState.playNote(
+                scaleNotes[keyIndex],
+                keyboardState.velocity,
+                true
+              );
             } else {
-              const nextOctaveNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, keyboardState.currentOctave + 1);
+              const nextOctaveNotes = scaleState.getScaleNotes(
+                scaleState.rootNote,
+                scaleState.scale,
+                keyboardState.currentOctave + 1
+              );
               if (keyIndex - scaleNotes.length < nextOctaveNotes.length) {
-                keyboardState.playNote(nextOctaveNotes[keyIndex - scaleNotes.length], keyboardState.velocity, true);
+                keyboardState.playNote(
+                  nextOctaveNotes[keyIndex - scaleNotes.length],
+                  keyboardState.velocity,
+                  true
+                );
               }
             }
           }
           // Upper row keys
           else if (melodySimpleKeysUpper.includes(key)) {
             const keyIndex = melodySimpleKeysUpper.indexOf(key);
-            const scaleNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, keyboardState.currentOctave + 1);
+            const scaleNotes = scaleState.getScaleNotes(
+              scaleState.rootNote,
+              scaleState.scale,
+              keyboardState.currentOctave + 1
+            );
             if (keyIndex < scaleNotes.length) {
-              keyboardState.playNote(scaleNotes[keyIndex], keyboardState.velocity, true);
+              keyboardState.playNote(
+                scaleNotes[keyIndex],
+                keyboardState.velocity,
+                true
+              );
             } else {
-              const nextOctaveNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, keyboardState.currentOctave + 2);
+              const nextOctaveNotes = scaleState.getScaleNotes(
+                scaleState.rootNote,
+                scaleState.scale,
+                keyboardState.currentOctave + 2
+              );
               if (keyIndex - scaleNotes.length < nextOctaveNotes.length) {
-                keyboardState.playNote(nextOctaveNotes[keyIndex - scaleNotes.length], keyboardState.velocity, true);
+                keyboardState.playNote(
+                  nextOctaveNotes[keyIndex - scaleNotes.length],
+                  keyboardState.velocity,
+                  true
+                );
               }
             }
           }
         } else if (keyboardState.simpleMode === "chord") {
           if (chordRootKeys.includes(key)) {
             const keyIndex = chordRootKeys.indexOf(key);
-            const scaleNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, keyboardState.currentOctave);
+            const scaleNotes = scaleState.getScaleNotes(
+              scaleState.rootNote,
+              scaleState.scale,
+              keyboardState.currentOctave
+            );
             if (keyIndex < scaleNotes.length) {
-              keyboardState.playNote(scaleNotes[keyIndex], keyboardState.velocity, true);
+              keyboardState.playNote(
+                scaleNotes[keyIndex],
+                keyboardState.velocity,
+                true
+              );
             }
           } else if (chordTriadKeys.includes(key)) {
             const keyIndex = chordTriadKeys.indexOf(key);
@@ -134,25 +206,50 @@ export const useKeyboardKeysController = (keyboardState: KeyboardState, scaleSta
               scaleState.rootNote,
               scaleState.scale,
               keyIndex,
-              3,
               virtualKeyboard.chordVoicing,
               virtualKeyboard.chordModifiers
             );
 
-            virtualKeyboard.setActiveTriadChords((prev: Map<number, string[]>) => new Map(prev).set(keyIndex, chord));
-            chord.forEach((note: string) => keyboardState.playNote(note, keyboardState.velocity, true));
-            virtualKeyboard.setPressedTriads((prev: Set<number>) => new Set(prev).add(keyIndex));
+            virtualKeyboard.setActiveTriadChords(
+              (prev: Map<number, string[]>) =>
+                new Map(prev).set(keyIndex, chord)
+            );
+            chord.forEach((note: string) =>
+              keyboardState.playNote(note, keyboardState.velocity, true)
+            );
+            virtualKeyboard.setPressedTriads((prev: Set<number>) =>
+              new Set(prev).add(keyIndex)
+            );
           }
         }
       } else if (keyboardState.mainMode === "advanced") {
         if (melodyAdvancedKeys.includes(key)) {
           const keyIndex = melodyAdvancedKeys.indexOf(key);
           const noteMapping = [
-            "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
-            "C", "C#", "D", "D#", "E", "F", "F#",
+            "C",
+            "C#",
+            "D",
+            "D#",
+            "E",
+            "F",
+            "F#",
+            "G",
+            "G#",
+            "A",
+            "A#",
+            "B",
+            "C",
+            "C#",
+            "D",
+            "D#",
+            "E",
+            "F",
+            "F#",
           ];
           const octaveOffset = keyIndex >= 12 ? 1 : 0;
-          const note = `${noteMapping[keyIndex]}${keyboardState.currentOctave + octaveOffset}`;
+          const note = `${noteMapping[keyIndex]}${
+            keyboardState.currentOctave + octaveOffset
+          }`;
           keyboardState.playNote(note, keyboardState.velocity, true);
         }
       }
@@ -183,46 +280,55 @@ export const useKeyboardKeysController = (keyboardState: KeyboardState, scaleSta
         });
 
         // Handle modifier release logic
-        virtualKeyboard.activeTriadChords.forEach((chord: string[], triadIndex: number) => {
-          if (virtualKeyboard.pressedTriads.has(triadIndex)) {
-            const newChord = virtualKeyboard.getChord(
-              scaleState.rootNote,
-              scaleState.scale,
-              triadIndex,
-              3,
-              virtualKeyboard.chordVoicing,
-              virtualKeyboard.chordModifiers
-            );
+        virtualKeyboard.activeTriadChords.forEach(
+          (chord: string[], triadIndex: number) => {
+            if (virtualKeyboard.pressedTriads.has(triadIndex)) {
+              const newChord = virtualKeyboard.getChord(
+                scaleState.rootNote,
+                scaleState.scale,
+                triadIndex,
+                virtualKeyboard.chordVoicing,
+                virtualKeyboard.chordModifiers
+              );
 
-            chord.forEach((note: string) => {
-              if (!newChord.includes(note)) {
-                keyboardState.releaseKeyHeldNote(note);
-              }
-            });
+              chord.forEach((note: string) => {
+                if (!newChord.includes(note)) {
+                  keyboardState.releaseKeyHeldNote(note);
+                }
+              });
 
-            newChord.forEach((note: string) => {
-              if (!chord.includes(note)) {
-                keyboardState.playNote(note, keyboardState.velocity, true);
-              }
-            });
+              newChord.forEach((note: string) => {
+                if (!chord.includes(note)) {
+                  keyboardState.playNote(note, keyboardState.velocity, true);
+                }
+              });
 
-            virtualKeyboard.setActiveTriadChords((prev: Map<number, string[]>) =>
-              new Map(prev).set(triadIndex, newChord)
-            );
+              virtualKeyboard.setActiveTriadChords(
+                (prev: Map<number, string[]>) =>
+                  new Map(prev).set(triadIndex, newChord)
+              );
+            }
           }
-        });
+        );
 
         return;
       }
 
       if (key === " ") {
-        keyboardState.setSustain(false);
-        keyboardState.stopSustainedNotes();
+        if (!keyboardState.sustainToggle) {
+          // Only stop sustain on spacebar release if not in toggle mode
+          keyboardState.setSustain(false);
+          keyboardState.stopSustainedNotes();
+        }
+        // If in toggle mode, do nothing on spacebar release - keep toggle active
         return;
       }
 
       // Don't handle key up for control keys
-      if (["z", "x", "c", "v", "/"].includes(key) || (key >= "1" && key <= "9")) {
+      if (
+        ["z", "x", "c", "v", "/"].includes(key) ||
+        (key >= "1" && key <= "9")
+      ) {
         return;
       }
 
@@ -232,33 +338,57 @@ export const useKeyboardKeysController = (keyboardState: KeyboardState, scaleSta
           // Lower row keys
           if (melodySimpleKeys.includes(key)) {
             const keyIndex = melodySimpleKeys.indexOf(key);
-            const scaleNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, keyboardState.currentOctave);
+            const scaleNotes = scaleState.getScaleNotes(
+              scaleState.rootNote,
+              scaleState.scale,
+              keyboardState.currentOctave
+            );
             if (keyIndex < scaleNotes.length) {
               keyboardState.releaseKeyHeldNote(scaleNotes[keyIndex]);
             } else {
-              const nextOctaveNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, keyboardState.currentOctave + 1);
+              const nextOctaveNotes = scaleState.getScaleNotes(
+                scaleState.rootNote,
+                scaleState.scale,
+                keyboardState.currentOctave + 1
+              );
               if (keyIndex - scaleNotes.length < nextOctaveNotes.length) {
-                keyboardState.releaseKeyHeldNote(nextOctaveNotes[keyIndex - scaleNotes.length]);
+                keyboardState.releaseKeyHeldNote(
+                  nextOctaveNotes[keyIndex - scaleNotes.length]
+                );
               }
             }
           }
           // Upper row keys
           else if (melodySimpleKeysUpper.includes(key)) {
             const keyIndex = melodySimpleKeysUpper.indexOf(key);
-            const scaleNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, keyboardState.currentOctave + 1);
+            const scaleNotes = scaleState.getScaleNotes(
+              scaleState.rootNote,
+              scaleState.scale,
+              keyboardState.currentOctave + 1
+            );
             if (keyIndex < scaleNotes.length) {
               keyboardState.releaseKeyHeldNote(scaleNotes[keyIndex]);
             } else {
-              const nextOctaveNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, keyboardState.currentOctave + 2);
+              const nextOctaveNotes = scaleState.getScaleNotes(
+                scaleState.rootNote,
+                scaleState.scale,
+                keyboardState.currentOctave + 2
+              );
               if (keyIndex - scaleNotes.length < nextOctaveNotes.length) {
-                keyboardState.releaseKeyHeldNote(nextOctaveNotes[keyIndex - scaleNotes.length]);
+                keyboardState.releaseKeyHeldNote(
+                  nextOctaveNotes[keyIndex - scaleNotes.length]
+                );
               }
             }
           }
         } else if (keyboardState.simpleMode === "chord") {
           if (chordRootKeys.includes(key)) {
             const keyIndex = chordRootKeys.indexOf(key);
-            const scaleNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, keyboardState.currentOctave);
+            const scaleNotes = scaleState.getScaleNotes(
+              scaleState.rootNote,
+              scaleState.scale,
+              keyboardState.currentOctave
+            );
             if (keyIndex < scaleNotes.length) {
               keyboardState.releaseKeyHeldNote(scaleNotes[keyIndex]);
             }
@@ -266,12 +396,16 @@ export const useKeyboardKeysController = (keyboardState: KeyboardState, scaleSta
             const keyIndex = chordTriadKeys.indexOf(key);
             const chord = virtualKeyboard.activeTriadChords.get(keyIndex);
             if (chord) {
-              chord.forEach((note: string) => keyboardState.releaseKeyHeldNote(note));
-              virtualKeyboard.setActiveTriadChords((prev: Map<number, string[]>) => {
-                const newMap = new Map(prev);
-                newMap.delete(keyIndex);
-                return newMap;
-              });
+              chord.forEach((note: string) =>
+                keyboardState.releaseKeyHeldNote(note)
+              );
+              virtualKeyboard.setActiveTriadChords(
+                (prev: Map<number, string[]>) => {
+                  const newMap = new Map(prev);
+                  newMap.delete(keyIndex);
+                  return newMap;
+                }
+              );
             }
             virtualKeyboard.setPressedTriads((prev: Set<number>) => {
               const newSet = new Set(prev);
@@ -284,11 +418,30 @@ export const useKeyboardKeysController = (keyboardState: KeyboardState, scaleSta
         if (melodyAdvancedKeys.includes(key)) {
           const keyIndex = melodyAdvancedKeys.indexOf(key);
           const noteMapping = [
-            "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
-            "C", "C#", "D", "D#", "E", "F", "F#",
+            "C",
+            "C#",
+            "D",
+            "D#",
+            "E",
+            "F",
+            "F#",
+            "G",
+            "G#",
+            "A",
+            "A#",
+            "B",
+            "C",
+            "C#",
+            "D",
+            "D#",
+            "E",
+            "F",
+            "F#",
           ];
           const octaveOffset = keyIndex >= 12 ? 1 : 0;
-          const note = `${noteMapping[keyIndex]}${keyboardState.currentOctave + octaveOffset}`;
+          const note = `${noteMapping[keyIndex]}${
+            keyboardState.currentOctave + octaveOffset
+          }`;
           keyboardState.releaseKeyHeldNote(note);
         }
       }
