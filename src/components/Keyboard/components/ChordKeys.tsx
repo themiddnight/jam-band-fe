@@ -1,6 +1,35 @@
+import { useKeyboardShortcutsStore } from "../../../stores/keyboardShortcutsStore";
 import type { Scale } from "../../../hooks/useScaleState";
 import { chordTriadKeys } from "../../../constants/virtualKeyboardKeys";
 import type { KeyboardKey } from "../types/keyboard";
+
+// Helper function to generate chord names based on scale and degree
+const getChordName = (rootNote: string, scale: Scale, degree: number): string => {
+  const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  
+  // Get the root note index
+  const rootIndex = NOTE_NAMES.indexOf(rootNote);
+  
+  // Define scale intervals
+  const SCALES = {
+    major: [0, 2, 4, 5, 7, 9, 11],
+    minor: [0, 2, 3, 5, 7, 8, 10],
+  };
+  
+  // Get the scale notes
+  const scaleIntervals = SCALES[scale];
+  const chordRootIndex = (rootIndex + scaleIntervals[degree % 7]) % 12;
+  const chordRootName = NOTE_NAMES[chordRootIndex];
+  
+  // Define chord qualities for each degree in major and minor scales
+  const MAJOR_CHORD_QUALITIES = ["", "m", "m", "", "", "m", "dim"];
+  const MINOR_CHORD_QUALITIES = ["m", "dim", "", "m", "m", "", ""];
+  
+  const qualities = scale === "major" ? MAJOR_CHORD_QUALITIES : MINOR_CHORD_QUALITIES;
+  const quality = qualities[degree % 7];
+  
+  return chordRootName + quality;
+};
 
 interface ChordKeysProps {
   virtualKeys: KeyboardKey[];
@@ -8,6 +37,7 @@ interface ChordKeysProps {
   pressedTriads: Set<number>;
   chordModifiers: Set<string>;
   scale: Scale;
+  rootNote: string;
   onKeyPress: (key: KeyboardKey) => void;
   onKeyRelease: (key: KeyboardKey) => void;
   onTriadPress: (index: number) => void;
@@ -22,6 +52,7 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
   pressedTriads,
   chordModifiers,
   scale,
+  rootNote,
   onKeyPress,
   onKeyRelease,
   onTriadPress,
@@ -29,6 +60,7 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
   onModifierPress,
   onModifierRelease,
 }) => {
+  const shortcuts = useKeyboardShortcutsStore((state) => state.shortcuts);
   return (
     <div className="flex justify-around gap-3 flex-wrap">
       {/* Keys */}
@@ -42,13 +74,13 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
 
               // Generate chord name based on current modifiers
               let chordSuffix = "";
-              if (chordModifiers.has("n")) chordSuffix += "sus2";
-              else if (chordModifiers.has("m")) chordSuffix += "sus4";
-              if (chordModifiers.has("i"))
+              if (chordModifiers.has(shortcuts.sus2.key)) chordSuffix += "sus2";
+              else if (chordModifiers.has(shortcuts.sus4.key)) chordSuffix += "sus4";
+              if (chordModifiers.has(shortcuts.dominant7.key))
                 chordSuffix += chordSuffix ? "+7" : "7";
-              else if (chordModifiers.has("o"))
+              else if (chordModifiers.has(shortcuts.major7.key))
                 chordSuffix += chordSuffix ? "+M7" : "M7";
-              if (chordModifiers.has("."))
+              if (chordModifiers.has(shortcuts.majMinToggle.key))
                 chordSuffix = chordSuffix.includes("sus")
                   ? chordSuffix
                   : chordSuffix + (scale === "major" ? "m" : "M");
@@ -72,7 +104,7 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
                   </span>
                   <div className="text-center">
                     <div className="text-xs text-purple-800">
-                      {["I", "ii", "iii", "IV", "V", "vi", "vii"][index]}
+                      {getChordName(rootNote, scale, index)}
                     </div>
                     {chordSuffix && (
                       <div className="text-xs text-purple-600 font-bold">
@@ -125,67 +157,67 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
         </p>
         <div className="flex gap-2 mb-4">
           <button
-            onMouseDown={() => onModifierPress("i")}
-            onMouseUp={() => onModifierRelease("i")}
-            onMouseLeave={() => onModifierRelease("i")}
+            onMouseDown={() => onModifierPress(shortcuts.dominant7.key)}
+            onMouseUp={() => onModifierRelease(shortcuts.dominant7.key)}
+            onMouseLeave={() => onModifierRelease(shortcuts.dominant7.key)}
             className={`px-2 py-1 rounded text-xs ${
-              chordModifiers.has("i")
+              chordModifiers.has(shortcuts.dominant7.key)
                 ? "bg-yellow-500 text-black"
                 : "bg-gray-600 text-gray-300"
             }`}
           >
-            I (dom7)
+            {shortcuts.dominant7.key.toUpperCase()} (dom7)
           </button>
           <button
-            onMouseDown={() => onModifierPress("o")}
-            onMouseUp={() => onModifierRelease("o")}
-            onMouseLeave={() => onModifierRelease("o")}
+            onMouseDown={() => onModifierPress(shortcuts.major7.key)}
+            onMouseUp={() => onModifierRelease(shortcuts.major7.key)}
+            onMouseLeave={() => onModifierRelease(shortcuts.major7.key)}
             className={`px-2 py-1 rounded text-xs ${
-              chordModifiers.has("o")
+              chordModifiers.has(shortcuts.major7.key)
                 ? "bg-yellow-500 text-black"
                 : "bg-gray-600 text-gray-300"
             }`}
           >
-            O (maj7)
+            {shortcuts.major7.key.toUpperCase()} (maj7)
           </button>
         </div>
 
         <div className="flex gap-2 mb-4">
           <button
-            onMouseDown={() => onModifierPress("n")}
-            onMouseUp={() => onModifierRelease("n")}
-            onMouseLeave={() => onModifierRelease("n")}
+            onMouseDown={() => onModifierPress(shortcuts.sus2.key)}
+            onMouseUp={() => onModifierRelease(shortcuts.sus2.key)}
+            onMouseLeave={() => onModifierRelease(shortcuts.sus2.key)}
             className={`px-2 py-1 rounded text-xs ${
-              chordModifiers.has("n")
+              chordModifiers.has(shortcuts.sus2.key)
                 ? "bg-green-500 text-black"
                 : "bg-gray-600 text-gray-300"
             }`}
           >
-            N (sus2)
+            {shortcuts.sus2.key.toUpperCase()} (sus2)
           </button>
           <button
-            onMouseDown={() => onModifierPress("m")}
-            onMouseUp={() => onModifierRelease("m")}
-            onMouseLeave={() => onModifierRelease("m")}
+            onMouseDown={() => onModifierPress(shortcuts.sus4.key)}
+            onMouseUp={() => onModifierRelease(shortcuts.sus4.key)}
+            onMouseLeave={() => onModifierRelease(shortcuts.sus4.key)}
             className={`px-2 py-1 rounded text-xs ${
-              chordModifiers.has("m")
+              chordModifiers.has(shortcuts.sus4.key)
                 ? "bg-green-500 text-black"
                 : "bg-gray-600 text-gray-300"
             }`}
           >
-            M (sus4)
+            {shortcuts.sus4.key.toUpperCase()} (sus4)
           </button>
           <button
-            onMouseDown={() => onModifierPress(".")}
-            onMouseUp={() => onModifierRelease(".")}
-            onMouseLeave={() => onModifierRelease(".")}
+            onMouseDown={() => onModifierPress(shortcuts.majMinToggle.key)}
+            onMouseUp={() => onModifierRelease(shortcuts.majMinToggle.key)}
+            onMouseLeave={() => onModifierRelease(shortcuts.majMinToggle.key)}
             className={`px-2 py-1 rounded text-xs ${
-              chordModifiers.has(".")
+              chordModifiers.has(shortcuts.majMinToggle.key)
                 ? "bg-blue-500 text-black"
                 : "bg-gray-600 text-gray-300"
             }`}
           >
-            . (maj/min)
+            {shortcuts.majMinToggle.key.toUpperCase()} (maj/min)
           </button>
         </div>
       </div>

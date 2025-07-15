@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useKeyboardShortcutsStore } from "../../../stores/keyboardShortcutsStore";
 import type { Scale } from "../../../hooks/useScaleState";
 import type { MainMode, KeyboardKey, SimpleMode } from "../types/keyboard";
 import {
@@ -17,6 +18,7 @@ export const useVirtualKeyboard = (
   onPlayNotes: (notes: string[], velocity: number, isKeyHeld: boolean) => void,
   onReleaseKeyHeldNote: (note: string) => void
 ) => {
+  const shortcuts = useKeyboardShortcutsStore((state) => state.shortcuts);
   const [mainMode, setMainMode] = useState<MainMode>("simple");
   const [simpleMode, setSimpleMode] = useState<SimpleMode>("melody");
   const [currentOctave, setCurrentOctave] = useState<number>(2);
@@ -85,7 +87,7 @@ export const useVirtualKeyboard = (
       }
 
       // Handle quality modifier
-      if (modifiers.has(".")) {
+      if (modifiers.has(shortcuts.majMinToggle.key)) {
         if (quality === "major") quality = "minor";
         else quality = "major"; // a simple toggle for now
       }
@@ -93,10 +95,10 @@ export const useVirtualKeyboard = (
       let chordIntervals: number[] = [];
 
       // Handle sus modifiers
-      if (modifiers.has("n")) {
+      if (modifiers.has(shortcuts.sus2.key)) {
         // sus2
         chordIntervals = [0, 2, 7];
-      } else if (modifiers.has("m")) {
+      } else if (modifiers.has(shortcuts.sus4.key)) {
         // sus4
         chordIntervals = [0, 5, 7];
       } else {
@@ -132,7 +134,7 @@ export const useVirtualKeyboard = (
         return note;
       });
 
-      if (modifiers.has("i")) {
+      if (modifiers.has(shortcuts.dominant7.key)) {
         const rootNoteIndex = getNoteIndex(rootNoteOfChord);
         let seventhNoteIndex = rootNoteIndex + 10;
         const highestNoteIndex =
@@ -140,7 +142,7 @@ export const useVirtualKeyboard = (
         if (seventhNoteIndex <= highestNoteIndex) seventhNoteIndex += 12;
         finalChordNotes.push(getNoteFromIndex(seventhNoteIndex));
       }
-      if (modifiers.has("o")) {
+      if (modifiers.has(shortcuts.major7.key)) {
         const rootNoteIndex = getNoteIndex(rootNoteOfChord);
         let seventhNoteIndex = rootNoteIndex + 11;
         const highestNoteIndex =
@@ -151,7 +153,7 @@ export const useVirtualKeyboard = (
 
       return finalChordNotes.sort((a, b) => getNoteIndex(a) - getNoteIndex(b));
     },
-    [getScaleNotes]
+    [getScaleNotes, shortcuts]
   );
 
   const generateVirtualKeys = useCallback((): KeyboardKey[] => {

@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import { useVirtualKeyboard } from "./hooks/useVirtualKeyboard";
 import { useKeyboardKeysController } from "./hooks/useKeyboardKeysController";
+import { useKeyboardState } from "./hooks/useKeyboardState";
 import { MelodyKeys } from "./components/MelodyKeys";
 import { ChordKeys } from "./components/ChordKeys";
 import { AdvancedKeys } from "./components/AdvancedKeys";
+import { ShortcutConfig } from "./ShortcutConfig";
+import { useKeyboardShortcutsStore } from "../../stores/keyboardShortcutsStore";
 import type { Scale } from "../../hooks/useScaleState";
 
 export interface Props {
@@ -30,11 +33,18 @@ export default function Keyboard({
   onReleaseKeyHeldNote,
   onSustainChange,
 }: Props) {
-  const [sustain, setSustain] = useState<boolean>(false);
-  const [sustainToggle, setSustainToggle] = useState<boolean>(false);
-  const [hasSustainedNotes, setHasSustainedNotes] = useState<boolean>(false);
-  const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
-  const [heldKeys, setHeldKeys] = useState<Set<string>>(new Set());
+  const shortcuts = useKeyboardShortcutsStore((state) => state.shortcuts);
+  const [showShortcutConfig, setShowShortcutConfig] = useState<boolean>(false);
+  
+  // Use the new keyboard state hook
+  const keyboardStateData = useKeyboardState({
+    scaleState,
+    onPlayNotes,
+    onStopNotes,
+    onStopSustainedNotes,
+    onReleaseKeyHeldNote,
+    onSustainChange,
+  });
 
   const virtualKeyboard = useVirtualKeyboard(
     scaleState.getScaleNotes,
@@ -67,64 +77,11 @@ export default function Keyboard({
     simpleMode,
     currentOctave,
     velocity,
-    sustain,
-    sustainToggle,
-    hasSustainedNotes,
-    pressedKeys,
-    heldKeys,
-    setHeldKeys,
     setMainMode,
     setSimpleMode,
     setCurrentOctave,
     setVelocity,
-    setSustain: (newSustain: boolean) => {
-      setSustain(newSustain);
-      onSustainChange(newSustain);
-    },
-    setSustainToggle: (newSustainToggle: boolean) => {
-      setSustainToggle(newSustainToggle);
-      if (newSustainToggle) {
-        setSustain(true);
-        onSustainChange(true);
-      } else {
-        setSustain(false);
-        onSustainChange(false);
-        onStopSustainedNotes();
-      }
-    },
-    setPressedKeys,
-    playNote: (note: string, vel: number = velocity, isKeyHeld: boolean = false) => {
-      onPlayNotes([note], vel, isKeyHeld);
-      if (isKeyHeld) {
-        setPressedKeys(new Set([...pressedKeys, note]));
-      }
-      // When toggle is active and we play a note, it will be sustained
-      if (sustainToggle && !isKeyHeld) {
-        setHasSustainedNotes(true);
-      }
-    },
-    stopNote: (note: string) => {
-      onStopNotes([note]);
-      const newPressedKeys = new Set(pressedKeys);
-      newPressedKeys.delete(note);
-      setPressedKeys(newPressedKeys);
-    },
-    releaseKeyHeldNote: (note: string) => {
-      onReleaseKeyHeldNote(note);
-      const newPressedKeys = new Set(pressedKeys);
-      newPressedKeys.delete(note);
-      setPressedKeys(newPressedKeys);
-      // When toggle is active and we release a key, check if we should turn off sustained notes
-      if (sustainToggle && newPressedKeys.size === 0) {
-        setHasSustainedNotes(false);
-      }
-    },
-    stopSustainedNotes: () => {
-      onStopSustainedNotes();
-      setSustain(false);
-      setHasSustainedNotes(false);
-      // Don't turn off toggle mode when stopping sustained notes
-    },
+    ...keyboardStateData,
   };
 
   const { handleKeyDown, handleKeyUp } = useKeyboardKeysController(
@@ -160,10 +117,11 @@ export default function Keyboard({
       return (
         <ChordKeys
           virtualKeys={virtualKeys}
-          pressedKeys={pressedKeys}
+          pressedKeys={keyboardStateData.pressedKeys}
           pressedTriads={pressedTriads}
           chordModifiers={chordModifiers}
           scale={scaleState.scale}
+          rootNote={scaleState.rootNote}
           onKeyPress={handleVirtualKeyPress}
           onKeyRelease={handleVirtualKeyRelease}
           onTriadPress={handleTriadPress}
@@ -176,7 +134,7 @@ export default function Keyboard({
       return (
         <MelodyKeys
           virtualKeys={virtualKeys}
-          pressedKeys={pressedKeys}
+          pressedKeys={keyboardStateData.pressedKeys}
           onKeyPress={handleVirtualKeyPress}
           onKeyRelease={handleVirtualKeyRelease}
         />
@@ -185,7 +143,7 @@ export default function Keyboard({
       return (
         <AdvancedKeys
           virtualKeys={virtualKeys}
-          pressedKeys={pressedKeys}
+          pressedKeys={keyboardStateData.pressedKeys}
           onKeyPress={handleVirtualKeyPress}
           onKeyRelease={handleVirtualKeyRelease}
         />
@@ -197,7 +155,16 @@ export default function Keyboard({
     <div className="bg-white p-3 rounded-lg shadow-lg w-full max-w-4xl">
       <div className="flex justify-around gap-3 mb-3 flex-wrap">
         <div className="space-y-4">
-          <h3 className="font-semibold text-gray-700">Mode Controls</h3>
+          <div className="flex justify-between items-center">
+            <h3 className="font-semibold text-gray-700">Mode Controls</h3>
+            <button
+              onClick={() => setShowShortcutConfig(true)}
+              className="px-3 py-1 text-sm bg-gray-200 rounded hover:bg-gray-300"
+              title="Configure keyboard shortcuts"
+            >
+              ⚙️ Settings
+            </button>
+          </div>
           <div className="flex gap-2">
             <button
               onClick={() => setMainMode("simple")}
@@ -228,7 +195,7 @@ export default function Keyboard({
                     : "bg-gray-200"
                   }`}
               >
-                Melody (/)
+                Melody ({shortcuts.toggleMelodyChord.key.toUpperCase()})
               </button>
               <button
                 onClick={() => setSimpleMode("chord")}
@@ -237,7 +204,7 @@ export default function Keyboard({
                     : "bg-gray-200"
                   }`}
               >
-                Chord (/)
+                Chord ({shortcuts.toggleMelodyChord.key.toUpperCase()})
               </button>
             </div>
           )}
@@ -298,40 +265,30 @@ export default function Keyboard({
             </div>
             <button
               onMouseDown={() => {
-                if (sustainToggle) {
+                if (keyboardStateData.sustainToggle) {
                   // If toggle mode is active, sustain button only stops current sustained notes
                   onStopSustainedNotes();
                 } else {
                   // Normal momentary sustain behavior
-                  setSustain(true);
-                  onSustainChange(true);
+                  keyboardStateData.setSustain(true);
                 }
               }}
               onMouseUp={() => {
-                if (!sustainToggle) {
+                if (!keyboardStateData.sustainToggle) {
                   // Only stop sustain on button release if not in toggle mode
-                  setSustain(false);
-                  onSustainChange(false);
+                  keyboardStateData.setSustain(false);
                 }
               }}
-              className={`px-4 py-2 rounded ${(sustain && !sustainToggle) || (sustainToggle && hasSustainedNotes) ? "bg-yellow-500 text-white" : "bg-gray-200"
+              className={`px-4 py-2 rounded ${(keyboardStateData.sustain && !keyboardStateData.sustainToggle) || (keyboardStateData.sustainToggle && keyboardStateData.hasSustainedNotes) ? "bg-yellow-500 text-white" : "bg-gray-200"
                 }`}
             >
               Sustain (Space)
             </button>
             <button
               onClick={() => {
-                setSustainToggle(!sustainToggle);
-                if (!sustainToggle) {
-                  setSustain(true);
-                  onSustainChange(true);
-                } else {
-                  setSustain(false);
-                  onSustainChange(false);
-                  onStopSustainedNotes();
-                }
+                keyboardStateData.setSustainToggle(!keyboardStateData.sustainToggle);
               }}
-              className={`px-4 py-2 rounded ${sustainToggle ? "bg-green-500 text-white" : "bg-gray-200"
+              className={`px-4 py-2 rounded ${keyboardStateData.sustainToggle ? "bg-green-500 text-white" : "bg-gray-200"
                 }`}
             >
               Toggle Sustain (')
@@ -345,6 +302,11 @@ export default function Keyboard({
       <div className="bg-black p-4 rounded-lg shadow-2xl">
         {renderVirtualKeyboard()}
       </div>
+      
+      <ShortcutConfig 
+        isOpen={showShortcutConfig}
+        onClose={() => setShowShortcutConfig(false)}
+      />
     </div>
   );
 }

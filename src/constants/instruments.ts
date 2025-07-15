@@ -6,11 +6,11 @@ export const SOUNDFONT_INSTRUMENTS = [
   { value: "acoustic_grand_piano", label: "Acoustic Grand Piano", controlType: ControlType.Keyboard },
   { value: "bright_acoustic_piano", label: "Bright Acoustic Piano", controlType: ControlType.Keyboard },
   { value: "electric_grand_piano", label: "Electric Grand Piano", controlType: ControlType.Keyboard },
-  { value: "honky_tonk_piano", label: "Honky-tonk Piano", controlType: ControlType.Keyboard },
+  { value: "honkytonk_piano", label: "Honky-tonk Piano", controlType: ControlType.Keyboard },
   { value: "electric_piano_1", label: "Electric Piano 1", controlType: ControlType.Keyboard },
   { value: "electric_piano_2", label: "Electric Piano 2", controlType: ControlType.Keyboard },
   { value: "harpsichord", label: "Harpsichord", controlType: ControlType.Keyboard },
-  { value: "clavi", label: "Clavi", controlType: ControlType.Keyboard },
+  { value: "clavinet", label: "Clavinet", controlType: ControlType.Keyboard },
   
   // Chromatic Percussion
   { value: "celesta", label: "Celesta", controlType: ControlType.Keyboard },
@@ -69,7 +69,7 @@ export const SOUNDFONT_INSTRUMENTS = [
   { value: "synth_strings_2", label: "Synth Strings 2", controlType: ControlType.Keyboard },
   { value: "choir_aahs", label: "Choir Aahs", controlType: ControlType.Keyboard },
   { value: "voice_oohs", label: "Voice Oohs", controlType: ControlType.Keyboard },
-  { value: "synth_voice", label: "Synth Voice", controlType: ControlType.Keyboard },
+  { value: "synth_choir", label: "Synth Choir", controlType: ControlType.Keyboard },
   { value: "orchestra_hit", label: "Orchestra Hit", controlType: ControlType.Keyboard },
   
   // Brass
@@ -110,7 +110,7 @@ export const SOUNDFONT_INSTRUMENTS = [
   { value: "lead_5_charang", label: "Lead 5 (Charang)", controlType: ControlType.Keyboard },
   { value: "lead_6_voice", label: "Lead 6 (Voice)", controlType: ControlType.Keyboard },
   { value: "lead_7_fifths", label: "Lead 7 (Fifths)", controlType: ControlType.Keyboard },
-  { value: "lead_8_bass_lead", label: "Lead 8 (Bass + Lead)", controlType: ControlType.Keyboard },
+  { value: "lead_8_bass__lead", label: "Lead 8 (Bass + Lead)", controlType: ControlType.Keyboard },
   
   // Synth Pad
   { value: "pad_1_new_age", label: "Pad 1 (New Age)", controlType: ControlType.Keyboard },
@@ -130,7 +130,7 @@ export const SOUNDFONT_INSTRUMENTS = [
   { value: "fx_5_brightness", label: "FX 5 (Brightness)", controlType: ControlType.Keyboard },
   { value: "fx_6_goblins", label: "FX 6 (Goblins)", controlType: ControlType.Keyboard },
   { value: "fx_7_echoes", label: "FX 7 (Echoes)", controlType: ControlType.Keyboard },
-  { value: "fx_8_sci_fi", label: "FX 8 (Sci-Fi)", controlType: ControlType.Keyboard },
+  { value: "fx_8_scifi", label: "FX 8 (Sci-Fi)", controlType: ControlType.Keyboard },
   
   // Ethnic
   { value: "sitar", label: "Sitar", controlType: ControlType.Keyboard },
