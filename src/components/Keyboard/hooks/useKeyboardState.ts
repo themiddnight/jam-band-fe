@@ -25,8 +25,8 @@ export const useKeyboardState = (props: Props) => {
     }
   }, [props]);
 
-  const playNote = useCallback((note: string, vel: number, isKeyHeld: boolean = false) => {
-    props.onPlayNotes([note], vel, isKeyHeld);
+  const playNote = useCallback(async (note: string, vel: number, isKeyHeld: boolean = false) => {
+    await props.onPlayNotes([note], vel, isKeyHeld);
     if (isKeyHeld) {
       setPressedKeys(new Set([...pressedKeys, note]));
     }

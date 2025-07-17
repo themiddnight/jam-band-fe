@@ -1,23 +1,31 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import Soundfont from "soundfont-player";
-import { SOUNDFONT_INSTRUMENTS } from "../constants/instruments";
+import { Soundfont, DrumMachine } from "smplr";
+import { SOUNDFONT_INSTRUMENTS, DRUM_MACHINES, InstrumentCategory } from "../constants/instruments";
 import { ControlType } from "../types";
+import { getCachedDrumMachines } from "../utils/drumMachineUtils";
 
 export const useInstrument = (
-  initialInstrument = "acoustic_grand_piano"
+  initialInstrument = "acoustic_grand_piano",
+  initialCategory = InstrumentCategory.Melodic
 ) => {
   const [instrument, setInstrument] = useState<any>(null);
   const [currentInstrument, setCurrentInstrument] =
     useState<string>(initialInstrument);
+  const [currentCategory, setCurrentCategory] = 
+    useState<InstrumentCategory>(initialCategory);
   const [sustain, setSustain] = useState<boolean>(false);
   const [isLoadingInstrument, setIsLoadingInstrument] =
     useState<boolean>(false);
+  const [availableSamples, setAvailableSamples] = useState<string[]>([]);
+  const [dynamicDrumMachines, setDynamicDrumMachines] = useState(DRUM_MACHINES);
+
+  const [isAudioContextReady, setIsAudioContextReady] = useState<boolean>(false);
   const audioContext = useRef<AudioContext | null>(null);
   const sustainedNotes = useRef<Set<any>>(new Set());
   const activeNotes = useRef<Map<string, any>>(new Map());
   const keyHeldNotes = useRef<Set<string>>(new Set());
 
-  const loadInstrument = async (instrumentName: string) => {
+  const initializeAudioContext = useCallback(async () => {
     if (!audioContext.current) {
       audioContext.current = new (window.AudioContext ||
         (window as any).webkitAudioContext)();
@@ -27,20 +35,77 @@ export const useInstrument = (
       await audioContext.current.resume();
     }
 
+    setIsAudioContextReady(true);
+    return audioContext.current;
+  }, []);
+
+  const loadInstrument = useCallback(async (instrumentName: string, category: InstrumentCategory = currentCategory) => {
+    // Don't load if AudioContext isn't ready
+    if (!audioContext.current || audioContext.current.state !== "running") {
+      console.log("AudioContext not ready, will load instrument later");
+      return;
+    }
+
     setIsLoadingInstrument(true);
     try {
-      const newInstrument = await Soundfont.instrument(
-        audioContext.current,
-        instrumentName as any
-      );
+      let newInstrument: any;
+      
+      if (category === InstrumentCategory.DrumBeat) {
+        newInstrument = new DrumMachine(
+          audioContext.current,
+          { instrument: instrumentName, volume: 127 }
+        );
+      } else {
+        // Default to Soundfont for melodic instruments
+        newInstrument = new Soundfont(
+          audioContext.current,
+          { instrument: instrumentName, volume: 127 }
+        );
+      }
+      
+      // Wait for the instrument to load
+      await newInstrument.load;
       setInstrument(newInstrument);
       setCurrentInstrument(instrumentName);
+      setCurrentCategory(category);
+      
+      // Get available samples for drum machines
+      if (category === InstrumentCategory.DrumBeat && newInstrument.getSampleNames) {
+        const samples = newInstrument.getSampleNames();
+        setAvailableSamples(samples);
+        console.log(`Available samples for ${instrumentName}:`, samples);
+      } else {
+        setAvailableSamples([]);
+      }
+      
+      console.log(`Loaded ${category} instrument: ${instrumentName}`);
     } catch (error) {
       console.error("Failed to load instrument:", error);
     } finally {
       setIsLoadingInstrument(false);
     }
-  };
+  }, [currentCategory]);
+
+  // Load dynamic drum machines
+  useEffect(() => {
+    const loadDrumMachines = async () => {
+      try {
+        const availableDrumMachines = await getCachedDrumMachines();
+        setDynamicDrumMachines(availableDrumMachines);
+      } catch (error) {
+        console.error("Failed to load dynamic drum machines:", error);
+      }
+    };
+    
+    loadDrumMachines();
+  }, []);
+
+  // Load instrument when AudioContext becomes ready
+  useEffect(() => {
+    if (isAudioContextReady && !instrument) {
+      loadInstrument(currentInstrument);
+    }
+  }, [isAudioContextReady, instrument, currentInstrument, loadInstrument]);
 
   useEffect(() => {
     return () => {
@@ -50,62 +115,73 @@ export const useInstrument = (
     };
   }, []);
 
+  const ensureAudioContextAndInstrument = useCallback(async () => {
+    if (!audioContext.current || audioContext.current.state !== "running") {
+      await initializeAudioContext();
+    }
+
+    if (!instrument) {
+      await loadInstrument(currentInstrument);
+    }
+  }, [initializeAudioContext, loadInstrument, instrument, currentInstrument]);
+
   const playNotes = useCallback(
-    (notes: string[], velocity: number, isKeyHeld: boolean = false) => {
-      if (!audioContext.current) {
-        audioContext.current = new (window.AudioContext ||
-          (window as any).webkitAudioContext)();
-      }
+    async (notes: string[], velocity: number, isKeyHeld: boolean = false) => {
+      try {
+        await ensureAudioContextAndInstrument();
 
-      if (instrument && audioContext.current?.state === "running") {
-        notes.forEach((note) => {
-          const existingNote = activeNotes.current.get(note);
-          if (existingNote && existingNote.stop) {
-            existingNote.stop();
-          }
+        if (instrument && audioContext.current?.state === "running") {
+          notes.forEach((note) => {
+            const existingNote = activeNotes.current.get(note);
+            if (existingNote) {
+              existingNote(); // Call the stop function directly
+            }
 
-          const playedNote = instrument.play(
-            note,
-            audioContext.current!.currentTime,
-            { gain: velocity * 5 }
-          );
-
-          activeNotes.current.set(note, playedNote);
-
-          if (isKeyHeld) {
-            keyHeldNotes.current.add(note);
-          }
-
-          if (!isKeyHeld && sustain) {
-            sustainedNotes.current.add(playedNote);
-          }
-
-          if (!isKeyHeld && !sustain) {
-            setTimeout(() => {
-              if (
-                activeNotes.current.has(note) &&
-                !keyHeldNotes.current.has(note)
-              ) {
-                if (playedNote && playedNote.stop) {
-                  playedNote.stop();
-                }
-                activeNotes.current.delete(note);
+            const playedNote = instrument.start(
+              { 
+                note: note, 
+                velocity: velocity * 127, // smplr expects velocity 0-127
+                time: audioContext.current!.currentTime,
               }
-            }, 300);
-          }
-        });
-      } else if (audioContext.current?.state === "suspended") {
-        audioContext.current.resume();
+            );
+
+            activeNotes.current.set(note, playedNote);
+
+            if (isKeyHeld) {
+              keyHeldNotes.current.add(note);
+            }
+
+            if (!isKeyHeld && sustain) {
+              sustainedNotes.current.add(playedNote);
+            }
+
+            if (!isKeyHeld && !sustain) {
+              setTimeout(() => {
+                if (
+                  activeNotes.current.has(note) &&
+                  !keyHeldNotes.current.has(note)
+                ) {
+                  if (playedNote) {
+                    playedNote(); // Call the stop function directly
+                  }
+                  activeNotes.current.delete(note);
+                }
+              }, 300);
+            }
+          });
+        }
+      } catch (error) {
+        console.error("Error playing notes:", error);
       }
     },
-    [instrument, audioContext, sustain]
+    [instrument, audioContext, sustain, ensureAudioContextAndInstrument]
   );
 
   const stopNotes = (notes: string[]) => {
     notes.forEach((note) => {
       const activeNote = activeNotes.current.get(note);
-      if (activeNote && activeNote.stop) {
-        activeNote.stop();
+      if (activeNote) {
+        activeNote(); // Call the stop function directly
         activeNotes.current.delete(note);
         sustainedNotes.current.delete(activeNote);
       }
@@ -115,15 +191,15 @@ export const useInstrument = (
 
   const stopSustainedNotes = useCallback(() => {
     sustainedNotes.current.forEach((note) => {
-      if (note && note.stop) {
-        note.stop();
+      if (note) {
+        note(); // Call the stop function directly
       }
     });
     sustainedNotes.current.clear();
 
     activeNotes.current.forEach((note, noteName) => {
-      if (!keyHeldNotes.current.has(noteName) && note && note.stop) {
-        note.stop();
+      if (!keyHeldNotes.current.has(noteName) && note) {
+        note(); // Call the stop function directly
       }
     });
 
@@ -141,9 +217,13 @@ export const useInstrument = (
       keyHeldNotes.current.delete(note);
 
       const activeNote = activeNotes.current.get(note);
-      if (activeNote && activeNote.stop && !sustain) {
-        activeNote.stop();
-        activeNotes.current.delete(note);
+      if (activeNote) {
+        if (!sustain) {
+          activeNote(); // Call the stop function directly
+          activeNotes.current.delete(note);
+        } else {
+          sustainedNotes.current.add(activeNote);
+        }
       }
     },
     [sustain]
@@ -159,11 +239,36 @@ export const useInstrument = (
     [stopSustainedNotes]
   );
 
-  const handleInstrumentChange = (instrumentName: string) => {
-    loadInstrument(instrumentName);
-  };
+  const handleInstrumentChange = useCallback(async (instrumentName: string, category?: InstrumentCategory) => {
+    setCurrentInstrument(instrumentName);
+    if (category && category !== currentCategory) {
+      setCurrentCategory(category);
+    }
+    if (isAudioContextReady) {
+      await loadInstrument(instrumentName, category || currentCategory);
+    }
+  }, [isAudioContextReady, loadInstrument, currentCategory]);
+
+  const handleCategoryChange = useCallback(async (category: InstrumentCategory) => {
+    setCurrentCategory(category);
+    // Reset to default instrument for the new category
+    const defaultInstrument = category === InstrumentCategory.DrumBeat 
+      ? dynamicDrumMachines[0]?.value || "TR-808"
+      : "acoustic_grand_piano";
+    setCurrentInstrument(defaultInstrument);
+    if (isAudioContextReady) {
+      await loadInstrument(defaultInstrument, category);
+    }
+  }, [isAudioContextReady, loadInstrument, dynamicDrumMachines]);
 
   const getCurrentInstrumentControlType = (): ControlType => {
+    if (currentCategory === InstrumentCategory.DrumBeat) {
+      const drumData = dynamicDrumMachines.find(
+        (inst) => inst.value === currentInstrument
+      );
+      return drumData?.controlType || ControlType.Drumpad;
+    }
+    
     const instrumentData = SOUNDFONT_INSTRUMENTS.find(
       (inst) => inst.value === currentInstrument
     );
@@ -171,15 +276,7 @@ export const useInstrument = (
   };
 
   const handleMidiNoteOn = useCallback(
-    (note: number, velocity: number) => {
-      if (audioContext.current?.state === "suspended") {
-        audioContext.current.resume();
-      }
-
-      if (!instrument) {
-        return;
-      }
-
+    async (note: number, velocity: number) => {
       const noteNames = [
         "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
       ];
@@ -187,9 +284,9 @@ export const useInstrument = (
       const noteName = noteNames[note % 12];
       const noteString = `${noteName}${octave}`;
 
-      playNotes([noteString], velocity, true);
+      await playNotes([noteString], velocity, true); // velocity is already normalized to 0-1
     },
-    [instrument, playNotes]
+    [playNotes]
   );
 
   const handleMidiNoteOff = useCallback(
@@ -226,7 +323,11 @@ export const useInstrument = (
   return {
     instrument,
     currentInstrument,
+    currentCategory,
+    availableSamples,
     isLoadingInstrument,
+    isAudioContextReady,
+    initializeAudioContext,
     loadInstrument,
     playNotes,
     stopNotes,
@@ -234,6 +335,7 @@ export const useInstrument = (
     releaseKeyHeldNote,
     setSustainState,
     handleInstrumentChange,
+    handleCategoryChange,
     getCurrentInstrumentControlType,
     handleMidiNoteOn,
     handleMidiNoteOff,

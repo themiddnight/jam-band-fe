@@ -11,15 +11,18 @@ interface MidiStatusProps {
   isConnected: boolean;
   getMidiInputs: () => MidiDevice[];
   onRequestAccess: () => Promise<boolean>;
+  connectionError?: string | null;
+  isRequesting?: boolean;
 }
 
 export default function MidiStatus({
   isConnected,
   getMidiInputs,
   onRequestAccess,
+  connectionError,
+  isRequesting = false,
 }: MidiStatusProps) {
   const [devices, setDevices] = useState<MidiDevice[]>([]);
-  const [isRequesting, setIsRequesting] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
 
   useEffect(() => {
@@ -31,13 +34,14 @@ export default function MidiStatus({
   }, [isConnected, getMidiInputs]);
 
   const handleRequestAccess = async () => {
-    setIsRequesting(true);
     try {
-      await onRequestAccess();
+      const success = await onRequestAccess();
+      if (success) {
+        // Refresh device list
+        setDevices(getMidiInputs());
+      }
     } catch (error) {
       console.error("Failed to request MIDI access:", error);
-    } finally {
-      setIsRequesting(false);
     }
   };
 
@@ -49,7 +53,11 @@ export default function MidiStatus({
         onMouseLeave={() => setShowTooltip(false)}
       >
         <span className="text-sm font-medium text-gray-700">MIDI</span>
-        <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+        <div className={`w-2 h-2 rounded-full ${
+          isConnected ? 'bg-green-500' : 
+          connectionError ? 'bg-red-500' : 
+          isRequesting ? 'bg-yellow-500' : 'bg-gray-400'
+        }`} />
       </div>
 
       {/* Tooltip for connected state */}
@@ -106,16 +114,31 @@ export default function MidiStatus({
       {/* Tooltip for disconnected state */}
       {showTooltip && !isConnected && (
         <div className="absolute top-full left-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4 w-64">
-          <p className="text-sm text-gray-600 mb-3">
-            Connect a MIDI controller to use physical keys and controls
-          </p>
-          <button
-            onClick={handleRequestAccess}
-            disabled={isRequesting}
-            className="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 text-sm"
-          >
-            {isRequesting ? 'Requesting...' : 'Connect MIDI Device'}
-          </button>
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600">
+              Connect a MIDI controller to use physical keys and controls
+            </p>
+            
+            {connectionError && (
+              <div className="p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
+                <strong>Error:</strong> {connectionError}
+              </div>
+            )}
+            
+            <button
+              onClick={handleRequestAccess}
+              disabled={isRequesting}
+              className="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 text-sm"
+            >
+              {isRequesting ? 'Requesting...' : 'Connect MIDI Device'}
+            </button>
+            
+            {!navigator.requestMIDIAccess && (
+              <p className="text-xs text-gray-500">
+                Web MIDI API not supported in this browser
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>

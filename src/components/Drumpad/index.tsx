@@ -12,36 +12,62 @@ export interface DrumpadProps {
   onStopSustainedNotes: () => void;
   onReleaseKeyHeldNote: (note: string) => void;
   onSustainChange: (sustain: boolean) => void;
+  availableSamples: string[];
 }
 
 export default function Drumpad({
   onPlayNotes,
   onReleaseKeyHeldNote,
+  availableSamples,
 }: DrumpadProps) {
   const [velocity, setVelocity] = useState<number>(0.7);
   const [pressedPads, setPressedPads] = useState<Set<string>>(new Set());
 
-  const drumPads = [
-    { id: "kick", note: "C2", label: "Kick", color: "bg-red-500" },
-    { id: "snare", note: "D2", label: "Snare", color: "bg-blue-500" },
-    { id: "hihat", note: "F#2", label: "Hi-Hat", color: "bg-yellow-500" },
-    { id: "crash", note: "C#3", label: "Crash", color: "bg-orange-500" },
-    { id: "tom1", note: "E2", label: "Tom 1", color: "bg-green-500" },
-    { id: "tom2", note: "G2", label: "Tom 2", color: "bg-purple-500" },
-    { id: "ride", note: "D#3", label: "Ride", color: "bg-indigo-500" },
-    { id: "floor", note: "A2", label: "Floor", color: "bg-pink-500" },
-  ];
-
-  const handlePadPress = (padId: string, note: string) => {
-    setPressedPads(new Set([...pressedPads, padId]));
-    onPlayNotes([note], velocity, true);
+  // Create drum pads based on available samples
+  const createDrumPads = () => {
+    const colors = [
+      "bg-red-500", "bg-blue-500", "bg-yellow-500", "bg-orange-500", 
+      "bg-green-500", "bg-purple-500", "bg-indigo-500", "bg-pink-500",
+      "bg-teal-500", "bg-cyan-500", "bg-lime-500", "bg-amber-500"
+    ];
+    
+    return availableSamples.map((sample, index) => {
+      // Create a display label from the sample name
+      const label = sample.replace(/-/g, ' ').replace(/\d+/g, '').trim();
+      const displayLabel = label.charAt(0).toUpperCase() + label.slice(1);
+      
+      return {
+        id: sample,
+        label: displayLabel || sample,
+        color: colors[index % colors.length],
+      };
+    });
   };
 
-  const handlePadRelease = (padId: string, note: string) => {
+  const drumPads = createDrumPads();
+
+  // Show message if no samples are available
+  if (availableSamples.length === 0) {
+    return (
+      <div className="bg-white p-3 rounded-lg shadow-lg w-full max-w-4xl text-center">
+        <h3 className="font-semibold text-gray-700 mb-2">Loading drum samples...</h3>
+        <p className="text-gray-500 text-sm">Please wait while the drum machine loads.</p>
+      </div>
+    );
+  }
+
+  const handlePadPress = async (padId: string) => {
+    setPressedPads(new Set([...pressedPads, padId]));
+    // Use drum sample name (padId) for drum machines
+    await onPlayNotes([padId], velocity, true);
+  };
+
+  const handlePadRelease = (padId: string) => {
     const newPressedPads = new Set(pressedPads);
     newPressedPads.delete(padId);
     setPressedPads(newPressedPads);
-    onReleaseKeyHeldNote(note);
+    // Use drum sample name (padId) for drum machines
+    onReleaseKeyHeldNote(padId);
   };
 
   return (
@@ -60,6 +86,9 @@ export default function Drumpad({
               className="w-20"
             />
           </div>
+          <div className="text-xs text-gray-500">
+            {availableSamples.length} samples available
+          </div>
         </div>
       </div>
 
@@ -70,9 +99,9 @@ export default function Drumpad({
           return (
             <button
               key={pad.id}
-              onMouseDown={() => handlePadPress(pad.id, pad.note)}
-              onMouseUp={() => handlePadRelease(pad.id, pad.note)}
-              onMouseLeave={() => handlePadRelease(pad.id, pad.note)}
+              onMouseDown={() => handlePadPress(pad.id)}
+              onMouseUp={() => handlePadRelease(pad.id)}
+              onMouseLeave={() => handlePadRelease(pad.id)}
               className={`h-24 rounded-lg border-2 border-gray-300 flex flex-col items-center justify-center transition-all ${
                 isPressed 
                   ? `${pad.color} text-white scale-95` 
@@ -80,7 +109,7 @@ export default function Drumpad({
               }`}
             >
               <span className="font-bold text-lg">{pad.label}</span>
-              <span className="text-xs opacity-75">{pad.note}</span>
+              <span className="text-xs opacity-75">{pad.id}</span>
             </button>
           );
         })}

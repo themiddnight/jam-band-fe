@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import Keyboard from "./components/Keyboard";
 import Guitar from "./components/Guitar";
 import Bass from "./components/Bass";
@@ -6,25 +6,30 @@ import Drumpad from "./components/Drumpad";
 import Drumset from "./components/Drumset";
 import ScaleSelector from "./components/ScaleSelector";
 import InstrumentSelector from "./components/InstrumentSelector";
+import CategorySelector from "./components/CategorySelector";
 import MidiStatus from "./components/MidiStatus";
 import { useScaleState } from "./hooks/useScaleState";
 import { useMidiController } from "./hooks/useMidiController";
 import { useInstrument } from "./hooks/useInstrument";
 import { ControlType } from "./types";
+import "./utils/midiTest"; // Import MIDI test utility
 
 export default function App() {
   const scaleState = useScaleState();
   const {
-    instrument,
     currentInstrument,
+    currentCategory,
+    availableSamples,
     isLoadingInstrument,
-    loadInstrument,
+    isAudioContextReady,
+    initializeAudioContext,
     playNotes,
     stopNotes,
     stopSustainedNotes,
     releaseKeyHeldNote,
     setSustainState,
     handleInstrumentChange,
+    handleCategoryChange,
     getCurrentInstrumentControlType,
     handleMidiNoteOn,
     handleMidiNoteOff,
@@ -32,15 +37,17 @@ export default function App() {
     handleMidiSustainChange,
   } = useInstrument();
 
-  const handlersRef = useRef({
+  // Memoize MIDI handlers to prevent unnecessary recreation
+  const midiHandlers = useRef({
     onNoteOn: handleMidiNoteOn,
     onNoteOff: handleMidiNoteOff,
     onControlChange: handleMidiControlChange,
     onSustainChange: handleMidiSustainChange,
   });
 
+  // Update handlers ref when they change
   useEffect(() => {
-    handlersRef.current = {
+    midiHandlers.current = {
       onNoteOn: handleMidiNoteOn,
       onNoteOff: handleMidiNoteOff,
       onControlChange: handleMidiControlChange,
@@ -53,15 +60,34 @@ export default function App() {
     handleMidiSustainChange,
   ]);
 
-  // Initialize MIDI controller
-  const midiController = useMidiController({
-    onNoteOn: (note, velocity) => handlersRef.current.onNoteOn(note, velocity),
-    onNoteOff: (note) => handlersRef.current.onNoteOff(note),
-    onControlChange: (controller) =>
-      handlersRef.current.onControlChange(controller),
-    onPitchBend: () => null,
-    onSustainChange: (sustain) => handlersRef.current.onSustainChange(sustain),
-  });
+  // Create stable callback functions
+  const stableMidiHandlers = {
+    onNoteOn: useCallback((note: number, velocity: number) => {
+      midiHandlers.current.onNoteOn(note, velocity);
+    }, []),
+    onNoteOff: useCallback((note: number) => {
+      midiHandlers.current.onNoteOff(note);
+    }, []),
+    onControlChange: useCallback((controller: number) => {
+      midiHandlers.current.onControlChange(controller);
+    }, []),
+    onPitchBend: useCallback(() => null, []),
+    onSustainChange: useCallback((sustain: boolean) => {
+      midiHandlers.current.onSustainChange(sustain);
+    }, []),
+  };
+
+  // Initialize MIDI controller with stable handlers
+  const midiController = useMidiController(stableMidiHandlers);
+
+  const handleInitializeAudio = async () => {
+    try {
+      await initializeAudioContext();
+      // The instrument will be loaded automatically when AudioContext becomes ready
+    } catch (error) {
+      console.error("Failed to initialize audio context:", error);
+    }
+  };
 
   const renderInstrumentControl = () => {
     const controlType = getCurrentInstrumentControlType();
@@ -78,8 +104,8 @@ export default function App() {
       onSustainChange: setSustainState,
     };
 
-    // Show initialization button if no instrument is loaded
-    if (!instrument && !isLoadingInstrument) {
+    // Show initialization button if AudioContext is not ready
+    if (!isAudioContextReady) {
       return (
         <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-4xl text-center">
           <h3 className="text-xl font-semibold text-gray-800 mb-4">
@@ -90,9 +116,7 @@ export default function App() {
             instrument.
           </p>
           <button
-            onClick={() => {
-              loadInstrument(currentInstrument);
-            }}
+            onClick={handleInitializeAudio}
             className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-medium"
           >
             Initialize Audio & Load Instrument
@@ -125,9 +149,9 @@ export default function App() {
       case ControlType.Bass:
         return <Bass {...commonProps} />;
       case ControlType.Drumpad:
-        return <Drumpad {...commonProps} />;
+        return <Drumpad {...commonProps} availableSamples={availableSamples} />;
       case ControlType.Drumset:
-        return <Drumset {...commonProps} />;
+        return <Drumset {...commonProps} availableSamples={availableSamples} />;
       case ControlType.Keyboard:
       default:
         return <Keyboard {...commonProps} />;
@@ -141,6 +165,8 @@ export default function App() {
           isConnected={midiController.isConnected}
           getMidiInputs={midiController.getMidiInputs}
           onRequestAccess={midiController.requestMidiAccess}
+          connectionError={midiController.connectionError}
+          isRequesting={midiController.isRequesting}
         />
         <ScaleSelector
           rootNote={scaleState.rootNote}
@@ -148,8 +174,14 @@ export default function App() {
           onRootNoteChange={scaleState.setRootNote}
           onScaleChange={scaleState.setScale}
         />
+        <CategorySelector
+          currentCategory={currentCategory}
+          onCategoryChange={handleCategoryChange}
+          isLoading={isLoadingInstrument}
+        />
         <InstrumentSelector
           currentInstrument={currentInstrument}
+          currentCategory={currentCategory}
           onInstrumentChange={handleInstrumentChange}
           isLoading={isLoadingInstrument}
         />

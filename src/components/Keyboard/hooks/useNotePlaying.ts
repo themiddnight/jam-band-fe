@@ -13,7 +13,7 @@ export const useNotePlaying = (
   scaleState: ScaleState,
   virtualKeyboard: VirtualKeyboardState
 ) => {
-  const playMelodyNote = useCallback((key: string, keyIndex: number, octaveOffset: number = 0) => {
+  const playMelodyNote = useCallback(async (keyIndex: number, octaveOffset: number = 0) => {
     const scaleNotes = scaleState.getScaleNotes(
       scaleState.rootNote,
       scaleState.scale,
@@ -21,7 +21,7 @@ export const useNotePlaying = (
     );
     
     if (keyIndex < scaleNotes.length) {
-      keyboardState.playNote(scaleNotes[keyIndex], keyboardState.velocity, true);
+      await keyboardState.playNote(scaleNotes[keyIndex], keyboardState.velocity, true);
     } else {
       const nextOctaveNotes = scaleState.getScaleNotes(
         scaleState.rootNote,
@@ -29,7 +29,7 @@ export const useNotePlaying = (
         keyboardState.currentOctave + octaveOffset + 1
       );
       if (keyIndex - scaleNotes.length < nextOctaveNotes.length) {
-        keyboardState.playNote(
+        await keyboardState.playNote(
           nextOctaveNotes[keyIndex - scaleNotes.length],
           keyboardState.velocity,
           true
@@ -38,18 +38,18 @@ export const useNotePlaying = (
     }
   }, [keyboardState, scaleState]);
 
-  const playChordNote = useCallback((key: string, keyIndex: number) => {
+  const playChordNote = useCallback(async (keyIndex: number) => {
     const scaleNotes = scaleState.getScaleNotes(
       scaleState.rootNote,
       scaleState.scale,
       keyboardState.currentOctave
     );
     if (keyIndex < scaleNotes.length) {
-      keyboardState.playNote(scaleNotes[keyIndex], keyboardState.velocity, true);
+      await keyboardState.playNote(scaleNotes[keyIndex], keyboardState.velocity, true);
     }
   }, [keyboardState, scaleState]);
 
-  const playTriadChord = useCallback((key: string, keyIndex: number) => {
+  const playTriadChord = useCallback(async (keyIndex: number) => {
     const chord = virtualKeyboard.getChord(
       scaleState.rootNote,
       scaleState.scale,
@@ -61,50 +61,50 @@ export const useNotePlaying = (
     virtualKeyboard.setActiveTriadChords(
       (prev: Map<number, string[]>) => new Map(prev).set(keyIndex, chord)
     );
-    chord.forEach((note: string) =>
-      keyboardState.playNote(note, keyboardState.velocity, true)
-    );
+    for (const note of chord) {
+      await keyboardState.playNote(note, keyboardState.velocity, true);
+    }
     virtualKeyboard.setPressedTriads((prev: Set<number>) =>
       new Set(prev).add(keyIndex)
     );
   }, [keyboardState, scaleState, virtualKeyboard]);
 
-  const playAdvancedNote = useCallback((key: string, keyIndex: number) => {
+  const playAdvancedNote = useCallback(async (keyIndex: number) => {
     const noteMapping = [
       "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
       "C", "C#", "D", "D#", "E", "F", "F#",
     ];
     const octaveOffset = keyIndex >= 12 ? 1 : 0;
     const note = `${noteMapping[keyIndex]}${keyboardState.currentOctave + octaveOffset}`;
-    keyboardState.playNote(note, keyboardState.velocity, true);
+    await keyboardState.playNote(note, keyboardState.velocity, true);
   }, [keyboardState]);
 
-  const handleNotePlaying = useCallback((key: string) => {
+  const handleNotePlaying = useCallback(async (key: string) => {
     if (keyboardState.mainMode === "simple") {
       if (keyboardState.simpleMode === "melody") {
         // Lower row keys
         if (melodySimpleKeys.includes(key)) {
           const keyIndex = melodySimpleKeys.indexOf(key);
-          playMelodyNote(key, keyIndex);
+          await playMelodyNote(keyIndex);
         }
         // Upper row keys
         else if (melodySimpleKeysUpper.includes(key)) {
           const keyIndex = melodySimpleKeysUpper.indexOf(key);
-          playMelodyNote(key, keyIndex, 1);
+          await playMelodyNote(keyIndex, 1);
         }
       } else if (keyboardState.simpleMode === "chord") {
         if (chordRootKeys.includes(key)) {
           const keyIndex = chordRootKeys.indexOf(key);
-          playChordNote(key, keyIndex);
+          await playChordNote(keyIndex);
         } else if (chordTriadKeys.includes(key)) {
           const keyIndex = chordTriadKeys.indexOf(key);
-          playTriadChord(key, keyIndex);
+          await playTriadChord(keyIndex);
         }
       }
     } else if (keyboardState.mainMode === "advanced") {
       if (melodyAdvancedKeys.includes(key)) {
         const keyIndex = melodyAdvancedKeys.indexOf(key);
-        playAdvancedNote(key, keyIndex);
+        await playAdvancedNote(keyIndex);
       }
     }
   }, [keyboardState, playMelodyNote, playChordNote, playTriadChord, playAdvancedNote]);

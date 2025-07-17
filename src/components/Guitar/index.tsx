@@ -15,10 +15,7 @@ export interface GuitarProps {
 }
 
 export default function Guitar({
-  scaleState,
   onPlayNotes,
-  onStopNotes,
-  onStopSustainedNotes,
   onReleaseKeyHeldNote,
   onSustainChange,
 }: GuitarProps) {
@@ -42,12 +39,12 @@ export default function Guitar({
     return noteNames[newNoteIndex] + octave;
   };
 
-  const handleFretPress = (stringIndex: number, fret: number) => {
+  const handleFretPress = async (stringIndex: number, fret: number) => {
     const note = getNoteAtFret(stringIndex, fret);
     const fretKey = `${stringIndex}-${fret}`;
     
     setPressedFrets(new Set([...pressedFrets, fretKey]));
-    onPlayNotes([note], velocity, true);
+    await onPlayNotes([note], velocity, true);
   };
 
   const handleFretRelease = (stringIndex: number, fret: number) => {

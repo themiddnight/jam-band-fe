@@ -1,25 +1,58 @@
-import { useState } from "react";
-import { SOUNDFONT_INSTRUMENTS } from "../constants/instruments";
+import { useState, useEffect } from "react";
+import { SOUNDFONT_INSTRUMENTS, DRUM_MACHINES, InstrumentCategory } from "../constants/instruments";
+import { getCachedDrumMachines, type DrumMachineInfo } from "../utils/drumMachineUtils";
 
 export interface InstrumentSelectorProps {
   currentInstrument: string;
+  currentCategory: InstrumentCategory;
   onInstrumentChange: (instrument: string) => void;
   isLoading?: boolean;
 }
 
 export default function InstrumentSelector({
   currentInstrument,
+  currentCategory,
   onInstrumentChange,
   isLoading = false,
 }: InstrumentSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [dynamicDrumMachines, setDynamicDrumMachines] = useState<DrumMachineInfo[]>(DRUM_MACHINES);
 
-  const filteredInstruments = SOUNDFONT_INSTRUMENTS.filter(instrument =>
+  // Load available drum machines when component mounts
+  useEffect(() => {
+    const loadDrumMachines = async () => {
+      try {
+        const availableDrumMachines = await getCachedDrumMachines();
+        setDynamicDrumMachines(availableDrumMachines);
+      } catch (error) {
+        console.error("Failed to load dynamic drum machines:", error);
+        // Keep the fallback DRUM_MACHINES
+      }
+    };
+    
+    loadDrumMachines();
+  }, []);
+
+  // Get instruments based on category
+  const getInstruments = () => {
+    switch (currentCategory) {
+      case InstrumentCategory.DrumBeat:
+        return dynamicDrumMachines;
+      case InstrumentCategory.Synthesizer:
+        return []; // TODO: Add synthesizer presets
+      case InstrumentCategory.Melodic:
+      default:
+        return SOUNDFONT_INSTRUMENTS;
+    }
+  };
+
+  const instruments = getInstruments();
+  const filteredInstruments = instruments.filter(instrument =>
     instrument.label.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const currentInstrumentLabel = SOUNDFONT_INSTRUMENTS.find(
+  const currentInstrumentLabel = instruments.find(
     instrument => instrument.value === currentInstrument
   )?.label || currentInstrument;
 

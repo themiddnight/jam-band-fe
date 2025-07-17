@@ -16,7 +16,8 @@ export const useVirtualKeyboard = (
   rootNote: string,
   scale: Scale,
   onPlayNotes: (notes: string[], velocity: number, isKeyHeld: boolean) => void,
-  onReleaseKeyHeldNote: (note: string) => void
+  onReleaseKeyHeldNote: (note: string) => void,
+  keyboardState?: any // Add keyboardState parameter
 ) => {
   const shortcuts = useKeyboardShortcutsStore((state) => state.shortcuts);
   const [mainMode, setMainMode] = useState<MainMode>("simple");
@@ -262,7 +263,7 @@ export const useVirtualKeyboard = (
   }, [mainMode, simpleMode, getScaleNotes, rootNote, scale, currentOctave]);
 
   const handleVirtualKeyPress = useCallback(
-    (key: KeyboardKey) => {
+    async (key: KeyboardKey) => {
       if (
         mainMode === "simple" &&
         simpleMode === "chord" &&
@@ -270,9 +271,9 @@ export const useVirtualKeyboard = (
       ) {
         const keyIndex = chordTriadKeys.indexOf(key.keyboardKey!);
         const chord = getChord(rootNote, scale, keyIndex, chordVoicing, chordModifiers);
-        onPlayNotes(chord, velocity, true); // isKeyHeld = true for chord keys
+        await onPlayNotes(chord, velocity, true); // isKeyHeld = true for chord keys
       } else {
-        onPlayNotes([key.note], velocity, true); // isKeyHeld = true for virtual key presses
+        await onPlayNotes([key.note], velocity, true); // isKeyHeld = true for virtual key presses
       }
     },
     [
@@ -330,18 +331,36 @@ export const useVirtualKeyboard = (
   }, []);
 
   const handleTriadPress = useCallback(
-    (index: number) => {
+    async (index: number) => {
       const chord = getChord(rootNote, scale, index, chordVoicing, chordModifiers);
-      onPlayNotes(chord, velocity, true); // isKeyHeld = true for triad presses
+      setActiveTriadChords((prev) => new Map(prev).set(index, chord));
+      
+      if (keyboardState) {
+        // Use keyboard state system to respect sustain settings
+        for (const note of chord) {
+          await keyboardState.playNote(note, velocity, true);
+        }
+      } else {
+        // Fallback to direct call (for backward compatibility)
+        onPlayNotes(chord, velocity, true);
+      }
+      
+      setPressedTriads((prev) => new Set(prev).add(index));
     },
-    [rootNote, scale, getChord, chordVoicing, velocity, onPlayNotes, chordModifiers]
+    [rootNote, scale, getChord, chordVoicing, velocity, chordModifiers, keyboardState, onPlayNotes]
   );
 
   const handleTriadRelease = useCallback(
     (index: number) => {
       const chord = activeTriadChords.get(index);
       if (chord) {
-        chord.forEach((note: string) => onReleaseKeyHeldNote(note));
+        if (keyboardState) {
+          // Use keyboard state system for consistency
+          chord.forEach((note: string) => keyboardState.releaseKeyHeldNote(note));
+        } else {
+          // Fallback to direct call (for backward compatibility)
+          chord.forEach((note: string) => onReleaseKeyHeldNote(note));
+        }
         setActiveTriadChords((prev) => {
           const newMap = new Map(prev);
           newMap.delete(index);
@@ -354,7 +373,7 @@ export const useVirtualKeyboard = (
         return newSet;
       });
     },
-    [activeTriadChords, onReleaseKeyHeldNote]
+    [activeTriadChords, keyboardState, onReleaseKeyHeldNote]
   );
 
   return {

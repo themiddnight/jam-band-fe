@@ -62,7 +62,7 @@ export const useKeyboardKeysController = (
       }
 
       // Handle note playing
-      handleNotePlaying(key);
+      handleNotePlaying(key).catch(console.error);
     },
     [keyboardState, handleAllControlKeys, handleChordModifierPress, handleNotePlaying]
   );

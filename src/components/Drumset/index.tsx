@@ -12,44 +12,63 @@ export interface DrumsetProps {
   onStopSustainedNotes: () => void;
   onReleaseKeyHeldNote: (note: string) => void;
   onSustainChange: (sustain: boolean) => void;
+  availableSamples: string[];
 }
 
 export default function Drumset({
   onPlayNotes,
   onReleaseKeyHeldNote,
+  availableSamples,
 }: DrumsetProps) {
   const [velocity, setVelocity] = useState<number>(0.7);
   const [pressedDrums, setPressedDrums] = useState<Set<string>>(new Set());
 
-  const drumKit = [
-    // Cymbals (top row)
-    { id: "crash", note: "C#3", label: "Crash", color: "bg-orange-500", size: "w-16 h-16" },
-    { id: "ride", note: "D#3", label: "Ride", color: "bg-indigo-500", size: "w-20 h-20" },
-    { id: "splash", note: "F#3", label: "Splash", color: "bg-yellow-400", size: "w-12 h-12" },
+  // Map available samples to drum positions
+  const mapSamplesToDrums = () => {
+    const sampleMap: { [key: string]: string } = {};
     
-    // Toms (middle row)
-    { id: "tom1", note: "E2", label: "Tom 1", color: "bg-green-500", size: "w-14 h-14" },
-    { id: "tom2", note: "G2", label: "Tom 2", color: "bg-purple-500", size: "w-14 h-14" },
-    { id: "tom3", note: "A2", label: "Tom 3", color: "bg-blue-500", size: "w-14 h-14" },
+    availableSamples.forEach(sample => {
+      const lowerSample = sample.toLowerCase();
+      if (lowerSample.includes('kick') || lowerSample.includes('bd')) {
+        sampleMap.kick = sample;
+      } else if (lowerSample.includes('snare') || lowerSample.includes('sd')) {
+        sampleMap.snare = sample;
+      } else if (lowerSample.includes('hihat') || lowerSample.includes('hh')) {
+        sampleMap.hihat = sample;
+      } else if (lowerSample.includes('crash') || lowerSample.includes('cr')) {
+        sampleMap.crash = sample;
+      } else if (lowerSample.includes('ride') || lowerSample.includes('rd')) {
+        sampleMap.ride = sample;
+      } else if (lowerSample.includes('tom') || lowerSample.includes('mt') || lowerSample.includes('ht') || lowerSample.includes('lt')) {
+        if (!sampleMap.tom1) sampleMap.tom1 = sample;
+        else if (!sampleMap.tom2) sampleMap.tom2 = sample;
+        else if (!sampleMap.tom3) sampleMap.tom3 = sample;
+      }
+    });
     
-    // Snare and Hi-Hat (bottom row)
-    { id: "snare", note: "D2", label: "Snare", color: "bg-blue-600", size: "w-16 h-16" },
-    { id: "hihat", note: "F#2", label: "Hi-Hat", color: "bg-yellow-500", size: "w-14 h-14" },
-    
-    // Bass drum (bottom center)
-    { id: "kick", note: "C2", label: "Kick", color: "bg-red-500", size: "w-20 h-12" },
-  ];
-
-  const handleDrumPress = (drumId: string, note: string) => {
-    setPressedDrums(new Set([...pressedDrums, drumId]));
-    onPlayNotes([note], velocity, true);
+    return sampleMap;
   };
 
-  const handleDrumRelease = (drumId: string, note: string) => {
-    const newPressedDrums = new Set(pressedDrums);
-    newPressedDrums.delete(drumId);
-    setPressedDrums(newPressedDrums);
-    onReleaseKeyHeldNote(note);
+  const drumMapping = mapSamplesToDrums();
+
+  const handleDrumPress = async (drumId: string) => {
+    const actualSample = drumMapping[drumId] || drumId;
+    if (actualSample) {
+      setPressedDrums(new Set([...pressedDrums, drumId]));
+      // Use the mapped sample name for drum machines
+      await onPlayNotes([actualSample], velocity, true);
+    }
+  };
+
+  const handleDrumRelease = (drumId: string) => {
+    const actualSample = drumMapping[drumId] || drumId;
+    if (actualSample) {
+      const newPressedDrums = new Set(pressedDrums);
+      newPressedDrums.delete(drumId);
+      setPressedDrums(newPressedDrums);
+      // Use the mapped sample name for drum machines
+      onReleaseKeyHeldNote(actualSample);
+    }
   };
 
   return (
@@ -75,11 +94,14 @@ export default function Drumset({
         {/* Cymbals Row */}
         <div className="flex gap-4 items-center">
           <button
-            onMouseDown={() => handleDrumPress("crash", "C#3")}
-            onMouseUp={() => handleDrumRelease("crash", "C#3")}
-            onMouseLeave={() => handleDrumRelease("crash", "C#3")}
+            onMouseDown={() => handleDrumPress("crash")}
+            onMouseUp={() => handleDrumRelease("crash")}
+            onMouseLeave={() => handleDrumRelease("crash")}
+            disabled={!drumMapping.crash}
             className={`w-16 h-16 rounded-full border-2 border-gray-300 flex items-center justify-center transition-all ${
-              pressedDrums.has("crash") 
+              !drumMapping.crash 
+                ? "bg-gray-300 text-gray-500 cursor-not-allowed" 
+                : pressedDrums.has("crash") 
                 ? "bg-orange-500 text-white scale-95" 
                 : "bg-orange-500 text-white hover:scale-105"
             }`}
@@ -88,9 +110,9 @@ export default function Drumset({
           </button>
           
           <button
-            onMouseDown={() => handleDrumPress("ride", "D#3")}
-            onMouseUp={() => handleDrumRelease("ride", "D#3")}
-            onMouseLeave={() => handleDrumRelease("ride", "D#3")}
+            onMouseDown={() => handleDrumPress("ride")}
+            onMouseUp={() => handleDrumRelease("ride")}
+            onMouseLeave={() => handleDrumRelease("ride")}
             className={`w-20 h-20 rounded-full border-2 border-gray-300 flex items-center justify-center transition-all ${
               pressedDrums.has("ride") 
                 ? "bg-indigo-500 text-white scale-95" 
@@ -101,9 +123,9 @@ export default function Drumset({
           </button>
           
           <button
-            onMouseDown={() => handleDrumPress("splash", "F#3")}
-            onMouseUp={() => handleDrumRelease("splash", "F#3")}
-            onMouseLeave={() => handleDrumRelease("splash", "F#3")}
+            onMouseDown={() => handleDrumPress("splash")}
+            onMouseUp={() => handleDrumRelease("splash")}
+            onMouseLeave={() => handleDrumRelease("splash")}
             className={`w-12 h-12 rounded-full border-2 border-gray-300 flex items-center justify-center transition-all ${
               pressedDrums.has("splash") 
                 ? "bg-yellow-400 text-white scale-95" 
@@ -117,9 +139,9 @@ export default function Drumset({
         {/* Toms Row */}
         <div className="flex gap-4 items-center">
           <button
-            onMouseDown={() => handleDrumPress("tom1", "E2")}
-            onMouseUp={() => handleDrumRelease("tom1", "E2")}
-            onMouseLeave={() => handleDrumRelease("tom1", "E2")}
+            onMouseDown={() => handleDrumPress("tom1")}
+            onMouseUp={() => handleDrumRelease("tom1")}
+            onMouseLeave={() => handleDrumRelease("tom1")}
             className={`w-14 h-14 rounded-full border-2 border-gray-300 flex items-center justify-center transition-all ${
               pressedDrums.has("tom1") 
                 ? "bg-green-500 text-white scale-95" 
@@ -130,9 +152,9 @@ export default function Drumset({
           </button>
           
           <button
-            onMouseDown={() => handleDrumPress("tom2", "G2")}
-            onMouseUp={() => handleDrumRelease("tom2", "G2")}
-            onMouseLeave={() => handleDrumRelease("tom2", "G2")}
+            onMouseDown={() => handleDrumPress("tom2")}
+            onMouseUp={() => handleDrumRelease("tom2")}
+            onMouseLeave={() => handleDrumRelease("tom2")}
             className={`w-14 h-14 rounded-full border-2 border-gray-300 flex items-center justify-center transition-all ${
               pressedDrums.has("tom2") 
                 ? "bg-purple-500 text-white scale-95" 
@@ -143,9 +165,9 @@ export default function Drumset({
           </button>
           
           <button
-            onMouseDown={() => handleDrumPress("tom3", "A2")}
-            onMouseUp={() => handleDrumRelease("tom3", "A2")}
-            onMouseLeave={() => handleDrumRelease("tom3", "A2")}
+            onMouseDown={() => handleDrumPress("tom3")}
+            onMouseUp={() => handleDrumRelease("tom3")}
+            onMouseLeave={() => handleDrumRelease("tom3")}
             className={`w-14 h-14 rounded-full border-2 border-gray-300 flex items-center justify-center transition-all ${
               pressedDrums.has("tom3") 
                 ? "bg-blue-500 text-white scale-95" 
@@ -159,9 +181,9 @@ export default function Drumset({
         {/* Snare, Hi-Hat, and Kick Row */}
         <div className="flex gap-4 items-center">
           <button
-            onMouseDown={() => handleDrumPress("snare", "D2")}
-            onMouseUp={() => handleDrumRelease("snare", "D2")}
-            onMouseLeave={() => handleDrumRelease("snare", "D2")}
+            onMouseDown={() => handleDrumPress("snare")}
+            onMouseUp={() => handleDrumRelease("snare")}
+            onMouseLeave={() => handleDrumRelease("snare")}
             className={`w-16 h-16 rounded-full border-2 border-gray-300 flex items-center justify-center transition-all ${
               pressedDrums.has("snare") 
                 ? "bg-blue-600 text-white scale-95" 
@@ -172,9 +194,9 @@ export default function Drumset({
           </button>
           
           <button
-            onMouseDown={() => handleDrumPress("kick", "C2")}
-            onMouseUp={() => handleDrumRelease("kick", "C2")}
-            onMouseLeave={() => handleDrumRelease("kick", "C2")}
+            onMouseDown={() => handleDrumPress("kick")}
+            onMouseUp={() => handleDrumRelease("kick")}
+            onMouseLeave={() => handleDrumRelease("kick")}
             className={`w-20 h-12 rounded-full border-2 border-gray-300 flex items-center justify-center transition-all ${
               pressedDrums.has("kick") 
                 ? "bg-red-500 text-white scale-95" 
@@ -185,9 +207,9 @@ export default function Drumset({
           </button>
           
           <button
-            onMouseDown={() => handleDrumPress("hihat", "F#2")}
-            onMouseUp={() => handleDrumRelease("hihat", "F#2")}
-            onMouseLeave={() => handleDrumRelease("hihat", "F#2")}
+            onMouseDown={() => handleDrumPress("hihat")}
+            onMouseUp={() => handleDrumRelease("hihat")}
+            onMouseLeave={() => handleDrumRelease("hihat")}
             className={`w-14 h-14 rounded-full border-2 border-gray-300 flex items-center justify-center transition-all ${
               pressedDrums.has("hihat") 
                 ? "bg-yellow-500 text-white scale-95" 

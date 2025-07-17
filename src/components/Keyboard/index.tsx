@@ -51,7 +51,8 @@ export default function Keyboard({
     scaleState.rootNote,
     scaleState.scale,
     onPlayNotes,
-    onReleaseKeyHeldNote
+    onReleaseKeyHeldNote,
+    keyboardStateData // Pass keyboardState to respect sustain settings
   );
 
   const {

@@ -1,5 +1,21 @@
 import { ControlType } from "../types";
 
+// Instrument categories
+export enum InstrumentCategory {
+  Melodic = "melodic",
+  DrumBeat = "drum_beat", 
+  Synthesizer = "synthesizer"
+}
+
+// Available drum machines from smplr
+export const DRUM_MACHINES = [
+  { value: "TR-808", label: "Roland TR-808", controlType: ControlType.Drumpad },
+  { value: "LM-2", label: "LinnDrum LM-2", controlType: ControlType.Drumpad },
+  { value: "Casio-RZ1", label: "Casio RZ-1", controlType: ControlType.Drumpad },
+  { value: "MFB-512", label: "Fricke MFB-512", controlType: ControlType.Drumpad },
+  { value: "Roland CR-8000", label: "Roland CR-8000", controlType: ControlType.Drumpad },
+];
+
 // List of available soundfont instruments
 export const SOUNDFONT_INSTRUMENTS = [
   // Piano
