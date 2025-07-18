@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useKeyboardShortcutsStore } from "../../../stores/keyboardShortcutsStore";
 import type { Scale } from "../../../hooks/useScaleState";
 import type { MainMode, KeyboardKey, SimpleMode } from "../types/keyboard";
@@ -30,6 +30,26 @@ export const useVirtualKeyboard = (
   const [activeTriadChords, setActiveTriadChords] = useState<
     Map<number, string[]>
   >(new Map());
+
+  // Memoize white and black note arrays
+  const whiteNotes = useMemo(() => ["C", "D", "E", "F", "G", "A", "B"], []);
+  const blackNotes = useMemo(() => ["C#", "D#", "", "F#", "G#", "A#", ""], []);
+
+  // Memoize scale notes calculations
+  const currentScaleNotes = useMemo(() => 
+    getScaleNotes(rootNote, scale, currentOctave),
+    [getScaleNotes, rootNote, scale, currentOctave]
+  );
+
+  const nextOctaveScaleNotes = useMemo(() => 
+    getScaleNotes(rootNote, scale, currentOctave + 1),
+    [getScaleNotes, rootNote, scale, currentOctave]
+  );
+
+  const upperOctaveScaleNotes = useMemo(() => 
+    getScaleNotes(rootNote, scale, currentOctave + 2),
+    [getScaleNotes, rootNote, scale, currentOctave]
+  );
 
   const getChord = useCallback(
     (
@@ -157,19 +177,13 @@ export const useVirtualKeyboard = (
     [getScaleNotes, shortcuts]
   );
 
-  const generateVirtualKeys = useCallback((): KeyboardKey[] => {
+  const generateVirtualKeys = useMemo((): KeyboardKey[] => {
     const keys: KeyboardKey[] = [];
 
     if (mainMode === "simple") {
       if (simpleMode === "melody") {
-        // Lower row keys (current octave)
-        const scaleNotes = getScaleNotes(rootNote, scale, currentOctave);
-        const nextOctaveNotes = getScaleNotes(
-          rootNote,
-          scale,
-          currentOctave + 1
-        );
-        const lowerRowNotes = [...scaleNotes, ...nextOctaveNotes];
+        // Lower row keys (current octave) - use memoized scale notes
+        const lowerRowNotes = [...currentScaleNotes, ...nextOctaveScaleNotes];
 
         melodySimpleKeys.forEach((key, index) => {
           if (index < lowerRowNotes.length) {
@@ -182,18 +196,8 @@ export const useVirtualKeyboard = (
           }
         });
 
-        // Upper row keys (one octave higher)
-        const upperScaleNotes = getScaleNotes(
-          rootNote,
-          scale,
-          currentOctave + 1
-        );
-        const upperNextOctaveNotes = getScaleNotes(
-          rootNote,
-          scale,
-          currentOctave + 2
-        );
-        const upperRowNotes = [...upperScaleNotes, ...upperNextOctaveNotes];
+        // Upper row keys (one octave higher) - use memoized scale notes
+        const upperRowNotes = [...nextOctaveScaleNotes, ...upperOctaveScaleNotes];
 
         melodySimpleKeysUpper.forEach((key, index) => {
           if (index < upperRowNotes.length) {
@@ -206,13 +210,11 @@ export const useVirtualKeyboard = (
           }
         });
       } else {
-        // Use currentOctave for chord root notes (baseline)
-        const scaleNotes = getScaleNotes(rootNote, scale, currentOctave);
-
+        // Use currentOctave for chord root notes (baseline) - use memoized scale notes
         chordRootKeys.forEach((key, index) => {
-          if (index < scaleNotes.length) {
+          if (index < currentScaleNotes.length) {
             keys.push({
-              note: scaleNotes[index],
+              note: currentScaleNotes[index],
               isBlack: false,
               position: index,
               keyboardKey: key,
@@ -221,9 +223,7 @@ export const useVirtualKeyboard = (
         });
       }
     } else {
-      const whiteNotes = ["C", "D", "E", "F", "G", "A", "B"];
-      const blackNotes = ["C#", "D#", "", "F#", "G#", "A#", ""];
-
+      // Advanced mode - generate piano keys
       for (let i = 0; i < 2; i++) {
         whiteNotes.forEach((note, index) => {
           const octave = currentOctave + i;
@@ -260,7 +260,16 @@ export const useVirtualKeyboard = (
     }
 
     return keys;
-  }, [mainMode, simpleMode, getScaleNotes, rootNote, scale, currentOctave]);
+  }, [
+    mainMode,
+    simpleMode,
+    currentOctave,
+    currentScaleNotes,
+    nextOctaveScaleNotes,
+    upperOctaveScaleNotes,
+    whiteNotes,
+    blackNotes,
+  ]);
 
   const handleVirtualKeyPress = useCallback(
     async (key: KeyboardKey) => {
@@ -300,13 +309,19 @@ export const useVirtualKeyboard = (
         const chord = activeTriadChords.get(keyIndex);
         if (chord) {
           chord.forEach((note: string) => onReleaseKeyHeldNote(note));
+          
+          // Optimized Map update - only create new Map if needed
           setActiveTriadChords((prev) => {
+            if (!prev.has(keyIndex)) return prev;
             const newMap = new Map(prev);
             newMap.delete(keyIndex);
             return newMap;
           });
         }
+        
+        // Optimized Set update - only create new Set if needed
         setPressedTriads((prev) => {
+          if (!prev.has(keyIndex)) return prev;
           const newSet = new Set(prev);
           newSet.delete(keyIndex);
           return newSet;
@@ -319,11 +334,15 @@ export const useVirtualKeyboard = (
   );
 
   const handleModifierPress = useCallback((modifier: string) => {
-    setChordModifiers((prev) => new Set(prev).add(modifier));
+    setChordModifiers((prev) => {
+      if (prev.has(modifier)) return prev;
+      return new Set(prev).add(modifier);
+    });
   }, []);
 
   const handleModifierRelease = useCallback((modifier: string) => {
     setChordModifiers((prev) => {
+      if (!prev.has(modifier)) return prev;
       const newSet = new Set(prev);
       newSet.delete(modifier);
       return newSet;
@@ -333,7 +352,15 @@ export const useVirtualKeyboard = (
   const handleTriadPress = useCallback(
     async (index: number) => {
       const chord = getChord(rootNote, scale, index, chordVoicing, chordModifiers);
-      setActiveTriadChords((prev) => new Map(prev).set(index, chord));
+      
+      // Optimized Map update - only create new Map if chord is different
+      setActiveTriadChords((prev) => {
+        const existingChord = prev.get(index);
+        if (existingChord && JSON.stringify(existingChord) === JSON.stringify(chord)) {
+          return prev;
+        }
+        return new Map(prev).set(index, chord);
+      });
       
       if (keyboardState) {
         // Use keyboard state system to respect sustain settings
@@ -345,7 +372,11 @@ export const useVirtualKeyboard = (
         onPlayNotes(chord, velocity, true);
       }
       
-      setPressedTriads((prev) => new Set(prev).add(index));
+      // Optimized Set update - only create new Set if needed
+      setPressedTriads((prev) => {
+        if (prev.has(index)) return prev;
+        return new Set(prev).add(index);
+      });
     },
     [rootNote, scale, getChord, chordVoicing, velocity, chordModifiers, keyboardState, onPlayNotes]
   );
@@ -361,13 +392,19 @@ export const useVirtualKeyboard = (
           // Fallback to direct call (for backward compatibility)
           chord.forEach((note: string) => onReleaseKeyHeldNote(note));
         }
+        
+        // Optimized Map update - only create new Map if needed
         setActiveTriadChords((prev) => {
+          if (!prev.has(index)) return prev;
           const newMap = new Map(prev);
           newMap.delete(index);
           return newMap;
         });
       }
+      
+      // Optimized Set update - only create new Set if needed
       setPressedTriads((prev) => {
+        if (!prev.has(index)) return prev;
         const newSet = new Set(prev);
         newSet.delete(index);
         return newSet;

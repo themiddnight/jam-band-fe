@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import type { Props } from '../index';
 
 export const useKeyboardState = (props: Props) => {
@@ -8,10 +8,14 @@ export const useKeyboardState = (props: Props) => {
   const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set());
   const [heldKeys, setHeldKeys] = useState<Set<string>>(new Set());
 
+  // Use ref to track current state for stable callbacks
+  const stateRef = useRef({ sustain, sustainToggle, pressedKeys });
+  stateRef.current = { sustain, sustainToggle, pressedKeys };
+
   const setSustainWithCallback = useCallback((newSustain: boolean) => {
     setSustain(newSustain);
     props.onSustainChange(newSustain);
-  }, [props]);
+  }, [props.onSustainChange]);
 
   const setSustainToggleWithCallback = useCallback((newSustainToggle: boolean) => {
     setSustainToggle(newSustainToggle);
@@ -23,45 +27,70 @@ export const useKeyboardState = (props: Props) => {
       props.onSustainChange(false);
       props.onStopSustainedNotes();
     }
-  }, [props]);
+  }, [props.onSustainChange, props.onStopSustainedNotes]);
+
+  // Optimized set operations for pressed keys
+  const updatePressedKeys = useCallback((note: string, action: 'add' | 'delete') => {
+    setPressedKeys(prev => {
+      const hasNote = prev.has(note);
+      if (action === 'add' && hasNote) return prev;
+      if (action === 'delete' && !hasNote) return prev;
+      
+      const newSet = new Set(prev);
+      if (action === 'add') {
+        newSet.add(note);
+      } else {
+        newSet.delete(note);
+      }
+      return newSet;
+    });
+  }, []);
 
   const playNote = useCallback(async (note: string, vel: number, isKeyHeld: boolean = false) => {
     await props.onPlayNotes([note], vel, isKeyHeld);
+    
     if (isKeyHeld) {
-      setPressedKeys(new Set([...pressedKeys, note]));
+      updatePressedKeys(note, 'add');
     }
+    
     // When toggle is active and we play a note, it will be sustained
-    if (sustainToggle && !isKeyHeld) {
+    if (stateRef.current.sustainToggle && !isKeyHeld) {
       setHasSustainedNotes(true);
     }
-  }, [props, sustainToggle, pressedKeys]);
+  }, [props.onPlayNotes, updatePressedKeys]);
 
   const stopNote = useCallback((note: string) => {
     props.onStopNotes([note]);
-    const newPressedKeys = new Set(pressedKeys);
-    newPressedKeys.delete(note);
-    setPressedKeys(newPressedKeys);
-  }, [props, pressedKeys]);
+    updatePressedKeys(note, 'delete');
+  }, [props.onStopNotes, updatePressedKeys]);
 
   const releaseKeyHeldNote = useCallback((note: string) => {
     props.onReleaseKeyHeldNote(note);
-    const newPressedKeys = new Set(pressedKeys);
-    newPressedKeys.delete(note);
-    setPressedKeys(newPressedKeys);
+    updatePressedKeys(note, 'delete');
+    
     // When toggle is active and we release a key, check if we should turn off sustained notes
-    if (sustainToggle && newPressedKeys.size === 0) {
-      setHasSustainedNotes(false);
+    if (stateRef.current.sustainToggle) {
+      // Use setTimeout to ensure state is updated before checking
+      setTimeout(() => {
+        setPressedKeys(current => {
+          if (current.size === 0) {
+            setHasSustainedNotes(false);
+          }
+          return current;
+        });
+      }, 0);
     }
-  }, [props, pressedKeys, sustainToggle]);
+  }, [props.onReleaseKeyHeldNote, updatePressedKeys]);
 
   const stopSustainedNotes = useCallback(() => {
     props.onStopSustainedNotes();
     setSustain(false);
     setHasSustainedNotes(false);
     // Don't turn off toggle mode when stopping sustained notes
-  }, [props]);
+  }, [props.onStopSustainedNotes]);
 
-  return {
+  // Memoize the return object to prevent unnecessary re-renders
+  return useMemo(() => ({
     sustain,
     sustainToggle,
     hasSustainedNotes,
@@ -75,5 +104,17 @@ export const useKeyboardState = (props: Props) => {
     stopNote,
     releaseKeyHeldNote,
     stopSustainedNotes,
-  };
+  }), [
+    sustain,
+    sustainToggle,
+    hasSustainedNotes,
+    pressedKeys,
+    heldKeys,
+    setSustainWithCallback,
+    setSustainToggleWithCallback,
+    playNote,
+    stopNote,
+    releaseKeyHeldNote,
+    stopSustainedNotes,
+  ]);
 }; 

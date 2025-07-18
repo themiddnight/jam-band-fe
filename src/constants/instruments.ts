@@ -16,6 +16,17 @@ export const DRUM_MACHINES = [
   { value: "Roland CR-8000", label: "Roland CR-8000", controlType: ControlType.Drumpad },
 ];
 
+// Available synthesizer instruments using Tone.js
+export const SYNTHESIZER_INSTRUMENTS = [
+  // Analog Synthesizers
+  { value: "analog_mono", label: "Analog Mono Synth", controlType: ControlType.Keyboard, type: "analog", polyphony: "mono" },
+  { value: "analog_poly", label: "Analog Poly Synth", controlType: ControlType.Keyboard, type: "analog", polyphony: "poly" },
+  
+  // FM Synthesizers
+  { value: "fm_mono", label: "FM Mono Synth", controlType: ControlType.Keyboard, type: "fm", polyphony: "mono" },
+  { value: "fm_poly", label: "FM Poly Synth", controlType: ControlType.Keyboard, type: "fm", polyphony: "poly" },
+];
+
 // List of available soundfont instruments
 export const SOUNDFONT_INSTRUMENTS = [
   // Piano

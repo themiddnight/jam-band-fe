@@ -1,5 +1,6 @@
-import { useState } from "react";
-import type { Scale } from "../../hooks/useScaleState";
+import { useState, useMemo, useCallback } from "react";
+import { FretboardBase, type FretboardConfig } from "../shared/FretboardBase";
+import { generateFretPositions, getScaleNotes, type Scale } from "../../utils/musicUtils";
 
 export interface GuitarProps {
   scaleState: {
@@ -15,6 +16,7 @@ export interface GuitarProps {
 }
 
 export default function Guitar({
+  scaleState,
   onPlayNotes,
   onReleaseKeyHeldNote,
   onSustainChange,
@@ -22,113 +24,145 @@ export default function Guitar({
   const [velocity, setVelocity] = useState<number>(0.7);
   const [sustain, setSustain] = useState<boolean>(false);
   const [pressedFrets, setPressedFrets] = useState<Set<string>>(new Set());
+  const [mode, setMode] = useState<'melody' | 'chord'>('melody');
 
-  const strings = ["E", "A", "D", "G", "B", "E"];
-  const frets = 12;
-
-  const getNoteAtFret = (stringIndex: number, fret: number): string => {
-    const openNotes = ["E2", "A2", "D3", "G3", "B3", "E4"];
-    const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-    
-    const openNote = openNotes[stringIndex];
-    const openNoteName = openNote.replace(/\d/, "");
-    const openNoteIndex = noteNames.indexOf(openNoteName);
-    const newNoteIndex = (openNoteIndex + fret) % 12;
-    const octave = Math.floor((openNoteIndex + fret) / 12) + parseInt(openNote.replace(/\D/g, ""));
-    
-    return noteNames[newNoteIndex] + octave;
+  // Guitar configuration
+  const config: FretboardConfig = {
+    strings: ["E", "A", "D", "G", "B", "E"],
+    frets: 12,
+    openNotes: ["E2", "A2", "D3", "G3", "B3", "E4"],
+    mode: mode,
+    showNoteNames: true,
+    showFretNumbers: true,
+    highlightScaleNotes: true,
   };
 
-  const handleFretPress = async (stringIndex: number, fret: number) => {
-    const note = getNoteAtFret(stringIndex, fret);
-    const fretKey = `${stringIndex}-${fret}`;
-    
-    setPressedFrets(new Set([...pressedFrets, fretKey]));
-    await onPlayNotes([note], velocity, true);
-  };
+  // Generate scale notes for highlighting
+  const scaleNotes = useMemo(() => 
+    getScaleNotes(scaleState.rootNote, scaleState.scale, 3)
+      .map(note => note.slice(0, -1)), // Remove octave for highlighting
+    [scaleState.rootNote, scaleState.scale]
+  );
 
-  const handleFretRelease = (stringIndex: number, fret: number) => {
-    const note = getNoteAtFret(stringIndex, fret);
+  // Generate fret positions using pure utility function
+  const positions = useMemo(() => 
+    generateFretPositions(
+      config.strings,
+      config.openNotes,
+      config.frets,
+      pressedFrets,
+      scaleNotes
+    ),
+    [config.strings, config.openNotes, config.frets, pressedFrets, scaleNotes]
+  );
+
+  const handleFretPress = useCallback(async (stringIndex: number, fret: number, note: string) => {
     const fretKey = `${stringIndex}-${fret}`;
+    setPressedFrets(prev => new Set(prev).add(fretKey));
     
-    const newPressedFrets = new Set(pressedFrets);
-    newPressedFrets.delete(fretKey);
-    setPressedFrets(newPressedFrets);
+    if (mode === 'melody') {
+      // Single note playing
+      await onPlayNotes([note], velocity, true);
+    } else {
+      // Chord mode - this will be expanded in future
+      // For now, just play the single note
+      await onPlayNotes([note], velocity, true);
+    }
+  }, [mode, velocity, onPlayNotes]);
+
+  const handleFretRelease = useCallback((stringIndex: number, fret: number, note: string) => {
+    const fretKey = `${stringIndex}-${fret}`;
+    setPressedFrets(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(fretKey);
+      return newSet;
+    });
     
     onReleaseKeyHeldNote(note);
-  };
+  }, [onReleaseKeyHeldNote]);
 
-  const handleSustainChange = (newSustain: boolean) => {
+  const handleSustainChange = useCallback((newSustain: boolean) => {
     setSustain(newSustain);
     onSustainChange(newSustain);
-  };
+  }, [onSustainChange]);
+
+  const handleVelocityChange = useCallback((newVelocity: number) => {
+    setVelocity(newVelocity);
+  }, []);
 
   return (
-    <div className="bg-white p-3 rounded-lg shadow-lg w-full max-w-4xl">
-      <div className="flex justify-around gap-3 mb-3 flex-wrap">
-        <div className="space-y-4">
-          <h3 className="font-semibold text-gray-700">Guitar Controls</h3>
-          <div className="flex items-center gap-2">
-            <span className="text-sm">Velocity: {Math.round(velocity * 9)}</span>
-            <input
-              type="range"
-              min="1"
-              max="9"
-              value={Math.round(velocity * 9)}
-              onChange={(e) => setVelocity(parseInt(e.target.value) / 9)}
-              className="w-20"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm">Sustain</span>
+    <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-6xl">
+      <div className="mb-4">
+        <h3 className="text-xl font-semibold text-gray-800 mb-4">Guitar</h3>
+        
+        {/* Mode Selection */}
+        <div className="flex items-center gap-4 mb-4">
+          <div className="flex gap-2">
             <button
-              onClick={() => handleSustainChange(!sustain)}
-              className={`px-3 py-1 text-sm rounded ${
-                sustain ? "bg-blue-500 text-white" : "bg-gray-200"
+              onClick={() => setMode('melody')}
+              className={`px-3 py-1 rounded text-sm ${
+                mode === 'melody'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-200 text-gray-700'
               }`}
             >
-              {sustain ? "ON" : "OFF"}
+              Melody
+            </button>
+            <button
+              onClick={() => setMode('chord')}
+              className={`px-3 py-1 rounded text-sm ${
+                mode === 'chord'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-200 text-gray-700'
+              }`}
+            >
+              Chord (Coming Soon)
             </button>
           </div>
+          
+          {/* Sustain Toggle */}
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={sustain}
+              onChange={(e) => handleSustainChange(e.target.checked)}
+              className="rounded"
+            />
+            <span className="text-sm text-gray-600">Sustain</span>
+          </label>
+        </div>
+        
+        {/* Scale Info */}
+        <div className="text-sm text-gray-600 mb-4">
+          Scale: {scaleState.rootNote} {scaleState.scale}
+          {mode === 'chord' && (
+            <span className="ml-4 text-orange-600">
+              • Chord mode will support strumming patterns and chord shapes
+            </span>
+          )}
         </div>
       </div>
 
-      <div className="flex flex-col gap-1">
-        {strings.map((stringNote, stringIndex) => (
-          <div key={stringIndex} className="flex items-center gap-1">
-            <div className="w-12 text-center text-sm font-mono text-gray-600">
-              {stringNote}
-            </div>
-            <div className="flex-1 flex gap-1">
-              {Array.from({ length: frets + 1 }, (_, fret) => {
-                const fretKey = `${stringIndex}-${fret}`;
-                const isPressed = pressedFrets.has(fretKey);
-                
-                return (
-                  <button
-                    key={fret}
-                    onMouseDown={() => handleFretPress(stringIndex, fret)}
-                    onMouseUp={() => handleFretRelease(stringIndex, fret)}
-                    onMouseLeave={() => handleFretRelease(stringIndex, fret)}
-                    className={`flex-1 h-8 border border-gray-300 rounded ${
-                      fret === 0 
-                        ? "bg-gray-100 text-gray-500" 
-                        : isPressed 
-                          ? "bg-blue-500 text-white" 
-                          : "bg-white hover:bg-gray-50"
-                    }`}
-                  >
-                    {fret === 0 ? "○" : fret}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* Pure Fretboard Component */}
+      <FretboardBase
+        config={config}
+        positions={positions}
+        onFretPress={handleFretPress}
+        onFretRelease={handleFretRelease}
+        velocity={velocity}
+        onVelocityChange={handleVelocityChange}
+        className="guitar-fretboard"
+      />
 
-      <div className="mt-4 text-center text-sm text-gray-600">
-        <p>Click on frets to play notes. Open strings (○) are muted.</p>
+      {/* Future Features Info */}
+      <div className="mt-4 text-xs text-gray-500">
+        <p>🎸 <strong>Coming Soon:</strong></p>
+        <ul className="ml-4 mt-1">
+          <li>• Chord mode with strumming patterns</li>
+          <li>• Keyboard shortcuts for chord shapes</li>
+          <li>• Scale highlighting and chord suggestions</li>
+          <li>• Capo simulation</li>
+        </ul>
       </div>
     </div>
   );

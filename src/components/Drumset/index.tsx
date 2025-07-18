@@ -72,7 +72,7 @@ export default function Drumset({
   };
 
   return (
-    <div className="bg-white p-3 rounded-lg shadow-lg w-full max-w-4xl">
+    <div className="bg-white p-3 rounded-lg shadow-lg w-full max-w-6xl">
       <div className="flex justify-around gap-3 mb-3 flex-wrap">
         <div className="space-y-4">
           <h3 className="font-semibold text-gray-700">Drum Kit Controls</h3>

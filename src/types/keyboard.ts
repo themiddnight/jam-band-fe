@@ -48,5 +48,5 @@ export interface VirtualKeyboardState {
     voicing?: number,
     modifiers?: Set<string>
   ) => string[];
-  generateVirtualKeys: () => any[];
+  generateVirtualKeys: any[];
 } 

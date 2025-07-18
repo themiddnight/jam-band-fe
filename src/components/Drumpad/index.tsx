@@ -1,5 +1,6 @@
-import { useState } from "react";
-import type { Scale } from "../../hooks/useScaleState";
+import { useState, useMemo, useCallback } from "react";
+import { DrumPadBase } from "../shared/DrumPadBase";
+import { generateDrumPads, type Scale } from "../../utils/musicUtils";
 
 export interface DrumpadProps {
   scaleState: {
@@ -17,107 +18,158 @@ export interface DrumpadProps {
 
 export default function Drumpad({
   onPlayNotes,
-  onReleaseKeyHeldNote,
   availableSamples,
 }: DrumpadProps) {
   const [velocity, setVelocity] = useState<number>(0.7);
   const [pressedPads, setPressedPads] = useState<Set<string>>(new Set());
+  const [padAssignments, setPadAssignments] = useState<Record<string, string>>({});
+  const [maxPads, setMaxPads] = useState<number>(16);
 
-  // Create drum pads based on available samples
-  const createDrumPads = () => {
-    const colors = [
-      "bg-red-500", "bg-blue-500", "bg-yellow-500", "bg-orange-500", 
-      "bg-green-500", "bg-purple-500", "bg-indigo-500", "bg-pink-500",
-      "bg-teal-500", "bg-cyan-500", "bg-lime-500", "bg-amber-500"
-    ];
+  // Generate drum pads using pure utility function
+  const pads = useMemo(() => 
+    generateDrumPads(availableSamples, maxPads, pressedPads, padAssignments),
+    [availableSamples, maxPads, pressedPads, padAssignments]
+  );
+
+  const handlePadPress = useCallback(async (padId: string, sound?: string) => {
+    setPressedPads(prev => new Set(prev).add(padId));
     
-    return availableSamples.map((sample, index) => {
-      // Create a display label from the sample name
-      const label = sample.replace(/-/g, ' ').replace(/\d+/g, '').trim();
-      const displayLabel = label.charAt(0).toUpperCase() + label.slice(1);
-      
-      return {
-        id: sample,
-        label: displayLabel || sample,
-        color: colors[index % colors.length],
-      };
+    if (sound) {
+      // Play the assigned sound
+      await onPlayNotes([sound], velocity, false);
+    }
+  }, [onPlayNotes, velocity]);
+
+  const handlePadRelease = useCallback((padId: string) => {
+    setPressedPads(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(padId);
+      return newSet;
     });
-  };
+    
+    // For drum pads, we typically don't need to release samples
+    // They are usually one-shot sounds
+  }, []);
 
-  const drumPads = createDrumPads();
+  const handlePadAssign = useCallback((padId: string, sound: string) => {
+    setPadAssignments(prev => ({
+      ...prev,
+      [padId]: sound
+    }));
+  }, []);
 
-  // Show message if no samples are available
-  if (availableSamples.length === 0) {
-    return (
-      <div className="bg-white p-3 rounded-lg shadow-lg w-full max-w-4xl text-center">
-        <h3 className="font-semibold text-gray-700 mb-2">Loading drum samples...</h3>
-        <p className="text-gray-500 text-sm">Please wait while the drum machine loads.</p>
-      </div>
-    );
-  }
+  const handleVelocityChange = useCallback((newVelocity: number) => {
+    setVelocity(newVelocity);
+  }, []);
 
-  const handlePadPress = async (padId: string) => {
-    setPressedPads(new Set([...pressedPads, padId]));
-    // Use drum sample name (padId) for drum machines
-    await onPlayNotes([padId], velocity, true);
-  };
+  const resetAssignments = useCallback(() => {
+    setPadAssignments({});
+  }, []);
 
-  const handlePadRelease = (padId: string) => {
-    const newPressedPads = new Set(pressedPads);
-    newPressedPads.delete(padId);
-    setPressedPads(newPressedPads);
-    // Use drum sample name (padId) for drum machines
-    onReleaseKeyHeldNote(padId);
+  const presetLayouts = {
+    '8-pad': 8,
+    '12-pad': 12,
+    '16-pad': 16,
   };
 
   return (
-    <div className="bg-white p-3 rounded-lg shadow-lg w-full max-w-4xl">
-      <div className="flex justify-around gap-3 mb-3 flex-wrap">
-        <div className="space-y-4">
-          <h3 className="font-semibold text-gray-700">Drum Pad Controls</h3>
+    <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-6xl">
+      <div className="mb-4">
+        <h3 className="text-xl font-semibold text-gray-800 mb-4">Drum Pad</h3>
+        
+        {/* Drum Pad Controls */}
+        <div className="flex items-center gap-4 mb-4 flex-wrap">
+          {/* Pad Count Selection */}
           <div className="flex items-center gap-2">
-            <span className="text-sm">Velocity: {Math.round(velocity * 9)}</span>
-            <input
-              type="range"
-              min="1"
-              max="9"
-              value={Math.round(velocity * 9)}
-              onChange={(e) => setVelocity(parseInt(e.target.value) / 9)}
-              className="w-20"
-            />
+            <span className="text-sm text-gray-600">Layout:</span>
+            <div className="flex gap-1">
+              {Object.entries(presetLayouts).map(([name, count]) => (
+                <button
+                  key={name}
+                  onClick={() => setMaxPads(count)}
+                  className={`px-3 py-1 rounded text-sm ${
+                    maxPads === count
+                      ? 'bg-purple-500 text-white'
+                      : 'bg-gray-200 text-gray-700'
+                  }`}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="text-xs text-gray-500">
-            {availableSamples.length} samples available
+
+          {/* Reset Button */}
+          <button
+            onClick={resetAssignments}
+            className="px-3 py-1 rounded text-sm bg-red-100 text-red-700 hover:bg-red-200"
+          >
+            Reset Assignments
+          </button>
+        </div>
+
+        {/* Available Samples Info */}
+        <div className="text-sm text-gray-600 mb-4">
+          <div>Available Samples: {availableSamples.length}</div>
+          <div className="text-xs text-gray-500 mt-1">
+            Right-click pads to assign different sounds
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-3">
-        {drumPads.map((pad) => {
-          const isPressed = pressedPads.has(pad.id);
-          
-          return (
-            <button
-              key={pad.id}
-              onMouseDown={() => handlePadPress(pad.id)}
-              onMouseUp={() => handlePadRelease(pad.id)}
-              onMouseLeave={() => handlePadRelease(pad.id)}
-              className={`h-24 rounded-lg border-2 border-gray-300 flex flex-col items-center justify-center transition-all ${
-                isPressed 
-                  ? `${pad.color} text-white scale-95` 
-                  : `${pad.color.replace('bg-', 'bg-')} text-white hover:scale-105`
-              }`}
-            >
-              <span className="font-bold text-lg">{pad.label}</span>
-              <span className="text-xs opacity-75">{pad.id}</span>
-            </button>
-          );
-        })}
+      {/* Pure Drum Pad Component */}
+      <DrumPadBase
+        pads={pads}
+        onPadPress={handlePadPress}
+        onPadRelease={handlePadRelease}
+        onPadAssign={handlePadAssign}
+        velocity={velocity}
+        onVelocityChange={handleVelocityChange}
+        maxPads={maxPads}
+        allowAssignment={true}
+        availableSounds={availableSamples}
+        className="drum-pad-grid"
+      />
+
+      {/* Drum Pad Features Info */}
+      <div className="mt-4 text-xs text-gray-500">
+        <p>🥁 <strong>Drum Pad Features:</strong></p>
+        <ul className="ml-4 mt-1">
+          <li>• Configurable pad count (8, 12, or 16 pads)</li>
+          <li>• User-assignable sounds per pad</li>
+          <li>• Right-click to assign sounds</li>
+          <li>• Velocity-sensitive playback</li>
+        </ul>
       </div>
 
-      <div className="mt-4 text-center text-sm text-gray-600">
-        <p>Click on drum pads to play percussive sounds.</p>
+      {/* Future Features Info */}
+      <div className="mt-2 text-xs text-gray-400">
+        <p><strong>Coming Soon:</strong></p>
+        <ul className="ml-4 mt-1">
+          <li>• Keyboard shortcuts for each pad</li>
+          <li>• Pad sensitivity settings</li>
+          <li>• Pattern recording and playback</li>
+          <li>• Custom pad colors and labels</li>
+          <li>• MIDI mapping support</li>
+        </ul>
       </div>
+
+      {/* Sample List */}
+      {availableSamples.length > 0 && (
+        <div className="mt-4 p-3 bg-gray-50 rounded">
+          <p className="text-sm font-medium text-gray-700 mb-2">Available Samples:</p>
+          <div className="flex flex-wrap gap-1">
+            {availableSamples.map((sample, index) => (
+              <span
+                key={index}
+                className="px-2 py-1 bg-white rounded text-xs text-gray-600 border"
+              >
+                {sample}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Soundfont, DrumMachine } from "smplr";
-import { SOUNDFONT_INSTRUMENTS, DRUM_MACHINES, InstrumentCategory } from "../constants/instruments";
+import { SOUNDFONT_INSTRUMENTS, DRUM_MACHINES, SYNTHESIZER_INSTRUMENTS, InstrumentCategory } from "../constants/instruments";
 import { ControlType } from "../types";
 import { getCachedDrumMachines } from "../utils/drumMachineUtils";
+import { useToneSynthesizer } from "./useToneSynthesizer";
 
 export const useInstrument = (
   initialInstrument = "acoustic_grand_piano",
@@ -25,6 +26,11 @@ export const useInstrument = (
   const activeNotes = useRef<Map<string, any>>(new Map());
   const keyHeldNotes = useRef<Set<string>>(new Set());
 
+  // Initialize Tone.js synthesizer for synthesizer category
+  const toneSynthesizer = useToneSynthesizer(
+    currentCategory === InstrumentCategory.Synthesizer ? currentInstrument : ""
+  );
+
   const initializeAudioContext = useCallback(async () => {
     if (!audioContext.current) {
       audioContext.current = new (window.AudioContext ||
@@ -40,6 +46,14 @@ export const useInstrument = (
   }, []);
 
   const loadInstrument = useCallback(async (instrumentName: string, category: InstrumentCategory = currentCategory) => {
+    // Skip loading for synthesizer category - handled by Tone.js
+    if (category === InstrumentCategory.Synthesizer) {
+      setCurrentInstrument(instrumentName);
+      setCurrentCategory(category);
+      setIsLoadingInstrument(false);
+      return;
+    }
+
     // Don't load if AudioContext isn't ready
     if (!audioContext.current || audioContext.current.state !== "running") {
       console.log("AudioContext not ready, will load instrument later");
@@ -107,6 +121,13 @@ export const useInstrument = (
     }
   }, [isAudioContextReady, instrument, currentInstrument, loadInstrument]);
 
+  // Sync sustain state with synthesizer when it becomes loaded
+  useEffect(() => {
+    if (currentCategory === InstrumentCategory.Synthesizer && toneSynthesizer.isLoaded && toneSynthesizer.setSustain) {
+      toneSynthesizer.setSustain(sustain);
+    }
+  }, [currentCategory, toneSynthesizer.isLoaded, toneSynthesizer.setSustain, sustain, toneSynthesizer]);
+
   useEffect(() => {
     return () => {
       if (audioContext.current) {
@@ -128,6 +149,20 @@ export const useInstrument = (
   const playNotes = useCallback(
     async (notes: string[], velocity: number, isKeyHeld: boolean = false) => {
       try {
+        // Handle synthesizer category with Tone.js
+        if (currentCategory === InstrumentCategory.Synthesizer) {
+          if (toneSynthesizer.isLoaded) {
+            toneSynthesizer.playNotes(notes, velocity);
+            
+            // Handle key held notes for synthesizer
+            if (isKeyHeld) {
+              notes.forEach(note => keyHeldNotes.current.add(note));
+            }
+          }
+          return;
+        }
+
+        // Handle other categories (Soundfont and DrumMachine)
         await ensureAudioContextAndInstrument();
 
         if (instrument && audioContext.current?.state === "running") {
@@ -174,10 +209,24 @@ export const useInstrument = (
         console.error("Error playing notes:", error);
       }
     },
-    [instrument, audioContext, sustain, ensureAudioContextAndInstrument]
+    [instrument, audioContext, sustain, ensureAudioContextAndInstrument, currentCategory, toneSynthesizer]
   );
 
   const stopNotes = (notes: string[]) => {
+    // Handle synthesizer category with Tone.js
+    if (currentCategory === InstrumentCategory.Synthesizer) {
+      if (toneSynthesizer.isLoaded) {
+        notes.forEach((note) => {
+          // Always process note releases for synthesizers
+          // The synthesizer itself will handle sustain behavior
+          toneSynthesizer.stopNotes([note]);
+          keyHeldNotes.current.delete(note);
+        });
+      }
+      return;
+    }
+
+    // Handle other categories (Soundfont and DrumMachine)
     notes.forEach((note) => {
       const activeNote = activeNotes.current.get(note);
       if (activeNote) {
@@ -189,7 +238,25 @@ export const useInstrument = (
     });
   };
 
+  const setSustainState = useCallback((newSustain: boolean) => {
+    setSustain(newSustain);
+    
+    // Pass sustain state to synthesizer if it's the current category
+    if (currentCategory === InstrumentCategory.Synthesizer && toneSynthesizer.setSustain) {
+      toneSynthesizer.setSustain(newSustain);
+    }
+  }, [currentCategory, toneSynthesizer]);
+
   const stopSustainedNotes = useCallback(() => {
+    // Handle synthesizer category with Tone.js
+    if (currentCategory === InstrumentCategory.Synthesizer) {
+      if (toneSynthesizer.isLoaded && toneSynthesizer.stopSustainedNotes) {
+        toneSynthesizer.stopSustainedNotes();
+      }
+      return;
+    }
+
+    // Handle other categories (Soundfont and DrumMachine)
     sustainedNotes.current.forEach((note) => {
       if (note) {
         note(); // Call the stop function directly
@@ -210,12 +277,23 @@ export const useInstrument = (
       }
     });
     notesToRemove.forEach((noteName) => activeNotes.current.delete(noteName));
-  }, []);
+  }, [currentCategory, toneSynthesizer]);
 
   const releaseKeyHeldNote = useCallback(
     (note: string) => {
       keyHeldNotes.current.delete(note);
 
+      // Handle synthesizer category with Tone.js
+      if (currentCategory === InstrumentCategory.Synthesizer) {
+        if (toneSynthesizer.isLoaded) {
+          // Always process note releases for synthesizers
+          // The synthesizer itself will handle sustain behavior
+          toneSynthesizer.stopNotes([note]);
+        }
+        return;
+      }
+
+      // Handle other categories (Soundfont and DrumMachine)
       const activeNote = activeNotes.current.get(note);
       if (activeNote) {
         if (!sustain) {
@@ -226,36 +304,52 @@ export const useInstrument = (
         }
       }
     },
-    [sustain]
-  );
-
-  const setSustainState = useCallback(
-    (newSustain: boolean) => {
-      setSustain(newSustain);
-      if (!newSustain) {
-        stopSustainedNotes();
-      }
-    },
-    [stopSustainedNotes]
+    [sustain, currentCategory, toneSynthesizer]
   );
 
   const handleInstrumentChange = useCallback(async (instrumentName: string, category?: InstrumentCategory) => {
+    const targetCategory = category || currentCategory;
     setCurrentInstrument(instrumentName);
-    if (category && category !== currentCategory) {
-      setCurrentCategory(category);
+    
+    if (targetCategory !== currentCategory) {
+      setCurrentCategory(targetCategory);
     }
+    
+    // For synthesizer category, just update the instrument name - Tone.js hook will handle the rest
+    if (targetCategory === InstrumentCategory.Synthesizer) {
+      return;
+    }
+    
+    // For other categories, load the instrument if AudioContext is ready
     if (isAudioContextReady) {
-      await loadInstrument(instrumentName, category || currentCategory);
+      await loadInstrument(instrumentName, targetCategory);
     }
   }, [isAudioContextReady, loadInstrument, currentCategory]);
 
   const handleCategoryChange = useCallback(async (category: InstrumentCategory) => {
     setCurrentCategory(category);
     // Reset to default instrument for the new category
-    const defaultInstrument = category === InstrumentCategory.DrumBeat 
-      ? dynamicDrumMachines[0]?.value || "TR-808"
-      : "acoustic_grand_piano";
+    let defaultInstrument: string;
+    
+    switch (category) {
+      case InstrumentCategory.DrumBeat:
+        defaultInstrument = dynamicDrumMachines[0]?.value || "TR-808";
+        break;
+      case InstrumentCategory.Synthesizer:
+        defaultInstrument = SYNTHESIZER_INSTRUMENTS[0]?.value || "analog_mono";
+        break;
+      default:
+        defaultInstrument = "acoustic_grand_piano";
+    }
+    
     setCurrentInstrument(defaultInstrument);
+    
+    // For synthesizer category, don't load through smplr - Tone.js hook will handle it
+    if (category === InstrumentCategory.Synthesizer) {
+      return;
+    }
+    
+    // For other categories, load the instrument if AudioContext is ready
     if (isAudioContextReady) {
       await loadInstrument(defaultInstrument, category);
     }
@@ -267,6 +361,13 @@ export const useInstrument = (
         (inst) => inst.value === currentInstrument
       );
       return drumData?.controlType || ControlType.Drumpad;
+    }
+    
+    if (currentCategory === InstrumentCategory.Synthesizer) {
+      const synthData = SYNTHESIZER_INSTRUMENTS.find(
+        (inst) => inst.value === currentInstrument
+      );
+      return synthData?.controlType || ControlType.Keyboard;
     }
     
     const instrumentData = SOUNDFONT_INSTRUMENTS.find(
@@ -325,6 +426,7 @@ export const useInstrument = (
     currentInstrument,
     currentCategory,
     availableSamples,
+    dynamicDrumMachines,
     isLoadingInstrument,
     isAudioContextReady,
     initializeAudioContext,
@@ -342,5 +444,10 @@ export const useInstrument = (
     handleMidiControlChange,
     handleMidiSustainChange,
     audioContext: audioContext.current,
+    // Synthesizer-specific properties
+    synthState: toneSynthesizer.synthState,
+    updateSynthParams: toneSynthesizer.updateSynthParams,
+    loadPresetParams: toneSynthesizer.loadPresetParams,
+    isSynthesizerLoaded: toneSynthesizer.isLoaded,
   };
 }; 

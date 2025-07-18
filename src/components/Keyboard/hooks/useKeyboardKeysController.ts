@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import {
   melodySimpleKeys,
   melodySimpleKeysUpper,
@@ -27,9 +27,57 @@ export const useKeyboardKeysController = (
   const { handleNotePlaying } = useNotePlaying(keyboardState, scaleState, virtualKeyboard);
   const { handleNoteStopping } = useNoteStopping(keyboardState, scaleState, virtualKeyboard);
 
+  // Memoize note keys array to avoid recreation on every render
+  const noteKeys = useMemo(() => [
+    ...melodySimpleKeys,
+    ...melodySimpleKeysUpper,
+    ...melodyAdvancedKeys,
+    ...chordRootKeys,
+    ...chordTriadKeys,
+  ], []);
+
+  // Use ref to track processing state and avoid duplicate key handling
+  const processingKeys = useRef<Set<string>>(new Set());
+
+  // Memoize control keys for faster lookup
+  const controlKeys = useMemo(() => {
+    const shortcuts = useKeyboardShortcutsStore.getState().shortcuts;
+    return new Set([
+      shortcuts.octaveDown.key,
+      shortcuts.octaveUp.key,
+      shortcuts.voicingDown.key,
+      shortcuts.voicingUp.key,
+      shortcuts.toggleMelodyChord.key,
+      shortcuts.sustain.key,
+      shortcuts.sustainToggle.key,
+      ...Array.from({length: 9}, (_, i) => (i + 1).toString()),
+    ]);
+  }, []);
+
+  // Optimized set operations using a more efficient approach
+  const updateHeldKeys = useCallback((key: string, action: 'add' | 'delete') => {
+    keyboardState.setHeldKeys((prev: Set<string>) => {
+      if (action === 'add' && prev.has(key)) return prev;
+      if (action === 'delete' && !prev.has(key)) return prev;
+      
+      const newSet = new Set(prev);
+      if (action === 'add') {
+        newSet.add(key);
+      } else {
+        newSet.delete(key);
+      }
+      return newSet;
+    });
+  }, [keyboardState]);
+
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
+
+      // Early exit if key is being processed
+      if (processingKeys.current.has(key)) {
+        return;
+      }
 
       // Handle control keys (sustain, velocity, octave, etc.)
       if (handleAllControlKeys(key)) {
@@ -41,41 +89,44 @@ export const useKeyboardKeysController = (
         return;
       }
 
-      keyboardState.setHeldKeys((prev: Set<string>) => new Set(prev).add(key));
+      // Mark key as being processed
+      processingKeys.current.add(key);
+
+      // Optimized held keys update
+      updateHeldKeys(key, 'add');
 
       // Handle chord modifier keys
       if (handleChordModifierPress(key)) {
+        processingKeys.current.delete(key);
         return;
       }
 
-      // Prevent default for note keys
-      if (
-        [
-          ...melodySimpleKeys,
-          ...melodySimpleKeysUpper,
-          ...melodyAdvancedKeys,
-          ...chordRootKeys,
-          ...chordTriadKeys,
-        ].includes(key)
-      ) {
+      // Prevent default for note keys (using memoized array)
+      if (noteKeys.includes(key)) {
         event.preventDefault();
       }
 
       // Handle note playing
-      handleNotePlaying(key).catch(console.error);
+      handleNotePlaying(key).catch(console.error).finally(() => {
+        processingKeys.current.delete(key);
+      });
     },
-    [keyboardState, handleAllControlKeys, handleChordModifierPress, handleNotePlaying]
+    [
+      keyboardState.heldKeys,
+      handleAllControlKeys,
+      handleChordModifierPress,
+      handleNotePlaying,
+      updateHeldKeys,
+      noteKeys,
+    ]
   );
 
   const handleKeyUp = useCallback(
     (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
 
-      keyboardState.setHeldKeys((prev: Set<string>) => {
-        const newSet = new Set(prev);
-        newSet.delete(key);
-        return newSet;
-      });
+      // Optimized held keys update
+      updateHeldKeys(key, 'delete');
 
       // Handle chord modifier release
       if (handleChordModifierRelease(key)) {
@@ -94,26 +145,23 @@ export const useKeyboardKeysController = (
         return;
       }
 
-      // Don't handle key up for control keys
-      const controlKeys = [
-        shortcuts.octaveDown.key,
-        shortcuts.octaveUp.key,
-        shortcuts.voicingDown.key,
-        shortcuts.voicingUp.key,
-        shortcuts.toggleMelodyChord.key
-      ];
-      
-      if (
-        controlKeys.includes(key) ||
-        (key >= "1" && key <= "9")
-      ) {
+      // Don't handle key up for control keys (using memoized set)
+      if (controlKeys.has(key)) {
         return;
       }
 
       // Handle note stopping
       handleNoteStopping(key);
     },
-    [keyboardState, handleChordModifierRelease, handleNoteStopping]
+    [
+      keyboardState.sustainToggle,
+      keyboardState.setSustain,
+      keyboardState.stopSustainedNotes,
+      handleChordModifierRelease,
+      handleNoteStopping,
+      updateHeldKeys,
+      controlKeys,
+    ]
   );
 
   return { handleKeyDown, handleKeyUp };

@@ -1,17 +1,21 @@
 import { useRef, useEffect, useCallback } from "react";
-import Keyboard from "./components/Keyboard";
-import Guitar from "./components/Guitar";
-import Bass from "./components/Bass";
-import Drumpad from "./components/Drumpad";
-import Drumset from "./components/Drumset";
+import {
+  LazyKeyboardWrapper as Keyboard,
+  LazyGuitarWrapper as Guitar,
+  LazyBassWrapper as Bass,
+  LazyDrumpadWrapper as Drumpad,
+  LazyDrumsetWrapper as Drumset,
+  LazySynthControlsWrapper as SynthControls,
+} from "./components/LazyComponents";
 import ScaleSelector from "./components/ScaleSelector";
-import InstrumentSelector from "./components/InstrumentSelector";
-import CategorySelector from "./components/CategorySelector";
+import InstrumentCategorySelector from "./components/InstrumentCategorySelector";
 import MidiStatus from "./components/MidiStatus";
 import { useScaleState } from "./hooks/useScaleState";
 import { useMidiController } from "./hooks/useMidiController";
 import { useInstrument } from "./hooks/useInstrument";
 import { ControlType } from "./types";
+import { InstrumentCategory } from "./constants/instruments";
+import { preloadCriticalComponents, preloadInstrumentComponents } from "./utils/componentPreloader";
 import "./utils/midiTest"; // Import MIDI test utility
 
 export default function App() {
@@ -20,6 +24,7 @@ export default function App() {
     currentInstrument,
     currentCategory,
     availableSamples,
+    dynamicDrumMachines,
     isLoadingInstrument,
     isAudioContextReady,
     initializeAudioContext,
@@ -35,6 +40,11 @@ export default function App() {
     handleMidiNoteOff,
     handleMidiControlChange,
     handleMidiSustainChange,
+    // Synthesizer-specific properties
+    synthState,
+    updateSynthParams,
+    loadPresetParams,
+    isSynthesizerLoaded,
   } = useInstrument();
 
   // Memoize MIDI handlers to prevent unnecessary recreation
@@ -84,10 +94,23 @@ export default function App() {
     try {
       await initializeAudioContext();
       // The instrument will be loaded automatically when AudioContext becomes ready
+      
+      // Preload critical components after audio is initialized
+      preloadCriticalComponents();
     } catch (error) {
       console.error("Failed to initialize audio context:", error);
     }
   };
+
+  // Preload instrument components when category changes
+  useEffect(() => {
+    if (currentCategory) {
+      const instrumentType = getCurrentInstrumentControlType();
+      if (instrumentType) {
+        preloadInstrumentComponents(instrumentType.toLowerCase());
+      }
+    }
+  }, [currentCategory, getCurrentInstrumentControlType]);
 
   const renderInstrumentControl = () => {
     const controlType = getCurrentInstrumentControlType();
@@ -107,7 +130,7 @@ export default function App() {
     // Show initialization button if AudioContext is not ready
     if (!isAudioContextReady) {
       return (
-        <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-4xl text-center">
+        <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-6xl text-center">
           <h3 className="text-xl font-semibold text-gray-800 mb-4">
             Initialize Audio
           </h3>
@@ -129,9 +152,9 @@ export default function App() {
     }
 
     // Show loading indicator
-    if (isLoadingInstrument) {
+    if (isLoadingInstrument || (currentCategory === InstrumentCategory.Synthesizer && !isSynthesizerLoaded)) {
       return (
-        <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-4xl text-center">
+        <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-6xl text-center">
           <h3 className="text-xl font-semibold text-gray-800 mb-4">
             Loading Instrument...
           </h3>
@@ -160,7 +183,7 @@ export default function App() {
 
   return (
     <div className="flex flex-col items-center p-3 bg-gray-100 min-h-screen">
-      <div className="flex gap-3 flex-wrap w-full max-w-4xl mb-3">
+      <div className="flex gap-3 flex-wrap w-full max-w-6xl mb-3">
         <MidiStatus
           isConnected={midiController.isConnected}
           getMidiInputs={midiController.getMidiInputs}
@@ -174,18 +197,27 @@ export default function App() {
           onRootNoteChange={scaleState.setRootNote}
           onScaleChange={scaleState.setScale}
         />
-        <CategorySelector
+        <InstrumentCategorySelector
           currentCategory={currentCategory}
-          onCategoryChange={handleCategoryChange}
-          isLoading={isLoadingInstrument}
-        />
-        <InstrumentSelector
           currentInstrument={currentInstrument}
-          currentCategory={currentCategory}
+          onCategoryChange={handleCategoryChange}
           onInstrumentChange={handleInstrumentChange}
           isLoading={isLoadingInstrument}
+          dynamicDrumMachines={dynamicDrumMachines}
         />
       </div>
+
+      {/* Show synthesizer controls only for synthesizer category */}
+      {currentCategory === InstrumentCategory.Synthesizer && synthState && (
+        <div className="w-full max-w-6xl mb-3">
+          <SynthControls
+            currentInstrument={currentInstrument}
+            synthState={synthState}
+            onParamChange={updateSynthParams}
+            onLoadPreset={loadPresetParams}
+          />
+        </div>
+      )}
 
       {renderInstrumentControl()}
     </div>

@@ -111,7 +111,7 @@ export default function Keyboard({
     };
   }, [handleKeyDown, handleKeyUp]);
 
-  const virtualKeys = virtualKeyboard.generateVirtualKeys();
+  const virtualKeys = virtualKeyboard.generateVirtualKeys;
 
   const renderVirtualKeyboard = () => {
     if (mainMode === "simple" && simpleMode === "chord") {
@@ -153,7 +153,7 @@ export default function Keyboard({
   };
 
   return (
-    <div className="bg-white p-3 rounded-lg shadow-lg w-full max-w-4xl">
+    <div className="bg-white p-3 rounded-lg shadow-lg w-full max-w-6xl">
       <div className="flex justify-around gap-3 mb-3 flex-wrap">
         <div className="space-y-4">
           <div className="flex justify-between items-center">

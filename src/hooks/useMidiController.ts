@@ -17,6 +17,8 @@ export const useMidiController = ({
 }: MidiControllerProps) => {
   const midiAccess = useRef<WebMidi.MIDIAccess | null>(null);
   const inputs = useRef<WebMidi.MIDIInput[]>([]);
+  
+  // Use ref to store stable handler references
   const handlersRef = useRef({
     onNoteOn,
     onNoteOff,
@@ -30,17 +32,16 @@ export const useMidiController = ({
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [isRequesting, setIsRequesting] = useState<boolean>(false);
 
-  // Update handlers ref when props change
-  useEffect(() => {
-    handlersRef.current = {
-      onNoteOn,
-      onNoteOff,
-      onControlChange,
-      onPitchBend,
-      onSustainChange,
-    };
-  }, [onNoteOn, onNoteOff, onControlChange, onPitchBend, onSustainChange]);
+  // Update handlers ref when props change - more stable than useEffect
+  handlersRef.current = {
+    onNoteOn,
+    onNoteOff,
+    onControlChange,
+    onPitchBend,
+    onSustainChange,
+  };
 
+  // Memoize MIDI message handler to prevent recreation
   const handleMidiMessage = useCallback((event: WebMidi.MIDIMessageEvent) => {
     const [status, data1, data2] = event.data;
     const channel = status & 0x0F;
@@ -111,36 +112,37 @@ export const useMidiController = ({
     updateInputs();
   }, [updateInputs]);
 
-  const requestMidiAccess = useCallback(async () => {
+  const requestMidiAccess = useCallback(async (): Promise<boolean> => {
+    if (isRequesting) return false;
+    
     setIsRequesting(true);
     setConnectionError(null);
     
     try {
       if (!navigator.requestMIDIAccess) {
-        throw new Error('Web MIDI API not supported in this browser');
+        throw new Error('Web MIDI API not supported');
       }
-
+      
       const access = await navigator.requestMIDIAccess();
       midiAccess.current = access;
       
       // Set up state change listener
       access.onstatechange = handleStateChange;
       
-      // Initial setup of inputs
+      // Initial input setup
       updateInputs();
-
+      
       console.log('MIDI access granted');
       return true;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to access MIDI devices';
+      const errorMessage = error instanceof Error ? error.message : 'Failed to access MIDI';
       setConnectionError(errorMessage);
-      console.error('MIDI access error:', error);
-      setIsConnected(false);
+      console.error('MIDI access error:', errorMessage);
       return false;
     } finally {
       setIsRequesting(false);
     }
-  }, [handleStateChange, updateInputs]);
+  }, [isRequesting, handleStateChange, updateInputs]);
 
   const getMidiInputs = useCallback(() => {
     return inputs.current.map(input => ({
@@ -151,34 +153,21 @@ export const useMidiController = ({
     }));
   }, []);
 
-  const disconnect = useCallback(() => {
-    cleanupInputs();
-    
-    if (midiAccess.current) {
-      midiAccess.current.onstatechange = null;
-    }
-    
-    midiAccess.current = null;
-    setIsConnected(false);
-    setConnectionError(null);
-    console.log('MIDI disconnected');
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cleanupInputs();
+      if (midiAccess.current) {
+        midiAccess.current.onstatechange = null;
+      }
+    };
   }, [cleanupInputs]);
 
-  useEffect(() => {
-    // Request MIDI access when the hook is initialized
-    requestMidiAccess();
-
-    return () => {
-      disconnect();
-    };
-  }, [requestMidiAccess, disconnect]);
-
   return {
-    requestMidiAccess,
-    getMidiInputs,
-    disconnect,
     isConnected,
     connectionError,
     isRequesting,
+    requestMidiAccess,
+    getMidiInputs,
   };
 }; 
