@@ -1,5 +1,6 @@
 import { memo } from "react";
 import type { KeyboardKey } from "../types/keyboard";
+import { useTouchEvents } from "../../../hooks/useTouchEvents";
 
 interface MelodyKeysProps {
   virtualKeys: KeyboardKey[];
@@ -19,24 +20,36 @@ const MelodyKeyButton = memo(({
   isPressed: boolean;
   onPress: () => void;
   onRelease: () => void;
-}) => (
-  <button
-    onMouseDown={onPress}
-    onMouseUp={onRelease}
-    onMouseLeave={onRelease}
-    className={`
-      w-12 h-30 border-2 border-gray-300 bg-white hover:bg-gray-100 
-      transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1
-      ${isPressed ? "bg-gray-200 transform scale-95" : ""}
-    `}
-  >
-    <div className="w-full h-full" />
-    <span className="text-xs text-gray-600 font-bold">
-      {keyData.keyboardKey?.toUpperCase()}
-    </span>
-    <span className="text-xs text-gray-600">{keyData.note}</span>
-  </button>
-));
+}) => {
+  const touchHandlers = useTouchEvents(onPress, onRelease);
+
+  return (
+    <button
+      onMouseDown={onPress}
+      onMouseUp={onRelease}
+      onMouseLeave={onRelease}
+      {...touchHandlers}
+      className={`
+        w-12 h-24 border-2 border-gray-300 bg-white hover:bg-gray-100 
+        transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1
+        touch-manipulation
+        ${isPressed ? "bg-gray-200 transform scale-95" : ""}
+      `}
+      style={{
+        WebkitTapHighlightColor: 'transparent',
+        WebkitTouchCallout: 'none',
+        WebkitUserSelect: 'none',
+        touchAction: 'manipulation'
+      }}
+    >
+      <div className="w-full h-full" />
+      <span className="text-xs text-gray-600 font-bold">
+        <kbd className="kbd kbd-sm">{keyData.keyboardKey?.toUpperCase()}</kbd>
+      </span>
+      <span className="text-xs text-gray-600">{keyData.note}</span>
+    </button>
+  );
+});
 
 MelodyKeyButton.displayName = 'MelodyKeyButton';
 
@@ -51,7 +64,7 @@ export const MelodyKeys = memo<MelodyKeysProps>(({
   const upperRowKeys = virtualKeys.filter(key => key.position >= 100);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4 w-fit mx-auto">
       {/* Upper row */}
       {upperRowKeys.length > 0 && (
         <div className="flex justify-center gap-1">

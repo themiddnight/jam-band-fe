@@ -5,6 +5,7 @@ import { DEFAULT_PRESETS } from "../../constants/defaultPresets";
 import type { SynthState } from "../../hooks/useToneSynthesizer";
 import type { SynthPreset } from "../../types/presets";
 import { LatencyControls } from "./LatencyControls";
+import { Knob } from "../shared/Knob";
 
 interface SynthControlsProps {
   currentInstrument: string;
@@ -36,14 +37,15 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
 
   // Get relevant presets for current synthesizer type
   const availablePresets = [
-    ...DEFAULT_PRESETS.filter(preset => 
-      preset.synthType === currentSynthData.type && 
-      preset.polyphony === currentSynthData.polyphony
+    ...DEFAULT_PRESETS.filter(
+      (preset) =>
+        preset.synthType === currentSynthData.type &&
+        preset.polyphony === currentSynthData.polyphony
     ),
     ...presetManager.getPresetsForSynth(
       currentSynthData.type as "analog" | "fm",
       currentSynthData.polyphony as "mono" | "poly"
-    )
+    ),
   ];
 
   const handleSavePreset = () => {
@@ -70,11 +72,11 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
 
   const handleExportPresets = () => {
     const data = presetManager.exportPresets();
-    const blob = new Blob([data], { type: 'application/json' });
+    const blob = new Blob([data], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = 'synth-presets.json';
+    a.download = "synth-presets.json";
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -88,480 +90,653 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
   };
 
   return (
-    <div className="bg-gray-800 p-6 rounded-lg">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-xl font-bold text-white">
-          {currentSynthData.label} Controls
-        </h3>
-        
-        {/* Preset Controls */}
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowPresetModal(true)}
-            className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
-          >
-            Save Preset
-          </button>
-          <button
-            onClick={() => setShowImportExport(true)}
-            className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
-          >
-            Import/Export
-          </button>
-        </div>
-      </div>
-
-      {/* Preset Selector */}
-      {availablePresets.length > 0 && (
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Load Preset
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {availablePresets.map((preset) => (
-              <div key={preset.id} className="flex items-center gap-1">
-                <button
-                  onClick={() => handleLoadPreset(preset)}
-                  className={`px-3 py-1 rounded text-sm ${
-                    presetManager.currentPreset?.id === preset.id
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
-                  }`}
-                >
-                  {preset.name}
-                </button>
-                {!DEFAULT_PRESETS.find(p => p.id === preset.id) && (
-                  <button
-                    onClick={() => presetManager.deletePreset(preset.id)}
-                    className="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-xs"
-                    title="Delete preset"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Error Display */}
-      {presetManager.error && (
-        <div className="mb-4 p-2 bg-red-900 text-red-200 rounded text-sm">
-          {presetManager.error}
-        </div>
-      )}
-
-      {/* Save Preset Modal */}
-      {showPresetModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 p-6 rounded-lg max-w-md w-full mx-4">
-            <h3 className="text-lg font-bold text-white mb-4">Save Preset</h3>
-            <input
-              type="text"
-              value={presetName}
-              onChange={(e) => setPresetName(e.target.value)}
-              placeholder="Enter preset name"
-              className="w-full p-2 bg-gray-700 text-white rounded mb-4"
-              onKeyPress={(e) => e.key === 'Enter' && handleSavePreset()}
+    <div className="card bg-neutral text-neutral-content shadow-xl">
+      <div className="card-body">
+        <div className="flex justify-between items-center ">
+          <div className="flex gap-2">
+            <h3 className="card-title">{currentSynthData.label} Controls</h3>
+            <LatencyControls
+              onConfigChange={(config) => {
+                console.log("Latency config updated:", config);
+                // Note: The config changes will be applied on next synthesizer initialization
+              }}
             />
-            <div className="flex gap-2">
-              <button
-                onClick={handleSavePreset}
-                disabled={!presetName.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-              >
-                Save
-              </button>
-              <button
-                onClick={() => {
-                  setShowPresetModal(false);
-                  setPresetName("");
+          </div>
+
+          {/* Preset Controls */}
+          <div className="flex gap-2 flex-wrap">
+            {availablePresets.length > 0 && (
+              <select
+                value={presetManager.currentPreset?.id || ""}
+                onChange={(e) => {
+                  const selectedPreset = availablePresets.find(
+                    (p) => p.id === e.target.value
+                  );
+                  if (selectedPreset) {
+                    handleLoadPreset(selectedPreset);
+                  }
                 }}
-                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                className="select select-bordered select-sm flex-1"
               >
-                Cancel
-              </button>
-            </div>
+                <option value="">Select a preset...</option>
+                {availablePresets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              onClick={() => setShowPresetModal(true)}
+              className="btn btn-primary btn-sm"
+            >
+              Save Preset
+            </button>
+            <button
+              onClick={() => setShowImportExport(true)}
+              className="btn btn-secondary btn-sm"
+            >
+              Import/Export
+            </button>
           </div>
         </div>
-      )}
 
-      {/* Import/Export Modal */}
-      {showImportExport && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-gray-800 p-6 rounded-lg max-w-md w-full mx-4">
-            <h3 className="text-lg font-bold text-white mb-4">Import/Export Presets</h3>
-            
-            <div className="space-y-4">
-              <div>
-                <button
-                  onClick={handleExportPresets}
-                  className="w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-                >
-                  Export All Presets
-                </button>
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Import Presets (JSON)
-                </label>
-                <textarea
-                  value={importData}
-                  onChange={(e) => setImportData(e.target.value)}
-                  placeholder="Paste preset JSON data here"
-                  className="w-full p-2 bg-gray-700 text-white rounded h-32 resize-none"
+        {/* Error Display */}
+        {presetManager.error && (
+          <div className="alert alert-error ">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="stroke-current shrink-0 h-6 w-6"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <span>{presetManager.error}</span>
+          </div>
+        )}
+
+        {/* Save Preset Modal */}
+        {showPresetModal && (
+          <div className="modal modal-open">
+            <div className="modal-box">
+              <h3 className="font-bold text-lg ">Save Preset</h3>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={presetName}
+                  onChange={(e) => setPresetName(e.target.value)}
+                  placeholder="Enter preset name"
+                  className="input input-bordered w-full"
+                  onKeyPress={(e) => e.key === "Enter" && handleSavePreset()}
                 />
+              </div>
+              <div className="modal-action">
                 <button
-                  onClick={handleImportPresets}
-                  disabled={!importData.trim()}
-                  className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                  onClick={handleSavePreset}
+                  disabled={!presetName.trim()}
+                  className="btn btn-primary"
                 >
-                  Import
+                  Save
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPresetModal(false);
+                    setPresetName("");
+                  }}
+                  className="btn"
+                >
+                  Cancel
                 </button>
               </div>
             </div>
-            
-            <div className="flex justify-end mt-4">
-              <button
-                onClick={() => {
-                  setShowImportExport(false);
-                  setImportData("");
-                }}
-                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-              >
-                Close
-              </button>
+          </div>
+        )}
+
+        {/* Import/Export Modal */}
+        {showImportExport && (
+          <div className="modal modal-open">
+            <div className="modal-box">
+              <h3 className="font-bold text-lg ">Import/Export Presets</h3>
+
+              <div className="space-y-4">
+                <div>
+                  <button
+                    onClick={handleExportPresets}
+                    className="btn btn-success w-full"
+                  >
+                    Export All Presets
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <label className="label">
+                    <span className="label-text">Import Presets (JSON)</span>
+                  </label>
+                  <textarea
+                    value={importData}
+                    onChange={(e) => setImportData(e.target.value)}
+                    placeholder="Paste preset JSON data here"
+                    className="textarea textarea-bordered h-32 resize-none"
+                  />
+                  <button
+                    onClick={handleImportPresets}
+                    disabled={!importData.trim()}
+                    className="btn btn-primary mt-2"
+                  >
+                    Import
+                  </button>
+                </div>
+              </div>
+
+              <div className="modal-action">
+                <button
+                  onClick={() => {
+                    setShowImportExport(false);
+                    setImportData("");
+                  }}
+                  className="btn"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-      
-      {/* Latency Controls */}
-      <div className="mb-6">
-        <LatencyControls onConfigChange={(config) => {
-          console.log('Latency config updated:', config);
-          // Note: The config changes will be applied on next synthesizer initialization
-        }} />
-      </div>
-      
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {/* Common Controls */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-300">
-            Amp Attack
-          </label>
-          <input
-            type="range"
-            min="0.001"
-            max="2"
-            step="0.001"
-            value={synthState.ampAttack}
-            onChange={(e) => onParamChange({ ampAttack: parseFloat(e.target.value) })}
-            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-          />
-          <span className="text-xs text-gray-400">
-            {synthState.ampAttack.toFixed(3)}s
-          </span>
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-300">
-            Amp Decay
-          </label>
-          <input
-            type="range"
-            min="0.001"
-            max="2"
-            step="0.001"
-            value={synthState.ampDecay}
-            onChange={(e) => onParamChange({ ampDecay: parseFloat(e.target.value) })}
-            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-          />
-          <span className="text-xs text-gray-400">
-            {synthState.ampDecay.toFixed(3)}s
-          </span>
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-300">
-            Amp Sustain
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={synthState.ampSustain}
-            onChange={(e) => onParamChange({ ampSustain: parseFloat(e.target.value) })}
-            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-          />
-          <span className="text-xs text-gray-400">
-            {synthState.ampSustain.toFixed(2)}
-          </span>
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-300">
-            Amp Release
-          </label>
-          <input
-            type="range"
-            min="0.001"
-            max="5"
-            step="0.001"
-            value={synthState.ampRelease}
-            onChange={(e) => onParamChange({ ampRelease: parseFloat(e.target.value) })}
-            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-          />
-          <span className="text-xs text-gray-400">
-            {synthState.ampRelease.toFixed(3)}s
-          </span>
-        </div>
+        )}
 
         {/* Analog Synthesizer Controls */}
         {isAnalog && (
-          <>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">
-                Oscillator Type
-              </label>
-              <select
-                value={synthState.oscillatorType}
-                onChange={(e) => onParamChange({ oscillatorType: e.target.value })}
-                className="w-full bg-gray-700 text-white rounded px-3 py-2"
-              >
-                <option value="sine">Sine</option>
-                <option value="square">Square</option>
-                <option value="sawtooth">Sawtooth</option>
-                <option value="triangle">Triangle</option>
-              </select>
-            </div>
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-3 flex-wrap">
+              {/* Oscillator Group */}
+              <div className="card bg-base-200 grow">
+                <div className="card-body">
+                  <h4 className="card-title text-sm">Oscillator</h4>
+                  <div className="flex justify-around items-center flex-wrap gap-3">
+                    <div className="flex flex-col gap-2">
+                      <select
+                        value={synthState.oscillatorType}
+                        onChange={(e) =>
+                          onParamChange({ oscillatorType: e.target.value })
+                        }
+                        className="select select-bordered"
+                      >
+                        <option value="sine">Sine</option>
+                        <option value="square">Square</option>
+                        <option value="sawtooth">Sawtooth</option>
+                        <option value="triangle">Triangle</option>
+                      </select>
+                    </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">
-                Filter Frequency
-              </label>
-              <input
-                type="range"
-                min="100"
-                max="8000"
-                step="10"
-                value={synthState.filterFrequency}
-                onChange={(e) => onParamChange({ filterFrequency: parseFloat(e.target.value) })}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-              />
-              <span className="text-xs text-gray-400">
-                {synthState.filterFrequency.toFixed(0)}Hz
-              </span>
-            </div>
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.volume || 0.5}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        onChange={(value) => onParamChange({ volume: value })}
+                        size={50}
+                        color="primary"
+                      />
+                      <label className="label">
+                        <span className="label-text text-neutral-content text-xs">
+                          Volume
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">
-                Filter Resonance
-              </label>
-              <input
-                type="range"
-                min="0.1"
-                max="30"
-                step="0.1"
-                value={synthState.filterResonance}
-                onChange={(e) => onParamChange({ filterResonance: parseFloat(e.target.value) })}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-              />
-              <span className="text-xs text-gray-400">
-                {synthState.filterResonance.toFixed(1)}
-              </span>
-            </div>
+              {/* Filter Group */}
+              <div className="card bg-base-200 grow">
+                <div className="card-body">
+                  <h4 className="card-title text-sm">Filter</h4>
+                  <div className="flex justify-around flex-wrap gap-3">
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.filterFrequency}
+                        min={20}
+                        max={20000}
+                        step={1}
+                        onChange={(value) =>
+                          onParamChange({ filterFrequency: value })
+                        }
+                        size={50}
+                        curve="logarithmic"
+                        color="secondary"
+                      />
+                      <label className="label">
+                        <span className="label-text text-neutral-content text-xs">
+                          Freq
+                        </span>
+                      </label>
+                    </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">
-                Filter Attack
-              </label>
-              <input
-                type="range"
-                min="0.001"
-                max="2"
-                step="0.001"
-                value={synthState.filterAttack}
-                onChange={(e) => onParamChange({ filterAttack: parseFloat(e.target.value) })}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-              />
-              <span className="text-xs text-gray-400">
-                {synthState.filterAttack.toFixed(3)}s
-              </span>
-            </div>
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.filterResonance}
+                        min={0.1}
+                        max={30}
+                        step={0.1}
+                        onChange={(value) =>
+                          onParamChange({ filterResonance: value })
+                        }
+                        size={50}
+                        color="secondary"
+                      />
+                      <label className="label">
+                        <span className="label-text text-neutral-content text-xs">
+                          Res
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">
-                Filter Decay
-              </label>
-              <input
-                type="range"
-                min="0.001"
-                max="2"
-                step="0.001"
-                value={synthState.filterDecay}
-                onChange={(e) => onParamChange({ filterDecay: parseFloat(e.target.value) })}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-              />
-              <span className="text-xs text-gray-400">
-                {synthState.filterDecay.toFixed(3)}s
-              </span>
-            </div>
+              {/* Amp Envelope Group */}
+              <div className="card bg-base-200 grow">
+                <div className="card-body">
+                  <h4 className="card-title text-sm">Amp Envelope</h4>
+                  <div className="flex justify-around flex-wrap gap-3">
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.ampAttack}
+                        min={0.001}
+                        max={2}
+                        step={0.001}
+                        onChange={(value) =>
+                          onParamChange({ ampAttack: value })
+                        }
+                        size={50}
+                        color="accent"
+                      />
+                      <label className="label">
+                        <span className="label-text text-neutral-content text-xs">
+                          Attack
+                        </span>
+                      </label>
+                    </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">
-                Filter Sustain
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={synthState.filterSustain}
-                onChange={(e) => onParamChange({ filterSustain: parseFloat(e.target.value) })}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-              />
-              <span className="text-xs text-gray-400">
-                {synthState.filterSustain.toFixed(2)}
-              </span>
-            </div>
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.ampDecay}
+                        min={0.001}
+                        max={10}
+                        step={0.001}
+                        onChange={(value) => onParamChange({ ampDecay: value })}
+                        size={50}
+                        color="accent"
+                      />
+                      <label className="label">
+                        <span className="label-text text-neutral-content text-xs">
+                          Decay
+                        </span>
+                      </label>
+                    </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">
-                Filter Release
-              </label>
-              <input
-                type="range"
-                min="0.001"
-                max="5"
-                step="0.001"
-                value={synthState.filterRelease}
-                onChange={(e) => onParamChange({ filterRelease: parseFloat(e.target.value) })}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-              />
-              <span className="text-xs text-gray-400">
-                {synthState.filterRelease.toFixed(3)}s
-              </span>
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.ampSustain}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        onChange={(value) =>
+                          onParamChange({ ampSustain: value })
+                        }
+                        size={50}
+                        color="accent"
+                      />
+                      <label className="label">
+                        <span className="label-text text-neutral-content text-xs">
+                          Sustain
+                        </span>
+                      </label>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.ampRelease}
+                        min={0.001}
+                        max={5}
+                        step={0.001}
+                        onChange={(value) =>
+                          onParamChange({ ampRelease: value })
+                        }
+                        size={50}
+                        color="accent"
+                      />
+                      <label className="label">
+                        <span className="label-text text-neutral-content text-xs">
+                          Release
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Filter Envelope Group */}
+              <div className="card bg-base-200 grow">
+                <div className="card-body">
+                  <h4 className="card-title text-sm">Filter Envelope</h4>
+                  <div className="flex justify-around flex-wrap gap-3">
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.filterAttack}
+                        min={0.001}
+                        max={2}
+                        step={0.001}
+                        onChange={(value) =>
+                          onParamChange({ filterAttack: value })
+                        }
+                        size={50}
+                        color="info"
+                      />
+                      <label className="label">
+                        <span className="label-text text-neutral-content text-xs">
+                          Attack
+                        </span>
+                      </label>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.filterDecay}
+                        min={0.001}
+                        max={10}
+                        step={0.001}
+                        onChange={(value) =>
+                          onParamChange({ filterDecay: value })
+                        }
+                        size={50}
+                        color="info"
+                      />
+                      <label className="label">
+                        <span className="label-text text-neutral-content text-xs">
+                          Decay
+                        </span>
+                      </label>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.filterSustain}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        onChange={(value) =>
+                          onParamChange({ filterSustain: value })
+                        }
+                        size={50}
+                        color="info"
+                      />
+                      <label className="label">
+                        <span className="label-text text-neutral-content text-xs">
+                          Sustain
+                        </span>
+                      </label>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.filterRelease}
+                        min={0.001}
+                        max={5}
+                        step={0.001}
+                        onChange={(value) =>
+                          onParamChange({ filterRelease: value })
+                        }
+                        size={50}
+                        color="info"
+                      />
+                      <label className="label">
+                        <span className="label-text text-neutral-content text-xs">
+                          Release
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-          </>
+          </div>
         )}
 
         {/* FM Synthesizer Controls */}
         {isFM && (
-          <>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">
-                Modulation Index
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="50"
-                step="0.1"
-                value={synthState.modulationIndex}
-                onChange={(e) => onParamChange({ modulationIndex: parseFloat(e.target.value) })}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-              />
-              <span className="text-xs text-gray-400">
-                {synthState.modulationIndex.toFixed(1)}
-              </span>
+          <div className="flex gap-3 flex-wrap">
+            {/* Volume Group */}
+            <div className="card bg-base-200 grow">
+              <div className="card-body">
+                <h4 className="card-title text-sm">Volume</h4>
+                <div className="flex justify-around flex-wrap gap-3">
+                  <div className="flex flex-col items-center gap-2">
+                    <Knob
+                      value={synthState.volume || 0.5}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      onChange={(value) => onParamChange({ volume: value })}
+                      size={50}
+                      color="primary"
+                    />
+                    <label className="label">
+                      <span className="label-text text-neutral-content text-xs">
+                        Volume
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">
-                Harmonicity
-              </label>
-              <input
-                type="range"
-                min="0.1"
-                max="10"
-                step="0.01"
-                value={synthState.harmonicity}
-                onChange={(e) => onParamChange({ harmonicity: parseFloat(e.target.value) })}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-              />
-              <span className="text-xs text-gray-400">
-                {synthState.harmonicity.toFixed(2)}
-              </span>
+            {/* Modulation Group */}
+            <div className="card bg-base-200 grow">
+              <div className="card-body">
+                <h4 className="card-title text-sm">Modulation</h4>
+                <div className="flex justify-around flex-wrap gap-3">
+                  <div className="flex flex-col items-center gap-2">
+                    <Knob
+                      value={synthState.modulationIndex}
+                      min={0}
+                      max={50}
+                      step={0.1}
+                      onChange={(value) =>
+                        onParamChange({ modulationIndex: value })
+                      }
+                      size={50}
+                      color="secondary"
+                    />
+                    <label className="label">
+                      <span className="label-text text-neutral-content text-xs">
+                        Modulation Index
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="flex flex-col items-center gap-2">
+                    <Knob
+                      value={synthState.harmonicity}
+                      min={0.1}
+                      max={10}
+                      step={0.01}
+                      onChange={(value) =>
+                        onParamChange({ harmonicity: value })
+                      }
+                      size={50}
+                      color="secondary"
+                    />
+                    <label className="label">
+                      <span className="label-text text-neutral-content text-xs">
+                        Harmonicity
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">
-                Mod Attack
-              </label>
-              <input
-                type="range"
-                min="0.001"
-                max="2"
-                step="0.001"
-                value={synthState.modAttack}
-                onChange={(e) => onParamChange({ modAttack: parseFloat(e.target.value) })}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-              />
-              <span className="text-xs text-gray-400">
-                {synthState.modAttack.toFixed(3)}s
-              </span>
+            {/* Amp Envelope Group */}
+            <div className="card bg-base-200 grow">
+              <div className="card-body">
+                <h4 className="card-title text-sm">Amp Envelope</h4>
+                <div className="flex justify-around flex-wrap gap-3">
+                  <div className="flex flex-col items-center gap-2">
+                    <Knob
+                      value={synthState.ampAttack}
+                      min={0.001}
+                      max={2}
+                      step={0.001}
+                      onChange={(value) => onParamChange({ ampAttack: value })}
+                      size={50}
+                      color="accent"
+                    />
+                    <label className="label">
+                      <span className="label-text text-neutral-content text-xs">
+                        Attack
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="flex flex-col items-center gap-2">
+                    <Knob
+                      value={synthState.ampDecay}
+                      min={0.001}
+                      max={10}
+                      step={0.001}
+                      onChange={(value) => onParamChange({ ampDecay: value })}
+                      size={50}
+                      color="accent"
+                    />
+                    <label className="label">
+                      <span className="label-text text-neutral-content text-xs">
+                        Decay
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="flex flex-col items-center gap-2">
+                    <Knob
+                      value={synthState.ampSustain}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      onChange={(value) => onParamChange({ ampSustain: value })}
+                      size={50}
+                      color="accent"
+                    />
+                    <label className="label">
+                      <span className="label-text text-neutral-content text-xs">
+                        Sustain
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="flex flex-col items-center gap-2">
+                    <Knob
+                      value={synthState.ampRelease}
+                      min={0.001}
+                      max={5}
+                      step={0.001}
+                      onChange={(value) => onParamChange({ ampRelease: value })}
+                      size={50}
+                      color="accent"
+                    />
+                    <label className="label">
+                      <span className="label-text text-neutral-content text-xs">
+                        Release
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">
-                Mod Decay
-              </label>
-              <input
-                type="range"
-                min="0.001"
-                max="2"
-                step="0.001"
-                value={synthState.modDecay}
-                onChange={(e) => onParamChange({ modDecay: parseFloat(e.target.value) })}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-              />
-              <span className="text-xs text-gray-400">
-                {synthState.modDecay.toFixed(3)}s
-              </span>
-            </div>
+            {/* Modulation Envelope Group */}
+            <div className="card bg-base-200 grow">
+              <div className="card-body">
+                <h4 className="card-title text-sm">Modulation Envelope</h4>
+                <div className="flex justify-around flex-wrap gap-3">
+                  <div className="flex flex-col items-center gap-2">
+                    <Knob
+                      value={synthState.modAttack}
+                      min={0.001}
+                      max={2}
+                      step={0.001}
+                      onChange={(value) => onParamChange({ modAttack: value })}
+                      size={50}
+                      color="info"
+                    />
+                    <label className="label">
+                      <span className="label-text text-neutral-content text-xs">
+                        Attack
+                      </span>
+                    </label>
+                  </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">
-                Mod Sustain
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={synthState.modSustain}
-                onChange={(e) => onParamChange({ modSustain: parseFloat(e.target.value) })}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-              />
-              <span className="text-xs text-gray-400">
-                {synthState.modSustain.toFixed(2)}
-              </span>
-            </div>
+                  <div className="flex flex-col items-center gap-2">
+                    <Knob
+                      value={synthState.modDecay}
+                      min={0.001}
+                      max={10}
+                      step={0.001}
+                      onChange={(value) => onParamChange({ modDecay: value })}
+                      size={50}
+                      color="info"
+                    />
+                    <label className="label">
+                      <span className="label-text text-neutral-content text-xs">
+                        Decay
+                      </span>
+                    </label>
+                  </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-300">
-                Mod Release
-              </label>
-              <input
-                type="range"
-                min="0.001"
-                max="5"
-                step="0.001"
-                value={synthState.modRelease}
-                onChange={(e) => onParamChange({ modRelease: parseFloat(e.target.value) })}
-                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-              />
-              <span className="text-xs text-gray-400">
-                {synthState.modRelease.toFixed(3)}s
-              </span>
+                  <div className="flex flex-col items-center gap-2">
+                    <Knob
+                      value={synthState.modSustain}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      onChange={(value) => onParamChange({ modSustain: value })}
+                      size={50}
+                      color="info"
+                    />
+                    <label className="label">
+                      <span className="label-text text-neutral-content text-xs">
+                        Sustain
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="flex flex-col items-center gap-2">
+                    <Knob
+                      value={synthState.modRelease}
+                      min={0.001}
+                      max={5}
+                      step={0.001}
+                      onChange={(value) => onParamChange({ modRelease: value })}
+                      size={50}
+                      color="info"
+                    />
+                    <label className="label">
+                      <span className="label-text text-neutral-content text-xs">
+                        Release
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </div>
             </div>
-          </>
+          </div>
         )}
       </div>
     </div>
   );
-}; 
+};

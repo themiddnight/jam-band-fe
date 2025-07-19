@@ -73,24 +73,26 @@ export default function Drumpad({
   };
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-6xl">
-      <div className="mb-4">
-        <h3 className="text-xl font-semibold text-gray-800 mb-4">Drum Pad</h3>
+    <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
+      <div className="card-body">
+        <h3 className="card-title text-xl mb-4">Drum Pad</h3>
         
         {/* Drum Pad Controls */}
         <div className="flex items-center gap-4 mb-4 flex-wrap">
           {/* Pad Count Selection */}
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">Layout:</span>
-            <div className="flex gap-1">
+            <label className="label">
+              <span className="label-text">Layout:</span>
+            </label>
+            <div className="join">
               {Object.entries(presetLayouts).map(([name, count]) => (
                 <button
                   key={name}
                   onClick={() => setMaxPads(count)}
-                  className={`px-3 py-1 rounded text-sm ${
+                  className={`btn btn-sm ${
                     maxPads === count
-                      ? 'bg-purple-500 text-white'
-                      : 'bg-gray-200 text-gray-700'
+                      ? 'btn-primary'
+                      : 'btn-outline'
                   }`}
                 >
                   {name}
@@ -99,77 +101,43 @@ export default function Drumpad({
             </div>
           </div>
 
+          {/* Velocity Control */}
+          <div className="flex items-center gap-2">
+            <label className="label">
+              <span className="label-text">Velocity: {Math.round(velocity * 9)}</span>
+            </label>
+            <input
+              type="range"
+              min="1"
+              max="9"
+              value={Math.round(velocity * 9)}
+              onChange={(e) => handleVelocityChange(parseInt(e.target.value) / 9)}
+              className="range range-primary w-32"
+            />
+          </div>
+
           {/* Reset Button */}
           <button
             onClick={resetAssignments}
-            className="px-3 py-1 rounded text-sm bg-red-100 text-red-700 hover:bg-red-200"
+            className="btn btn-warning btn-sm"
           >
             Reset Assignments
           </button>
         </div>
 
-        {/* Available Samples Info */}
-        <div className="text-sm text-gray-600 mb-4">
-          <div>Available Samples: {availableSamples.length}</div>
-          <div className="text-xs text-gray-500 mt-1">
-            Right-click pads to assign different sounds
-          </div>
-        </div>
+        <DrumPadBase
+          pads={pads}
+          onPadPress={handlePadPress}
+          onPadRelease={handlePadRelease}
+          onPadAssign={handlePadAssign}
+          velocity={velocity}
+          onVelocityChange={handleVelocityChange}
+          maxPads={maxPads}
+          allowAssignment={true}
+          availableSounds={availableSamples}
+          className="drum-pad-grid"
+        />
       </div>
-
-      {/* Pure Drum Pad Component */}
-      <DrumPadBase
-        pads={pads}
-        onPadPress={handlePadPress}
-        onPadRelease={handlePadRelease}
-        onPadAssign={handlePadAssign}
-        velocity={velocity}
-        onVelocityChange={handleVelocityChange}
-        maxPads={maxPads}
-        allowAssignment={true}
-        availableSounds={availableSamples}
-        className="drum-pad-grid"
-      />
-
-      {/* Drum Pad Features Info */}
-      <div className="mt-4 text-xs text-gray-500">
-        <p>🥁 <strong>Drum Pad Features:</strong></p>
-        <ul className="ml-4 mt-1">
-          <li>• Configurable pad count (8, 12, or 16 pads)</li>
-          <li>• User-assignable sounds per pad</li>
-          <li>• Right-click to assign sounds</li>
-          <li>• Velocity-sensitive playback</li>
-        </ul>
-      </div>
-
-      {/* Future Features Info */}
-      <div className="mt-2 text-xs text-gray-400">
-        <p><strong>Coming Soon:</strong></p>
-        <ul className="ml-4 mt-1">
-          <li>• Keyboard shortcuts for each pad</li>
-          <li>• Pad sensitivity settings</li>
-          <li>• Pattern recording and playback</li>
-          <li>• Custom pad colors and labels</li>
-          <li>• MIDI mapping support</li>
-        </ul>
-      </div>
-
-      {/* Sample List */}
-      {availableSamples.length > 0 && (
-        <div className="mt-4 p-3 bg-gray-50 rounded">
-          <p className="text-sm font-medium text-gray-700 mb-2">Available Samples:</p>
-          <div className="flex flex-wrap gap-1">
-            {availableSamples.map((sample, index) => (
-              <span
-                key={index}
-                className="px-2 py-1 bg-white rounded text-xs text-gray-600 border"
-              >
-                {sample}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 } 

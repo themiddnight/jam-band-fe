@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useVirtualKeyboard } from "./hooks/useVirtualKeyboard";
 import { useKeyboardKeysController } from "./hooks/useKeyboardKeysController";
 import { useKeyboardState } from "./hooks/useKeyboardState";
+import { useTouchEvents } from "../../hooks/useTouchEvents";
 import { MelodyKeys } from "./components/MelodyKeys";
 import { ChordKeys } from "./components/ChordKeys";
 import { AdvancedKeys } from "./components/AdvancedKeys";
@@ -35,7 +36,7 @@ export default function Keyboard({
 }: Props) {
   const shortcuts = useKeyboardShortcutsStore((state) => state.shortcuts);
   const [showShortcutConfig, setShowShortcutConfig] = useState<boolean>(false);
-  
+
   // Use the new keyboard state hook
   const keyboardStateData = useKeyboardState({
     scaleState,
@@ -56,14 +57,22 @@ export default function Keyboard({
   );
 
   const {
-    mainMode, setMainMode,
-    simpleMode, setSimpleMode,
-    currentOctave, setCurrentOctave,
-    velocity, setVelocity,
-    chordVoicing, setChordVoicing,
-    chordModifiers, setChordModifiers,
-    pressedTriads, setPressedTriads,
-    activeTriadChords, setActiveTriadChords,
+    mainMode,
+    setMainMode,
+    simpleMode,
+    setSimpleMode,
+    currentOctave,
+    setCurrentOctave,
+    velocity,
+    setVelocity,
+    chordVoicing,
+    setChordVoicing,
+    chordModifiers,
+    setChordModifiers,
+    pressedTriads,
+    setPressedTriads,
+    activeTriadChords,
+    setActiveTriadChords,
     handleVirtualKeyPress,
     handleVirtualKeyRelease,
     handleTriadPress,
@@ -111,6 +120,8 @@ export default function Keyboard({
     };
   }, [handleKeyDown, handleKeyUp]);
 
+
+
   const virtualKeys = virtualKeyboard.generateVirtualKeys;
 
   const renderVirtualKeyboard = () => {
@@ -153,161 +164,229 @@ export default function Keyboard({
   };
 
   return (
-    <div className="bg-white p-3 rounded-lg shadow-lg w-full max-w-6xl">
-      <div className="flex justify-around gap-3 mb-3 flex-wrap">
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="font-semibold text-gray-700">Mode Controls</h3>
-            <button
-              onClick={() => setShowShortcutConfig(true)}
-              className="px-3 py-1 text-sm bg-gray-200 rounded hover:bg-gray-300"
-              title="Configure keyboard shortcuts"
-            >
-              ⚙️ Settings
-            </button>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setMainMode("simple")}
-              className={`px-4 py-2 rounded ${mainMode === "simple"
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-200"
-                }`}
-            >
-              Simple
-            </button>
-            <button
-              onClick={() => setMainMode("advanced")}
-              className={`px-4 py-2 rounded ${mainMode === "advanced"
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-200"
-                }`}
-            >
-              Advanced
-            </button>
-          </div>
-
-          {mainMode === "simple" && (
-            <div className="flex gap-2">
+    <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
+      <div className="card-body p-3">
+        <div className="flex gap-5 mb-3">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <h3 className="card-title text-base">Mode Controls</h3>
               <button
-                onClick={() => setSimpleMode("melody")}
-                className={`px-3 py-1 text-sm rounded ${simpleMode === "melody"
-                    ? "bg-green-500 text-white"
-                    : "bg-gray-200"
-                  }`}
+                onClick={() => setShowShortcutConfig(true)}
+                className="btn btn-xs touch-manipulation"
+                title="Configure keyboard shortcuts"
               >
-                Melody ({shortcuts.toggleMelodyChord.key.toUpperCase()})
-              </button>
-              <button
-                onClick={() => setSimpleMode("chord")}
-                className={`px-3 py-1 text-sm rounded ${simpleMode === "chord"
-                    ? "bg-green-500 text-white"
-                    : "bg-gray-200"
-                  }`}
-              >
-                Chord ({shortcuts.toggleMelodyChord.key.toUpperCase()})
+                ⚙️
               </button>
             </div>
-          )}
-        </div>
 
-        <div className="space-y-4">
-          <h3 className="font-semibold text-gray-700">Controls</h3>
-          <div className="flex items-start gap-4">
-            <div className="space-y-2">
+            <div className="flex gap-3 flex-wrap">
+              <div className="block join">
+                <button
+                  onClick={() => setMainMode("simple")}
+                  className={`btn btn-sm join-item touch-manipulation ${mainMode === "simple" ? "btn-primary" : "btn-outline"
+                    }`}
+                >
+                  Simple
+                </button>
+                <button
+                  onClick={() => setMainMode("advanced")}
+                  className={`btn btn-sm join-item touch-manipulation ${mainMode === "advanced" ? "btn-primary" : "btn-outline"
+                    }`}
+                >
+                  Basic
+                </button>
+              </div>
+
+              {mainMode === "simple" && (
+                <div className="block join">
+                  <button
+                    onClick={() => setSimpleMode("melody")}
+                    className={`btn btn-sm join-item touch-manipulation ${simpleMode === "melody" ? "btn-success" : "btn-outline"
+                      }`}
+                  >
+                    Notes{" "}
+                    <kbd className="kbd kbd-xs">
+                      {shortcuts.toggleMelodyChord.key.toUpperCase()}
+                    </kbd>
+                  </button>
+                  <button
+                    onClick={() => setSimpleMode("chord")}
+                    className={`btn btn-sm join-item touch-manipulation ${simpleMode === "chord" ? "btn-success" : "btn-outline"
+                      }`}
+                  >
+                    Chord{" "}
+                    <kbd className="kbd kbd-xs">
+                      {shortcuts.toggleMelodyChord.key.toUpperCase()}
+                    </kbd>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="card-title text-base">Controls</h3>
+
+            <div className="flex items-start gap-3 flex-wrap">
 
               <div className="flex items-center gap-2">
-                <span className="text-sm">
-                  Velocity: {Math.round(velocity * 9)}
-                </span>
+                <label className="label py-1">
+                  <span className="label-text text-sm">
+                    Octave: {currentOctave}
+                  </span>
+                </label>
+                <div className="join">
+                  <button
+                    onClick={() =>
+                      setCurrentOctave(Math.max(0, currentOctave - 1))
+                    }
+                    className="btn btn-sm btn-outline join-item touch-manipulation"
+                  >
+                    - <kbd className="kbd kbd-xs">Z</kbd>
+                  </button>
+                  <button
+                    onClick={() =>
+                      setCurrentOctave(Math.min(8, currentOctave + 1))
+                    }
+                    className="btn btn-sm btn-outline join-item touch-manipulation"
+                  >
+                    + <kbd className="kbd kbd-xs">X</kbd>
+                  </button>
+                </div>
+              </div>
+
+              {mainMode === "simple" && simpleMode === "chord" && (
+                <div className="flex items-center gap-2">
+                  <label className="label py-1">
+                    <span className="label-text text-sm">
+                      Voicing: {chordVoicing}
+                    </span>
+                  </label>
+                  <div className="join">
+                    <button
+                      onClick={() =>
+                        setChordVoicing(Math.max(-2, chordVoicing - 1))
+                      }
+                      className="btn btn-sm btn-outline join-item touch-manipulation"
+                    >
+                      - <kbd className="kbd kbd-xs">C</kbd>
+                    </button>
+                    <button
+                      onClick={() =>
+                        setChordVoicing(Math.min(4, chordVoicing + 1))
+                      }
+                      className="btn btn-sm btn-outline join-item touch-manipulation"
+                    >
+                      + <kbd className="kbd kbd-xs">V</kbd>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+
+              <div className="join">
+                <button
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    if (keyboardStateData.sustainToggle) {
+                      // If toggle mode is active, sustain button only stops current sustained notes
+                      onStopSustainedNotes();
+                    } else {
+                      // Normal momentary sustain behavior
+                      keyboardStateData.setSustain(true);
+                    }
+                  }}
+                  onMouseUp={(e) => {
+                    e.preventDefault();
+                    if (!keyboardStateData.sustainToggle) {
+                      // Only stop sustain on button release if not in toggle mode
+                      keyboardStateData.setSustain(false);
+                      // Fix: Also stop sustained notes like the spacebar does
+                      onStopSustainedNotes();
+                    }
+                  }}
+                  onMouseLeave={() => {
+                    if (!keyboardStateData.sustainToggle) {
+                      keyboardStateData.setSustain(false);
+                      onStopSustainedNotes();
+                    }
+                  }}
+                  {...useTouchEvents(
+                    () => {
+                      if (keyboardStateData.sustainToggle) {
+                        onStopSustainedNotes();
+                      } else {
+                        keyboardStateData.setSustain(true);
+                      }
+                    },
+                    () => {
+                      if (!keyboardStateData.sustainToggle) {
+                        keyboardStateData.setSustain(false);
+                        onStopSustainedNotes();
+                      }
+                    }
+                  )}
+                  className={`btn btn-sm join-item touch-manipulation select-none ${(keyboardStateData.sustain &&
+                      !keyboardStateData.sustainToggle) ||
+                      (keyboardStateData.sustainToggle &&
+                        keyboardStateData.hasSustainedNotes)
+                      ? "btn-warning"
+                      : "btn-outline"
+                    }`}
+                  style={{
+                    WebkitTapHighlightColor: 'transparent',
+                    WebkitTouchCallout: 'none',
+                    WebkitUserSelect: 'none',
+                    touchAction: 'manipulation'
+                  }}
+                >
+                  Sustain <kbd className="kbd kbd-xs">Space</kbd>
+                </button>
+                <button
+                  onClick={() => {
+                    keyboardStateData.setSustainToggle(
+                      !keyboardStateData.sustainToggle
+                    );
+                  }}
+                  className={`btn btn-sm join-item touch-manipulation ${keyboardStateData.sustainToggle
+                      ? "btn-success"
+                      : "btn-outline"
+                    }`}
+                >
+                  {keyboardStateData.sustainToggle ? "🔒" : "🔓"}
+                  <kbd className="kbd kbd-xs">'</kbd>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <label className="label py-1">
+                  <span className="label-text text-sm">
+                    Velocity: {Math.round(velocity * 9)}
+                  </span>
+                </label>
                 <input
                   type="range"
                   min="1"
                   max="9"
                   value={Math.round(velocity * 9)}
                   onChange={(e) => setVelocity(parseInt(e.target.value) / 9)}
-                  className="w-20"
+                  className="range range-sm range-primary w-20"
                 />
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-sm">Octave: {currentOctave}</span>
-                <button
-                  onClick={() => setCurrentOctave(Math.max(0, currentOctave - 1))}
-                  className="px-2 py-1 bg-gray-200 rounded text-sm"
-                >
-                  Z (-)
-                </button>
-                <button
-                  onClick={() => setCurrentOctave(Math.min(8, currentOctave + 1))}
-                  className="px-2 py-1 bg-gray-200 rounded text-sm"
-                >
-                  X (+)
-                </button>
-              </div>
-
-              {mainMode === "simple" && simpleMode === "chord" && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">Voicing: {chordVoicing}</span>
-                  <button
-                    onClick={() => setChordVoicing(Math.max(-2, chordVoicing - 1))}
-                    className="px-2 py-1 bg-gray-200 rounded text-sm"
-                  >
-                    C (-)
-                  </button>
-                  <button
-                    onClick={() => setChordVoicing(Math.min(4, chordVoicing + 1))}
-                    className="px-2 py-1 bg-gray-200 rounded text-sm"
-                  >
-                    V (+)
-                  </button>
-                </div>
-              )}
             </div>
-            <button
-              onMouseDown={() => {
-                if (keyboardStateData.sustainToggle) {
-                  // If toggle mode is active, sustain button only stops current sustained notes
-                  onStopSustainedNotes();
-                } else {
-                  // Normal momentary sustain behavior
-                  keyboardStateData.setSustain(true);
-                }
-              }}
-              onMouseUp={() => {
-                if (!keyboardStateData.sustainToggle) {
-                  // Only stop sustain on button release if not in toggle mode
-                  keyboardStateData.setSustain(false);
-                }
-              }}
-              className={`px-4 py-2 rounded ${(keyboardStateData.sustain && !keyboardStateData.sustainToggle) || (keyboardStateData.sustainToggle && keyboardStateData.hasSustainedNotes) ? "bg-yellow-500 text-white" : "bg-gray-200"
-                }`}
-            >
-              Sustain (Space)
-            </button>
-            <button
-              onClick={() => {
-                keyboardStateData.setSustainToggle(!keyboardStateData.sustainToggle);
-              }}
-              className={`px-4 py-2 rounded ${keyboardStateData.sustainToggle ? "bg-green-500 text-white" : "bg-gray-200"
-                }`}
-            >
-              Toggle Sustain (')
-            </button>
-
           </div>
         </div>
 
-      </div>
+        <div className="bg-neutral p-4 rounded-lg shadow-2xl overflow-auto">
+          {renderVirtualKeyboard()}
+        </div>
 
-      <div className="bg-black p-4 rounded-lg shadow-2xl">
-        {renderVirtualKeyboard()}
+        <ShortcutConfig
+          isOpen={showShortcutConfig}
+          onClose={() => setShowShortcutConfig(false)}
+        />
       </div>
-      
-      <ShortcutConfig 
-        isOpen={showShortcutConfig}
-        onClose={() => setShowShortcutConfig(false)}
-      />
     </div>
   );
 }

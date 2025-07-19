@@ -15,40 +15,44 @@ export default function ScaleSelector({
   onScaleChange,
 }: ScaleSelectorProps) {
   return (
-    <div className="flex justify-center items-center gap-3 bg-white p-3 rounded-lg shadow-lg grow">
-      <h3 className="font-semibold text-gray-700">Scale</h3>
-      <div className="flex gap-2">
-        <select
-          value={rootNote}
-          onChange={(e) => onRootNoteChange(e.target.value)}
-          className="px-3 py-2 border rounded"
-        >
-          {NOTE_NAMES.map((note) => (
-            <option key={note} value={note}>
-              {note}
-            </option>
-          ))}
-        </select>
-        <button
-          onClick={() => onScaleChange("major")}
-          className={`px-4 py-2 rounded ${
-            scale === "major"
-              ? "bg-purple-500 text-white"
-              : "bg-gray-200"
-          }`}
-        >
-          Major
-        </button>
-        <button
-          onClick={() => onScaleChange("minor")}
-          className={`px-4 py-2 rounded ${
-            scale === "minor"
-              ? "bg-purple-500 text-white"
-              : "bg-gray-200"
-          }`}
-        >
-          Minor
-        </button>
+    <div className="card bg-base-100 shadow-lg grow">
+      <div className="card-body p-3">
+        <div className="flex justify-center items-center gap-3">
+          <label className="label py-1">
+            <span className="label-text text-xs">Root</span>
+          </label>
+          <div className="flex gap-2">
+            <select
+              value={rootNote}
+              onChange={(e) => onRootNoteChange(e.target.value)}
+              className="select select-bordered select-sm"
+            >
+              {NOTE_NAMES.map((note) => (
+                <option key={note} value={note}>
+                  {note}
+                </option>
+              ))}
+            </select>
+            <div className="join">
+              <button
+                onClick={() => onScaleChange("major")}
+                className={`btn btn-sm join-item ${
+                  scale === "major" ? "btn-primary" : "btn-outline"
+                }`}
+              >
+                Major
+              </button>
+              <button
+                onClick={() => onScaleChange("minor")}
+                className={`btn btn-sm join-item ${
+                  scale === "minor" ? "btn-primary" : "btn-outline"
+                }`}
+              >
+                Minor
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

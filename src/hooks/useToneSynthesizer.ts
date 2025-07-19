@@ -32,6 +32,9 @@ export interface SynthParams {
 }
 
 export interface SynthState {
+  // Volume control
+  volume: number;
+  
   // Amplitude envelope
   ampAttack: number;
   ampDecay: number;
@@ -59,6 +62,9 @@ export interface SynthState {
 }
 
 const defaultSynthState: SynthState = {
+  // Volume control
+  volume: 0.5,
+  
   // Amplitude envelope
   ampAttack: 0.01,
   ampDecay: 0.1,
@@ -93,6 +99,7 @@ export const useToneSynthesizer = (synthType: string) => {
   const synthRef = useRef<any>(null);
   const filterRef = useRef<Tone.Filter | null>(null);
   const filterEnvelopeRef = useRef<Tone.FrequencyEnvelope | null>(null);
+  const gainRef = useRef<Tone.Gain | null>(null);
   const activeNotes = useRef<Map<string, Tone.Unit.Time>>(new Map());
   const pendingReleases = useRef<Map<string, number>>(new Map());
   const filterEnvelopeActive = useRef<boolean>(false);
@@ -184,12 +191,19 @@ export const useToneSynthesizer = (synthType: string) => {
         filterEnvelopeRef.current.dispose();
       }
 
+      if (gainRef.current) {
+        gainRef.current.dispose();
+      }
+
       // Create filter
       filterRef.current = new Tone.Filter({
         frequency: defaultSynthState.filterFrequency,
         Q: defaultSynthState.filterResonance,
         type: "lowpass",
       });
+
+      // Create gain node for volume control
+      gainRef.current = new Tone.Gain(defaultSynthState.volume);
 
       // Create filter envelope for analog synthesizers
       if (synthType.startsWith("analog_")) {
@@ -310,10 +324,11 @@ export const useToneSynthesizer = (synthType: string) => {
           });
       }
 
-      // Connect synthesizer through filter to destination
-      if (synthRef.current && filterRef.current) {
+      // Connect synthesizer through filter and gain to destination
+      if (synthRef.current && filterRef.current && gainRef.current) {
         synthRef.current.connect(filterRef.current);
-        filterRef.current.toDestination();
+        filterRef.current.connect(gainRef.current);
+        gainRef.current.toDestination();
       }
 
       setIsLoaded(true);
@@ -328,13 +343,19 @@ export const useToneSynthesizer = (synthType: string) => {
   const updateSynthParams = useCallback((params: Partial<SynthState>) => {
     setSynthState(prev => ({ ...prev, ...params }));
     
-    if (synthRef.current && filterRef.current) {
+    if (synthRef.current && filterRef.current && gainRef.current) {
       try {
         const synth = synthRef.current as any;
         const filter = filterRef.current;
+        const gain = gainRef.current;
         const filterEnvelope = filterEnvelopeRef.current;
         console.log("Updating synth parameters:", params);
         console.log("Synth type:", synth.constructor.name);
+        
+        // Update volume parameter
+        if (params.volume !== undefined) {
+          gain.gain.value = params.volume;
+        }
         
         // Update filter parameters
         if (params.filterFrequency !== undefined) {

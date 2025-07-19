@@ -104,29 +104,29 @@ export default function Bass({
   }, []);
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-6xl">
-      <div className="mb-4">
-        <h3 className="text-xl font-semibold text-gray-800 mb-4">Bass</h3>
+    <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
+      <div className="card-body">
+        <h3 className="card-title text-xl mb-4">Bass</h3>
         
         {/* Bass-specific Controls */}
         <div className="flex items-center gap-4 mb-4">
-          <div className="flex gap-2">
+          <div className="join">
             <button
               onClick={() => setOctaveMode(false)}
-              className={`px-3 py-1 rounded text-sm ${
+              className={`btn btn-sm ${
                 !octaveMode
-                  ? 'bg-green-500 text-white'
-                  : 'bg-gray-200 text-gray-700'
+                  ? 'btn-success'
+                  : 'btn-outline'
               }`}
             >
               Single Note
             </button>
             <button
               onClick={() => setOctaveMode(true)}
-              className={`px-3 py-1 rounded text-sm ${
+              className={`btn btn-sm ${
                 octaveMode
-                  ? 'bg-green-500 text-white'
-                  : 'bg-gray-200 text-gray-700'
+                  ? 'btn-success'
+                  : 'btn-outline'
               }`}
             >
               Octave Mode
@@ -134,58 +134,43 @@ export default function Bass({
           </div>
           
           {/* Sustain Toggle */}
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={sustain}
-              onChange={(e) => handleSustainChange(e.target.checked)}
-              className="rounded"
-            />
-            <span className="text-sm text-gray-600">Sustain</span>
-          </label>
+          <div className="flex items-center gap-2">
+            <label className="label cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sustain}
+                onChange={(e) => handleSustainChange(e.target.checked)}
+                className="checkbox checkbox-sm"
+              />
+              <span className="label-text ml-2">Sustain</span>
+            </label>
+          </div>
         </div>
         
-        {/* Scale Info and Mode Description */}
-        <div className="text-sm text-gray-600 mb-4">
-          <div>Scale: {scaleState.rootNote} {scaleState.scale}</div>
-          {octaveMode && (
-            <div className="text-green-600 mt-1">
-              • Octave mode: Each fret plays the note + its octave
-            </div>
-          )}
+        {/* Velocity Control */}
+        <div className="flex items-center gap-2 mb-4">
+          <label className="label">
+            <span className="label-text">Velocity: {Math.round(velocity * 9)}</span>
+          </label>
+          <input
+            type="range"
+            min="1"
+            max="9"
+            value={Math.round(velocity * 9)}
+            onChange={(e) => handleVelocityChange(parseInt(e.target.value) / 9)}
+            className="range range-primary w-32"
+          />
         </div>
-      </div>
 
-      {/* Pure Fretboard Component */}
-      <FretboardBase
-        config={config}
-        positions={positions}
-        onFretPress={handleFretPress}
-        onFretRelease={handleFretRelease}
-        velocity={velocity}
-        onVelocityChange={handleVelocityChange}
-        className="bass-fretboard"
-      />
-
-      {/* Bass-specific Features Info */}
-      <div className="mt-4 text-xs text-gray-500">
-        <p>🎸 <strong>Bass Features:</strong></p>
-        <ul className="ml-4 mt-1">
-          <li>• Octave mode for fuller bass sound</li>
-          <li>• Scale highlighting for bass lines</li>
-          <li>• Lower register tuning (E1-A1-D2-G2)</li>
-          <li>• <strong>Coming Soon:</strong> Keyboard shortcuts for quick octave access</li>
-        </ul>
-      </div>
-
-      {/* Future Keyboard Shortcuts Info */}
-      <div className="mt-2 text-xs text-gray-400">
-        <p><strong>Planned Keyboard Shortcuts:</strong></p>
-        <ul className="ml-4 mt-1">
-          <li>• <kbd>Shift</kbd> + fret = Play octave</li>
-          <li>• <kbd>Ctrl</kbd> + fret = Play root + fifth</li>
-          <li>• <kbd>Alt</kbd> + fret = Play walking bass pattern</li>
-        </ul>
+        <FretboardBase
+          config={config}
+          positions={positions}
+          onFretPress={handleFretPress}
+          onFretRelease={handleFretRelease}
+          velocity={velocity}
+          onVelocityChange={handleVelocityChange}
+          className="bass-fretboard"
+        />
       </div>
     </div>
   );

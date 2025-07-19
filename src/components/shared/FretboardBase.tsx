@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTouchEvents } from '../../hooks/useTouchEvents';
 
 export interface FretPosition {
   string: number;
@@ -29,6 +30,46 @@ export interface FretboardBaseProps {
   className?: string;
 }
 
+// Separate component for fret button to use hooks properly
+const FretButton: React.FC<{
+  stringIndex: number;
+  fret: number;
+  position: FretPosition;
+  onPress: () => void;
+  onRelease: () => void;
+  showNoteNames?: boolean;
+}> = ({ stringIndex, fret, position, onPress, onRelease, showNoteNames = true }) => {
+  const touchHandlers = useTouchEvents(onPress, onRelease);
+
+  const isPressed = position.isPressed;
+  const isHighlighted = position.isHighlighted;
+  const isScaleNote = position.isScaleNote;
+
+  return (
+    <button
+      key={`${stringIndex}-${fret}`}
+      className={`
+        relative w-12 h-8 border border-gray-300 transition-all duration-100
+        ${isPressed ? 'bg-blue-500 scale-95' : 'bg-gray-100 hover:bg-gray-200'}
+        ${isHighlighted ? 'ring-2 ring-yellow-400' : ''}
+        ${isScaleNote ? 'bg-green-100' : ''}
+        ${fret === 0 ? 'border-l-4 border-l-gray-800' : ''}
+        touch-manipulation
+      `}
+      onMouseDown={onPress}
+      onMouseUp={onRelease}
+      onMouseLeave={onRelease}
+      {...touchHandlers}
+    >
+      {showNoteNames && (
+        <span className={`text-xs ${isPressed ? 'text-white' : 'text-gray-700'}`}>
+          {position.note}
+        </span>
+      )}
+    </button>
+  );
+};
+
 export const FretboardBase: React.FC<FretboardBaseProps> = ({
   config,
   positions,
@@ -48,30 +89,16 @@ export const FretboardBase: React.FC<FretboardBaseProps> = ({
     const position = getFretPosition(stringIndex, fret);
     if (!position) return null;
 
-    const isPressed = position.isPressed;
-    const isHighlighted = position.isHighlighted;
-    const isScaleNote = position.isScaleNote;
-
     return (
-      <button
+      <FretButton
         key={`${stringIndex}-${fret}`}
-        className={`
-          relative w-12 h-8 border border-gray-300 transition-all duration-100
-          ${isPressed ? 'bg-blue-500 scale-95' : 'bg-gray-100 hover:bg-gray-200'}
-          ${isHighlighted ? 'ring-2 ring-yellow-400' : ''}
-          ${isScaleNote ? 'bg-green-100' : ''}
-          ${fret === 0 ? 'border-l-4 border-l-gray-800' : ''}
-        `}
-        onMouseDown={() => onFretPress(stringIndex, fret, position.note)}
-        onMouseUp={() => onFretRelease(stringIndex, fret, position.note)}
-        onMouseLeave={() => onFretRelease(stringIndex, fret, position.note)}
-      >
-        {showNoteNames && (
-          <span className={`text-xs ${isPressed ? 'text-white' : 'text-gray-700'}`}>
-            {position.note}
-          </span>
-        )}
-      </button>
+        stringIndex={stringIndex}
+        fret={fret}
+        position={position}
+        onPress={() => onFretPress(stringIndex, fret, position.note)}
+        onRelease={() => onFretRelease(stringIndex, fret, position.note)}
+        showNoteNames={showNoteNames}
+      />
     );
   };
 

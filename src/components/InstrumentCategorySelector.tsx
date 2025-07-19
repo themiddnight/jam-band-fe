@@ -39,44 +39,46 @@ export default function InstrumentCategorySelector({
   const instruments = getInstrumentsForCategory();
 
   return (
-    <div className="bg-white p-3 rounded-lg shadow-lg">
-      <div className="flex gap-4">
-        {/* Category Selection */}
-        <div className="flex items-center gap-2">
-          <label>
-            Category
-          </label>
-          <select
-            value={currentCategory}
-            onChange={(e) => onCategoryChange(e.target.value as InstrumentCategory)}
-            disabled={isLoading}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-          >
-            {categories.map((category) => (
-              <option key={category.value} value={category.value}>
-                {category.label}
-              </option>
-            ))}
-          </select>
-        </div>
+    <div className="card bg-base-100 shadow-lg grow">
+      <div className="card-body p-3">
+        <div className="flex justify-center gap-4">
+          {/* Category Selection */}
+          <div className="flex items-center gap-2">
+            <label className="label py-1 hidden lg:block">
+              <span className="label-text text-xs">Category</span>
+            </label>
+            <select
+              value={currentCategory}
+              onChange={(e) => onCategoryChange(e.target.value as InstrumentCategory)}
+              disabled={isLoading}
+              className="select select-bordered select-sm w-full max-w-xs"
+            >
+              {categories.map((category) => (
+                <option key={category.value} value={category.value}>
+                  {category.label}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        {/* Instrument Selection */}
-        <div className="flex items-center gap-2">
-          <label>
-            Instrument
-          </label>
-          <select
-            value={currentInstrument}
-            onChange={(e) => onInstrumentChange(e.target.value)}
-            disabled={isLoading}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-          >
-            {instruments.map((instrument) => (
-              <option key={instrument.value} value={instrument.value}>
-                {instrument.label}
-              </option>
-            ))}
-          </select>
+          {/* Instrument Selection */}
+          <div className="flex items-center gap-2">
+            <label className="label py-1 hidden lg:block">
+              <span className="label-text text-xs">Inst</span>
+            </label>
+            <select
+              value={currentInstrument}
+              onChange={(e) => onInstrumentChange(e.target.value)}
+              disabled={isLoading}
+              className="select select-bordered select-sm w-full max-w-xs"
+            >
+              {instruments.map((instrument) => (
+                <option key={instrument.value} value={instrument.value}>
+                  {instrument.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
     </div>

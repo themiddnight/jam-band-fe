@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTouchEvents } from '../../hooks/useTouchEvents';
 
 export interface VirtualKey {
   id: string;
@@ -27,6 +28,141 @@ export interface VirtualKeyboardBaseProps {
   className?: string;
 }
 
+// Separate component for piano key to use hooks properly
+const PianoKey: React.FC<{
+  virtualKey: VirtualKey;
+  onPress: () => void;
+  onRelease: () => void;
+  showKeyLabels?: boolean;
+  showNoteNames?: boolean;
+}> = ({ virtualKey, onPress, onRelease, showKeyLabels = true, showNoteNames = true }) => {
+  const touchHandlers = useTouchEvents(onPress, onRelease);
+
+  const isBlack = virtualKey.isBlack;
+  const isPressed = virtualKey.isPressed;
+  const isHighlighted = virtualKey.isHighlighted;
+  const isScaleNote = virtualKey.isScaleNote;
+
+  return (
+    <button
+      key={virtualKey.id}
+      className={`
+        ${isBlack ? 'w-8 h-24 -mx-1 z-10' : 'w-12 h-40 z-0'}
+        ${isBlack ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'}
+        ${isPressed ? (isBlack ? 'bg-gray-600' : 'bg-gray-200') : ''}
+        ${isHighlighted ? 'ring-2 ring-yellow-400' : ''}
+        ${isScaleNote && !isBlack ? 'bg-blue-50' : ''}
+        border-2 border-gray-300 transition-all duration-75 
+        focus:outline-none flex flex-col justify-between p-1
+        ${isPressed ? 'transform scale-95' : ''}
+        touch-manipulation
+      `}
+      style={{
+        position: 'relative',
+        left: isBlack ? `${-4}px` : '0px',
+        marginLeft: isBlack ? '0' : '1px',
+        marginRight: isBlack ? '0' : '1px',
+      }}
+      onMouseDown={onPress}
+      onMouseUp={onRelease}
+      onMouseLeave={onRelease}
+      {...touchHandlers}
+    >
+      <div className="w-full h-full" />
+      {showKeyLabels && virtualKey.keyboardShortcut && (
+        <span className={`text-xs font-bold ${isBlack ? 'text-white' : 'text-gray-600'}`}>
+          {virtualKey.keyboardShortcut.toUpperCase()}
+        </span>
+      )}
+      {showNoteNames && (
+        <span className={`text-xs ${isBlack ? 'text-white' : 'text-gray-600'}`}>
+          {virtualKey.note}
+        </span>
+      )}
+    </button>
+  );
+};
+
+// Separate component for scale key to use hooks properly
+const ScaleKey: React.FC<{
+  virtualKey: VirtualKey;
+  onPress: () => void;
+  onRelease: () => void;
+  showKeyLabels?: boolean;
+  showNoteNames?: boolean;
+}> = ({ virtualKey, onPress, onRelease, showKeyLabels = true, showNoteNames = true }) => {
+  const touchHandlers = useTouchEvents(onPress, onRelease);
+
+  const isPressed = virtualKey.isPressed;
+  const isHighlighted = virtualKey.isHighlighted;
+
+  return (
+    <button
+      key={virtualKey.id}
+      className={`
+        w-12 h-24 border-2 border-gray-300 transition-all duration-75 
+        focus:outline-none flex flex-col justify-between p-1
+        ${isPressed ? 'bg-blue-200 transform scale-95' : 'bg-blue-50 hover:bg-blue-100'}
+        ${isHighlighted ? 'ring-2 ring-yellow-400' : ''}
+        touch-manipulation
+      `}
+      onMouseDown={onPress}
+      onMouseUp={onRelease}
+      onMouseLeave={onRelease}
+      {...touchHandlers}
+    >
+      {showKeyLabels && virtualKey.keyboardShortcut && (
+        <span className="text-xs text-blue-800 font-bold">
+          {virtualKey.keyboardShortcut.toUpperCase()}
+        </span>
+      )}
+      {showNoteNames && (
+        <span className="text-xs text-blue-800">{virtualKey.note}</span>
+      )}
+    </button>
+  );
+};
+
+// Separate component for chord key to use hooks properly
+const ChordKey: React.FC<{
+  virtualKey: VirtualKey;
+  onPress: () => void;
+  onRelease: () => void;
+  showKeyLabels?: boolean;
+  showNoteNames?: boolean;
+}> = ({ virtualKey, onPress, onRelease, showKeyLabels = true, showNoteNames = true }) => {
+  const touchHandlers = useTouchEvents(onPress, onRelease);
+
+  const isPressed = virtualKey.isPressed;
+  const isHighlighted = virtualKey.isHighlighted;
+
+  return (
+    <button
+      key={virtualKey.id}
+      className={`
+        w-16 h-24 border-2 border-gray-300 transition-all duration-75 
+        focus:outline-none flex flex-col justify-between p-1
+        ${isPressed ? 'bg-purple-200 transform scale-95' : 'bg-purple-50 hover:bg-purple-100'}
+        ${isHighlighted ? 'ring-2 ring-yellow-400' : ''}
+        touch-manipulation
+      `}
+      onMouseDown={onPress}
+      onMouseUp={onRelease}
+      onMouseLeave={onRelease}
+      {...touchHandlers}
+    >
+      {showKeyLabels && virtualKey.keyboardShortcut && (
+        <span className="text-xs text-purple-800 font-bold">
+          {virtualKey.keyboardShortcut.toUpperCase()}
+        </span>
+      )}
+      {showNoteNames && (
+        <span className="text-xs text-purple-800">{virtualKey.note}</span>
+      )}
+    </button>
+  );
+};
+
 export const VirtualKeyboardBase: React.FC<VirtualKeyboardBaseProps> = ({
   config,
   keys,
@@ -36,107 +172,38 @@ export const VirtualKeyboardBase: React.FC<VirtualKeyboardBaseProps> = ({
 }) => {
   const { layout, showKeyLabels = true, showNoteNames = true } = config;
 
-  const renderPianoKey = (key: VirtualKey) => {
-    const isBlack = key.isBlack;
-    const isPressed = key.isPressed;
-    const isHighlighted = key.isHighlighted;
-    const isScaleNote = key.isScaleNote;
+  const renderPianoKey = (key: VirtualKey) => (
+    <PianoKey
+      key={key.id}
+      virtualKey={key}
+      onPress={() => onKeyPress(key)}
+      onRelease={() => onKeyRelease(key)}
+      showKeyLabels={showKeyLabels}
+      showNoteNames={showNoteNames}
+    />
+  );
 
-    return (
-      <button
-        key={key.id}
-        className={`
-          ${isBlack ? 'w-8 h-24 -mx-1 z-10' : 'w-12 h-40 z-0'}
-          ${isBlack ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'}
-          ${isPressed ? (isBlack ? 'bg-gray-600' : 'bg-gray-200') : ''}
-          ${isHighlighted ? 'ring-2 ring-yellow-400' : ''}
-          ${isScaleNote && !isBlack ? 'bg-blue-50' : ''}
-          border-2 border-gray-300 transition-all duration-75 
-          focus:outline-none flex flex-col justify-between p-1
-          ${isPressed ? 'transform scale-95' : ''}
-        `}
-        style={{
-          position: 'relative',
-          left: isBlack ? `${-4}px` : '0px',
-          marginLeft: isBlack ? '0' : '1px',
-          marginRight: isBlack ? '0' : '1px',
-        }}
-        onMouseDown={() => onKeyPress(key)}
-        onMouseUp={() => onKeyRelease(key)}
-        onMouseLeave={() => onKeyRelease(key)}
-      >
-        <div className="w-full h-full" />
-        {showKeyLabels && key.keyboardShortcut && (
-          <span className={`text-xs font-bold ${isBlack ? 'text-white' : 'text-gray-600'}`}>
-            {key.keyboardShortcut.toUpperCase()}
-          </span>
-        )}
-        {showNoteNames && (
-          <span className={`text-xs ${isBlack ? 'text-white' : 'text-gray-600'}`}>
-            {key.note}
-          </span>
-        )}
-      </button>
-    );
-  };
+  const renderScaleKey = (key: VirtualKey) => (
+    <ScaleKey
+      key={key.id}
+      virtualKey={key}
+      onPress={() => onKeyPress(key)}
+      onRelease={() => onKeyRelease(key)}
+      showKeyLabels={showKeyLabels}
+      showNoteNames={showNoteNames}
+    />
+  );
 
-  const renderScaleKey = (key: VirtualKey) => {
-    const isPressed = key.isPressed;
-    const isHighlighted = key.isHighlighted;
-
-    return (
-      <button
-        key={key.id}
-        className={`
-          w-12 h-24 border-2 border-gray-300 transition-all duration-75 
-          focus:outline-none flex flex-col justify-between p-1
-          ${isPressed ? 'bg-blue-200 transform scale-95' : 'bg-blue-50 hover:bg-blue-100'}
-          ${isHighlighted ? 'ring-2 ring-yellow-400' : ''}
-        `}
-        onMouseDown={() => onKeyPress(key)}
-        onMouseUp={() => onKeyRelease(key)}
-        onMouseLeave={() => onKeyRelease(key)}
-      >
-        {showKeyLabels && key.keyboardShortcut && (
-          <span className="text-xs text-blue-800 font-bold">
-            {key.keyboardShortcut.toUpperCase()}
-          </span>
-        )}
-        {showNoteNames && (
-          <span className="text-xs text-blue-800">{key.note}</span>
-        )}
-      </button>
-    );
-  };
-
-  const renderChordKey = (key: VirtualKey) => {
-    const isPressed = key.isPressed;
-    const isHighlighted = key.isHighlighted;
-
-    return (
-      <button
-        key={key.id}
-        className={`
-          w-16 h-24 border-2 border-gray-300 transition-all duration-75 
-          focus:outline-none flex flex-col justify-between p-1
-          ${isPressed ? 'bg-purple-200 transform scale-95' : 'bg-purple-50 hover:bg-purple-100'}
-          ${isHighlighted ? 'ring-2 ring-yellow-400' : ''}
-        `}
-        onMouseDown={() => onKeyPress(key)}
-        onMouseUp={() => onKeyRelease(key)}
-        onMouseLeave={() => onKeyRelease(key)}
-      >
-        {showKeyLabels && key.keyboardShortcut && (
-          <span className="text-xs text-purple-800 font-bold">
-            {key.keyboardShortcut.toUpperCase()}
-          </span>
-        )}
-        {showNoteNames && (
-          <span className="text-xs text-purple-800">{key.note}</span>
-        )}
-      </button>
-    );
-  };
+  const renderChordKey = (key: VirtualKey) => (
+    <ChordKey
+      key={key.id}
+      virtualKey={key}
+      onPress={() => onKeyPress(key)}
+      onRelease={() => onKeyRelease(key)}
+      showKeyLabels={showKeyLabels}
+      showNoteNames={showNoteNames}
+    />
+  );
 
   const renderKeys = () => {
     switch (layout) {

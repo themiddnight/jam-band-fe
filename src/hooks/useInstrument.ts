@@ -4,14 +4,28 @@ import { SOUNDFONT_INSTRUMENTS, DRUM_MACHINES, SYNTHESIZER_INSTRUMENTS, Instrume
 import { ControlType } from "../types";
 import { getCachedDrumMachines } from "../utils/drumMachineUtils";
 import { useToneSynthesizer } from "./useToneSynthesizer";
+import { 
+  isSafari, 
+  createWebKitCompatibleAudioContext, 
+  handleSafariAudioError,
+  getSafariLoadTimeout 
+} from "../utils/webkitCompat";
 
 export const useInstrument = (
-  initialInstrument = "acoustic_grand_piano",
+  initialInstrument?: string,
   initialCategory = InstrumentCategory.Melodic
 ) => {
+  // Use Safari-compatible instrument as default if no instrument specified and Safari is detected
+  const getInitialInstrument = (): string => {
+    if (initialInstrument) return initialInstrument;
+    if (isSafari() && initialCategory === InstrumentCategory.Melodic) {
+      return "bright_acoustic_piano"; // More Safari-compatible than acoustic_grand_piano
+    }
+    return "acoustic_grand_piano";
+  };
   const [instrument, setInstrument] = useState<any>(null);
   const [currentInstrument, setCurrentInstrument] =
-    useState<string>(initialInstrument);
+    useState<string>(getInitialInstrument());
   const [currentCategory, setCurrentCategory] = 
     useState<InstrumentCategory>(initialCategory);
   const [sustain, setSustain] = useState<boolean>(false);
@@ -21,10 +35,24 @@ export const useInstrument = (
   const [dynamicDrumMachines, setDynamicDrumMachines] = useState(DRUM_MACHINES);
 
   const [isAudioContextReady, setIsAudioContextReady] = useState<boolean>(false);
+  const [audioContextError, setAudioContextError] = useState<string | null>(null);
   const audioContext = useRef<AudioContext | null>(null);
   const sustainedNotes = useRef<Set<any>>(new Set());
   const activeNotes = useRef<Map<string, any>>(new Map());
   const keyHeldNotes = useRef<Set<string>>(new Set());
+  const initRetryCount = useRef<number>(0);
+  const maxRetries = 3;
+  const failedInstruments = useRef<Set<string>>(new Set());
+
+  // Safari-compatible instrument fallbacks for when decoding fails
+  const getSafariCompatibleInstruments = (): string[] => {
+    return [
+      "bright_acoustic_piano",  // Usually works better in Safari
+      "drawbar_organ",     // Simpler waveforms
+      "synth_strings_1",   // Basic synthesis
+      "lead_1_square",     // Very simple waveform
+    ];
+  };
 
   // Initialize Tone.js synthesizer for synthesizer category
   const toneSynthesizer = useToneSynthesizer(
@@ -32,17 +60,44 @@ export const useInstrument = (
   );
 
   const initializeAudioContext = useCallback(async () => {
-    if (!audioContext.current) {
-      audioContext.current = new (window.AudioContext ||
-        (window as any).webkitAudioContext)();
-    }
+    try {
+      setAudioContextError(null);
+      
+      if (!audioContext.current) {
+        audioContext.current = await createWebKitCompatibleAudioContext();
+      }
 
-    if (audioContext.current.state === "suspended") {
-      await audioContext.current.resume();
-    }
+      // Ensure context is running - critical for Safari
+      if (audioContext.current.state === "suspended") {
+        await audioContext.current.resume();
+        
+        // Wait a bit for Safari to properly initialize
+        if (isSafari()) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
 
-    setIsAudioContextReady(true);
-    return audioContext.current;
+      // Verify context is actually running
+      if (audioContext.current.state !== "running") {
+        throw new Error(`AudioContext state is ${audioContext.current.state}, expected 'running'`);
+      }
+
+      setIsAudioContextReady(true);
+      initRetryCount.current = 0;
+      return audioContext.current;
+    } catch (error) {
+      console.error("Failed to initialize AudioContext:", error);
+      setAudioContextError(error instanceof Error ? error.message : "AudioContext initialization failed");
+      
+      // Retry logic for Safari
+      if (initRetryCount.current < maxRetries) {
+        initRetryCount.current++;
+        console.log(`Retrying AudioContext initialization (${initRetryCount.current}/${maxRetries})`);
+        setTimeout(() => initializeAudioContext(), 1000);
+      }
+      
+      throw error;
+    }
   }, []);
 
   const loadInstrument = useCallback(async (instrumentName: string, category: InstrumentCategory = currentCategory) => {
@@ -61,6 +116,8 @@ export const useInstrument = (
     }
 
     setIsLoadingInstrument(true);
+    setAudioContextError(null);
+    
     try {
       let newInstrument: any;
       
@@ -77,8 +134,28 @@ export const useInstrument = (
         );
       }
       
-      // Wait for the instrument to load
-      await newInstrument.load;
+      // Safari-specific loading with timeout and better error handling
+      const loadTimeout = getSafariLoadTimeout();
+      
+      const loadPromise = new Promise<void>((resolve, reject) => {
+        // Set up timeout
+        const timeoutId = setTimeout(() => {
+          reject(new Error(`Instrument loading timed out after ${loadTimeout}ms`));
+        }, loadTimeout);
+        
+        // Wait for the instrument to load
+        newInstrument.load.then(() => {
+          clearTimeout(timeoutId);
+          resolve();
+        }).catch((error: any) => {
+          clearTimeout(timeoutId);
+          // Use Safari-specific error handling
+          reject(handleSafariAudioError(error, instrumentName));
+        });
+      });
+      
+      await loadPromise;
+      
       setInstrument(newInstrument);
       setCurrentInstrument(instrumentName);
       setCurrentCategory(category);
@@ -95,6 +172,42 @@ export const useInstrument = (
       console.log(`Loaded ${category} instrument: ${instrumentName}`);
     } catch (error) {
       console.error("Failed to load instrument:", error);
+      setAudioContextError(error instanceof Error ? error.message : "Failed to load instrument");
+      
+      // For Safari decoding errors, try fallback instruments instead of infinite retry
+      if (isSafari() && error instanceof Error && error.message.includes("decoding")) {
+        console.log("Safari decoding error detected for:", instrumentName);
+        
+        // Mark this instrument as failed
+        failedInstruments.current.add(instrumentName);
+        
+        // Try Safari-compatible fallback instruments
+        const fallbackInstruments = getSafariCompatibleInstruments();
+        let fallbackFound = false;
+        
+        for (const fallback of fallbackInstruments) {
+          if (!failedInstruments.current.has(fallback)) {
+            console.log(`Trying Safari-compatible fallback instrument: ${fallback}`);
+            setCurrentInstrument(fallback);
+            setAudioContextError(null);
+            
+            // Try loading the fallback instrument
+            setTimeout(() => loadInstrument(fallback, category), 500);
+            fallbackFound = true;
+            break;
+          }
+        }
+        
+        if (!fallbackFound) {
+          console.error("All Safari-compatible instruments have failed. Switching to synthesizer mode.");
+          setAudioContextError("Safari cannot load any of the available instruments. Switching to synthesizer mode for compatibility.");
+          // Switch to synthesizer category as last resort
+          setTimeout(() => {
+            setCurrentCategory(InstrumentCategory.Synthesizer);
+            setCurrentInstrument("analog_mono");
+          }, 1000);
+        }
+      }
     } finally {
       setIsLoadingInstrument(false);
     }
@@ -137,12 +250,29 @@ export const useInstrument = (
   }, []);
 
   const ensureAudioContextAndInstrument = useCallback(async () => {
-    if (!audioContext.current || audioContext.current.state !== "running") {
-      await initializeAudioContext();
-    }
+    try {
+      // Check AudioContext state first
+      if (!audioContext.current || audioContext.current.state !== "running") {
+        await initializeAudioContext();
+        
+        // Extra wait for Safari to stabilize AudioContext
+        if (isSafari()) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      }
 
-    if (!instrument) {
-      await loadInstrument(currentInstrument);
+      // Verify AudioContext is actually running after initialization
+      if (!audioContext.current || audioContext.current.state !== "running") {
+        throw new Error("AudioContext failed to start properly");
+      }
+
+      // Load instrument if not already loaded
+      if (!instrument) {
+        await loadInstrument(currentInstrument);
+      }
+    } catch (error) {
+      console.error("Failed to ensure AudioContext and instrument:", error);
+      throw error;
     }
   }, [initializeAudioContext, loadInstrument, instrument, currentInstrument]);
 
@@ -311,6 +441,9 @@ export const useInstrument = (
     const targetCategory = category || currentCategory;
     setCurrentInstrument(instrumentName);
     
+    // Clear any previous error when manually changing instruments
+    setAudioContextError(null);
+    
     if (targetCategory !== currentCategory) {
       setCurrentCategory(targetCategory);
     }
@@ -328,6 +461,11 @@ export const useInstrument = (
 
   const handleCategoryChange = useCallback(async (category: InstrumentCategory) => {
     setCurrentCategory(category);
+    
+    // Clear failed instruments list when changing categories
+    failedInstruments.current.clear();
+    setAudioContextError(null);
+    
     // Reset to default instrument for the new category
     let defaultInstrument: string;
     
@@ -339,7 +477,13 @@ export const useInstrument = (
         defaultInstrument = SYNTHESIZER_INSTRUMENTS[0]?.value || "analog_mono";
         break;
       default:
-        defaultInstrument = "acoustic_grand_piano";
+        // For Safari, start with a more compatible instrument
+        if (isSafari()) {
+          defaultInstrument = getSafariCompatibleInstruments()[0];
+          console.log(`Safari detected, using compatible default instrument: ${defaultInstrument}`);
+        } else {
+          defaultInstrument = "acoustic_grand_piano";
+        }
     }
     
     setCurrentInstrument(defaultInstrument);
@@ -429,6 +573,7 @@ export const useInstrument = (
     dynamicDrumMachines,
     isLoadingInstrument,
     isAudioContextReady,
+    audioContextError,
     initializeAudioContext,
     loadInstrument,
     playNotes,

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTouchEvents } from '../../hooks/useTouchEvents';
 
 export interface DrumPad {
   id: string;
@@ -21,6 +22,41 @@ export interface DrumPadBaseProps {
   availableSounds?: string[];
   className?: string;
 }
+
+// Separate component for pad button to use hooks properly
+const PadButton: React.FC<{
+  pad: DrumPad;
+  onPress: () => void;
+  onRelease: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
+}> = ({ pad, onPress, onRelease, onContextMenu }) => {
+  const touchHandlers = useTouchEvents(onPress, onRelease);
+
+  return (
+    <button
+      className={`
+        w-20 h-20 rounded-lg border-2 transition-all duration-100 flex flex-col items-center justify-center
+        ${pad.isPressed ? 'scale-95 border-gray-800' : 'border-gray-300'}
+        ${pad.color} hover:brightness-110
+        touch-manipulation
+      `}
+      onMouseDown={onPress}
+      onMouseUp={onRelease}
+      onMouseLeave={onRelease}
+      {...touchHandlers}
+      onContextMenu={onContextMenu}
+    >
+      <span className="text-xs font-bold text-white drop-shadow-lg">
+        {pad.label}
+      </span>
+      {pad.keyboardShortcut && (
+        <span className="text-xs text-white opacity-75">
+          {pad.keyboardShortcut.toUpperCase()}
+        </span>
+      )}
+    </button>
+  );
+};
 
 export const DrumPadBase: React.FC<DrumPadBaseProps> = ({
   pads,
@@ -55,32 +91,17 @@ export const DrumPadBase: React.FC<DrumPadBaseProps> = ({
 
   const renderPad = (pad: DrumPad) => (
     <div key={pad.id} className="relative">
-      <button
-        className={`
-          w-20 h-20 rounded-lg border-2 transition-all duration-100 flex flex-col items-center justify-center
-          ${pad.isPressed ? 'scale-95 border-gray-800' : 'border-gray-300'}
-          ${pad.color} hover:brightness-110
-          ${assigningPad === pad.id ? 'ring-4 ring-blue-500' : ''}
-        `}
-        onMouseDown={() => handlePadPress(pad)}
-        onMouseUp={() => handlePadRelease(pad)}
-        onMouseLeave={() => handlePadRelease(pad)}
+      <PadButton
+        pad={pad}
+        onPress={() => handlePadPress(pad)}
+        onRelease={() => handlePadRelease(pad)}
         onContextMenu={(e) => {
           if (allowAssignment) {
             e.preventDefault();
             setAssigningPad(pad.id);
           }
         }}
-      >
-        <span className="text-xs font-bold text-white drop-shadow-lg">
-          {pad.label}
-        </span>
-        {pad.keyboardShortcut && (
-          <span className="text-xs text-white opacity-75">
-            {pad.keyboardShortcut.toUpperCase()}
-          </span>
-        )}
-      </button>
+      />
       
       {assigningPad === pad.id && (
         <div className="absolute top-full left-0 mt-2 bg-white border rounded-lg shadow-lg p-2 z-10 min-w-40">

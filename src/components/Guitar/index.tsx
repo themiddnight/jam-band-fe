@@ -91,29 +91,29 @@ export default function Guitar({
   }, []);
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-6xl">
-      <div className="mb-4">
-        <h3 className="text-xl font-semibold text-gray-800 mb-4">Guitar</h3>
+    <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
+      <div className="card-body">
+        <h3 className="card-title text-xl mb-4">Guitar</h3>
         
         {/* Mode Selection */}
         <div className="flex items-center gap-4 mb-4">
-          <div className="flex gap-2">
+          <div className="join">
             <button
               onClick={() => setMode('melody')}
-              className={`px-3 py-1 rounded text-sm ${
+              className={`btn btn-sm ${
                 mode === 'melody'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-200 text-gray-700'
+                  ? 'btn-primary'
+                  : 'btn-outline'
               }`}
             >
               Melody
             </button>
             <button
               onClick={() => setMode('chord')}
-              className={`px-3 py-1 rounded text-sm ${
+              className={`btn btn-sm ${
                 mode === 'chord'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-200 text-gray-700'
+                  ? 'btn-primary'
+                  : 'btn-outline'
               }`}
             >
               Chord (Coming Soon)
@@ -121,48 +121,43 @@ export default function Guitar({
           </div>
           
           {/* Sustain Toggle */}
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={sustain}
-              onChange={(e) => handleSustainChange(e.target.checked)}
-              className="rounded"
-            />
-            <span className="text-sm text-gray-600">Sustain</span>
-          </label>
+          <div className="flex items-center gap-2">
+            <label className="label cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sustain}
+                onChange={(e) => handleSustainChange(e.target.checked)}
+                className="checkbox checkbox-sm"
+              />
+              <span className="label-text ml-2">Sustain</span>
+            </label>
+          </div>
         </div>
         
-        {/* Scale Info */}
-        <div className="text-sm text-gray-600 mb-4">
-          Scale: {scaleState.rootNote} {scaleState.scale}
-          {mode === 'chord' && (
-            <span className="ml-4 text-orange-600">
-              • Chord mode will support strumming patterns and chord shapes
-            </span>
-          )}
+        {/* Velocity Control */}
+        <div className="flex items-center gap-2 mb-4">
+          <label className="label">
+            <span className="label-text">Velocity: {Math.round(velocity * 9)}</span>
+          </label>
+          <input
+            type="range"
+            min="1"
+            max="9"
+            value={Math.round(velocity * 9)}
+            onChange={(e) => handleVelocityChange(parseInt(e.target.value) / 9)}
+            className="range range-primary w-32"
+          />
         </div>
-      </div>
 
-      {/* Pure Fretboard Component */}
-      <FretboardBase
-        config={config}
-        positions={positions}
-        onFretPress={handleFretPress}
-        onFretRelease={handleFretRelease}
-        velocity={velocity}
-        onVelocityChange={handleVelocityChange}
-        className="guitar-fretboard"
-      />
-
-      {/* Future Features Info */}
-      <div className="mt-4 text-xs text-gray-500">
-        <p>🎸 <strong>Coming Soon:</strong></p>
-        <ul className="ml-4 mt-1">
-          <li>• Chord mode with strumming patterns</li>
-          <li>• Keyboard shortcuts for chord shapes</li>
-          <li>• Scale highlighting and chord suggestions</li>
-          <li>• Capo simulation</li>
-        </ul>
+        <FretboardBase
+          config={config}
+          positions={positions}
+          onFretPress={handleFretPress}
+          onFretRelease={handleFretRelease}
+          velocity={velocity}
+          onVelocityChange={handleVelocityChange}
+          className="guitar-fretboard"
+        />
       </div>
     </div>
   );

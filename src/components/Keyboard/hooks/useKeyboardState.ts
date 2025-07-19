@@ -12,10 +12,17 @@ export const useKeyboardState = (props: Props) => {
   const stateRef = useRef({ sustain, sustainToggle, pressedKeys });
   stateRef.current = { sustain, sustainToggle, pressedKeys };
 
+  // Improved setSustain with better state consistency
   const setSustainWithCallback = useCallback((newSustain: boolean) => {
     setSustain(newSustain);
     props.onSustainChange(newSustain);
-  }, [props.onSustainChange]);
+    
+    // If turning off sustain and not in toggle mode, ensure sustained notes stop
+    if (!newSustain && !stateRef.current.sustainToggle) {
+      setHasSustainedNotes(false);
+      props.onStopSustainedNotes();
+    }
+  }, [props]);
 
   const setSustainToggleWithCallback = useCallback((newSustainToggle: boolean) => {
     setSustainToggle(newSustainToggle);
@@ -27,7 +34,7 @@ export const useKeyboardState = (props: Props) => {
       props.onSustainChange(false);
       props.onStopSustainedNotes();
     }
-  }, [props.onSustainChange, props.onStopSustainedNotes]);
+  }, [props]);
 
   // Optimized set operations for pressed keys
   const updatePressedKeys = useCallback((note: string, action: 'add' | 'delete') => {
@@ -57,12 +64,12 @@ export const useKeyboardState = (props: Props) => {
     if (stateRef.current.sustainToggle && !isKeyHeld) {
       setHasSustainedNotes(true);
     }
-  }, [props.onPlayNotes, updatePressedKeys]);
+  }, [props, updatePressedKeys]);
 
   const stopNote = useCallback((note: string) => {
     props.onStopNotes([note]);
     updatePressedKeys(note, 'delete');
-  }, [props.onStopNotes, updatePressedKeys]);
+  }, [props, updatePressedKeys]);
 
   const releaseKeyHeldNote = useCallback((note: string) => {
     props.onReleaseKeyHeldNote(note);
@@ -78,16 +85,29 @@ export const useKeyboardState = (props: Props) => {
           }
           return current;
         });
-      }, 0);
+      }, 10); // Reduced timeout for better responsiveness
     }
-  }, [props.onReleaseKeyHeldNote, updatePressedKeys]);
+  }, [props, updatePressedKeys]);
 
   const stopSustainedNotes = useCallback(() => {
     props.onStopSustainedNotes();
-    setSustain(false);
     setHasSustainedNotes(false);
-    // Don't turn off toggle mode when stopping sustained notes
-  }, [props.onStopSustainedNotes]);
+    
+    // Also ensure sustain state is properly reset if not in toggle mode
+    if (!stateRef.current.sustainToggle) {
+      setSustain(false);
+      props.onSustainChange(false);
+    }
+  }, [props]);
+
+  // Add force reset mechanism for stuck states
+  const forceResetSustain = useCallback(() => {
+    setSustain(false);
+    setSustainToggle(false);
+    setHasSustainedNotes(false);
+    props.onSustainChange(false);
+    props.onStopSustainedNotes();
+  }, [props]);
 
   // Memoize the return object to prevent unnecessary re-renders
   return useMemo(() => ({
@@ -104,6 +124,7 @@ export const useKeyboardState = (props: Props) => {
     stopNote,
     releaseKeyHeldNote,
     stopSustainedNotes,
+    forceResetSustain,
   }), [
     sustain,
     sustainToggle,
@@ -116,5 +137,6 @@ export const useKeyboardState = (props: Props) => {
     stopNote,
     releaseKeyHeldNote,
     stopSustainedNotes,
+    forceResetSustain,
   ]);
 }; 

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Scale } from "../../hooks/useScaleState";
+import { useTouchEvents } from "../../hooks/useTouchEvents";
 
 export interface DrumsetProps {
   scaleState: {
@@ -14,6 +15,30 @@ export interface DrumsetProps {
   onSustainChange: (sustain: boolean) => void;
   availableSamples: string[];
 }
+
+// Separate component for drum button to use hooks properly
+const DrumButton: React.FC<{
+  label: string;
+  className: string;
+  disabled?: boolean;
+  onPress: () => void;
+  onRelease: () => void;
+}> = ({ label, className, disabled, onPress, onRelease }) => {
+  const touchHandlers = useTouchEvents(onPress, onRelease);
+
+  return (
+    <button
+      {...touchHandlers}
+      onMouseDown={onPress}
+      onMouseUp={onRelease}
+      onMouseLeave={onRelease}
+      disabled={disabled}
+      className={`${className} touch-manipulation`}
+    >
+      <span className="text-xs font-bold">{label}</span>
+    </button>
+  );
+};
 
 export default function Drumset({
   onPlayNotes,
@@ -72,157 +97,142 @@ export default function Drumset({
   };
 
   return (
-    <div className="bg-white p-3 rounded-lg shadow-lg w-full max-w-6xl">
-      <div className="flex justify-around gap-3 mb-3 flex-wrap">
-        <div className="space-y-4">
-          <h3 className="font-semibold text-gray-700">Drum Kit Controls</h3>
-          <div className="flex items-center gap-2">
-            <span className="text-sm">Velocity: {Math.round(velocity * 9)}</span>
-            <input
-              type="range"
-              min="1"
-              max="9"
-              value={Math.round(velocity * 9)}
-              onChange={(e) => setVelocity(parseInt(e.target.value) / 9)}
-              className="w-20"
+    <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
+      <div className="card-body p-3">
+        <div className="flex justify-around gap-3 mb-3 flex-wrap">
+          <div className="space-y-4">
+            <h3 className="card-title">Drum Kit Controls</h3>
+            <div className="flex items-center gap-2">
+              <label className="label">
+                <span className="label-text">Velocity: {Math.round(velocity * 9)}</span>
+              </label>
+              <input
+                type="range"
+                min="1"
+                max="9"
+                value={Math.round(velocity * 9)}
+                onChange={(e) => setVelocity(parseInt(e.target.value) / 9)}
+                className="range range-primary w-20"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-center gap-4">
+          {/* Cymbals Row */}
+          <div className="flex gap-4 items-center">
+            <DrumButton
+              label="Crash"
+              className={`btn btn-circle w-16 h-16 ${
+                !drumMapping.crash 
+                  ? "btn-disabled" 
+                  : pressedDrums.has("crash") 
+                  ? "btn-warning scale-95" 
+                  : "btn-warning hover:scale-105"
+              }`}
+              disabled={!drumMapping.crash}
+              onPress={() => handleDrumPress("crash")}
+              onRelease={() => handleDrumRelease("crash")}
+            />
+            
+            <DrumButton
+              label="Ride"
+              className={`btn btn-circle w-20 h-20 ${
+                pressedDrums.has("ride") 
+                  ? "btn-primary scale-95" 
+                  : "btn-primary hover:scale-105"
+              }`}
+              onPress={() => handleDrumPress("ride")}
+              onRelease={() => handleDrumRelease("ride")}
+            />
+            
+            <DrumButton
+              label="Splash"
+              className={`btn btn-circle w-12 h-12 ${
+                pressedDrums.has("splash") 
+                  ? "btn-accent scale-95" 
+                  : "btn-accent hover:scale-105"
+              }`}
+              onPress={() => handleDrumPress("splash")}
+              onRelease={() => handleDrumRelease("splash")}
+            />
+          </div>
+
+          {/* Toms Row */}
+          <div className="flex gap-4 items-center">
+            <DrumButton
+              label="Tom 1"
+              className={`btn btn-circle w-14 h-14 ${
+                pressedDrums.has("tom1") 
+                  ? "btn-success scale-95" 
+                  : "btn-success hover:scale-105"
+              }`}
+              onPress={() => handleDrumPress("tom1")}
+              onRelease={() => handleDrumRelease("tom1")}
+            />
+            
+            <DrumButton
+              label="Tom 2"
+              className={`btn btn-circle w-14 h-14 ${
+                pressedDrums.has("tom2") 
+                  ? "btn-secondary scale-95" 
+                  : "btn-secondary hover:scale-105"
+              }`}
+              onPress={() => handleDrumPress("tom2")}
+              onRelease={() => handleDrumRelease("tom2")}
+            />
+            
+            <DrumButton
+              label="Tom 3"
+              className={`btn btn-circle w-14 h-14 ${
+                pressedDrums.has("tom3") 
+                  ? "btn-info scale-95" 
+                  : "btn-info hover:scale-105"
+              }`}
+              onPress={() => handleDrumPress("tom3")}
+              onRelease={() => handleDrumRelease("tom3")}
+            />
+          </div>
+
+          {/* Main Drums Row */}
+          <div className="flex gap-8 items-center">
+            {/* Hi-Hat */}
+            <DrumButton
+              label="Hi-Hat"
+              className={`btn btn-circle w-12 h-12 ${
+                pressedDrums.has("hihat") 
+                  ? "btn-neutral scale-95" 
+                  : "btn-neutral hover:scale-105"
+              }`}
+              onPress={() => handleDrumPress("hihat")}
+              onRelease={() => handleDrumRelease("hihat")}
+            />
+
+            {/* Snare */}
+            <DrumButton
+              label="Snare"
+              className={`btn btn-circle w-20 h-20 ${
+                pressedDrums.has("snare") 
+                  ? "btn-error scale-95" 
+                  : "btn-error hover:scale-105"
+              }`}
+              onPress={() => handleDrumPress("snare")}
+              onRelease={() => handleDrumRelease("snare")}
+            />
+
+            {/* Kick */}
+            <DrumButton
+              label="Kick"
+              className={`btn btn-circle w-24 h-24 ${
+                pressedDrums.has("kick") 
+                  ? "btn-neutral scale-95" 
+                  : "btn-neutral hover:scale-105"
+              }`}
+              onPress={() => handleDrumPress("kick")}
+              onRelease={() => handleDrumRelease("kick")}
             />
           </div>
         </div>
-      </div>
-
-      <div className="flex flex-col items-center gap-4">
-        {/* Cymbals Row */}
-        <div className="flex gap-4 items-center">
-          <button
-            onMouseDown={() => handleDrumPress("crash")}
-            onMouseUp={() => handleDrumRelease("crash")}
-            onMouseLeave={() => handleDrumRelease("crash")}
-            disabled={!drumMapping.crash}
-            className={`w-16 h-16 rounded-full border-2 border-gray-300 flex items-center justify-center transition-all ${
-              !drumMapping.crash 
-                ? "bg-gray-300 text-gray-500 cursor-not-allowed" 
-                : pressedDrums.has("crash") 
-                ? "bg-orange-500 text-white scale-95" 
-                : "bg-orange-500 text-white hover:scale-105"
-            }`}
-          >
-            <span className="text-xs font-bold">Crash</span>
-          </button>
-          
-          <button
-            onMouseDown={() => handleDrumPress("ride")}
-            onMouseUp={() => handleDrumRelease("ride")}
-            onMouseLeave={() => handleDrumRelease("ride")}
-            className={`w-20 h-20 rounded-full border-2 border-gray-300 flex items-center justify-center transition-all ${
-              pressedDrums.has("ride") 
-                ? "bg-indigo-500 text-white scale-95" 
-                : "bg-indigo-500 text-white hover:scale-105"
-            }`}
-          >
-            <span className="text-xs font-bold">Ride</span>
-          </button>
-          
-          <button
-            onMouseDown={() => handleDrumPress("splash")}
-            onMouseUp={() => handleDrumRelease("splash")}
-            onMouseLeave={() => handleDrumRelease("splash")}
-            className={`w-12 h-12 rounded-full border-2 border-gray-300 flex items-center justify-center transition-all ${
-              pressedDrums.has("splash") 
-                ? "bg-yellow-400 text-white scale-95" 
-                : "bg-yellow-400 text-white hover:scale-105"
-            }`}
-          >
-            <span className="text-xs font-bold">Splash</span>
-          </button>
-        </div>
-
-        {/* Toms Row */}
-        <div className="flex gap-4 items-center">
-          <button
-            onMouseDown={() => handleDrumPress("tom1")}
-            onMouseUp={() => handleDrumRelease("tom1")}
-            onMouseLeave={() => handleDrumRelease("tom1")}
-            className={`w-14 h-14 rounded-full border-2 border-gray-300 flex items-center justify-center transition-all ${
-              pressedDrums.has("tom1") 
-                ? "bg-green-500 text-white scale-95" 
-                : "bg-green-500 text-white hover:scale-105"
-            }`}
-          >
-            <span className="text-xs font-bold">Tom 1</span>
-          </button>
-          
-          <button
-            onMouseDown={() => handleDrumPress("tom2")}
-            onMouseUp={() => handleDrumRelease("tom2")}
-            onMouseLeave={() => handleDrumRelease("tom2")}
-            className={`w-14 h-14 rounded-full border-2 border-gray-300 flex items-center justify-center transition-all ${
-              pressedDrums.has("tom2") 
-                ? "bg-purple-500 text-white scale-95" 
-                : "bg-purple-500 text-white hover:scale-105"
-            }`}
-          >
-            <span className="text-xs font-bold">Tom 2</span>
-          </button>
-          
-          <button
-            onMouseDown={() => handleDrumPress("tom3")}
-            onMouseUp={() => handleDrumRelease("tom3")}
-            onMouseLeave={() => handleDrumRelease("tom3")}
-            className={`w-14 h-14 rounded-full border-2 border-gray-300 flex items-center justify-center transition-all ${
-              pressedDrums.has("tom3") 
-                ? "bg-blue-500 text-white scale-95" 
-                : "bg-blue-500 text-white hover:scale-105"
-            }`}
-          >
-            <span className="text-xs font-bold">Tom 3</span>
-          </button>
-        </div>
-
-        {/* Snare, Hi-Hat, and Kick Row */}
-        <div className="flex gap-4 items-center">
-          <button
-            onMouseDown={() => handleDrumPress("snare")}
-            onMouseUp={() => handleDrumRelease("snare")}
-            onMouseLeave={() => handleDrumRelease("snare")}
-            className={`w-16 h-16 rounded-full border-2 border-gray-300 flex items-center justify-center transition-all ${
-              pressedDrums.has("snare") 
-                ? "bg-blue-600 text-white scale-95" 
-                : "bg-blue-600 text-white hover:scale-105"
-            }`}
-          >
-            <span className="text-xs font-bold">Snare</span>
-          </button>
-          
-          <button
-            onMouseDown={() => handleDrumPress("kick")}
-            onMouseUp={() => handleDrumRelease("kick")}
-            onMouseLeave={() => handleDrumRelease("kick")}
-            className={`w-20 h-12 rounded-full border-2 border-gray-300 flex items-center justify-center transition-all ${
-              pressedDrums.has("kick") 
-                ? "bg-red-500 text-white scale-95" 
-                : "bg-red-500 text-white hover:scale-105"
-            }`}
-          >
-            <span className="text-xs font-bold">Kick</span>
-          </button>
-          
-          <button
-            onMouseDown={() => handleDrumPress("hihat")}
-            onMouseUp={() => handleDrumRelease("hihat")}
-            onMouseLeave={() => handleDrumRelease("hihat")}
-            className={`w-14 h-14 rounded-full border-2 border-gray-300 flex items-center justify-center transition-all ${
-              pressedDrums.has("hihat") 
-                ? "bg-yellow-500 text-white scale-95" 
-                : "bg-yellow-500 text-white hover:scale-105"
-            }`}
-          >
-            <span className="text-xs font-bold">Hi-Hat</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="mt-4 text-center text-sm text-gray-600">
-        <p>Click on drum pieces to play drum kit sounds.</p>
       </div>
     </div>
   );
