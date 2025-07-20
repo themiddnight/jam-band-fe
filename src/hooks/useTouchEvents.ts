@@ -8,7 +8,7 @@ interface TouchEventHandlers {
 }
 
 export const useTouchEvents = (
-  onPress: () => void,
+  onPress: (isSliderClick?: boolean) => void,
   onRelease: () => void
 ): TouchEventHandlers => {
   const activeTouchIds = useRef<Set<number>>(new Set());
@@ -18,7 +18,7 @@ export const useTouchEvents = (
     
     for (const touch of Array.from(e.changedTouches)) {
       if (activeTouchIds.current.size === 0) {
-        onPress();
+        onPress(false); // Regular touch press, not slider click
       }
       activeTouchIds.current.add(touch.identifier);
     }

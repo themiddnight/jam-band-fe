@@ -1,106 +1,133 @@
-import { useState, useMemo, useCallback } from "react";
-import { DrumPadBase } from "../shared/DrumPadBase";
-import { generateDrumPads, type Scale } from "../../utils/musicUtils";
-
-export interface DrumpadProps {
-  scaleState: {
-    rootNote: string;
-    scale: Scale;
-    getScaleNotes: (root: string, scaleType: Scale, octave: number) => string[];
-  };
-  onPlayNotes: (notes: string[], velocity: number, isKeyHeld: boolean) => void;
-  onStopNotes: (notes: string[]) => void;
-  onStopSustainedNotes: () => void;
-  onReleaseKeyHeldNote: (note: string) => void;
-  onSustainChange: (sustain: boolean) => void;
-  availableSamples: string[];
-}
+import { useState } from "react";
+import { useDrumpadState } from "./hooks/useDrumpadState";
+import { PadButton } from "./components/PadButton";
+import { PresetManager } from "./components/PresetManager";
+import { SoundSelectionModal } from "./components/SoundSelectionModal";
+import { DRUMPAD_SHORTCUTS } from "../../constants/defaultPresets";
+import type { DrumpadProps } from "./types/drumpad";
 
 export default function Drumpad({
   onPlayNotes,
   availableSamples,
+  currentInstrument = "TR-808",
 }: DrumpadProps) {
-  const [velocity, setVelocity] = useState<number>(0.7);
-  const [pressedPads, setPressedPads] = useState<Set<string>>(new Set());
-  const [padAssignments, setPadAssignments] = useState<Record<string, string>>({});
-  const [maxPads, setMaxPads] = useState<number>(16);
+  const drumpadState = useDrumpadState({
+    onPlayNotes,
+    currentInstrument,
+    availableSamples,
+  });
 
-  // Generate drum pads using pure utility function
-  const pads = useMemo(() => 
-    generateDrumPads(availableSamples, maxPads, pressedPads, padAssignments),
-    [availableSamples, maxPads, pressedPads, padAssignments]
-  );
+  const {
+    velocity,
+    isEditMode,
+    selectedPadForAssign,
+    pads,
+    currentPreset,
+    setVelocity,
+    handlePadPress,
+    handlePadRelease,
+    resetAssignments,
+    toggleEditMode,
+    loadPreset,
+    savePreset,
+    deletePreset,
+    exportPreset,
+    importPreset,
+    setPadAssignments,
+    setPadVolume,
+  } = drumpadState;
 
-  const handlePadPress = useCallback(async (padId: string, sound?: string) => {
-    setPressedPads(prev => new Set(prev).add(padId));
-    
-    if (sound) {
-      // Play the assigned sound
-      await onPlayNotes([sound], velocity, false);
+  // Modal state
+  const [showSoundModal, setShowSoundModal] = useState(false);
+  const [selectedPadForModal, setSelectedPadForModal] = useState<string | null>(null);
+
+  // Enhanced import handler for file reading
+  const handleImportPreset = async (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const presetData = JSON.parse(event.target?.result as string);
+        importPreset(presetData);
+      } catch {
+        throw new Error('Invalid preset file format');
+      }
+    };
+    reader.onerror = () => {
+      throw new Error('Failed to read file');
+    };
+    reader.readAsText(file);
+  };
+
+  // Handle pad press in edit mode
+  const handlePadPressInEditMode = (padId: string, isSliderClick: boolean = false) => {
+    if (isEditMode) {
+      if (isSliderClick) {
+        // If it's a slider click, play the sound with current volume
+        const sound = drumpadState.padAssignments[padId];
+        if (sound) {
+          const padVolume = drumpadState.padVolumes[padId] || 1;
+          const effectiveVelocity = Math.min(velocity * padVolume, 1);
+          onPlayNotes([sound], effectiveVelocity, false);
+        }
+      } else {
+        // If it's a pad click, open the sound selection modal
+        setSelectedPadForModal(padId);
+        setShowSoundModal(true);
+      }
+      return;
     }
-  }, [onPlayNotes, velocity]);
+    handlePadPress(padId, drumpadState.padAssignments[padId]);
+  };
 
-  const handlePadRelease = useCallback((padId: string) => {
-    setPressedPads(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(padId);
-      return newSet;
-    });
-    
-    // For drum pads, we typically don't need to release samples
-    // They are usually one-shot sounds
-  }, []);
+  // Handle sound preview
+  const handleSoundPreview = (sound: string) => {
+    onPlayNotes([sound], velocity, false);
+  };
 
-  const handlePadAssign = useCallback((padId: string, sound: string) => {
-    setPadAssignments(prev => ({
-      ...prev,
-      [padId]: sound
-    }));
-  }, []);
+  // Handle sound assignment from modal
+  const handleSoundAssignmentFromModal = (sound: string) => {
+    if (selectedPadForModal) {
+      // Update the pad assignments directly
+      const updatedAssignments = {
+        ...drumpadState.padAssignments,
+        [selectedPadForModal]: sound
+      };
+      setPadAssignments(updatedAssignments);
+      setShowSoundModal(false);
+      setSelectedPadForModal(null);
+    }
+  };
 
-  const handleVelocityChange = useCallback((newVelocity: number) => {
-    setVelocity(newVelocity);
-  }, []);
+  // Handle modal close
+  const handleModalClose = () => {
+    setShowSoundModal(false);
+    setSelectedPadForModal(null);
+  };
 
-  const resetAssignments = useCallback(() => {
-    setPadAssignments({});
-  }, []);
-
-  const presetLayouts = {
-    '8-pad': 8,
-    '12-pad': 12,
-    '16-pad': 16,
+  // Handle volume change for a specific pad
+  const handlePadVolumeChange = (padId: string, volume: number) => {
+    setPadVolume(padId, volume);
   };
 
   return (
     <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
       <div className="card-body">
-        <h3 className="card-title text-xl mb-4">Drum Pad</h3>
+        
+        {/* Preset Controls */}
+        <div className="flex justify-between items-center gap-5 mb-3">
+          <h4 className="text-lg font-semibold">Presets</h4>
+          <PresetManager
+            currentPreset={currentPreset}
+            onLoadPreset={loadPreset}
+            onSavePreset={(name, description) => savePreset(name, description, drumpadState.padAssignments, drumpadState.padVolumes)}
+            onDeletePreset={deletePreset}
+            onExportPreset={exportPreset}
+            onImportPreset={handleImportPreset}
+          />
+        </div>
         
         {/* Drum Pad Controls */}
         <div className="flex items-center gap-4 mb-4 flex-wrap">
-          {/* Pad Count Selection */}
-          <div className="flex items-center gap-2">
-            <label className="label">
-              <span className="label-text">Layout:</span>
-            </label>
-            <div className="join">
-              {Object.entries(presetLayouts).map(([name, count]) => (
-                <button
-                  key={name}
-                  onClick={() => setMaxPads(count)}
-                  className={`btn btn-sm ${
-                    maxPads === count
-                      ? 'btn-primary'
-                      : 'btn-outline'
-                  }`}
-                >
-                  {name}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Velocity Control */}
           <div className="flex items-center gap-2">
             <label className="label">
@@ -111,10 +138,20 @@ export default function Drumpad({
               min="1"
               max="9"
               value={Math.round(velocity * 9)}
-              onChange={(e) => handleVelocityChange(parseInt(e.target.value) / 9)}
-              className="range range-primary w-32"
+              onChange={(e) => setVelocity(parseInt(e.target.value) / 9)}
+              className="range range-sm range-primary w-32"
             />
           </div>
+
+          {/* Edit Mode Toggle */}
+          <button
+            onClick={toggleEditMode}
+            className={`btn btn-sm ${
+              isEditMode ? 'btn-secondary' : 'btn-outline btn-secondary'
+            }`}
+          >
+            {isEditMode ? 'Exit Edit Mode' : 'Edit Mode'}
+          </button>
 
           {/* Reset Button */}
           <button
@@ -125,19 +162,88 @@ export default function Drumpad({
           </button>
         </div>
 
-        <DrumPadBase
-          pads={pads}
-          onPadPress={handlePadPress}
-          onPadRelease={handlePadRelease}
-          onPadAssign={handlePadAssign}
-          velocity={velocity}
-          onVelocityChange={handleVelocityChange}
-          maxPads={maxPads}
-          allowAssignment={true}
-          availableSounds={availableSamples}
-          className="drum-pad-grid"
-        />
+        {/* Drum Pad Grid */}
+        <div className="flex gap-8 justify-evenly flex-wrap bg-black p-4 rounded-lg overflow-auto">
+          {/* Group A */}
+          <div>
+            <div className="space-y-3">
+              {/* Row 1: Q W E R */}
+              <div className="flex justify-center gap-3">
+                {pads.slice(0, 4).map(pad => (
+                  <PadButton
+                    key={pad.id}
+                    pad={pad}
+                    isEditMode={isEditMode}
+                    selectedPadForAssign={selectedPadForAssign}
+                    onPress={(isSliderClick) => handlePadPressInEditMode(pad.id, isSliderClick)}
+                    onRelease={() => handlePadRelease(pad.id)}
+                    onVolumeChange={(volume) => handlePadVolumeChange(pad.id, volume)}
+                  />
+                ))}
+              </div>
+              {/* Row 2: A S D F */}
+              <div className="flex justify-center gap-3">
+                {pads.slice(4, 8).map(pad => (
+                  <PadButton
+                    key={pad.id}
+                    pad={pad}
+                    isEditMode={isEditMode}
+                    selectedPadForAssign={selectedPadForAssign}
+                    onPress={(isSliderClick) => handlePadPressInEditMode(pad.id, isSliderClick)}
+                    onRelease={() => handlePadRelease(pad.id)}
+                    onVolumeChange={(volume) => handlePadVolumeChange(pad.id, volume)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Group B */}
+          <div>
+            <div className="space-y-3">
+              {/* Row 1: U I O P */}
+              <div className="flex justify-center gap-3">
+                {pads.slice(8, 12).map(pad => (
+                  <PadButton
+                    key={pad.id}
+                    pad={pad}
+                    isEditMode={isEditMode}
+                    selectedPadForAssign={selectedPadForAssign}
+                    onPress={(isSliderClick) => handlePadPressInEditMode(pad.id, isSliderClick)}
+                    onRelease={() => handlePadRelease(pad.id)}
+                    onVolumeChange={(volume) => handlePadVolumeChange(pad.id, volume)}
+                  />
+                ))}
+              </div>
+              {/* Row 2: J K L ; */}
+              <div className="flex justify-center gap-3">
+                {pads.slice(12, 16).map(pad => (
+                  <PadButton
+                    key={pad.id}
+                    pad={pad}
+                    isEditMode={isEditMode}
+                    selectedPadForAssign={selectedPadForAssign}
+                    onPress={(isSliderClick) => handlePadPressInEditMode(pad.id, isSliderClick)}
+                    onRelease={() => handlePadRelease(pad.id)}
+                    onVolumeChange={(volume) => handlePadVolumeChange(pad.id, volume)}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Sound Selection Modal */}
+      <SoundSelectionModal
+        isOpen={showSoundModal}
+        onClose={handleModalClose}
+        onAssign={handleSoundAssignmentFromModal}
+        onPreview={handleSoundPreview}
+        availableSamples={availableSamples}
+        selectedPad={selectedPadForModal}
+        padShortcut={selectedPadForModal ? DRUMPAD_SHORTCUTS[selectedPadForModal as keyof typeof DRUMPAD_SHORTCUTS] : null}
+      />
     </div>
   );
 } 

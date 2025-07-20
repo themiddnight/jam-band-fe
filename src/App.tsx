@@ -312,7 +312,7 @@ export default function App() {
       case ControlType.Bass:
         return <Bass {...commonProps} />;
       case ControlType.Drumpad:
-        return <Drumpad {...commonProps} availableSamples={availableSamples} />;
+        return <Drumpad {...commonProps} availableSamples={availableSamples} currentInstrument={currentInstrument} />;
       case ControlType.Drumset:
         return <Drumset {...commonProps} availableSamples={availableSamples} />;
       case ControlType.Keyboard:

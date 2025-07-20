@@ -1,0 +1,253 @@
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { 
+  DRUMPAD_SHORTCUTS, 
+  DRUMPAD_COLORS, 
+  validatePresetAssignments
+} from '../../../constants/defaultPresets';
+import { useDrumpadPresetsStore } from '../../../stores/drumpadPresetsStore';
+import type { DrumPad, DrumpadProps, DrumpadState, DrumpadActions } from '../types/drumpad';
+
+export const useDrumpadState = ({
+  onPlayNotes,
+  currentInstrument = "TR-808",
+  availableSamples = []
+}: Pick<DrumpadProps, 'onPlayNotes' | 'availableSamples'> & { currentInstrument?: string }): DrumpadState & DrumpadActions => {
+  
+  // Local state
+  const [velocity, setVelocity] = useState<number>(0.7);
+  const [pressedPads, setPressedPads] = useState<Set<string>>(new Set());
+  const [padAssignments, setPadAssignments] = useState<Record<string, string>>({});
+  const [padVolumes, setPadVolumes] = useState<Record<string, number>>({});
+  const [isEditMode, setIsEditMode] = useState<boolean>(false);
+  const [selectedPadForAssign, setSelectedPadForAssign] = useState<string | null>(null);
+
+  // Store integration
+  const {
+    currentPreset,
+    setCurrentInstrument: setStoreInstrument,
+    loadPreset: loadStorePreset,
+    savePreset: saveStorePreset,
+    deletePreset: deleteStorePreset,
+    exportPreset: exportStorePreset,
+    importPreset: importStorePreset,
+    createSmartDefaultPreset,
+  } = useDrumpadPresetsStore();
+
+  // Initialize with current instrument and load default preset
+  useEffect(() => {
+    setStoreInstrument(currentInstrument);
+  }, [currentInstrument, setStoreInstrument]);
+
+  // Load and validate preset assignments when current preset or available samples change
+  useEffect(() => {
+    if (currentPreset?.padAssignments && availableSamples.length > 0) {
+      // Validate the preset against available samples
+      const validatedPreset = validatePresetAssignments(currentPreset, availableSamples);
+      setPadAssignments(validatedPreset.padAssignments);
+      // Load pad volumes from preset or use defaults
+      setPadVolumes(validatedPreset.padVolumes || {});
+    } else if (availableSamples.length > 0) {
+      // If no preset is loaded, create and load a smart default preset
+      const smartDefaultPreset = createSmartDefaultPreset(currentInstrument, availableSamples);
+      loadStorePreset(smartDefaultPreset);
+      setPadAssignments(smartDefaultPreset.padAssignments);
+      setPadVolumes(smartDefaultPreset.padVolumes || {});
+    }
+  }, [currentPreset, availableSamples, currentInstrument, createSmartDefaultPreset, loadStorePreset]);
+
+  // Generate the fixed 16 pads
+  const pads = useMemo(() => {
+    const generatedPads: DrumPad[] = [];
+    
+    for (let i = 0; i < 16; i++) {
+      const padId = `pad-${i}`;
+      const group = i < 8 ? 'A' : 'B';
+      const assignedSound = padAssignments[padId];
+      const padVolume = padVolumes[padId] || 1; // Default to 1x multiplier
+      
+      // Create a better label from the sample name or use fallback
+      let label = `${group}${(i % 8) + 1}`;
+      if (assignedSound) {
+        // Clean up the sample name for display
+        label = assignedSound
+          .replace(/_/g, ' ')
+          .replace(/-/g, ' ')
+          .replace(/\d+/g, '')
+          .trim()
+          .toUpperCase()
+          .slice(0, 6); // Limit to 6 characters for better display
+        
+        if (!label) {
+          label = assignedSound.slice(0, 6).toUpperCase();
+        }
+      }
+      
+      generatedPads.push({
+        id: padId,
+        label,
+        color: DRUMPAD_COLORS[i],
+        sound: assignedSound,
+        isPressed: pressedPads.has(padId),
+        keyboardShortcut: DRUMPAD_SHORTCUTS[padId as keyof typeof DRUMPAD_SHORTCUTS],
+        group,
+        volume: padVolume,
+      });
+    }
+    
+    return generatedPads;
+  }, [padAssignments, padVolumes, pressedPads]);
+
+  // Actions
+  const handlePadPress = useCallback(async (padId: string, sound?: string) => {
+    if (isEditMode) {
+      setSelectedPadForAssign(padId);
+      return;
+    }
+
+    setPressedPads(prev => new Set(prev).add(padId));
+    
+    if (sound) {
+      // Calculate effective velocity using global velocity and pad-specific volume
+      const padVolume = padVolumes[padId] || 1;
+      const effectiveVelocity = Math.min(velocity * padVolume, 1); // Cap at 1.0
+      await onPlayNotes([sound], effectiveVelocity, false);
+    }
+  }, [onPlayNotes, velocity, padVolumes, isEditMode]);
+
+  const handlePadRelease = useCallback((padId: string) => {
+    if (isEditMode) return;
+    
+    setPressedPads(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(padId);
+      return newSet;
+    });
+  }, [isEditMode]);
+
+  const handleSoundAssignment = useCallback((sound: string) => {
+    if (selectedPadForAssign) {
+      setPadAssignments(prev => ({
+        ...prev,
+        [selectedPadForAssign]: sound
+      }));
+      setSelectedPadForAssign(null);
+      setIsEditMode(false);
+    }
+  }, [selectedPadForAssign]);
+
+  const setPadVolume = useCallback((padId: string, volume: number) => {
+    setPadVolumes(prev => ({
+      ...prev,
+      [padId]: volume
+    }));
+  }, []);
+
+  const resetAssignments = useCallback(() => {
+    // Reset to smart assignments if we have available samples
+    if (availableSamples.length > 0) {
+      const smartDefaultPreset = createSmartDefaultPreset(currentInstrument, availableSamples);
+      loadStorePreset(smartDefaultPreset);
+      setPadAssignments(smartDefaultPreset.padAssignments);
+      setPadVolumes(smartDefaultPreset.padVolumes || {});
+    } else {
+      setPadAssignments({});
+      setPadVolumes({});
+    }
+    setIsEditMode(false);
+    setSelectedPadForAssign(null);
+  }, [availableSamples, currentInstrument, createSmartDefaultPreset, loadStorePreset]);
+
+  const toggleEditMode = useCallback(() => {
+    setIsEditMode(prev => !prev);
+    setSelectedPadForAssign(null);
+  }, []);
+
+  const cancelAssignment = useCallback(() => {
+    setIsEditMode(false);
+    setSelectedPadForAssign(null);
+  }, []);
+
+  const loadPreset = useCallback((preset: any) => {
+    // Validate the preset against available samples before loading
+    if (availableSamples.length > 0) {
+      const validatedPreset = validatePresetAssignments(preset, availableSamples);
+      loadStorePreset(validatedPreset);
+      setPadAssignments(validatedPreset.padAssignments);
+      setPadVolumes(validatedPreset.padVolumes || {});
+    } else {
+      loadStorePreset(preset);
+      setPadAssignments(preset.padAssignments || {});
+      setPadVolumes(preset.padVolumes || {});
+    }
+    setIsEditMode(false);
+    setSelectedPadForAssign(null);
+  }, [loadStorePreset, availableSamples]);
+
+  // Keyboard event handling
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.repeat || isEditMode) return;
+      
+      const padEntry = Object.entries(DRUMPAD_SHORTCUTS).find(([, key]) => key === e.key.toLowerCase());
+      if (padEntry) {
+        const [padId] = padEntry;
+        handlePadPress(padId, padAssignments[padId]);
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (isEditMode) return;
+      
+      const padEntry = Object.entries(DRUMPAD_SHORTCUTS).find(([, key]) => key === e.key.toLowerCase());
+      if (padEntry) {
+        const [padId] = padEntry;
+        handlePadRelease(padId);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [padAssignments, isEditMode, handlePadPress, handlePadRelease]);
+
+  return {
+    // State
+    velocity,
+    pressedPads,
+    padAssignments,
+    padVolumes,
+    isEditMode,
+    selectedPadForAssign,
+    currentInstrument,
+    pads,
+    
+    // Actions
+    setVelocity,
+    setPressedPads,
+    setPadAssignments,
+    setPadVolumes,
+    setPadVolume,
+    setIsEditMode,
+    setSelectedPadForAssign,
+    setCurrentInstrument: setStoreInstrument,
+    handlePadPress,
+    handlePadRelease,
+    handleSoundAssignment,
+    resetAssignments,
+    toggleEditMode,
+    cancelAssignment,
+    loadPreset,
+    
+    // Store actions
+    savePreset: (name: string, description: string, padAssignments: Record<string, string>, padVolumes: Record<string, number>) => 
+      saveStorePreset(name, description, padAssignments, padVolumes),
+    deletePreset: deleteStorePreset,
+    exportPreset: exportStorePreset,
+    importPreset: importStorePreset,
+    currentPreset,
+  };
+}; 
