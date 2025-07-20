@@ -8,6 +8,13 @@ export interface MidiControllerProps {
   onSustainChange: (sustain: boolean) => void;
 }
 
+export interface MidiDevice {
+  id: string;
+  name: string;
+  manufacturer: string | null;
+  state: string;
+}
+
 export const useMidiController = ({
   onNoteOn,
   onNoteOff,
@@ -17,6 +24,7 @@ export const useMidiController = ({
 }: MidiControllerProps) => {
   const midiAccess = useRef<WebMidi.MIDIAccess | null>(null);
   const inputs = useRef<WebMidi.MIDIInput[]>([]);
+  const isInitialized = useRef<boolean>(false);
   
   // Use ref to store stable handler references
   const handlersRef = useRef({
@@ -27,7 +35,7 @@ export const useMidiController = ({
     onSustainChange,
   });
   
-  // Add React state for proper reactivity
+  // React state for proper reactivity
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [isRequesting, setIsRequesting] = useState<boolean>(false);
@@ -88,7 +96,7 @@ export const useMidiController = ({
     inputs.current = [];
   }, []);
 
-  const updateInputs = useCallback(() => {
+  const refreshMidiDevices = useCallback(() => {
     if (midiAccess.current) {
       // Clean up old listeners first
       cleanupInputs();
@@ -102,13 +110,19 @@ export const useMidiController = ({
       });
       
       // Update connection state
-      setIsConnected(newInputs.length > 0);
+      const hasActiveDevices = newInputs.length > 0;
+      setIsConnected(hasActiveDevices);
+      
+      console.log(`MIDI devices refreshed: ${newInputs.length} device(s) found`);
+      
+      return hasActiveDevices;
     }
+    return false;
   }, [handleMidiMessage, cleanupInputs]);
 
   const handleStateChange = useCallback(() => {
-    updateInputs();
-  }, [updateInputs]);
+    refreshMidiDevices();
+  }, [refreshMidiDevices]);
 
   const requestMidiAccess = useCallback(async (): Promise<boolean> => {
     if (isRequesting) return false;
@@ -123,26 +137,27 @@ export const useMidiController = ({
       
       const access = await navigator.requestMIDIAccess();
       midiAccess.current = access;
+      isInitialized.current = true;
       
       // Set up state change listener
       access.onstatechange = handleStateChange;
       
-      // Initial input setup
-      updateInputs();
+      // Initial device refresh
+      const hasDevices = refreshMidiDevices();
       
-
-      return true;
+      return hasDevices;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to access MIDI';
       setConnectionError(errorMessage);
       console.error('MIDI access error:', errorMessage);
+      isInitialized.current = false;
       return false;
     } finally {
       setIsRequesting(false);
     }
-  }, [isRequesting, handleStateChange, updateInputs]);
+  }, [isRequesting, handleStateChange, refreshMidiDevices]);
 
-  const getMidiInputs = useCallback(() => {
+  const getMidiInputs = useCallback((): MidiDevice[] => {
     return inputs.current.map(input => ({
       id: input.id,
       name: input.name || `MIDI Input ${input.id}`,
@@ -151,13 +166,41 @@ export const useMidiController = ({
     }));
   }, []);
 
+  // Handle window focus/visibility to refresh MIDI devices
+  const handleWindowFocus = useCallback(() => {
+    if (isInitialized.current && midiAccess.current) {
+      console.log('Window focused - refreshing MIDI devices');
+      refreshMidiDevices();
+    }
+  }, [refreshMidiDevices]);
+
+  const handleVisibilityChange = useCallback(() => {
+    if (!document.hidden && isInitialized.current && midiAccess.current) {
+      console.log('Tab became visible - refreshing MIDI devices');
+      refreshMidiDevices();
+    }
+  }, [refreshMidiDevices]);
+
+  // Set up window focus and visibility listeners
+  useEffect(() => {
+    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [handleWindowFocus, handleVisibilityChange]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       cleanupInputs();
       if (midiAccess.current) {
         midiAccess.current.onstatechange = null;
+        midiAccess.current = null;
       }
+      isInitialized.current = false;
     };
   }, [cleanupInputs]);
 
@@ -167,5 +210,6 @@ export const useMidiController = ({
     isRequesting,
     requestMidiAccess,
     getMidiInputs,
+    refreshMidiDevices, // Expose for manual refresh if needed
   };
 }; 

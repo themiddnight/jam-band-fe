@@ -331,6 +331,7 @@ export default function App() {
             onRequestAccess={midiController.requestMidiAccess}
             connectionError={midiController.connectionError}
             isRequesting={midiController.isRequesting}
+            refreshMidiDevices={midiController.refreshMidiDevices}
           />
           <ScaleSelector
             rootNote={scaleState.rootNote}
