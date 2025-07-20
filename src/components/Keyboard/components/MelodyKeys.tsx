@@ -9,6 +9,23 @@ interface MelodyKeysProps {
   onKeyRelease: (key: KeyboardKey) => void;
 }
 
+// Helper function to extract octave from note string
+const getOctaveFromNote = (note: string): number => {
+  return parseInt(note.slice(-1));
+};
+
+// Helper function to get background color based on octave
+const getOctaveBackgroundColor = (octave: number): string => {
+  // Even octaves get white background, odd octaves get accent color
+  return octave % 2 === 0 ? "bg-white" : "bg-blue-100";
+};
+
+// Helper function to get pressed background color based on octave
+const getPressedOctaveBackgroundColor = (octave: number): string => {
+  // Even octaves get light gray when pressed, odd octaves get darker accent
+  return octave % 2 === 0 ? "bg-gray-200" : "bg-blue-200";
+};
+
 // Memoized key component to prevent unnecessary re-renders
 const MelodyKeyButton = memo(({ 
   keyData, 
@@ -22,6 +39,9 @@ const MelodyKeyButton = memo(({
   onRelease: () => void;
 }) => {
   const touchHandlers = useTouchEvents(onPress, onRelease);
+  const octave = getOctaveFromNote(keyData.note);
+  const baseBgColor = getOctaveBackgroundColor(octave);
+  const pressedBgColor = getPressedOctaveBackgroundColor(octave);
 
   return (
     <button
@@ -30,10 +50,11 @@ const MelodyKeyButton = memo(({
       onMouseLeave={onRelease}
       {...touchHandlers}
       className={`
-        w-12 h-24 border-2 border-gray-300 bg-white hover:bg-gray-100 
+        w-12 h-24 border-2 border-gray-300 hover:bg-gray-100 
         transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1
         touch-manipulation
-        ${isPressed ? "bg-gray-200 transform scale-95" : ""}
+        ${baseBgColor}
+        ${isPressed ? `${pressedBgColor} transform scale-95` : ""}
       `}
       style={{
         WebkitTapHighlightColor: 'transparent',

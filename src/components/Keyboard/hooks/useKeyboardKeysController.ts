@@ -74,6 +74,17 @@ export const useKeyboardKeysController = (
     (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
 
+      // Check if the target is an input element (input, textarea, contenteditable)
+      const target = event.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.contentEditable === 'true' ||
+        target.closest('input, textarea, [contenteditable="true"]')
+      ) {
+        return;
+      }
+
       // Early exit if key is being processed
       if (processingKeys.current.has(key)) {
         return;
@@ -125,6 +136,17 @@ export const useKeyboardKeysController = (
     (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
 
+      // Check if the target is an input element (input, textarea, contenteditable)
+      const target = event.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.contentEditable === 'true' ||
+        target.closest('input, textarea, [contenteditable="true"]')
+      ) {
+        return;
+      }
+
       // Optimized held keys update
       updateHeldKeys(key, 'delete');
 
@@ -153,15 +175,7 @@ export const useKeyboardKeysController = (
       // Handle note stopping
       handleNoteStopping(key);
     },
-    [
-      keyboardState.sustainToggle,
-      keyboardState.setSustain,
-      keyboardState.stopSustainedNotes,
-      handleChordModifierRelease,
-      handleNoteStopping,
-      updateHeldKeys,
-      controlKeys,
-    ]
+    [updateHeldKeys, handleChordModifierRelease, controlKeys, handleNoteStopping, keyboardState]
   );
 
   return { handleKeyDown, handleKeyUp };

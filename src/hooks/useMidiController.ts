@@ -103,12 +103,10 @@ export const useMidiController = ({
       
       // Update connection state
       setIsConnected(newInputs.length > 0);
-      console.log(`MIDI inputs updated: ${newInputs.length} device(s) connected`);
     }
   }, [handleMidiMessage, cleanupInputs]);
 
-  const handleStateChange = useCallback((event: WebMidi.MIDIConnectionEvent) => {
-    console.log('MIDI state change:', event.port.state, event.port.name);
+  const handleStateChange = useCallback(() => {
     updateInputs();
   }, [updateInputs]);
 
@@ -132,7 +130,7 @@ export const useMidiController = ({
       // Initial input setup
       updateInputs();
       
-      console.log('MIDI access granted');
+
       return true;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to access MIDI';

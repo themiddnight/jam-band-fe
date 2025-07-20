@@ -8,6 +8,7 @@ export const DEFAULT_PRESETS: SynthPreset[] = [
     synthType: "analog",
     polyphony: "mono",
     parameters: {
+      volume: 0.5,
       ampAttack: 0.01,
       ampDecay: 0.3,
       ampSustain: 0.7,
@@ -35,6 +36,7 @@ export const DEFAULT_PRESETS: SynthPreset[] = [
     synthType: "analog",
     polyphony: "mono",
     parameters: {
+      volume: 0.5,
       ampAttack: 0.02,
       ampDecay: 0.1,
       ampSustain: 0.8,
@@ -64,6 +66,7 @@ export const DEFAULT_PRESETS: SynthPreset[] = [
     synthType: "analog",
     polyphony: "poly",
     parameters: {
+      volume: 0.5,
       ampAttack: 0.8,
       ampDecay: 0.5,
       ampSustain: 0.7,
@@ -91,6 +94,7 @@ export const DEFAULT_PRESETS: SynthPreset[] = [
     synthType: "analog",
     polyphony: "poly",
     parameters: {
+      volume: 0.5,
       ampAttack: 0.01,
       ampDecay: 0.4,
       ampSustain: 0.0,
@@ -120,6 +124,7 @@ export const DEFAULT_PRESETS: SynthPreset[] = [
     synthType: "fm",
     polyphony: "mono",
     parameters: {
+      volume: 0.5,
       ampAttack: 0.01,
       ampDecay: 0.2,
       ampSustain: 0.8,
@@ -147,6 +152,7 @@ export const DEFAULT_PRESETS: SynthPreset[] = [
     synthType: "fm",
     polyphony: "mono",
     parameters: {
+      volume: 0.5,
       ampAttack: 0.02,
       ampDecay: 0.1,
       ampSustain: 0.9,
@@ -176,6 +182,7 @@ export const DEFAULT_PRESETS: SynthPreset[] = [
     synthType: "fm",
     polyphony: "poly",
     parameters: {
+      volume: 0.5,
       ampAttack: 0.01,
       ampDecay: 0.3,
       ampSustain: 0.3,
@@ -203,6 +210,7 @@ export const DEFAULT_PRESETS: SynthPreset[] = [
     synthType: "fm",
     polyphony: "poly",
     parameters: {
+      volume: 0.5,
       ampAttack: 0.01,
       ampDecay: 1.0,
       ampSustain: 0.2,

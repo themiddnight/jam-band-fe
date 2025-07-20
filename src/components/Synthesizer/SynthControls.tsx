@@ -29,6 +29,8 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
   const [presetName, setPresetName] = useState("");
   const [showImportExport, setShowImportExport] = useState(false);
   const [importData, setImportData] = useState("");
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [presetToDelete, setPresetToDelete] = useState<SynthPreset | null>(null);
 
   if (!currentSynthData) return null;
 
@@ -92,12 +94,11 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
   return (
     <div className="card bg-neutral text-neutral-content shadow-xl">
       <div className="card-body">
-        <div className="flex justify-between items-center ">
+        <div className="flex justify-between items-center gap-5">
           <div className="flex gap-2">
             <h3 className="card-title">{currentSynthData.label} Controls</h3>
             <LatencyControls
-              onConfigChange={(config) => {
-                console.log("Latency config updated:", config);
+              onConfigChange={() => {
                 // Note: The config changes will be applied on next synthesizer initialization
               }}
             />
@@ -105,6 +106,33 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
 
           {/* Preset Controls */}
           <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setShowPresetModal(true)}
+              className="btn btn-primary btn-xs"
+            >
+              Save Preset
+            </button>
+            {presetManager.currentPreset && (
+              <button
+                onClick={() => {
+                  const currentPreset = presetManager.currentPreset;
+                  if (currentPreset) {
+                    setPresetToDelete(currentPreset);
+                    setShowDeleteModal(true);
+                  }
+                }}
+                className="btn btn-error btn-xs"
+                title="Delete current preset"
+              >
+                Delete
+              </button>
+            )}
+            <button
+              onClick={() => setShowImportExport(true)}
+              className="btn btn-secondary btn-xs"
+            >
+              Import/Export
+            </button>
             {availablePresets.length > 0 && (
               <select
                 value={presetManager.currentPreset?.id || ""}
@@ -116,7 +144,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                     handleLoadPreset(selectedPreset);
                   }
                 }}
-                className="select select-bordered select-sm flex-1"
+                className="select select-bordered select-xs flex-1"
               >
                 <option value="">Select a preset...</option>
                 {availablePresets.map((preset) => (
@@ -126,18 +154,6 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                 ))}
               </select>
             )}
-            <button
-              onClick={() => setShowPresetModal(true)}
-              className="btn btn-primary btn-sm"
-            >
-              Save Preset
-            </button>
-            <button
-              onClick={() => setShowImportExport(true)}
-              className="btn btn-secondary btn-sm"
-            >
-              Import/Export
-            </button>
           </div>
         </div>
 
@@ -173,7 +189,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                   onChange={(e) => setPresetName(e.target.value)}
                   placeholder="Enter preset name"
                   className="input input-bordered w-full"
-                  onKeyPress={(e) => e.key === "Enter" && handleSavePreset()}
+                  onKeyDown={(e) => e.key === "Enter" && handleSavePreset()}
                 />
               </div>
               <div className="modal-action">
@@ -243,6 +259,39 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                   className="btn"
                 >
                   Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Preset Modal */}
+        {showDeleteModal && presetToDelete && (
+          <div className="modal modal-open">
+            <div className="modal-box">
+              <h3 className="font-bold text-lg text-error">Delete Preset</h3>
+              <p className="py-4">
+                Are you sure you want to delete "{presetToDelete.name}"? This action cannot be undone.
+              </p>
+              <div className="modal-action">
+                <button
+                  onClick={() => {
+                    presetManager.deletePreset(presetToDelete.id);
+                    setShowDeleteModal(false);
+                    setPresetToDelete(null);
+                  }}
+                  className="btn btn-error"
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setPresetToDelete(null);
+                  }}
+                  className="btn"
+                >
+                  Cancel
                 </button>
               </div>
             </div>

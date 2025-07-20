@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import * as Tone from "tone";
 import { getOptimalAudioConfig } from "../constants/audioConfig";
+import { throttle } from "../utils/performanceUtils";
 
 export interface SynthParams {
   // Analog Synth Parameters
@@ -102,8 +103,10 @@ export const useToneSynthesizer = (synthType: string) => {
   const gainRef = useRef<Tone.Gain | null>(null);
   const activeNotes = useRef<Map<string, Tone.Unit.Time>>(new Map());
   const pendingReleases = useRef<Map<string, number>>(new Map());
+  const pendingStop = useRef<Map<string, number>>(new Map());
   const filterEnvelopeActive = useRef<boolean>(false);
   const sustainedNotes = useRef<Set<string>>(new Set());
+  const heldNotes = useRef<Set<string>>(new Set()); // Track notes currently being held down
   
   // Note priority stack for monophonic synthesizers
   const noteStack = useRef<string[]>([]);
@@ -136,37 +139,6 @@ export const useToneSynthesizer = (synthType: string) => {
     noteStack.current = noteStack.current.filter(n => n !== note);
   }, []);
 
-  // Play a specific note on monophonic synth
-  const playMonophonicNote = useCallback((note: string, velocity: number) => {
-    if (!synthRef.current) return;
-    
-    try {
-      const time = Tone.now();
-      
-      // If there's a current note playing, release it first
-      if (currentNote.current) {
-        synthRef.current.triggerRelease(time);
-        // Remove previous note from active notes
-        activeNotes.current.delete(currentNote.current);
-      }
-      
-      // Play the new note
-      synthRef.current.triggerAttack(note, time, velocity);
-      currentNote.current = note;
-      // Add note to active notes map for proper tracking
-      activeNotes.current.set(note, time);
-      
-      // Trigger filter envelope for analog synthesizers (only if not already active)
-      if (filterEnvelopeRef.current && !filterEnvelopeActive.current) {
-        filterEnvelopeRef.current.triggerAttack(time, velocity);
-        filterEnvelopeActive.current = true;
-      }
-      console.log(`Playing monophonic note: ${note}`);
-    } catch (error) {
-      console.warn("Error playing monophonic note:", error);
-    }
-  }, []);
-
   // Initialize synthesizer based on type
   const initializeSynth = useCallback(async () => {
     try {
@@ -195,24 +167,24 @@ export const useToneSynthesizer = (synthType: string) => {
         gainRef.current.dispose();
       }
 
-      // Create filter
+      // Create filter with current state values (fallback to defaults if needed)
       filterRef.current = new Tone.Filter({
-        frequency: defaultSynthState.filterFrequency,
-        Q: defaultSynthState.filterResonance,
+        frequency: synthState.filterFrequency !== undefined ? synthState.filterFrequency : defaultSynthState.filterFrequency,
+        Q: synthState.filterResonance !== undefined ? synthState.filterResonance : defaultSynthState.filterResonance,
         type: "lowpass",
       });
 
-      // Create gain node for volume control
-      gainRef.current = new Tone.Gain(defaultSynthState.volume);
+      // Create gain node for volume control with current state (fallback to defaults if needed)
+      gainRef.current = new Tone.Gain(synthState.volume !== undefined ? synthState.volume : defaultSynthState.volume);
 
-      // Create filter envelope for analog synthesizers
+      // Create filter envelope for analog synthesizers with current state
       if (synthType.startsWith("analog_")) {
         filterEnvelopeRef.current = new Tone.FrequencyEnvelope({
-          attack: defaultSynthState.filterAttack,
-          decay: defaultSynthState.filterDecay,
-          sustain: defaultSynthState.filterSustain,
-          release: defaultSynthState.filterRelease,
-          baseFrequency: defaultSynthState.filterFrequency,
+          attack: synthState.filterAttack !== undefined ? synthState.filterAttack : defaultSynthState.filterAttack,
+          decay: synthState.filterDecay !== undefined ? synthState.filterDecay : defaultSynthState.filterDecay,
+          sustain: synthState.filterSustain !== undefined ? synthState.filterSustain : defaultSynthState.filterSustain,
+          release: synthState.filterRelease !== undefined ? synthState.filterRelease : defaultSynthState.filterRelease,
+          baseFrequency: synthState.filterFrequency !== undefined ? synthState.filterFrequency : defaultSynthState.filterFrequency,
           octaves: 4,
         });
         
@@ -223,92 +195,92 @@ export const useToneSynthesizer = (synthType: string) => {
       switch (synthType) {
         case "analog_mono":
           synthRef.current = new Tone.Synth({
-            oscillator: { type: "sawtooth" },
+            oscillator: { type: (synthState.oscillatorType !== undefined ? synthState.oscillatorType : defaultSynthState.oscillatorType) as any },
             envelope: {
-              attack: Math.max(0.01, audioConfig.SYNTHESIZER.envelopeAttackMin),
-              decay: 0.1,
-              sustain: 0.8,
-              release: 0.3,
+              attack: synthState.ampAttack !== undefined ? synthState.ampAttack : defaultSynthState.ampAttack,
+              decay: synthState.ampDecay !== undefined ? synthState.ampDecay : defaultSynthState.ampDecay,
+              sustain: synthState.ampSustain !== undefined ? synthState.ampSustain : defaultSynthState.ampSustain,
+              release: synthState.ampRelease !== undefined ? synthState.ampRelease : defaultSynthState.ampRelease,
             },
           });
           break;
 
         case "analog_poly":
           synthRef.current = new Tone.PolySynth(Tone.Synth, {
-            oscillator: { type: "sawtooth" },
+            oscillator: { type: (synthState.oscillatorType !== undefined ? synthState.oscillatorType : defaultSynthState.oscillatorType) as any },
             envelope: {
-              attack: Math.max(0.01, audioConfig.SYNTHESIZER.envelopeAttackMin),
-              decay: 0.1,
-              sustain: 0.8,
-              release: 0.3,
+              attack: synthState.ampAttack !== undefined ? synthState.ampAttack : defaultSynthState.ampAttack,
+              decay: synthState.ampDecay !== undefined ? synthState.ampDecay : defaultSynthState.ampDecay,
+              sustain: synthState.ampSustain !== undefined ? synthState.ampSustain : defaultSynthState.ampSustain,
+              release: synthState.ampRelease !== undefined ? synthState.ampRelease : defaultSynthState.ampRelease,
             },
           });
           break;
 
         case "analog_bass":
           synthRef.current = new Tone.Synth({
-            oscillator: { type: "sawtooth" },
+            oscillator: { type: (synthState.oscillatorType !== undefined ? synthState.oscillatorType : defaultSynthState.oscillatorType) as any },
             envelope: {
-              attack: Math.max(0.01, audioConfig.SYNTHESIZER.envelopeAttackMin),
-              decay: 0.1,
-              sustain: 0.8,
-              release: 0.1,
+              attack: synthState.ampAttack !== undefined ? synthState.ampAttack : defaultSynthState.ampAttack,
+              decay: synthState.ampDecay !== undefined ? synthState.ampDecay : defaultSynthState.ampDecay,
+              sustain: synthState.ampSustain !== undefined ? synthState.ampSustain : defaultSynthState.ampSustain,
+              release: synthState.ampRelease !== undefined ? synthState.ampRelease : defaultSynthState.ampRelease,
             },
           });
           break;
 
         case "analog_lead":
           synthRef.current = new Tone.Synth({
-            oscillator: { type: "square" },
+            oscillator: { type: (synthState.oscillatorType !== undefined ? synthState.oscillatorType : defaultSynthState.oscillatorType) as any },
             envelope: {
-              attack: Math.max(0.01, audioConfig.SYNTHESIZER.envelopeAttackMin),
-              decay: 0.1,
-              sustain: 0.9,
-              release: 0.3,
+              attack: synthState.ampAttack !== undefined ? synthState.ampAttack : defaultSynthState.ampAttack,
+              decay: synthState.ampDecay !== undefined ? synthState.ampDecay : defaultSynthState.ampDecay,
+              sustain: synthState.ampSustain !== undefined ? synthState.ampSustain : defaultSynthState.ampSustain,
+              release: synthState.ampRelease !== undefined ? synthState.ampRelease : defaultSynthState.ampRelease,
             },
           });
           break;
 
         case "fm_mono":
           synthRef.current = new Tone.FMSynth({
-            harmonicity: 1,
-            modulationIndex: 10,
+            harmonicity: synthState.harmonicity !== undefined ? synthState.harmonicity : defaultSynthState.harmonicity,
+            modulationIndex: synthState.modulationIndex !== undefined ? synthState.modulationIndex : defaultSynthState.modulationIndex,
             envelope: {
-              attack: Math.max(0.01, audioConfig.SYNTHESIZER.envelopeAttackMin),
-              decay: 0.1,
-              sustain: 0.8,
-              release: 0.3,
+              attack: synthState.ampAttack !== undefined ? synthState.ampAttack : defaultSynthState.ampAttack,
+              decay: synthState.ampDecay !== undefined ? synthState.ampDecay : defaultSynthState.ampDecay,
+              sustain: synthState.ampSustain !== undefined ? synthState.ampSustain : defaultSynthState.ampSustain,
+              release: synthState.ampRelease !== undefined ? synthState.ampRelease : defaultSynthState.ampRelease,
             },
             modulation: {
               type: "sine",
             },
             modulationEnvelope: {
-              attack: Math.max(0.01, audioConfig.SYNTHESIZER.envelopeAttackMin),
-              decay: 0.1,
-              sustain: 0.5,
-              release: 0.3,
+              attack: synthState.modAttack !== undefined ? synthState.modAttack : defaultSynthState.modAttack,
+              decay: synthState.modDecay !== undefined ? synthState.modDecay : defaultSynthState.modDecay,
+              sustain: synthState.modSustain !== undefined ? synthState.modSustain : defaultSynthState.modSustain,
+              release: synthState.modRelease !== undefined ? synthState.modRelease : defaultSynthState.modRelease,
             },
           });
           break;
 
         case "fm_poly":
           synthRef.current = new Tone.PolySynth(Tone.FMSynth, {
-            harmonicity: 1,
-            modulationIndex: 10,
+            harmonicity: synthState.harmonicity !== undefined ? synthState.harmonicity : defaultSynthState.harmonicity,
+            modulationIndex: synthState.modulationIndex !== undefined ? synthState.modulationIndex : defaultSynthState.modulationIndex,
             envelope: {
-              attack: Math.max(0.01, audioConfig.SYNTHESIZER.envelopeAttackMin),
-              decay: 0.1,
-              sustain: 0.8,
-              release: 0.3,
+              attack: synthState.ampAttack !== undefined ? synthState.ampAttack : defaultSynthState.ampAttack,
+              decay: synthState.ampDecay !== undefined ? synthState.ampDecay : defaultSynthState.ampDecay,
+              sustain: synthState.ampSustain !== undefined ? synthState.ampSustain : defaultSynthState.ampSustain,
+              release: synthState.ampRelease !== undefined ? synthState.ampRelease : defaultSynthState.ampRelease,
             },
             modulation: {
               type: "sine",
             },
             modulationEnvelope: {
-              attack: Math.max(0.01, audioConfig.SYNTHESIZER.envelopeAttackMin),
-              decay: 0.1,
-              sustain: 0.5,
-              release: 0.3,
+              attack: synthState.modAttack !== undefined ? synthState.modAttack : defaultSynthState.modAttack,
+              decay: synthState.modDecay !== undefined ? synthState.modDecay : defaultSynthState.modDecay,
+              sustain: synthState.modSustain !== undefined ? synthState.modSustain : defaultSynthState.modSustain,
+              release: synthState.modRelease !== undefined ? synthState.modRelease : defaultSynthState.modRelease,
             },
           });
           break;
@@ -316,10 +288,10 @@ export const useToneSynthesizer = (synthType: string) => {
         default:
           synthRef.current = new Tone.Synth({
             envelope: {
-              attack: Math.max(0.01, audioConfig.SYNTHESIZER.envelopeAttackMin),
-              decay: 0.1,
-              sustain: 0.8,
-              release: 0.3,
+              attack: synthState.ampAttack !== undefined ? synthState.ampAttack : defaultSynthState.ampAttack,
+              decay: synthState.ampDecay !== undefined ? synthState.ampDecay : defaultSynthState.ampDecay,
+              sustain: synthState.ampSustain !== undefined ? synthState.ampSustain : defaultSynthState.ampSustain,
+              release: synthState.ampRelease !== undefined ? synthState.ampRelease : defaultSynthState.ampRelease,
             },
           });
       }
@@ -332,25 +304,20 @@ export const useToneSynthesizer = (synthType: string) => {
       }
 
       setIsLoaded(true);
-      console.log(`Initialized ${synthType} synthesizer with filter and low latency settings`);
-      console.log('Audio config:', audioConfig);
     } catch (error) {
       console.error("Failed to initialize synthesizer:", error);
     }
-  }, [synthType]); // Remove synthState dependency
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [synthType]); // Remove synthState dependency to prevent re-initialization on param changes
 
-  // Update synthesizer parameters
-  const updateSynthParams = useCallback((params: Partial<SynthState>) => {
-    setSynthState(prev => ({ ...prev, ...params }));
-    
+  // Create a throttled version of the actual parameter update function
+  const updateSynthParamsInternal = useCallback((params: Partial<SynthState>) => {
     if (synthRef.current && filterRef.current && gainRef.current) {
       try {
         const synth = synthRef.current as any;
         const filter = filterRef.current;
         const gain = gainRef.current;
         const filterEnvelope = filterEnvelopeRef.current;
-        console.log("Updating synth parameters:", params);
-        console.log("Synth type:", synth.constructor.name);
         
         // Update volume parameter
         if (params.volume !== undefined) {
@@ -373,13 +340,14 @@ export const useToneSynthesizer = (synthType: string) => {
         if (filterEnvelope) {
           if (params.filterAttack !== undefined) filterEnvelope.attack = params.filterAttack;
           if (params.filterDecay !== undefined) filterEnvelope.decay = params.filterDecay;
-          if (params.filterSustain !== undefined) filterEnvelope.sustain = params.filterSustain;
+          if (params.filterSustain !== undefined) {
+            filterEnvelope.sustain = params.filterSustain;
+          }
           if (params.filterRelease !== undefined) filterEnvelope.release = params.filterRelease;
         }
         
         // Handle PolySynth differently from monophonic synths
         if (synth instanceof Tone.PolySynth) {
-          console.log("Updating PolySynth parameters");
           
           // Update the default options for new voices
           if (params.oscillatorType) {
@@ -426,7 +394,9 @@ export const useToneSynthesizer = (synthType: string) => {
               if (voice.envelope) {
                 if (params.ampAttack !== undefined) voice.envelope.attack = params.ampAttack;
                 if (params.ampDecay !== undefined) voice.envelope.decay = params.ampDecay;
-                if (params.ampSustain !== undefined) voice.envelope.sustain = params.ampSustain;
+                if (params.ampSustain !== undefined) {
+                  voice.envelope.sustain = params.ampSustain;
+                }
                 if (params.ampRelease !== undefined) voice.envelope.release = params.ampRelease;
               }
               // Update FM parameters on existing voices
@@ -439,38 +409,34 @@ export const useToneSynthesizer = (synthType: string) => {
               if (voice.modulationEnvelope) {
                 if (params.modAttack !== undefined) voice.modulationEnvelope.attack = params.modAttack;
                 if (params.modDecay !== undefined) voice.modulationEnvelope.decay = params.modDecay;
-                if (params.modSustain !== undefined) voice.modulationEnvelope.sustain = params.modSustain;
+                if (params.modSustain !== undefined) {
+                  voice.modulationEnvelope.sustain = params.modSustain;
+                }
                 if (params.modRelease !== undefined) voice.modulationEnvelope.release = params.modRelease;
               }
             });
           }
         } else {
           // Handle monophonic synths
-          console.log("Updating monophonic synth parameters");
           
           // Update oscillator type
           if (params.oscillatorType && synth.oscillator) {
             synth.oscillator.type = params.oscillatorType as any;
-            console.log("Updated oscillator type to:", params.oscillatorType);
           }
           
           // Update amplitude envelope
           if (synth.envelope) {
             if (params.ampAttack !== undefined) {
               synth.envelope.attack = params.ampAttack;
-              console.log("Updated amp attack to:", params.ampAttack);
             }
             if (params.ampDecay !== undefined) {
               synth.envelope.decay = params.ampDecay;
-              console.log("Updated amp decay to:", params.ampDecay);
             }
             if (params.ampSustain !== undefined) {
               synth.envelope.sustain = params.ampSustain;
-              console.log("Updated amp sustain to:", params.ampSustain);
             }
             if (params.ampRelease !== undefined) {
               synth.envelope.release = params.ampRelease;
-              console.log("Updated amp release to:", params.ampRelease);
             }
           }
         }
@@ -487,25 +453,42 @@ export const useToneSynthesizer = (synthType: string) => {
         if (synth.modulationEnvelope) {
           if (params.modAttack !== undefined) synth.modulationEnvelope.attack = params.modAttack;
           if (params.modDecay !== undefined) synth.modulationEnvelope.decay = params.modDecay;
-          if (params.modSustain !== undefined) synth.modulationEnvelope.sustain = params.modSustain;
+          if (params.modSustain !== undefined) {
+            synth.modulationEnvelope.sustain = params.modSustain;
+          }
           if (params.modRelease !== undefined) synth.modulationEnvelope.release = params.modRelease;
         }
-        console.log("Parameters updated successfully");
       } catch (error) {
         console.error("Error updating synth parameters:", error);
       }
     }
   }, []);
 
+  // Create throttled version for frequent updates (like knob adjustments)
+  const throttledUpdateParams = useMemo(
+    () => throttle(updateSynthParamsInternal, 16), // ~60fps
+    [updateSynthParamsInternal]
+  );
+
+  // Update synthesizer parameters - handles both state and audio parameters
+  const updateSynthParams = useCallback((params: Partial<SynthState>) => {
+    // Always update state immediately for UI responsiveness
+    setSynthState(prev => ({ ...prev, ...params }));
+    
+    // Use throttled update for audio parameters to prevent audio glitches
+    throttledUpdateParams(params);
+  }, [throttledUpdateParams]);
+
   // Play notes
   const playNotes = useCallback((notes: string[], velocity: number) => {
     if (!synthRef.current || !isLoaded) return;
 
-    // Get optimal audio configuration for this device
-    const audioConfig = getOptimalAudioConfig();
-
     notes.forEach(note => {
-      const time = Tone.now();
+      // Clear any pending stop timeouts for this note
+      if (pendingStop.current.has(note)) {
+        clearTimeout(pendingStop.current.get(note));
+        pendingStop.current.delete(note);
+      }
       
       // Clear any pending releases for this note
       clearPendingRelease(note);
@@ -513,39 +496,33 @@ export const useToneSynthesizer = (synthType: string) => {
       if (synthRef.current instanceof Tone.PolySynth) {
         // Handle polyphonic synthesizers
         try {
-          // If note is already playing, release it first to avoid stuck notes
+          // If the note is already playing, release it first to avoid stacking
           if (activeNotes.current.has(note)) {
-            synthRef.current.triggerRelease(note, time);
+            synthRef.current.triggerRelease(note, Tone.now());
             activeNotes.current.delete(note);
-            
-            // Use configurable delay for cleaner transition
-            const playDelay = audioConfig.SYNTHESIZER.noteRetriggerDelay;
-            setTimeout(() => {
-              if (synthRef.current && synthRef.current instanceof Tone.PolySynth) {
-                try {
-                  synthRef.current.triggerAttack(note, Tone.now(), velocity);
-                  activeNotes.current.set(note, Tone.now());
-                  
-                  // Trigger filter envelope for analog synthesizers (only if not already active)
-                  if (filterEnvelopeRef.current && !filterEnvelopeActive.current) {
-                    filterEnvelopeRef.current.triggerAttack(Tone.now(), velocity);
-                    filterEnvelopeActive.current = true;
-                  }
-                } catch (error) {
-                  console.warn("Error in delayed note attack:", error);
-                }
-              }
-            }, playDelay);
-          } else {
-            // Note is not playing, trigger it immediately
-            synthRef.current.triggerAttack(note, time, velocity);
-            activeNotes.current.set(note, time);
-            
-            // Trigger filter envelope for analog synthesizers (only if not already active)
-            if (filterEnvelopeRef.current && !filterEnvelopeActive.current) {
-              filterEnvelopeRef.current.triggerAttack(time, velocity);
-              filterEnvelopeActive.current = true;
+            sustainedNotes.current.delete(note);
+          }
+          
+          // Tone.js handles re-triggering notes gracefully, so we can just call triggerAttack.
+          // This avoids race conditions with rapid note on/off events.
+          synthRef.current.triggerAttack(note, Tone.now(), velocity);
+          activeNotes.current.set(note, Tone.now());
+          heldNotes.current.add(note); // Mark as currently held
+
+          // Trigger filter envelope for analog synthesizers (always reset on new keystroke)
+          if (filterEnvelopeRef.current) {
+            // Release filter envelope first to ensure reset
+            if (filterEnvelopeActive.current) {
+              filterEnvelopeRef.current.triggerRelease(Tone.now());
+              filterEnvelopeActive.current = false;
             }
+            // Small delay before triggering new filter envelope
+            setTimeout(() => {
+              if (filterEnvelopeRef.current) {
+                filterEnvelopeRef.current.triggerAttack(Tone.now(), velocity);
+                filterEnvelopeActive.current = true;
+              }
+            }, 10);
           }
         } catch (error) {
           console.warn("Error triggering note attack:", error);
@@ -557,105 +534,111 @@ export const useToneSynthesizer = (synthType: string) => {
         addToNoteStack(note);
         const topNote = getTopNote();
         
-        if (topNote === note) {
-          // This is the new top note, play it
-          playMonophonicNote(note, velocity);
+        if (topNote === note) { // Is this a new highest priority note?
+          // If a note is already sounding, change its pitch
+          if (currentNote.current) {
+            synthRef.current.setNote(note);
+            // Update which note is sounding
+            if (currentNote.current) {
+              activeNotes.current.delete(currentNote.current);
+            }
+          } else {
+            // If synth is silent, trigger attack
+            synthRef.current.triggerAttack(note, undefined, velocity);
+            
+            // Trigger filter envelope if it exists
+            if (filterEnvelopeRef.current) {
+                filterEnvelopeRef.current.triggerAttack();
+                filterEnvelopeActive.current = true;
+            }
+          }
+          
+          currentNote.current = note;
+          activeNotes.current.set(note, Tone.now());
         }
-        console.log(`Note stack: [${noteStack.current.join(', ')}], playing: ${currentNote.current}`);
       }
     });
-  }, [isLoaded, clearPendingRelease, addToNoteStack, getTopNote, playMonophonicNote]);
+  }, [isLoaded, clearPendingRelease, addToNoteStack, getTopNote]);
 
   // Stop notes
   const stopNotes = useCallback((notes: string[]) => {
     if (!synthRef.current || !isLoaded) return;
 
+    const now = Tone.now();
+    const releaseTime = now + 0.01; // Add a small delay to avoid clicks
+
     notes.forEach(note => {
-      // Clear any pending releases
-      clearPendingRelease(note);
-      
-      try {
-        const time = Tone.now();
-        
-        if (synthRef.current instanceof Tone.PolySynth) {
-          // Handle polyphonic synthesizers - only process if note is actually active
-          if (activeNotes.current.has(note)) {
-            // If sustain is enabled, add to sustained notes instead of releasing
-            if (sustainEnabled) {
-              sustainedNotes.current.add(note);
-              console.log(`Note ${note} sustained`);
-            } else {
-              try {
-                synthRef.current.triggerRelease(note, time);
-                activeNotes.current.delete(note);
-                sustainedNotes.current.delete(note);
-                
-                // Only release filter envelope if no more notes are playing
-                if (filterEnvelopeRef.current && activeNotes.current.size === 0 && filterEnvelopeActive.current) {
-                  filterEnvelopeRef.current.triggerRelease(time);
-                  filterEnvelopeActive.current = false;
-                }
-              } catch (error) {
-                console.warn("Error releasing polyphonic note:", error);
-                // Force cleanup on error
-                activeNotes.current.delete(note);
-                sustainedNotes.current.delete(note);
-                
-                // Fallback: try to release all notes if individual release fails
-                if (synthRef.current instanceof Tone.PolySynth) {
-                  try {
-                    synthRef.current.releaseAll();
-                    activeNotes.current.clear();
-                    sustainedNotes.current.clear();
-                  } catch (fallbackError) {
-                    console.warn("Error in fallback releaseAll:", fallbackError);
-                  }
-                }
-              }
-            }
-          }
-        } else {
-          // Handle monophonic synthesizers with note priority stack
-          removeFromNoteStack(note);
-          
-          // If this was the current playing note or if it's in the active notes
-          if (currentNote.current === note || activeNotes.current.has(note)) {
-            // If sustain is enabled, add to sustained notes
-            if (sustainEnabled) {
-              sustainedNotes.current.add(note);
-              console.log(`Monophonic note ${note} sustained`);
-            } else {
-              // Release the current note
-              synthRef.current.triggerRelease(time);
-              activeNotes.current.delete(note);
-              sustainedNotes.current.delete(note);
-              currentNote.current = null;
-              
-              // Check if there's another note in the stack to play
-              const nextNote = getTopNote();
-              if (nextNote) {
-                // Play the next note in the stack (most recent held note)
-                playMonophonicNote(nextNote, 0.8); // Use default velocity
-                console.log(`Switched to previous note: ${nextNote}`);
-              } else {
-                // No more notes in stack, release filter envelope
-                if (filterEnvelopeRef.current && filterEnvelopeActive.current) {
-                  filterEnvelopeRef.current.triggerRelease(time);
-                  filterEnvelopeActive.current = false;
-                }
-              }
-            }
-          }
-          console.log(`Note stack after release: [${noteStack.current.join(', ')}], playing: ${currentNote.current}`);
-        }
-      } catch (error) {
-        console.warn("Error triggering note release:", error);
-        // Force cleanup on error
-        activeNotes.current.delete(note);
-        sustainedNotes.current.delete(note);
+      // If a note is played again very quickly, we want to cancel a pending stop
+      if (pendingStop.current.has(note)) {
+        clearTimeout(pendingStop.current.get(note));
+        pendingStop.current.delete(note);
       }
+
+      const timeoutId = window.setTimeout(() => {
+        if (!synthRef.current) return;
+        
+        try {
+          if (synthRef.current instanceof Tone.PolySynth) {
+            if (activeNotes.current.has(note)) {
+              heldNotes.current.delete(note); // Remove from held notes
+              
+              if (sustainEnabled) {
+                sustainedNotes.current.add(note);
+              } else {
+                synthRef.current.triggerRelease(note, releaseTime);
+                activeNotes.current.delete(note);
+                sustainedNotes.current.delete(note);
+                if (filterEnvelopeRef.current && activeNotes.current.size === 0 && filterEnvelopeActive.current) {
+                  filterEnvelopeRef.current.triggerRelease(releaseTime);
+                  filterEnvelopeActive.current = false;
+                }
+              }
+            }
+          } else {
+            // Handle monophonic synthesizers with note priority stack
+            removeFromNoteStack(note);
+            
+            // Was the released note the one that was sounding?
+            if (currentNote.current === note) {
+              const nextNote = getTopNote();
+          
+              if (sustainEnabled) {
+                sustainedNotes.current.add(note);
+                return; // Don't change note or release if sustain is on
+              }
+          
+              if (nextNote) {
+                // Another note is held, switch to it (legato)
+                synthRef.current.setNote(nextNote);
+                currentNote.current = nextNote;
+                activeNotes.current.delete(note);
+                activeNotes.current.set(nextNote, Tone.now());
+              } else {
+                // No other notes held, so release the envelope
+                synthRef.current.triggerRelease();
+                currentNote.current = null;
+                activeNotes.current.delete(note);
+          
+                // Release filter envelope if it exists
+                if (filterEnvelopeRef.current && filterEnvelopeActive.current) {
+                  filterEnvelopeRef.current.triggerRelease();
+                  filterEnvelopeActive.current = false;
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.warn("Error triggering note release:", error);
+          activeNotes.current.delete(note);
+          sustainedNotes.current.delete(note);
+        } finally {
+          pendingStop.current.delete(note);
+        }
+      }, 5); // 5ms delay to allow for rapid re-triggering
+
+      pendingStop.current.set(note, timeoutId);
     });
-  }, [isLoaded, clearPendingRelease, removeFromNoteStack, getTopNote, playMonophonicNote, sustainEnabled]);
+  }, [isLoaded, removeFromNoteStack, getTopNote, sustainEnabled]);
 
   // Force release all notes (emergency cleanup)
   const releaseAllNotes = useCallback(() => {
@@ -666,9 +649,36 @@ export const useToneSynthesizer = (synthType: string) => {
       pendingReleases.current.forEach((timeout) => clearTimeout(timeout));
       pendingReleases.current.clear();
       
-      // For polyphonic synths, use releaseAll for better cleanup
+      // Clear all pending stop timeouts
+      pendingStop.current.forEach(timeout => clearTimeout(timeout));
+      pendingStop.current.clear();
+      
       if (synthRef.current instanceof Tone.PolySynth) {
-        synthRef.current.releaseAll();
+        // Only release notes that are sustained but not currently held
+        try {
+          sustainedNotes.current.forEach(note => {
+            if (!heldNotes.current.has(note)) {
+              synthRef.current.triggerRelease(note);
+              activeNotes.current.delete(note);
+            }
+          });
+          
+          // Re-trigger currently held notes to ensure they continue playing
+          heldNotes.current.forEach(note => {
+            if (!activeNotes.current.has(note)) {
+              synthRef.current.triggerAttack(note, Tone.now(), 0.8);
+              activeNotes.current.set(note, Tone.now());
+            }
+          });
+        } catch (error) {
+          console.warn("Error releasing sustained notes:", error);
+        }
+        
+        // Release filter envelope only if no notes are playing
+        if (filterEnvelopeRef.current && activeNotes.current.size === 0 && filterEnvelopeActive.current) {
+          filterEnvelopeRef.current.triggerRelease();
+          filterEnvelopeActive.current = false;
+        }
       } else {
         // For monophonic synths, force release current note
         if (currentNote.current) {
@@ -691,7 +701,6 @@ export const useToneSynthesizer = (synthType: string) => {
         filterEnvelopeRef.current.triggerRelease();
         filterEnvelopeActive.current = false;
       }
-      console.log("All notes released");
     } catch (error) {
       console.warn("Error releasing all notes:", error);
     }
@@ -703,142 +712,115 @@ export const useToneSynthesizer = (synthType: string) => {
     
     // If sustain is turned off, release all sustained notes
     if (!sustain && sustainedNotes.current.size > 0) {
-      const notesToRelease = Array.from(sustainedNotes.current);
-      sustainedNotes.current.clear();
-      
-      // Release sustained notes that are not currently being held
-      notesToRelease.forEach(note => {
-        if (activeNotes.current.has(note)) {
-          try {
-            const time = Tone.now();
-            if (synthRef.current instanceof Tone.PolySynth) {
-              synthRef.current.triggerRelease(note, time);
-            } else {
-              // For monophonic synths, only release if it's the current note
-              if (currentNote.current === note) {
-                synthRef.current.triggerRelease(time);
-                currentNote.current = null;
-              }
+      if (synthRef.current instanceof Tone.PolySynth) {
+        // Only release sustained notes that aren't currently being held
+        try {
+          sustainedNotes.current.forEach(note => {
+            if (!heldNotes.current.has(note)) {
+              synthRef.current.triggerRelease(note);
+              activeNotes.current.delete(note);
             }
-            activeNotes.current.delete(note);
-          } catch (error) {
-            console.warn("Error releasing sustained note:", error);
+          });
+        } catch (error) {
+          console.warn("Error releasing sustained notes:", error);
+        }
+        
+        // Release filter envelope only if no notes are playing
+        if (filterEnvelopeRef.current && activeNotes.current.size === 0 && filterEnvelopeActive.current) {
+          filterEnvelopeRef.current.triggerRelease();
+          filterEnvelopeActive.current = false;
+        }
+      } else {
+        // For mono synths, if no keys are currently held, release the note.
+        if (noteStack.current.length === 0 && currentNote.current) {
+          synthRef.current.triggerRelease();
+          activeNotes.current.delete(currentNote.current);
+          currentNote.current = null;
+
+          if (filterEnvelopeRef.current && filterEnvelopeActive.current) {
+            filterEnvelopeRef.current.triggerRelease();
+            filterEnvelopeActive.current = false;
           }
         }
-      });
+      }
+      
+      // Clear sustained notes after processing
+      sustainedNotes.current.clear();
     }
   }, []);
 
-  // Stop all sustained notes (for sustain toggle functionality)
+  // Stop sustained notes when sustain is released
   const stopSustainedNotes = useCallback(() => {
     if (sustainedNotes.current.size > 0) {
-      const notesToRelease = Array.from(sustainedNotes.current);
-      sustainedNotes.current.clear();
-      
-      notesToRelease.forEach(note => {
-        if (activeNotes.current.has(note)) {
-          try {
-            const time = Tone.now();
-            if (synthRef.current instanceof Tone.PolySynth) {
-              synthRef.current.triggerRelease(note, time);
-            } else {
-              // For monophonic synths, only release if it's the current note
-              if (currentNote.current === note) {
-                synthRef.current.triggerRelease(time);
-                currentNote.current = null;
-              }
+      if (synthRef.current instanceof Tone.PolySynth) {
+        // Only release sustained notes that aren't currently being held
+        try {
+          sustainedNotes.current.forEach(note => {
+            if (!heldNotes.current.has(note)) {
+              synthRef.current.triggerRelease(note);
+              activeNotes.current.delete(note);
             }
-            activeNotes.current.delete(note);
-          } catch (error) {
-            console.warn("Error stopping sustained note:", error);
+          });
+        } catch (error) {
+          console.warn("Error releasing sustained notes:", error);
+        }
+        
+        // Release filter envelope only if no notes are playing
+        if (filterEnvelopeRef.current && activeNotes.current.size === 0 && filterEnvelopeActive.current) {
+          filterEnvelopeRef.current.triggerRelease();
+          filterEnvelopeActive.current = false;
+        }
+      } else {
+        // For mono synths, if no keys are currently held, release the note.
+        if (noteStack.current.length === 0 && currentNote.current) {
+          synthRef.current.triggerRelease();
+          activeNotes.current.delete(currentNote.current);
+          currentNote.current = null;
+          
+          if (filterEnvelopeRef.current && filterEnvelopeActive.current) {
+            filterEnvelopeRef.current.triggerRelease();
+            filterEnvelopeActive.current = false;
           }
         }
-      });
+      }
+      
+      // Clear sustained notes after processing
+      sustainedNotes.current.clear();
     }
   }, []);
+
+  // Load preset parameters
+  const loadPresetParams = useCallback((params: SynthState) => {
+    // The preset already contains SynthState, so we can use it directly
+    setSynthState(params);
+    // Apply the preset parameters to the synthesizer
+    updateSynthParams(params);
+  }, [updateSynthParams]);
 
   // Initialize on mount and when synthType changes
   useEffect(() => {
-    initializeSynth();
-    
-    // Copy ref values to avoid stale closure warning
-    const pendingReleasesMap = pendingReleases.current;
-    const activeNotesMap = activeNotes.current;
-    const noteStackArray = noteStack.current;
-    
-    // Set up periodic cleanup to prevent stuck notes
-    const cleanupInterval = setInterval(() => {
-      if (synthRef.current instanceof Tone.PolySynth && activeNotes.current.size > 0) {
-        // Check if any notes have been playing for too long (over 30 seconds)
-        const now = Tone.now();
-        const stuckNotes: string[] = [];
-        
-        activeNotes.current.forEach((startTime, note) => {
-          if (typeof startTime === 'number' && now - startTime > 30) {
-            stuckNotes.push(note);
-          }
-        });
-        
-        // Release stuck notes
-        stuckNotes.forEach(note => {
-          console.warn(`Releasing stuck note: ${note}`);
-          try {
-            if (synthRef.current instanceof Tone.PolySynth) {
-              synthRef.current.triggerRelease(note);
-            }
-            activeNotes.current.delete(note);
-          } catch (error) {
-            console.warn("Error releasing stuck note:", error);
-          }
-        });
-      }
-    }, 5000); // Check every 5 seconds
-    
-    return () => {
-      clearInterval(cleanupInterval);
-      
-      // Clear all pending releases
-      pendingReleasesMap.forEach((timeout) => clearTimeout(timeout));
-      pendingReleasesMap.clear();
-      
-      // Clear active notes
-      activeNotesMap.clear();
-      
-      // Reset monophonic note stack and current note
-      noteStackArray.length = 0;
-      currentNote.current = null;
-      
-      // Reset filter envelope state
-      filterEnvelopeActive.current = false;
-      
+    if (synthType) {
+      initializeSynth();
+    } else {
+      // Cleanup when no synth is selected
       if (synthRef.current) {
+        releaseAllNotes();
         synthRef.current.dispose();
+        synthRef.current = null;
+        setIsLoaded(false);
       }
-      if (filterRef.current) {
-        filterRef.current.dispose();
-      }
-      if (filterEnvelopeRef.current) {
-        filterEnvelopeRef.current.dispose();
-      }
-    };
-  }, [initializeSynth]);
-
-  const loadPresetParams = useCallback((presetParams: SynthState) => {
-    setSynthState(presetParams);
-    // Apply the preset parameters to the synthesizer
-    updateSynthParams(presetParams);
-  }, [updateSynthParams]);
+    }
+  }, [synthType, initializeSynth, releaseAllNotes]);
 
   return {
-    synthState,
     isLoaded,
+    synthState,
     updateSynthParams,
-    loadPresetParams,
     playNotes,
     stopNotes,
-    releaseAllNotes,
     setSustain,
     stopSustainedNotes,
+    loadPresetParams,
     synth: synthRef.current,
   };
 }; 

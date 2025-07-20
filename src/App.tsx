@@ -197,7 +197,7 @@ export default function App() {
             <div className="card-actions justify-center">
               <button
                 onClick={handleInitializeAudio}
-                className="btn btn-primary btn-lg"
+                className="btn btn-primary"
                 disabled={isLoadingInstrument}
               >
                 {isLoadingInstrument

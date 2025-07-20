@@ -40,14 +40,7 @@ export const useAudioContextManager = () => {
 
       contextRef.current = new AudioContextClass(contextOptions);
       
-      // Log audio context info for debugging
-      console.log('Audio Context Info:', {
-        sampleRate: contextRef.current.sampleRate,
-        baseLatency: contextRef.current.baseLatency,
-        outputLatency: contextRef.current.outputLatency,
-        state: contextRef.current.state,
-        config: audioConfig
-      });
+
       
       return contextRef.current;
     } catch (error) {

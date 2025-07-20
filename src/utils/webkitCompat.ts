@@ -154,7 +154,6 @@ export const applySafariBestPractices = () => {
 // Initialize Safari compatibility on app start
 export const initSafariCompatibility = () => {
   if (isSafari()) {
-    console.log('Safari detected, applying compatibility measures...');
     applySafariBestPractices();
     
     if (hasSafariAudioIssues()) {
