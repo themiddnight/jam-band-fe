@@ -15,25 +15,67 @@ import {
   handleSafariAudioError,
   getSafariLoadTimeout,
 } from "../utils/webkitCompat";
+import { useInstrumentPreferencesStore } from "../stores/instrumentPreferencesStore";
 
 export const useInstrument = (
   initialInstrument?: string,
   initialCategory = InstrumentCategory.Melodic
 ) => {
+  // Get saved preferences
+  const { preferences, setPreferences, clearPreferences } = useInstrumentPreferencesStore();
+  
   // Use Safari-compatible instrument as default if no instrument specified and Safari is detected
   const getInitialInstrument = (): string => {
     if (initialInstrument) return initialInstrument;
-    if (isSafari() && initialCategory === InstrumentCategory.Melodic) {
+    
+    // Validate saved instrument before using it
+    if (preferences.instrument) {
+      const drumMachines = DRUM_MACHINES.map(dm => dm.value);
+      const synthesizers = SYNTHESIZER_INSTRUMENTS.map(s => s.value);
+      const soundfonts = SOUNDFONT_INSTRUMENTS.map(s => s.value);
+      
+      // Check if the saved instrument exists in any category
+      if (drumMachines.includes(preferences.instrument) || 
+          synthesizers.includes(preferences.instrument) || 
+          soundfonts.includes(preferences.instrument)) {
+        return preferences.instrument;
+      } else {
+        // Clear invalid preferences
+        clearPreferences();
+      }
+    }
+    
+    if (isSafari() && (initialCategory || preferences.category) === InstrumentCategory.Melodic) {
       return "bright_acoustic_piano"; // More Safari-compatible than acoustic_grand_piano
     }
     return "acoustic_grand_piano";
   };
+  
+  const getInitialCategory = (): InstrumentCategory => {
+    if (initialCategory) return initialCategory;
+    if (preferences.category) return preferences.category;
+    
+    // Auto-detect category based on saved instrument name
+    if (preferences.instrument) {
+      const drumMachines = DRUM_MACHINES.map(dm => dm.value);
+      const synthesizers = SYNTHESIZER_INSTRUMENTS.map(s => s.value);
+      
+      if (drumMachines.includes(preferences.instrument)) {
+        return InstrumentCategory.DrumBeat;
+      } else if (synthesizers.includes(preferences.instrument)) {
+        return InstrumentCategory.Synthesizer;
+      }
+    }
+    
+    return InstrumentCategory.Melodic;
+  };
+  
   const [instrument, setInstrument] = useState<any>(null);
   const [currentInstrument, setCurrentInstrument] = useState<string>(
     getInitialInstrument()
   );
   const [currentCategory, setCurrentCategory] =
-    useState<InstrumentCategory>(initialCategory);
+    useState<InstrumentCategory>(getInitialCategory());
   const [sustain, setSustain] = useState<boolean>(false);
   const [isLoadingInstrument, setIsLoadingInstrument] =
     useState<boolean>(false);
@@ -147,10 +189,27 @@ export const useInstrument = (
       instrumentName: string,
       category: InstrumentCategory = currentCategory
     ) => {
+      // Validate that the instrument belongs to the specified category
+      const drumMachines = DRUM_MACHINES.map(dm => dm.value);
+      const synthesizers = SYNTHESIZER_INSTRUMENTS.map(s => s.value);
+      const soundfonts = SOUNDFONT_INSTRUMENTS.map(s => s.value);
+      
+      let validatedCategory = category;
+      if (drumMachines.includes(instrumentName)) {
+        validatedCategory = InstrumentCategory.DrumBeat;
+      } else if (synthesizers.includes(instrumentName)) {
+        validatedCategory = InstrumentCategory.Synthesizer;
+      } else if (soundfonts.includes(instrumentName)) {
+        validatedCategory = InstrumentCategory.Melodic;
+      }
+      
+      // Use validated category instead of the provided one
+      const finalCategory = validatedCategory;
       // Skip loading for synthesizer category - handled by Tone.js
-      if (category === InstrumentCategory.Synthesizer) {
+      if (finalCategory === InstrumentCategory.Synthesizer) {
         setCurrentInstrument(instrumentName);
-        setCurrentCategory(category);
+        setCurrentCategory(finalCategory);
+        setPreferences(instrumentName, finalCategory);
         setIsLoadingInstrument(false);
         return;
       }
@@ -166,7 +225,7 @@ export const useInstrument = (
       try {
         let newInstrument: any;
 
-        if (category === InstrumentCategory.DrumBeat) {
+        if (finalCategory === InstrumentCategory.DrumBeat) {
           newInstrument = new DrumMachine(audioContext.current, {
             instrument: instrumentName,
             volume: 127,
@@ -207,11 +266,14 @@ export const useInstrument = (
 
         setInstrument(newInstrument);
         setCurrentInstrument(instrumentName);
-        setCurrentCategory(category);
+        setCurrentCategory(finalCategory);
+        
+        // Save preferences when instrument changes
+        setPreferences(instrumentName, finalCategory);
 
         // Get available samples for drum machines
         if (
-          category === InstrumentCategory.DrumBeat &&
+          finalCategory === InstrumentCategory.DrumBeat &&
           newInstrument.getSampleNames
         ) {
           const samples = newInstrument.getSampleNames();
@@ -225,11 +287,15 @@ export const useInstrument = (
           error instanceof Error ? error.message : "Failed to load instrument"
         );
 
-        // For Safari decoding errors, try the next instrument in the list
+        // For Safari decoding errors or invalid instrument errors, try the next instrument in the list
         if (
-          isSafari() &&
+          (isSafari() &&
           error instanceof Error &&
-          error.message.includes("decoding")
+          error.message.includes("decoding")) ||
+          (error instanceof Error && 
+           (error.message.includes("Invalid MIDI.js Soundfont format") ||
+            error.message.includes("404") ||
+            error.message.includes("Not Found")))
         ) {
           // Mark this instrument as failed
           failedInstruments.current.add(instrumentName);
@@ -237,7 +303,7 @@ export const useInstrument = (
           // Try the next instrument in the list
           const nextInstrument = getNextInstrumentToTry(
             instrumentName,
-            category
+            finalCategory
           );
 
           if (
@@ -254,12 +320,15 @@ export const useInstrument = (
               "All instruments in this category have failed. Switching to synthesizer mode."
             );
             setAudioContextError(
-              "Safari cannot load any of the available instruments in this category. Switching to synthesizer mode for compatibility."
+              "Failed to load the saved instrument. Switching to synthesizer mode for compatibility."
             );
             // Switch to synthesizer category as last resort
             setTimeout(() => {
               setCurrentCategory(InstrumentCategory.Synthesizer);
               setCurrentInstrument("analog_mono");
+              setPreferences("analog_mono", InstrumentCategory.Synthesizer);
+              // Clear failed instruments cache for next attempt
+              failedInstruments.current.clear();
             }, 1000);
           }
         }
@@ -267,7 +336,7 @@ export const useInstrument = (
         setIsLoadingInstrument(false);
       }
     },
-    [currentCategory, getNextInstrumentToTry]
+    [currentCategory, getNextInstrumentToTry, setPreferences]
   );
 
   // Load dynamic drum machines
@@ -283,6 +352,21 @@ export const useInstrument = (
 
     loadDrumMachines();
   }, []);
+
+  // Auto-initialize audio context when component mounts
+  useEffect(() => {
+    const autoInitialize = async () => {
+      if (!isAudioContextReady && !audioContext.current) {
+        try {
+          await initializeAudioContext();
+        } catch (error) {
+          console.error("Auto-initialization failed:", error);
+        }
+      }
+    };
+    
+    autoInitialize();
+  }, [isAudioContextReady, initializeAudioContext]);
 
   // Load instrument when AudioContext becomes ready
   useEffect(() => {

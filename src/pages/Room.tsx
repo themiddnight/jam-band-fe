@@ -280,15 +280,20 @@ export default function Room() {
     }
   }, [currentInstrument, currentCategory, changeInstrument]);
 
-  // Initialize audio context
-  const handleInitializeAudio = async () => {
-    try {
-      await initializeAudioContext();
-      preloadCriticalComponents();
-    } catch (error) {
-      console.error("Failed to initialize audio context:", error);
+  // Initialize audio context on room join
+  useEffect(() => {
+    if (isConnected && roomId && username && !isAudioContextReady) {
+      const initAudio = async () => {
+        try {
+          await initializeAudioContext();
+          preloadCriticalComponents();
+        } catch (error) {
+          console.error("Failed to initialize audio context:", error);
+        }
+      };
+      initAudio();
     }
-  };
+  }, [isConnected, roomId, username, isAudioContextReady, initializeAudioContext]);
 
   // Handle note playing with socket emission
   const handlePlayNote = useCallback(
@@ -829,29 +834,18 @@ export default function Room() {
       onSustainChange: handleSustainChange,
     };
 
-    // Show initialization button if AudioContext is not ready
+    // Show loading indicator while audio context is initializing
     if (!isAudioContextReady) {
       return (
         <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
           <div className="card-body text-center">
             <h3 className="card-title justify-center text-xl">
-              Initialize Audio
+              Initializing Audio...
             </h3>
-            <p className="text-base-content/70 mb-4">
-              Click the button below to initialize the audio system and load the
-              instrument.
+            <div className="loading loading-spinner loading-lg text-primary"></div>
+            <p className="text-base-content/70 mt-4">
+              Setting up audio system for the jam session...
             </p>
-            <div className="card-actions justify-center">
-              <button
-                onClick={handleInitializeAudio}
-                className="btn btn-primary"
-                disabled={isLoadingInstrument}
-              >
-                {isLoadingInstrument
-                  ? "Initializing..."
-                  : "Initialize Audio & Load Instrument"}
-              </button>
-            </div>
           </div>
         </div>
       );
