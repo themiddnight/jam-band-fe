@@ -1,6 +1,7 @@
 import { useRef, useCallback, useEffect } from 'react';
 import { InstrumentManager } from '../utils/InstrumentManager';
 import { InstrumentCategory } from '../constants/instruments';
+import type { SynthState } from './useToneSynthesizer';
 
 export const useInstrumentManager = () => {
   const instrumentManagerRef = useRef<InstrumentManager | null>(null);
@@ -89,6 +90,32 @@ export const useInstrumentManager = () => {
     }
   }, []);
 
+  // Update synthesizer parameters for a remote user
+  const updateUserSynthParams = useCallback(async (
+    userId: string,
+    username: string,
+    instrumentName: string,
+    category: InstrumentCategory,
+    params: Partial<SynthState>
+  ) => {
+    if (!instrumentManagerRef.current) {
+      console.warn('InstrumentManager not initialized');
+      return;
+    }
+
+    try {
+      await instrumentManagerRef.current.updateUserSynthParams(
+        userId,
+        username,
+        instrumentName,
+        category,
+        params
+      );
+    } catch (error) {
+      console.error('Error updating user synth parameters:', error);
+    }
+  }, []);
+
   // Preload instruments for all users in a room
   const preloadRoomInstruments = useCallback(async (roomUsers: Array<{
     id: string;
@@ -171,6 +198,7 @@ export const useInstrumentManager = () => {
     playUserNotes,
     stopUserNotes,
     setUserSustain,
+    updateUserSynthParams,
     preloadRoomInstruments,
     updateUserInstrument,
     cleanupUserInstruments,

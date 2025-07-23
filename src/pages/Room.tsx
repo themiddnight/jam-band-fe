@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useUserStore } from "../stores/userStore";
 import { useRoomStore } from "../stores/roomStore";
@@ -30,7 +30,7 @@ export default function Room() {
   const role = location.state?.role as "band_member" | "audience";
 
   const { username } = useUserStore();
-  const { currentRoom, currentUser, pendingApproval, error, setError } =
+  const { currentRoom, currentUser, pendingApproval, error, rejectionMessage, setError } =
     useRoomStore();
   const {
     connect,
@@ -41,10 +41,13 @@ export default function Room() {
     transferOwnershipTo,
     playNote,
     changeInstrument,
-    updateMixer,
+    updateSynthParams: socketUpdateSynthParams,
+    requestSynthParams,
     onNoteReceived,
     onUserLeft,
     onInstrumentChanged,
+    onSynthParamsChanged,
+    onRequestSynthParamsResponse,
     isConnected,
     isConnecting,
   } = useSocket();
@@ -71,15 +74,12 @@ export default function Room() {
     updateSynthParams,
     loadPresetParams,
     isSynthesizerLoaded,
-  } = useInstrument();
+  } = useInstrument(undefined, undefined, socketUpdateSynthParams);
 
   // Multi-user audio for playing other users' instruments
   const instrumentManager = useInstrumentManager();
 
-  const [mixerMode, setMixerMode] = useState<"original" | "custom">("original");
-  const [localMixerSettings, setLocalMixerSettings] = useState<
-    Record<string, number>
-  >({});
+
 
   // Initialize room
   useEffect(() => {
@@ -113,13 +113,49 @@ export default function Room() {
     }
   }, [isConnected, roomId, username, role, joinRoom]);
 
-  // Handle socket errors
+  // Request synth parameters when joining a room with synthesizer users
   useEffect(() => {
-    if (error && error.includes("Room not found")) {
-      // If room not found, redirect back to lobby
-      navigate("/");
+    if (currentRoom && currentUser && currentCategory === InstrumentCategory.Synthesizer) {
+      // Check if there are other users with synthesizers and request their parameters
+      const otherSynthUsers = currentRoom.users.filter(user => 
+        user.id !== currentUser.id && 
+        user.currentCategory === InstrumentCategory.Synthesizer
+      );
+      
+      if (otherSynthUsers.length > 0) {
+        console.log("🎛️ Requesting synth parameters from existing users in room");
+        // Small delay to ensure we're fully connected
+        setTimeout(() => {
+          requestSynthParams();
+        }, 1000);
+      }
+    }
+  }, [currentRoom, currentUser, currentCategory, requestSynthParams]);
+
+
+
+  // Handle socket errors and redirect to lobby when rejected
+  useEffect(() => {
+    if (error) {
+      if (error.includes("Room not found")) {
+        // If room not found, redirect back to lobby
+        navigate("/");
+      } else if (error.includes("rejected") || error.includes("Your request was rejected")) {
+        // If user was rejected, redirect to lobby immediately
+        navigate("/");
+      }
     }
   }, [error, navigate]);
+
+  // Handle rejection message and redirect to lobby
+  useEffect(() => {
+    if (rejectionMessage) {
+      // Redirect to lobby with rejection message
+      navigate("/", { state: { rejectionMessage } });
+    }
+  }, [rejectionMessage, navigate]);
+
+
 
   // Initialize instrument manager when audio context is ready
   useEffect(() => {
@@ -172,6 +208,67 @@ export default function Room() {
     return cleanup;
   }, [onInstrumentChanged, instrumentManager]);
 
+  // Handle synthesizer parameter changes from remote users
+  useEffect(() => {
+    const cleanup = onSynthParamsChanged(async (data) => {
+      console.log("🎛️ Remote synth parameters changed:", data);
+      try {
+        await instrumentManager.updateUserSynthParams(
+          data.userId,
+          data.username,
+          data.instrument,
+          data.category as InstrumentCategory,
+          data.params
+        );
+        console.log(
+          "✅ Successfully updated synth parameters for user:",
+          data.username
+        );
+      } catch (error) {
+        console.error(
+          "❌ Failed to update synth parameters for user:",
+          data.username,
+          error
+        );
+      }
+    });
+
+    return cleanup;
+  }, [onSynthParamsChanged, instrumentManager]);
+
+  // Sync synth parameters when joining a room with existing synthesizer users
+  useEffect(() => {
+    if (currentRoom && currentUser && currentCategory === InstrumentCategory.Synthesizer && synthState && isSynthesizerLoaded) {
+      // Check if there are other users with synthesizers and sync our parameters
+      const otherSynthUsers = currentRoom.users.filter(user => 
+        user.id !== currentUser.id && 
+        user.currentCategory === InstrumentCategory.Synthesizer
+      );
+      
+      if (otherSynthUsers.length > 0) {
+        console.log("🎛️ Syncing complete synth state to existing users in room");
+        // Sync the complete synth state to ensure all parameters are synchronized
+        setTimeout(() => {
+          socketUpdateSynthParams(synthState);
+        }, 500);
+      }
+    }
+  }, [currentRoom, currentUser, currentCategory, synthState, socketUpdateSynthParams, isSynthesizerLoaded]);
+
+  // Handle requests for synth parameters from new users
+  useEffect(() => {
+    const cleanup = onRequestSynthParamsResponse((data) => {
+      console.log("🎛️ Received request for synth parameters from:", data.requestingUsername);
+      if (currentCategory === InstrumentCategory.Synthesizer && synthState) {
+        console.log("🎛️ Sending complete synth state to new user:", synthState);
+        // Send the complete synth state to ensure all parameters are synchronized
+        socketUpdateSynthParams(synthState);
+      }
+    });
+
+    return cleanup;
+  }, [onRequestSynthParamsResponse, currentCategory, synthState, socketUpdateSynthParams]);
+
   // Preload all room instruments when room data changes
   useEffect(() => {
     if (currentRoom && currentRoom.users && instrumentManager.isReady()) {
@@ -180,9 +277,44 @@ export default function Room() {
     }
   }, [currentRoom, instrumentManager]);
 
-  // Handle incoming notes from other users
+  // Handle incoming notes from other users with deduplication
+  const recentReceivedNotes = useRef<Map<string, number>>(new Map());
+  const NOTE_RECEIVE_DEDUPE_WINDOW = 50; // 50ms window to prevent duplicate processing
+
   useEffect(() => {
     const cleanup = onNoteReceived(async (data) => {
+      // For mono synths, be more careful with deduplication to preserve key tracking
+      const isMonoSynth = data.instrument === "analog_mono" || data.instrument === "fm_mono";
+      
+      // Create a unique key for this received note event
+      const eventKey = `${data.userId}-${data.eventType}-${data.notes.join(',')}-${data.instrument}-${data.velocity}`;
+      const now = Date.now();
+      
+      // Only apply deduplication to note_on events for mono synths, or all events for other instruments
+      const shouldCheckDuplicate = !isMonoSynth || data.eventType === "note_on";
+      
+      if (shouldCheckDuplicate) {
+        // Check if we recently processed the same event
+        const lastProcessed = recentReceivedNotes.current.get(eventKey);
+        if (lastProcessed && (now - lastProcessed) < NOTE_RECEIVE_DEDUPE_WINDOW) {
+          console.log(`🔄 Skipping duplicate received note event: ${eventKey}`);
+          return;
+        }
+      }
+      
+      // Record this event
+      recentReceivedNotes.current.set(eventKey, now);
+      
+      // Clean up old entries periodically
+      if (recentReceivedNotes.current.size > 100) {
+        const cutoff = now - NOTE_RECEIVE_DEDUPE_WINDOW * 2;
+        for (const [key, timestamp] of recentReceivedNotes.current.entries()) {
+          if (timestamp < cutoff) {
+            recentReceivedNotes.current.delete(key);
+          }
+        }
+      }
+
       // Don't automatically switch instruments - each user maintains their own instrument
       console.log("🎵 Received note from another user:", data);
 
@@ -446,26 +578,7 @@ export default function Room() {
     },
   });
 
-  // Handle mixer mode change
-  const handleMixerModeChange = (mode: "original" | "custom") => {
-    setMixerMode(mode);
-    updateMixer(mode, mode === "custom" ? localMixerSettings : undefined);
-  };
 
-  // Handle mixer settings change
-  const handleMixerSettingsChange = (userId: string, gain: number) => {
-    if (mixerMode === "custom") {
-      const newSettings = { ...localMixerSettings, [userId]: gain };
-      setLocalMixerSettings(newSettings);
-      updateMixer("custom", newSettings);
-    } else {
-      // Original mode - only room owner can change
-      if (currentUser?.role === "room_owner") {
-        const newSettings = { ...currentRoom?.mixerSettings, [userId]: gain };
-        updateMixer("original", newSettings);
-      }
-    }
-  };
 
   // Handle approve member
   const handleApproveMember = useCallback(
@@ -492,11 +605,11 @@ export default function Room() {
   };
 
   // Render pending approval modal
-  if (pendingApproval) {
+  if (pendingApproval || (currentRoom && currentUser && currentRoom.pendingMembers.some(member => member.id === currentUser.id))) {
     return (
-      <div className="min-h-screen bg-base-200 flex items-center justify-center">
+      <div className="min-h-dvh bg-base-200 flex items-center justify-center p-4">
         <div className="card bg-base-100 shadow-xl w-full max-w-md">
-          <div className="card-body text-center">
+          <div className="card-body text-center flex flex-col items-center justify-center">
             <h2 className="card-title justify-center text-xl">
               Waiting for Approval
             </h2>
@@ -541,6 +654,8 @@ export default function Room() {
       </div>
     );
   }
+
+
 
   // Render error state
   if (error) {
@@ -684,75 +799,7 @@ export default function Room() {
           </div>
         </div>
 
-        {/* Mixer Controls */}
-        <div className="w-full max-w-6xl mb-4">
-          <div className="card bg-base-100 shadow-xl">
-            <div className="card-body">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="card-title">Sound Mixer</h3>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleMixerModeChange("original")}
-                    className={`btn btn-sm ${
-                      mixerMode === "original" ? "btn-primary" : "btn-outline"
-                    }`}
-                    disabled={currentUser?.role !== "room_owner"}
-                  >
-                    Original
-                  </button>
-                  <button
-                    onClick={() => handleMixerModeChange("custom")}
-                    className={`btn btn-sm ${
-                      mixerMode === "custom" ? "btn-primary" : "btn-outline"
-                    }`}
-                  >
-                    Custom
-                  </button>
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {currentRoom?.users.map((user) => (
-                  <div key={user.id} className="flex items-center gap-3">
-                    <span className="text-sm min-w-0 flex-1 truncate">
-                      {user.username}
-                    </span>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.1"
-                      value={
-                        mixerMode === "custom"
-                          ? localMixerSettings[user.id] || 1
-                          : currentRoom?.mixerSettings[user.id] || 1
-                      }
-                      onChange={(e) =>
-                        handleMixerSettingsChange(
-                          user.id,
-                          parseFloat(e.target.value)
-                        )
-                      }
-                      disabled={
-                        mixerMode === "original" &&
-                        currentUser?.role !== "room_owner"
-                      }
-                      className="range range-xs range-primary"
-                    />
-                    <span className="text-xs w-8 text-right">
-                      {Math.round(
-                        (mixerMode === "custom"
-                          ? localMixerSettings[user.id] || 1
-                          : currentRoom?.mixerSettings[user.id] || 1) * 100
-                      )}
-                      %
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
 
         {/* Instrument Controls */}
         {(currentUser?.role === "room_owner" ||

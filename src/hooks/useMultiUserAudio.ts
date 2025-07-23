@@ -46,10 +46,10 @@ export const useMultiUserAudio = (audioContext: AudioContext | null) => {
       let newInstrument: any;
 
       if (category === InstrumentCategory.Synthesizer) {
-        // For synthesizer, we'll use a simplified approach
-        // In a full implementation, you'd want to create separate Tone.js instances
-        console.log('Synthesizer instruments for other users not fully implemented');
-        return null;
+        // Synthesizer instruments are now fully supported via the InstrumentManager system
+        // The UserInstrument class handles Tone.js synthesizer creation and parameter updates
+        console.log('Synthesizer instruments for remote users are handled by InstrumentManager');
+        return null; // InstrumentManager will handle synthesizer creation
       } else if (category === InstrumentCategory.DrumBeat) {
         newInstrument = new DrumMachine(audioContext, {
           instrument: instrumentName,

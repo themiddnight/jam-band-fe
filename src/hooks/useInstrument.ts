@@ -8,7 +8,7 @@ import {
 } from "../constants/instruments";
 import { ControlType } from "../types";
 import { getCachedDrumMachines } from "../utils/drumMachineUtils";
-import { useToneSynthesizer } from "./useToneSynthesizer";
+import { useToneSynthesizer, type SynthState } from "./useToneSynthesizer";
 import {
   isSafari,
   createWebKitCompatibleAudioContext,
@@ -19,7 +19,8 @@ import { useInstrumentPreferencesStore } from "../stores/instrumentPreferencesSt
 
 export const useInstrument = (
   initialInstrument?: string,
-  initialCategory = InstrumentCategory.Melodic
+  initialCategory = InstrumentCategory.Melodic,
+  onSynthParamsChange?: (params: Partial<SynthState>) => void
 ) => {
   // Get saved preferences
   const { preferences, setPreferences, clearPreferences } = useInstrumentPreferencesStore();
@@ -94,6 +95,7 @@ export const useInstrument = (
   const initRetryCount = useRef<number>(0);
   const maxRetries = 3;
   const failedInstruments = useRef<Set<string>>(new Set());
+  const synthStateRef = useRef<SynthState | null>(null);
 
   // Get the list of instruments for the current category
   const getInstrumentsForCategory = useCallback(
@@ -137,6 +139,24 @@ export const useInstrument = (
   const toneSynthesizer = useToneSynthesizer(
     currentCategory === InstrumentCategory.Synthesizer ? currentInstrument : ""
   );
+
+  // Update synthStateRef when toneSynthesizer.synthState changes
+  useEffect(() => {
+    if (toneSynthesizer.synthState) {
+      synthStateRef.current = toneSynthesizer.synthState;
+    }
+  }, [toneSynthesizer.synthState]);
+
+  // Set up callback for synth parameter changes to sync to remote users
+  useEffect(() => {
+    const setOnParamsChange = toneSynthesizer.setOnParamsChange;
+    if (setOnParamsChange && onSynthParamsChange) {
+      setOnParamsChange((params) => {
+        console.log("🎛️ Synth parameters changed locally, syncing to remote users:", params);
+        onSynthParamsChange(params);
+      });
+    }
+  }, [toneSynthesizer.setOnParamsChange, onSynthParamsChange]);
 
   const initializeAudioContext = useCallback(async () => {
     try {
@@ -209,7 +229,25 @@ export const useInstrument = (
       if (finalCategory === InstrumentCategory.Synthesizer) {
         setCurrentInstrument(instrumentName);
         setCurrentCategory(finalCategory);
+        
+        // Save preferences when instrument changes
         setPreferences(instrumentName, finalCategory);
+        
+        // Wait for the synthesizer to be ready, then sync parameters
+        // Use a more reliable approach with multiple attempts
+        const syncParameters = () => {
+          if (onSynthParamsChange && synthStateRef.current) {
+            console.log("🎛️ Syncing initial synth parameters for new instrument:", instrumentName);
+            onSynthParamsChange(synthStateRef.current);
+          } else {
+            // If synthStateRef is not ready, try again after a short delay
+            setTimeout(syncParameters, 50);
+          }
+        };
+        
+        // Start syncing after a short delay to ensure the synthesizer is initialized
+        setTimeout(syncParameters, 100);
+        
         setIsLoadingInstrument(false);
         return;
       }
@@ -336,7 +374,7 @@ export const useInstrument = (
         setIsLoadingInstrument(false);
       }
     },
-    [currentCategory, getNextInstrumentToTry, setPreferences]
+    [currentCategory, getNextInstrumentToTry, setPreferences, onSynthParamsChange]
   );
 
   // Load dynamic drum machines
@@ -391,6 +429,13 @@ export const useInstrument = (
     sustain,
     toneSynthesizer,
   ]);
+
+  // Keep synth state ref updated
+  useEffect(() => {
+    if (toneSynthesizer.synthState) {
+      synthStateRef.current = toneSynthesizer.synthState;
+    }
+  }, [toneSynthesizer.synthState]);
 
   useEffect(() => {
     return () => {
@@ -610,6 +655,8 @@ export const useInstrument = (
 
       // For synthesizer category, just update the instrument name - Tone.js hook will handle the rest
       if (targetCategory === InstrumentCategory.Synthesizer) {
+        // Save preferences for synthesizer instruments
+        setPreferences(instrumentName, targetCategory);
         return;
       }
 
@@ -618,7 +665,7 @@ export const useInstrument = (
         await loadInstrument(instrumentName, targetCategory);
       }
     },
-    [isAudioContextReady, loadInstrument, currentCategory]
+    [isAudioContextReady, loadInstrument, currentCategory, setPreferences]
   );
 
   const handleCategoryChange = useCallback(
@@ -652,6 +699,9 @@ export const useInstrument = (
 
       setCurrentInstrument(defaultInstrument);
 
+      // Save preferences when category changes
+      setPreferences(defaultInstrument, category);
+
       // For synthesizer category, don't load through smplr - Tone.js hook will handle it
       if (category === InstrumentCategory.Synthesizer) {
         return;
@@ -667,6 +717,7 @@ export const useInstrument = (
       dynamicDrumMachines,
       getInstrumentsForCategory,
       loadInstrument,
+      setPreferences,
     ]
   );
 
@@ -764,6 +815,29 @@ export const useInstrument = (
     [setSustainState, stopSustainedNotes]
   );
 
+  // Enhanced preset loading with remote sync
+  const loadPresetParamsWithSync = useCallback((params: SynthState) => {
+    // Load preset locally
+    toneSynthesizer.loadPresetParams(params);
+    
+    // Sync to remote users
+    if (onSynthParamsChange) {
+      console.log("🎛️ Syncing preset parameters to remote users");
+      onSynthParamsChange(params);
+    }
+  }, [toneSynthesizer, onSynthParamsChange]);
+
+  // Wrapper for updateSynthParams that also emits to socket
+  const updateSynthParamsWithSocket = useCallback((params: Partial<SynthState>) => {
+    // Update local synthesizer
+    toneSynthesizer.updateSynthParams(params);
+    
+    // Emit to socket if callback is provided
+    if (onSynthParamsChange) {
+      onSynthParamsChange(params);
+    }
+  }, [toneSynthesizer, onSynthParamsChange]);
+
   return {
     instrument,
     currentInstrument,
@@ -790,8 +864,8 @@ export const useInstrument = (
     audioContext: audioContext.current,
     // Synthesizer-specific properties
     synthState: toneSynthesizer.synthState,
-    updateSynthParams: toneSynthesizer.updateSynthParams,
-    loadPresetParams: toneSynthesizer.loadPresetParams,
+    updateSynthParams: updateSynthParamsWithSocket,
+    loadPresetParams: loadPresetParamsWithSync, // Use the enhanced version
     isSynthesizerLoaded: toneSynthesizer.isLoaded,
   };
 };

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useUserStore } from '../stores/userStore';
 import { useRoomStore } from '../stores/roomStore';
 import { useSocket } from '../hooks/useSocket';
@@ -16,16 +16,19 @@ interface Room {
 
 export default function Lobby() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { username, setUsername } = useUserStore();
   const { connect, createRoom, isConnected, isConnecting, onRoomCreated, onRoomClosed } = useSocket();
   const { currentRoom } = useRoomStore();
-  
+
   const [showUsernameModal, setShowUsernameModal] = useState(false);
   const [tempUsername, setTempUsername] = useState('');
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(false);
-  const [showCreateRoom, setShowCreateRoom] = useState(false);
+  const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
   const [newRoomName, setNewRoomName] = useState('');
+  const [showRejectionModal, setShowRejectionModal] = useState(false);
+  const [rejectionMessage, setRejectionMessage] = useState<string>('');
 
   // Check if username is set
   useEffect(() => {
@@ -33,6 +36,17 @@ export default function Lobby() {
       setShowUsernameModal(true);
     }
   }, [username]);
+
+  // Check for rejection message in location state
+  useEffect(() => {
+    const state = location.state as { rejectionMessage?: string } | null;
+    if (state?.rejectionMessage) {
+      setRejectionMessage(state.rejectionMessage);
+      setShowRejectionModal(true);
+      // Clear the state to prevent showing the modal again on refresh
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.state, navigate, location.pathname]);
 
   // Connect to socket and fetch rooms
   useEffect(() => {
@@ -111,7 +125,7 @@ export default function Lobby() {
     e.preventDefault();
     if (newRoomName.trim() && username) {
       createRoom(newRoomName.trim(), username);
-      setShowCreateRoom(false);
+      setShowCreateRoomModal(false);
       setNewRoomName('');
     }
   };
@@ -156,14 +170,11 @@ export default function Lobby() {
   }
 
   return (
-    <div className="min-h-screen bg-base-200 p-4">
+    <div className="min-h-dvh bg-base-200 p-4">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-4xl font-bold text-primary">Jam Band</h1>
-            <p className="text-base-content/70">Real-time music collaboration</p>
-          </div>
+          <h1 className="text-4xl font-bold text-primary">Jam Band</h1>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-success' : isConnecting ? 'bg-warning' : 'bg-error'}`}></div>
@@ -175,13 +186,12 @@ export default function Lobby() {
           </div>
         </div>
 
-        {/* Room List */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Available Rooms */}
-          <div className="card bg-base-100 shadow-xl">
-            <div className="card-body">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="card-title">Available Rooms</h2>
+        {/* Card */}
+        <div className="card bg-base-100 shadow-xl h-full">
+          <div className="card-body h-full">
+            <div className="flex justify-between items-center">
+              <h2 className="card-title">Available Rooms</h2>
+              <div className="flex gap-2">
                 <button
                   onClick={fetchRooms}
                   className="btn btn-sm btn-outline"
@@ -189,8 +199,17 @@ export default function Lobby() {
                 >
                   {loading ? 'Loading...' : 'Refresh'}
                 </button>
+                <button
+                  onClick={() => setShowCreateRoomModal(true)}
+                  className="btn btn-sm btn-primary"
+                >
+                  Create
+                </button>
               </div>
-              
+            </div>
+
+            {/* Room List */}
+            <div className="flex flex-col gap-4">
               {rooms.length === 0 ? (
                 <div className="text-center py-8 text-base-content/50">
                   <p>No rooms available</p>
@@ -211,7 +230,7 @@ export default function Lobby() {
                               Created {new Date(room.createdAt).toLocaleDateString()}
                             </p>
                           </div>
-                          <div className="flex gap-2">
+                          <div className="flex gap-2 flex-wrap justify-end">
                             <button
                               onClick={() => handleJoinRoom(room.id, 'band_member')}
                               className="btn btn-sm btn-primary"
@@ -233,55 +252,76 @@ export default function Lobby() {
               )}
             </div>
           </div>
-
-          {/* Create Room */}
-          <div className="card bg-base-100 shadow-xl">
-            <div className="card-body">
-              <h2 className="card-title">Create New Room</h2>
-              <p className="text-base-content/70 mb-4">
-                Start a new jam session and invite others to join
-              </p>
-              
-              {showCreateRoom ? (
-                <form onSubmit={handleCreateRoom}>
-                  <div className="form-control">
-                    <label className="label">
-                      <span className="label-text">Room Name</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Enter room name"
-                      className="input input-bordered w-full"
-                      value={newRoomName}
-                      onChange={(e) => setNewRoomName(e.target.value)}
-                      autoFocus
-                      required
-                    />
-                  </div>
-                  <div className="card-actions justify-end mt-4">
-                    <button
-                      type="button"
-                      onClick={() => setShowCreateRoom(false)}
-                      className="btn btn-outline"
-                    >
-                      Cancel
-                    </button>
-                    <button type="submit" className="btn btn-primary">
-                      Create Room
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <button
-                  onClick={() => setShowCreateRoom(true)}
-                  className="btn btn-primary w-full"
-                >
-                  Create New Room
-                </button>
-              )}
-            </div>
-          </div>
         </div>
+
+        {/* Create Room Modal */}
+        {showCreateRoomModal && (
+          <div className="modal modal-open">
+            <div className="modal-box">
+              <h3 className="font-bold text-lg mb-4">Create New Room</h3>
+              <form onSubmit={handleCreateRoom}>
+                <div className="form-control">
+                  <label className="label">
+                    <span className="label-text">Room Name</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter room name"
+                    className="input input-bordered w-full"
+                    value={newRoomName}
+                    onChange={(e) => setNewRoomName(e.target.value)}
+                    autoFocus
+                    required
+                  />
+                </div>
+                <div className="modal-action">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCreateRoomModal(false);
+                      setNewRoomName('');
+                    }}
+                    className="btn btn-outline"
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary">
+                    Create Room
+                  </button>
+                </div>
+              </form>
+            </div>
+            <div className="modal-backdrop" onClick={() => {
+              setShowCreateRoomModal(false);
+              setNewRoomName('');
+            }}></div>
+          </div>
+        )}
+
+        {/* Rejection Modal */}
+        {showRejectionModal && (
+          <div className="modal modal-open">
+            <div className="modal-box">
+              <h3 className="font-bold text-lg mb-4 text-error">Request Rejected</h3>
+              <p className="text-base-content/70 mb-4">{rejectionMessage}</p>
+              <div className="modal-action">
+                <button
+                  onClick={() => {
+                    setShowRejectionModal(false);
+                    setRejectionMessage('');
+                  }}
+                  className="btn btn-primary"
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+            <div className="modal-backdrop" onClick={() => {
+              setShowRejectionModal(false);
+              setRejectionMessage('');
+            }}></div>
+          </div>
+        )}
       </div>
     </div>
   );

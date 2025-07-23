@@ -2,6 +2,7 @@ import { UserInstrument } from './UserInstrument';
 import type { UserInstrumentData } from './UserInstrument';
 import { AudioEngine } from './AudioEngine';
 import { InstrumentCategory } from '../constants/instruments';
+import type { SynthState } from '../hooks/useToneSynthesizer';
 
 export class InstrumentManager {
   private instruments = new Map<string, UserInstrument>();
@@ -90,6 +91,25 @@ export class InstrumentManager {
     }
 
     return userInstrument;
+  }
+
+  // Update synthesizer parameters for a remote user
+  async updateUserSynthParams(
+    userId: string,
+    username: string,
+    instrumentName: string,
+    category: InstrumentCategory,
+    params: Partial<SynthState>
+  ): Promise<void> {
+    const key = `${userId}-${instrumentName}-${category}`;
+    const userInstrument = this.instruments.get(key);
+
+    if (userInstrument && category === InstrumentCategory.Synthesizer) {
+      console.log(`🎛️ Updating synth parameters for ${username}:`, params);
+      await userInstrument.updateSynthParams(params);
+    } else {
+      console.warn(`❌ No synthesizer found for user ${username} with instrument ${instrumentName}`);
+    }
   }
 
   // Get a user's instrument

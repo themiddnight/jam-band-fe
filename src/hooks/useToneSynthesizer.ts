@@ -112,6 +112,14 @@ export const useToneSynthesizer = (synthType: string) => {
   const noteStack = useRef<string[]>([]);
   const currentNote = useRef<string | null>(null);
 
+  // Callback for parameter changes (for network synchronization)
+  const onParamsChangeRef = useRef<((params: Partial<SynthState>) => void) | null>(null);
+
+  // Set callback for parameter changes
+  const setOnParamsChange = useCallback((callback: (params: Partial<SynthState>) => void) => {
+    onParamsChangeRef.current = callback;
+  }, []);
+
   // Clear any pending releases for a note
   const clearPendingRelease = useCallback((note: string) => {
     const timeout = pendingReleases.current.get(note);
@@ -477,6 +485,11 @@ export const useToneSynthesizer = (synthType: string) => {
     
     // Use throttled update for audio parameters to prevent audio glitches
     throttledUpdateParams(params);
+    
+    // Notify callback for network synchronization (if set)
+    if (onParamsChangeRef.current) {
+      onParamsChangeRef.current(params);
+    }
   }, [throttledUpdateParams]);
 
   // Play notes
@@ -795,6 +808,12 @@ export const useToneSynthesizer = (synthType: string) => {
     setSynthState(params);
     // Apply the preset parameters to the synthesizer
     updateSynthParams(params);
+    
+    // Notify callback for network synchronization (if set)
+    if (onParamsChangeRef.current) {
+      console.log("🎛️ Preset loaded, syncing all parameters to remote users:", params);
+      onParamsChangeRef.current(params);
+    }
   }, [updateSynthParams]);
 
   // Initialize on mount and when synthType changes
@@ -812,6 +831,19 @@ export const useToneSynthesizer = (synthType: string) => {
     }
   }, [synthType, initializeSynth, releaseAllNotes]);
 
+  // Sync initial parameters when synthesizer is loaded
+  useEffect(() => {
+    if (isLoaded && onParamsChangeRef.current && synthType) {
+      console.log("🎛️ Synthesizer loaded, syncing initial parameters to remote users:", synthState);
+      // Small delay to ensure everything is properly initialized
+      setTimeout(() => {
+        if (onParamsChangeRef.current) {
+          onParamsChangeRef.current(synthState);
+        }
+      }, 200);
+    }
+  }, [isLoaded, synthType, synthState]);
+
   return {
     isLoaded,
     synthState,
@@ -821,6 +853,7 @@ export const useToneSynthesizer = (synthType: string) => {
     setSustain,
     stopSustainedNotes,
     loadPresetParams,
+    setOnParamsChange,
     synth: synthRef.current,
   };
 }; 

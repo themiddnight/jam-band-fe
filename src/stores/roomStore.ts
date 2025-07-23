@@ -15,8 +15,7 @@ export interface Room {
   owner: string;
   users: RoomUser[];
   pendingMembers: RoomUser[];
-  mixerMode: 'original' | 'custom';
-  mixerSettings: Record<string, number>;
+
   createdAt: Date;
 }
 
@@ -26,17 +25,19 @@ interface RoomState {
   isConnected: boolean;
   pendingApproval: boolean;
   error: string | null;
+  rejectionMessage: string | null;
   setCurrentRoom: (room: Room | null) => void;
   setCurrentUser: (user: RoomUser | null) => void;
   setIsConnected: (connected: boolean) => void;
   setPendingApproval: (pending: boolean) => void;
   setError: (error: string | null) => void;
+  setRejectionMessage: (message: string | null) => void;
   updateUserInstrument: (userId: string, instrument: string, category: string) => void;
   addUser: (user: RoomUser) => void;
   removeUser: (userId: string) => void;
   addPendingMember: (user: RoomUser) => void;
   removePendingMember: (userId: string) => void;
-  updateMixerSettings: (mode: 'original' | 'custom', settings?: Record<string, number>) => void;
+
   transferOwnership: (newOwnerId: string) => void;
   clearRoom: () => void;
 }
@@ -47,12 +48,27 @@ export const useRoomStore = create<RoomState>((set, get) => ({
   isConnected: false,
   pendingApproval: false,
   error: null,
+  rejectionMessage: null,
 
-  setCurrentRoom: (room) => set({ currentRoom: room }),
+  setCurrentRoom: (room) => {
+    if (room) {
+      // Ensure the room has proper structure
+      const normalizedRoom = {
+        ...room,
+        users: room.users || [],
+        pendingMembers: room.pendingMembers || [],
+    
+      };
+      set({ currentRoom: normalizedRoom });
+    } else {
+      set({ currentRoom: null });
+    }
+  },
   setCurrentUser: (user) => set({ currentUser: user }),
   setIsConnected: (connected) => set({ isConnected: connected }),
   setPendingApproval: (pending) => set({ pendingApproval: pending }),
   setError: (error) => set({ error }),
+  setRejectionMessage: (message) => set({ rejectionMessage: message }),
 
   updateUserInstrument: (userId, instrument, category) => {
     const { currentRoom } = get();
@@ -80,10 +96,14 @@ export const useRoomStore = create<RoomState>((set, get) => ({
       return;
     }
 
+    // Remove user from pending members if they exist there
+    const updatedPendingMembers = currentRoom.pendingMembers.filter(pendingUser => pendingUser.id !== user.id);
+
     set({
       currentRoom: {
         ...currentRoom,
-        users: [...currentRoom.users, user]
+        users: [...currentRoom.users, user],
+        pendingMembers: updatedPendingMembers
       }
     });
   },
@@ -124,31 +144,10 @@ export const useRoomStore = create<RoomState>((set, get) => ({
     });
   },
 
-  updateMixerSettings: (mode, settings) => {
-    const { currentRoom } = get();
-    if (!currentRoom) return;
 
-    // Prevent infinite loops by checking if the values are actually different
-    const newSettings = settings || currentRoom.mixerSettings;
-    const hasChanged = 
-      currentRoom.mixerMode !== mode || 
-      JSON.stringify(currentRoom.mixerSettings) !== JSON.stringify(newSettings);
-
-    if (!hasChanged) {
-      return; // No change, don't update
-    }
-
-    set({
-      currentRoom: {
-        ...currentRoom,
-        mixerMode: mode,
-        mixerSettings: newSettings
-      }
-    });
-  },
 
   transferOwnership: (newOwnerId) => {
-    const { currentRoom } = get();
+    const { currentRoom, currentUser } = get();
     if (!currentRoom) return;
 
     const updatedUsers = currentRoom.users.map(user => {
@@ -160,12 +159,21 @@ export const useRoomStore = create<RoomState>((set, get) => ({
       return user;
     });
 
+    // Update current user if they are the new owner
+    let updatedCurrentUser = currentUser;
+    if (currentUser && currentUser.id === newOwnerId) {
+      updatedCurrentUser = { ...currentUser, role: 'room_owner' as const };
+    } else if (currentUser && currentUser.id === currentRoom.owner) {
+      updatedCurrentUser = { ...currentUser, role: 'band_member' as const };
+    }
+
     set({
       currentRoom: {
         ...currentRoom,
         owner: newOwnerId,
         users: updatedUsers
-      }
+      },
+      currentUser: updatedCurrentUser
     });
   },
 
@@ -174,6 +182,7 @@ export const useRoomStore = create<RoomState>((set, get) => ({
     currentUser: null,
     isConnected: false,
     pendingApproval: false,
-    error: null
+    error: null,
+    rejectionMessage: null
   })
 })); 

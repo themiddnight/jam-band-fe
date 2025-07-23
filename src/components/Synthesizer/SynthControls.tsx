@@ -64,12 +64,17 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
   };
 
   const handleLoadPreset = (preset: SynthPreset) => {
+    console.log("🎛️ Loading preset:", preset.name);
     if (onLoadPreset) {
       onLoadPreset(preset.parameters);
     } else {
       onParamChange(preset.parameters);
     }
     presetManager.loadPreset(preset);
+    
+    // Ensure all preset parameters are synchronized to remote users
+    console.log("🎛️ Syncing all preset parameters to remote users:", preset.parameters);
+    // The onParamChange will trigger the sync through the callback mechanism
   };
 
   const handleExportPresets = () => {
