@@ -1,11 +1,10 @@
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useUserStore } from "../stores/userStore";
 import { useRoomStore } from "../stores/roomStore";
 import { useSocket } from "../hooks/useSocket";
-import { useInstrument } from "../hooks/useInstrument";
+import { useUnifiedInstrument } from "../hooks/useUnifiedInstrument";
 import { useScaleState } from "../hooks/useScaleState";
-import { useInstrumentManager } from "../hooks/useInstrumentManager";
 import { useMidiController } from "../hooks/useMidiController";
 import { InstrumentCategory } from "../constants/instruments";
 import { ControlType } from "../types";
@@ -20,6 +19,7 @@ import {
 import ScaleSelector from "../components/ScaleSelector";
 import InstrumentCategorySelector from "../components/InstrumentCategorySelector";
 import MidiStatus from "../components/MidiStatus";
+import PlayingIndicator from "../components/PlayingIndicator";
 import { preloadCriticalComponents } from "../utils/componentPreloader";
 import { getSafariUserMessage } from "../utils/webkitCompat";
 
@@ -32,13 +32,17 @@ export default function Room() {
   const { username } = useUserStore();
   const { currentRoom, currentUser, pendingApproval, error, rejectionMessage, setError } =
     useRoomStore();
+  
+  // State to track playing indicators for each user
+  const [playingIndicators, setPlayingIndicators] = useState<Map<string, { velocity: number; timestamp: number }>>(new Map());
+
   const {
     connect,
     joinRoom,
     leaveRoom,
     approveMember,
     rejectMember,
-    transferOwnershipTo,
+    // transferOwnershipTo,
     playNote,
     changeInstrument,
     updateSynthParams: socketUpdateSynthParams,
@@ -50,9 +54,14 @@ export default function Room() {
     onRequestSynthParamsResponse,
     isConnected,
     isConnecting,
+    cleanup: socketCleanup,
   } = useSocket();
 
   const scaleState = useScaleState();
+  
+  // Track sustain toggle state for MIDI controller access
+  const [sustainToggleState, setSustainToggleState] = useState<boolean>(false);
+  
   const {
     currentInstrument,
     currentCategory,
@@ -74,10 +83,17 @@ export default function Room() {
     updateSynthParams,
     loadPresetParams,
     isSynthesizerLoaded,
-  } = useInstrument(undefined, undefined, socketUpdateSynthParams);
-
-  // Multi-user audio for playing other users' instruments
-  const instrumentManager = useInstrumentManager();
+    // Remote user methods
+    playRemoteUserNote,
+    stopRemoteUserNote,
+    setRemoteUserSustain,
+    updateRemoteUserInstrument,
+    updateRemoteUserSynthParams,
+    cleanupRemoteUser,
+    preloadRoomInstruments,
+  } = useUnifiedInstrument({
+    onSynthParamsChange: socketUpdateSynthParams,
+  });
 
 
 
@@ -123,7 +139,6 @@ export default function Room() {
       );
       
       if (otherSynthUsers.length > 0) {
-        console.log("🎛️ Requesting synth parameters from existing users in room");
         // Small delay to ensure we're fully connected
         setTimeout(() => {
           requestSynthParams();
@@ -157,45 +172,63 @@ export default function Room() {
 
 
 
-  // Initialize instrument manager when audio context is ready
-  useEffect(() => {
-    if (isAudioContextReady) {
-      instrumentManager.initialize();
-    }
-  }, [isAudioContextReady, instrumentManager]);
+  // Initialize audio context when needed
+  // (This is now handled automatically by the unified instrument hook)
+  
+  // Clean up is handled automatically by the unified instrument hook
 
-  // Clean up multi-user audio when component unmounts
+  // Cleanup on component unmount
   useEffect(() => {
     return () => {
-      instrumentManager.cleanupAllInstruments();
+      // Clean up socket optimizations
+      socketCleanup();
     };
-  }, [instrumentManager]);
+  }, [socketCleanup]);
+
+  // Cleanup old playing indicators
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setPlayingIndicators(prev => {
+        const newMap = new Map(prev);
+        for (const [username, indicator] of newMap.entries()) {
+          if (now - indicator.timestamp > 200) { // Remove after 200ms
+            newMap.delete(username);
+          }
+        }
+        return newMap;
+      });
+    }, 100); // Check every 100ms
+
+    return () => clearInterval(interval);
+  }, []);
 
   // Handle user leaving - cleanup their instruments
   useEffect(() => {
     const cleanup = onUserLeft((user) => {
-      console.log("Cleaning up instruments for user:", user.username);
-      instrumentManager.cleanupUserInstruments(user.id);
+      cleanupRemoteUser(user.id);
     });
 
     return cleanup;
-  }, [onUserLeft, instrumentManager]);
+  }, [onUserLeft, cleanupRemoteUser]);
 
   // Handle instrument changes - preload new instruments
   useEffect(() => {
     const cleanup = onInstrumentChanged(async (data) => {
-      console.log("🎵 User changed instrument:", data);
       try {
-        await instrumentManager.updateUserInstrument(
+        await updateRemoteUserInstrument(
           data.userId,
           data.username,
           data.instrument,
           data.category as InstrumentCategory
         );
-        console.log(
-          "✅ Successfully updated instrument for user:",
-          data.username
-        );
+        // If the user changed to a synthesizer, request their current parameters
+        if (data.category === InstrumentCategory.Synthesizer) {
+          // Small delay to ensure the instrument is fully loaded
+          setTimeout(() => {
+            requestSynthParams();
+          }, 500);
+        }
       } catch (error) {
         console.error(
           "❌ Failed to update instrument for user:",
@@ -206,23 +239,18 @@ export default function Room() {
     });
 
     return cleanup;
-  }, [onInstrumentChanged, instrumentManager]);
+  }, [onInstrumentChanged, updateRemoteUserInstrument, requestSynthParams]);
 
   // Handle synthesizer parameter changes from remote users
   useEffect(() => {
     const cleanup = onSynthParamsChanged(async (data) => {
-      console.log("🎛️ Remote synth parameters changed:", data);
       try {
-        await instrumentManager.updateUserSynthParams(
+        await updateRemoteUserSynthParams(
           data.userId,
           data.username,
           data.instrument,
           data.category as InstrumentCategory,
           data.params
-        );
-        console.log(
-          "✅ Successfully updated synth parameters for user:",
-          data.username
         );
       } catch (error) {
         console.error(
@@ -234,7 +262,7 @@ export default function Room() {
     });
 
     return cleanup;
-  }, [onSynthParamsChanged, instrumentManager]);
+  }, [onSynthParamsChanged, updateRemoteUserSynthParams]);
 
   // Sync synth parameters when joining a room with existing synthesizer users
   useEffect(() => {
@@ -246,7 +274,6 @@ export default function Room() {
       );
       
       if (otherSynthUsers.length > 0) {
-        console.log("🎛️ Syncing complete synth state to existing users in room");
         // Sync the complete synth state to ensure all parameters are synchronized
         setTimeout(() => {
           socketUpdateSynthParams(synthState);
@@ -257,10 +284,8 @@ export default function Room() {
 
   // Handle requests for synth parameters from new users
   useEffect(() => {
-    const cleanup = onRequestSynthParamsResponse((data) => {
-      console.log("🎛️ Received request for synth parameters from:", data.requestingUsername);
+    const cleanup = onRequestSynthParamsResponse(() => {
       if (currentCategory === InstrumentCategory.Synthesizer && synthState) {
-        console.log("🎛️ Sending complete synth state to new user:", synthState);
         // Send the complete synth state to ensure all parameters are synchronized
         socketUpdateSynthParams(synthState);
       }
@@ -271,18 +296,38 @@ export default function Room() {
 
   // Preload all room instruments when room data changes
   useEffect(() => {
-    if (currentRoom && currentRoom.users && instrumentManager.isReady()) {
-      console.log("Preloading instruments for room users");
-      instrumentManager.preloadRoomInstruments(currentRoom.users);
+    if (currentRoom && currentRoom.users && isAudioContextReady) {
+      const instrumentsToPreload = currentRoom.users.map(user => ({
+        userId: user.id,
+        username: user.username,
+        instrumentName: user.currentInstrument || 'acoustic_grand_piano',
+        category: user.currentCategory || 'melodic'
+      }));
+      preloadRoomInstruments(instrumentsToPreload);
     }
-  }, [currentRoom, instrumentManager]);
+  }, [currentRoom, isAudioContextReady, preloadRoomInstruments]);
 
   // Handle incoming notes from other users with deduplication
   const recentReceivedNotes = useRef<Map<string, number>>(new Map());
   const NOTE_RECEIVE_DEDUPE_WINDOW = 50; // 50ms window to prevent duplicate processing
 
+  // Handle playing indicators for all users (including self)
+  const handleNotePlayed = useCallback((data: { username: string; velocity: number }) => {
+    setPlayingIndicators(prev => {
+      const newMap = new Map(prev);
+      newMap.set(data.username, { 
+        velocity: data.velocity, 
+        timestamp: Date.now() 
+      });
+      return newMap;
+    });
+  }, []);
+
   useEffect(() => {
     const cleanup = onNoteReceived(async (data) => {
+      // Trigger playing indicator for the user who played the note
+      handleNotePlayed({ username: data.username, velocity: data.velocity });
+
       // For mono synths, be more careful with deduplication to preserve key tracking
       const isMonoSynth = data.instrument === "analog_mono" || data.instrument === "fm_mono";
       
@@ -297,7 +342,6 @@ export default function Room() {
         // Check if we recently processed the same event
         const lastProcessed = recentReceivedNotes.current.get(eventKey);
         if (lastProcessed && (now - lastProcessed) < NOTE_RECEIVE_DEDUPE_WINDOW) {
-          console.log(`🔄 Skipping duplicate received note event: ${eventKey}`);
           return;
         }
       }
@@ -316,18 +360,11 @@ export default function Room() {
       }
 
       // Don't automatically switch instruments - each user maintains their own instrument
-      console.log("🎵 Received note from another user:", data);
-
       // Play the note using the separate multi-user audio system
       switch (data.eventType) {
         case "note_on":
-          console.log(
-            `🎹 Playing notes for ${data.username}:`,
-            data.notes,
-            `isKeyHeld: ${data.isKeyHeld}`
-          );
           try {
-            await instrumentManager.playUserNotes(
+            await playRemoteUserNote(
               data.userId,
               data.username,
               data.notes,
@@ -335,10 +372,6 @@ export default function Room() {
               data.instrument,
               data.category as InstrumentCategory,
               data.isKeyHeld || false
-            );
-            console.log(
-              "✅ Successfully played notes for user:",
-              data.username
             );
           } catch (error) {
             console.error(
@@ -349,9 +382,8 @@ export default function Room() {
           }
           break;
         case "note_off":
-          console.log(`🛑 Stopping notes for ${data.username}:`, data.notes);
           try {
-            await instrumentManager.stopUserNotes(
+            await stopRemoteUserNote(
               data.userId,
               data.notes,
               data.instrument,
@@ -366,9 +398,8 @@ export default function Room() {
           }
           break;
         case "sustain_on":
-          console.log(`🎛️ User ${data.username} sustain ON`);
           try {
-            instrumentManager.setUserSustain(
+            setRemoteUserSustain(
               data.userId,
               true,
               data.instrument,
@@ -383,9 +414,8 @@ export default function Room() {
           }
           break;
         case "sustain_off":
-          console.log(`🎛️ User ${data.username} sustain OFF`);
           try {
-            instrumentManager.setUserSustain(
+            setRemoteUserSustain(
               data.userId,
               false,
               data.instrument,
@@ -403,7 +433,7 @@ export default function Room() {
     });
 
     return cleanup;
-  }, [onNoteReceived, instrumentManager]);
+  }, [onNoteReceived, playRemoteUserNote, stopRemoteUserNote, setRemoteUserSustain, handleNotePlayed]);
 
   // Handle instrument changes
   useEffect(() => {
@@ -433,7 +463,12 @@ export default function Room() {
       // Play locally
       playNotes(notes, velocity, isKeyHeld);
 
-      // Send to other users
+      // Trigger playing indicator for local user
+      if (username) {
+        handleNotePlayed({ username, velocity });
+      }
+
+      // Send to other users (avoid double-triggering for drum machines)
       if (currentInstrument && currentCategory) {
         playNote({
           notes,
@@ -445,7 +480,7 @@ export default function Room() {
         });
       }
     },
-    [playNotes, playNote, currentInstrument, currentCategory]
+    [playNotes, playNote, currentInstrument, currentCategory, username, handleNotePlayed]
   );
 
   const handleStopNote = useCallback(
@@ -516,6 +551,14 @@ export default function Room() {
     ]
   );
 
+  const handleSustainToggleChange = useCallback(
+    (sustainToggle: boolean) => {
+      // Update the sustain toggle state for MIDI controller access
+      setSustainToggleState(sustainToggle);
+    },
+    []
+  );
+
   // MIDI Controller integration
   const midiController = useMidiController({
     onNoteOn: (note: number, velocity: number) => {
@@ -565,16 +608,42 @@ export default function Room() {
       // Use handleReleaseKeyHeldNote to properly handle sustain and send to other users
       handleReleaseKeyHeldNote(fullNoteName);
     },
-    onControlChange: (controller: number) => {
-      console.log("MIDI Control Change:", controller);
+    onControlChange: () => {
+      // MIDI Control Change
     },
-    onPitchBend: (value: number, channel: number) => {
-      console.log("MIDI Pitch Bend:", value, "Channel:", channel);
+    onPitchBend: () => {
+      // MIDI Pitch Bend
     },
     onSustainChange: (sustain: boolean) => {
-      // Use the same handleSustainChange function as keyboard/button inputs
-      // This ensures MIDI sustain works with all input methods
-      handleSustainChange(sustain);
+      // For MIDI sustain, we need to handle the inverse behavior when sustain toggle is active
+      // When sustain toggle is ON and MIDI sustain is pressed (true), we should stop sustained notes
+      // When sustain toggle is ON and MIDI sustain is released (false), we should resume sustain
+      if (sustain) {
+        // MIDI sustain pedal pressed down
+        if (sustainToggleState) {
+          // If toggle mode is active, pressing sustain should stop current sustained notes
+          stopSustainedNotes();
+          // Also temporarily turn off sustain to communicate with remote users
+          // then immediately turn it back on to maintain the toggle state
+          handleSustainChange(false);
+          // Use setTimeout to ensure the sustain off message is sent before turning it back on
+          setTimeout(() => {
+            handleSustainChange(true);
+          }, 10);
+        } else {
+          // Normal momentary sustain behavior
+          handleSustainChange(true);
+        }
+      } else {
+        // MIDI sustain pedal released
+        if (sustainToggleState) {
+          // If toggle mode is active, releasing sustain should resume sustain mode
+          handleSustainChange(true);
+        } else {
+          // Normal momentary sustain behavior
+          handleSustainChange(false);
+        }
+      }
     },
   });
 
@@ -583,7 +652,6 @@ export default function Room() {
   // Handle approve member
   const handleApproveMember = useCallback(
     (userId: string) => {
-      console.log("Approving member:", userId);
       approveMember(userId);
     },
     [approveMember]
@@ -592,7 +660,6 @@ export default function Room() {
   // Handle reject member
   const handleRejectMember = useCallback(
     (userId: string) => {
-      console.log("Rejecting member:", userId);
       rejectMember(userId);
     },
     [rejectMember]
@@ -739,33 +806,34 @@ export default function Room() {
               
               {/* Active Members - Compact List */}
               <div className="flex flex-wrap gap-2">
-                {currentRoom?.users.map((user) => (
-                  <div key={user.id} className="flex items-center gap-2 p-2 bg-base-200 rounded-lg min-w-fit">
-                    <div className={`w-2 h-2 rounded-full ${
-                      user.role === "room_owner" ? "bg-primary" : 
-                      user.role === "band_member" ? "bg-success" : "bg-base-content/30"
-                    }`}></div>
-                    <span className="font-medium text-sm whitespace-nowrap">{user.username}</span>
-                    {user.currentInstrument && (
-                      <span className="text-xs text-base-content/60 bg-base-300 px-2 py-1 rounded whitespace-nowrap">
-                        {user.currentInstrument.replace(/_/g, " ")}
+                {currentRoom?.users.map((user) => {
+                  const playingIndicator = playingIndicators.get(user.username);
+                  
+                  return (
+                    <div key={user.id} className="flex items-center gap-2 p-2 bg-base-200 rounded-lg min-w-fit">
+                      <PlayingIndicator velocity={playingIndicator?.velocity || 0} />
+                      <span className="font-medium text-sm whitespace-nowrap">{user.username}</span>
+                      {user.currentInstrument && (
+                        <span className="text-xs text-base-content/60 bg-base-300 px-2 py-1 rounded whitespace-nowrap">
+                          {user.currentInstrument.replace(/_/g, " ")}
+                        </span>
+                      )}
+                      <span className="text-xs whitespace-nowrap">
+                        {user.role === "room_owner" ? "👑" : 
+                         user.role === "band_member" ? "🎸" : ""}
                       </span>
-                    )}
-                    <span className="text-xs text-base-content/50 whitespace-nowrap">
-                      {user.role === "room_owner" ? "Owner" : 
-                       user.role === "band_member" ? "Member" : "Audience"}
-                    </span>
-                    {currentUser?.role === "room_owner" && user.role === "band_member" && (
-                      <button
-                        onClick={() => transferOwnershipTo(user.id)}
-                        className="btn btn-xs btn-outline btn-ghost"
-                        title="Transfer ownership"
-                      >
-                        👑
-                      </button>
-                    )}
-                  </div>
-                ))}
+                      {/* {currentUser?.role === "room_owner" && user.role === "band_member" && (
+                        <button
+                          onClick={() => transferOwnershipTo(user.id)}
+                          className="btn btn-xs btn-outline btn-ghost"
+                          title="Transfer ownership"
+                        >
+                          👑
+                        </button>
+                      )} */}
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Pending Members - Compact */}
@@ -882,6 +950,7 @@ export default function Room() {
       onStopSustainedNotes: stopSustainedNotes,
       onReleaseKeyHeldNote: handleReleaseKeyHeldNote,
       onSustainChange: handleSustainChange,
+      onSustainToggleChange: handleSustainToggleChange,
     };
 
     // Show loading indicator while audio context is initializing

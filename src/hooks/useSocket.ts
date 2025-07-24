@@ -2,7 +2,8 @@ import { useRef, useCallback, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import { useRoomStore } from "../stores/roomStore";
 import { useUserStore } from "../stores/userStore";
-import type { SynthState } from "./useToneSynthesizer";
+import type { SynthState } from "../utils/InstrumentEngine";
+import { throttle } from "lodash";
 
 interface NoteData {
   notes: string[];
@@ -64,12 +65,15 @@ export const useSocket = () => {
   const lastRoomCreatedRef = useRef<string>("");
   const connectingRef = useRef<boolean>(false);
 
-  // Throttling for synth parameter updates
-  const synthParamThrottles = useRef<Map<string, number>>(new Map());
+  // Performance optimizations
+  const messageQueueRef = useRef<Array<{ event: string; data: any; timestamp: number }>>([]);
+  const batchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const BATCH_INTERVAL = 16; // ~60fps for real-time updates
+  const MAX_QUEUE_SIZE = 50; // Prevent memory leaks
 
   // Deduplication for note events to prevent flaming
   const recentNoteEvents = useRef<Map<string, number>>(new Map());
-  const NOTE_DEDUPE_WINDOW = 50; // 50ms window to prevent duplicate note events
+  const NOTE_DEDUPE_WINDOW = 30; // Reduced from 50ms to 30ms for better responsiveness
 
   const {
     setCurrentRoom,
@@ -97,10 +101,60 @@ export const useSocket = () => {
     }
   }, []);
 
+  // Batch message processing for better performance
+  const processMessageBatch = useCallback(() => {
+    if (messageQueueRef.current.length === 0) return;
+
+    const messages = [...messageQueueRef.current];
+    messageQueueRef.current = [];
+
+    // Group messages by event type for efficient processing
+    const groupedMessages = messages.reduce((acc, msg) => {
+      if (!acc[msg.event]) {
+        acc[msg.event] = [];
+      }
+      acc[msg.event].push(msg.data);
+      return acc;
+    }, {} as Record<string, any[]>);
+
+    // Process each group
+    Object.entries(groupedMessages).forEach(([event, dataArray]) => {
+      if (socketRef.current?.connected) {
+        // For most events, send the latest data only
+        const latestData = dataArray[dataArray.length - 1];
+        socketRef.current.emit(event, latestData);
+      }
+    });
+
+    batchTimeoutRef.current = null;
+  }, []);
+
+  // Queue message for batched processing
+  const queueMessage = useCallback((event: string, data: any) => {
+    // Add message to queue
+    messageQueueRef.current.push({ event, data, timestamp: Date.now() });
+
+    // Limit queue size to prevent memory leaks
+    if (messageQueueRef.current.length > MAX_QUEUE_SIZE) {
+      messageQueueRef.current = messageQueueRef.current.slice(-MAX_QUEUE_SIZE / 2);
+    }
+
+    // Schedule batch processing if not already scheduled
+    if (!batchTimeoutRef.current) {
+      batchTimeoutRef.current = setTimeout(processMessageBatch, BATCH_INTERVAL);
+    }
+  }, [processMessageBatch]);
+
   // Safe emit function that waits for connection
   const safeEmit = useCallback((event: string, data: any) => {
     if (socketRef.current?.connected) {
-      socketRef.current.emit(event, data);
+      // For real-time events like notes, emit immediately
+      if (event === 'play_note' || event === 'change_instrument') {
+        socketRef.current.emit(event, data);
+      } else {
+        // For other events, use batching
+        queueMessage(event, data);
+      }
     } else {
       // Queue the operation to execute when connected
       pendingOperationsRef.current.push(() => {
@@ -109,24 +163,14 @@ export const useSocket = () => {
         }
       });
     }
-  }, []);
+  }, [queueMessage]);
 
-  // Throttled emit for synth parameters
+  // Throttled emit for synth parameters with lodash
   const throttledEmit = useCallback(
-    (event: string, data: any, throttleKey: string, delay: number = 16) => {
-      // Clear existing throttle for this key
-      const existingThrottle = synthParamThrottles.current.get(throttleKey);
-      if (existingThrottle) {
-        clearTimeout(existingThrottle);
-      }
-
-      // Set new throttle
-      const timeoutId = setTimeout(() => {
-        safeEmit(event, data);
-        synthParamThrottles.current.delete(throttleKey);
-      }, delay);
-
-      synthParamThrottles.current.set(throttleKey, timeoutId);
+    (event: string, data: any) => {
+      throttle((evt: string, dat: any) => {
+        safeEmit(evt, dat);
+      }, 16)(event, data);
     },
     [safeEmit]
   );
@@ -552,8 +596,7 @@ export const useSocket = () => {
   // Update synthesizer parameters (throttled for real-time updates)
   const updateSynthParams = useCallback(
     (params: Partial<SynthState>) => {
-      const throttleKey = "synth_params";
-      throttledEmit("update_synth_params", { params }, throttleKey, 16); // ~60fps
+      throttledEmit("update_synth_params", { params });
     },
     [throttledEmit]
   );
@@ -642,6 +685,23 @@ export const useSocket = () => {
     memberRejectedCallbackRef.current = callback;
   }, []);
 
+  // Cleanup function for performance optimizations
+  const cleanup = useCallback(() => {
+    // Clear any pending batch processing
+    if (batchTimeoutRef.current) {
+      clearTimeout(batchTimeoutRef.current);
+      batchTimeoutRef.current = null;
+    }
+    
+    // Process any remaining messages in queue
+    if (messageQueueRef.current.length > 0) {
+      processMessageBatch();
+    }
+    
+    // Clear recent note events
+    recentNoteEvents.current.clear();
+  }, [processMessageBatch]);
+
   return {
     connect,
     createRoom,
@@ -667,5 +727,6 @@ export const useSocket = () => {
     isConnected: isConnected,
     isConnecting,
     socketRef, // Expose the socket instance
+    cleanup, // Expose cleanup function
   };
 };

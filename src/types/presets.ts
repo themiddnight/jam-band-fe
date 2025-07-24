@@ -1,4 +1,4 @@
-import type { SynthState } from "../hooks/useToneSynthesizer";
+import type { SynthState } from "../utils/InstrumentEngine";
 
 export interface SynthPreset {
   id: string;

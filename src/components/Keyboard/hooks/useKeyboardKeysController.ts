@@ -22,7 +22,7 @@ export const useKeyboardKeysController = (
   scaleState: ScaleState,
   virtualKeyboard: VirtualKeyboardState
 ) => {
-  const { handleAllControlKeys } = useControlKeys(keyboardState, virtualKeyboard);
+  const { handleAllControlKeys, handleSustainRelease } = useControlKeys(keyboardState, virtualKeyboard);
   const { handleChordModifierPress, handleChordModifierRelease } = useChordModifiers(keyboardState, scaleState, virtualKeyboard);
   const { handleNotePlaying } = useNotePlaying(keyboardState, scaleState, virtualKeyboard);
   const { handleNoteStopping } = useNoteStopping(keyboardState, scaleState, virtualKeyboard);
@@ -156,14 +156,7 @@ export const useKeyboardKeysController = (
       }
 
       // Handle sustain release
-      const shortcuts = useKeyboardShortcutsStore.getState().shortcuts;
-      if (key === shortcuts.sustain.key) {
-        if (!keyboardState.sustainToggle) {
-          // Only stop sustain on spacebar release if not in toggle mode
-          keyboardState.setSustain(false);
-          keyboardState.stopSustainedNotes();
-        }
-        // If in toggle mode, do nothing on spacebar release - keep toggle active
+      if (handleSustainRelease(key)) {
         return;
       }
 
@@ -175,7 +168,7 @@ export const useKeyboardKeysController = (
       // Handle note stopping
       handleNoteStopping(key);
     },
-    [updateHeldKeys, handleChordModifierRelease, controlKeys, handleNoteStopping, keyboardState]
+    [updateHeldKeys, handleChordModifierRelease, handleSustainRelease, controlKeys, handleNoteStopping, keyboardState]
   );
 
   return { handleKeyDown, handleKeyUp };

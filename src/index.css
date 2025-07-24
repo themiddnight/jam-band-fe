@@ -57,3 +57,31 @@
     user-select: none;
   }
 }
+
+/* user indicator animation */
+
+.user-on {
+  animation: user-on 10ms ease-in-out forwards;
+}
+
+.user-off {
+  animation: user-off 3s ease-in-out forwards;
+}
+
+@keyframes user-on {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes user-off {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}

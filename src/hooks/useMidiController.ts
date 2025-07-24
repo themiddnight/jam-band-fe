@@ -169,15 +169,37 @@ export const useMidiController = ({
   // Handle window focus/visibility to refresh MIDI devices
   const handleWindowFocus = useCallback(() => {
     if (isInitialized.current && midiAccess.current) {
-      console.log('Window focused - refreshing MIDI devices');
-      refreshMidiDevices();
+      // Only refresh if we detect a state change in MIDI devices
+      const currentInputs = Array.from(midiAccess.current.inputs.values());
+      const hasStateChange = currentInputs.length !== inputs.current.length || 
+        currentInputs.some((input, index) => 
+          !inputs.current[index] || 
+          input.id !== inputs.current[index].id || 
+          input.state !== inputs.current[index].state
+        );
+      
+      if (hasStateChange) {
+        console.log('Window focused - refreshing MIDI devices');
+        refreshMidiDevices();
+      }
     }
   }, [refreshMidiDevices]);
 
   const handleVisibilityChange = useCallback(() => {
     if (!document.hidden && isInitialized.current && midiAccess.current) {
-      console.log('Tab became visible - refreshing MIDI devices');
-      refreshMidiDevices();
+      // Only refresh if we detect a state change in MIDI devices
+      const currentInputs = Array.from(midiAccess.current.inputs.values());
+      const hasStateChange = currentInputs.length !== inputs.current.length || 
+        currentInputs.some((input, index) => 
+          !inputs.current[index] || 
+          input.id !== inputs.current[index].id || 
+          input.state !== inputs.current[index].state
+        );
+      
+      if (hasStateChange) {
+        console.log('Tab became visible - refreshing MIDI devices');
+        refreshMidiDevices();
+      }
     }
   }, [refreshMidiDevices]);
 

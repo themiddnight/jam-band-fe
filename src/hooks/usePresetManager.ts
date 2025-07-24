@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import type { SynthPreset, PresetManager, PresetBank } from "../types/presets";
-import type { SynthState } from "./useToneSynthesizer";
+import type { SynthState } from "../utils/InstrumentEngine";
 
 const STORAGE_KEY = "jam-band-synth-presets";
 const PRESET_VERSION = "1.0.0";
@@ -11,12 +11,7 @@ export const usePresetManager = (): PresetManager => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load presets from localStorage on initialization
-  useEffect(() => {
-    loadPresetsFromStorage();
-  }, []);
-
-  const loadPresetsFromStorage = useCallback(() => {
+  const loadPresetsFromStorage = () => {
     try {
       setIsLoading(true);
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -37,6 +32,11 @@ export const usePresetManager = (): PresetManager => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Load presets from localStorage on initialization
+  useEffect(() => {
+    loadPresetsFromStorage();
   }, []);
 
   const savePresetsToStorage = useCallback((presetsToSave: SynthPreset[]) => {

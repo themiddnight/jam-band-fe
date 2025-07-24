@@ -76,14 +76,12 @@ export default function Lobby() {
   useEffect(() => {
     if (!isConnected) return;
 
-    const handleRoomCreated = (data: Room) => {
-      console.log('Room created callback triggered:', data);
+    const handleRoomCreated = () => {
       // Refresh the room list immediately when a new room is created
       fetchRooms();
     };
 
     const handleRoomClosed = (roomId: string) => {
-      console.log('Room closed callback triggered:', roomId);
       setRooms(prevRooms => prevRooms.filter(room => room.id !== roomId));
     };
 
@@ -105,8 +103,8 @@ export default function Lobby() {
       const response = await fetch(`${BACKEND_URL}/api/rooms`);
       const data = await response.json();
       setRooms(data);
-    } catch (error) {
-      console.error('Failed to fetch rooms:', error);
+    } catch {
+      // Failed to fetch rooms
     } finally {
       setLoading(false);
     }

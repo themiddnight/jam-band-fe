@@ -24,6 +24,7 @@ export interface Props {
   onStopSustainedNotes: () => void;
   onReleaseKeyHeldNote: (note: string) => void;
   onSustainChange: (sustain: boolean) => void;
+  onSustainToggleChange?: (sustainToggle: boolean) => void;
 }
 
 export default function Keyboard({
@@ -33,6 +34,7 @@ export default function Keyboard({
   onStopSustainedNotes,
   onReleaseKeyHeldNote,
   onSustainChange,
+  onSustainToggleChange,
 }: Props) {
   const shortcuts = useKeyboardShortcutsStore((state) => state.shortcuts);
   const [showShortcutConfig, setShowShortcutConfig] = useState<boolean>(false);
@@ -45,6 +47,7 @@ export default function Keyboard({
     onStopSustainedNotes,
     onReleaseKeyHeldNote,
     onSustainChange,
+    onSustainToggleChange,
   });
 
   const virtualKeyboard = useVirtualKeyboard(
@@ -289,8 +292,16 @@ export default function Keyboard({
                   onMouseDown={(e) => {
                     e.preventDefault();
                     if (keyboardStateData.sustainToggle) {
-                      // If toggle mode is active, sustain button only stops current sustained notes
+                      // If toggle mode is active, sustain button stops current sustained notes
+                      // This creates the "inverse" behavior where tapping sustain stops sound
                       onStopSustainedNotes();
+                      // Also temporarily turn off sustain to communicate with remote users
+                      // then immediately turn it back on to maintain the toggle state
+                      keyboardStateData.setSustain(false);
+                      // Use setTimeout to ensure the sustain off message is sent before turning it back on
+                      setTimeout(() => {
+                        keyboardStateData.setSustain(true);
+                      }, 10);
                     } else {
                       // Normal momentary sustain behavior
                       keyboardStateData.setSustain(true);
@@ -298,10 +309,13 @@ export default function Keyboard({
                   }}
                   onMouseUp={(e) => {
                     e.preventDefault();
-                    if (!keyboardStateData.sustainToggle) {
-                      // Only stop sustain on button release if not in toggle mode
+                    if (keyboardStateData.sustainToggle) {
+                      // If toggle mode is active, releasing sustain should resume sustain mode
+                      // This creates the "inverse" behavior where lifting sustain resumes sustain
+                      keyboardStateData.setSustain(true);
+                    } else {
+                      // Normal momentary sustain behavior - turn off sustain
                       keyboardStateData.setSustain(false);
-                      // Fix: Also stop sustained notes like the spacebar does
                       onStopSustainedNotes();
                     }
                   }}
@@ -314,13 +328,24 @@ export default function Keyboard({
                   {...useTouchEvents(
                     () => {
                       if (keyboardStateData.sustainToggle) {
+                        // If toggle mode is active, tapping sustain stops current sustained notes
                         onStopSustainedNotes();
+                        // Also temporarily turn off sustain to communicate with remote users
+                        // then immediately turn it back on to maintain the toggle state
+                        keyboardStateData.setSustain(false);
+                        // Use setTimeout to ensure the sustain off message is sent before turning it back on
+                        setTimeout(() => {
+                          keyboardStateData.setSustain(true);
+                        }, 10);
                       } else {
                         keyboardStateData.setSustain(true);
                       }
                     },
                     () => {
-                      if (!keyboardStateData.sustainToggle) {
+                      if (keyboardStateData.sustainToggle) {
+                        // If toggle mode is active, releasing sustain should resume sustain mode
+                        keyboardStateData.setSustain(true);
+                      } else {
                         keyboardStateData.setSustain(false);
                         onStopSustainedNotes();
                       }

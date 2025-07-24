@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { SYNTHESIZER_INSTRUMENTS } from "../../constants/instruments";
 import { usePresetManager } from "../../hooks/usePresetManager";
 import { DEFAULT_PRESETS } from "../../constants/defaultPresets";
-import type { SynthState } from "../../hooks/useToneSynthesizer";
+import type { SynthState } from "../../utils/InstrumentEngine";
 import type { SynthPreset } from "../../types/presets";
 import { LatencyControls } from "./LatencyControls";
 import { Knob } from "../shared/Knob";

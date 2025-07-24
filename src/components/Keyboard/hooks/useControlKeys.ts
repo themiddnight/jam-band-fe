@@ -12,8 +12,16 @@ export const useControlKeys = (
     if (key === shortcuts.sustain.key) {
       if (!keyboardState.heldKeys.has(key)) {
         if (keyboardState.sustainToggle) {
-          // If toggle mode is active, spacebar only stops current sustained notes
+          // If toggle mode is active, spacebar stops current sustained notes
+          // This creates the "inverse" behavior where tapping sustain stops sound
           keyboardState.stopSustainedNotes();
+          // Also temporarily turn off sustain to communicate with remote users
+          // then immediately turn it back on to maintain the toggle state
+          keyboardState.setSustain(false);
+          // Use setTimeout to ensure the sustain off message is sent before turning it back on
+          setTimeout(() => {
+            keyboardState.setSustain(true);
+          }, 10);
         } else {
           // Normal momentary sustain behavior
           keyboardState.setSustain(true);
@@ -22,6 +30,26 @@ export const useControlKeys = (
           new Set(prev).add(key)
         );
       }
+      return true;
+    }
+    return false;
+  }, [keyboardState, shortcuts.sustain.key]);
+
+  const handleSustainRelease = useCallback((key: string) => {
+    if (key === shortcuts.sustain.key) {
+      if (keyboardState.sustainToggle) {
+        // If toggle mode is active, releasing sustain should resume sustain mode
+        // This creates the "inverse" behavior where lifting sustain resumes sustain
+        keyboardState.setSustain(true);
+      } else {
+        // Normal momentary sustain behavior - turn off sustain
+        keyboardState.setSustain(false);
+      }
+      keyboardState.setHeldKeys((prev: Set<string>) => {
+        const newSet = new Set(prev);
+        newSet.delete(key);
+        return newSet;
+      });
       return true;
     }
     return false;
@@ -104,5 +132,5 @@ export const useControlKeys = (
     );
   }, [handleSustain, handleSustainToggle, handleVelocity, handleToggleMelodyChord, handleOctaveControls, handleVoicingControls]);
 
-  return { handleAllControlKeys };
+  return { handleAllControlKeys, handleSustainRelease };
 }; 

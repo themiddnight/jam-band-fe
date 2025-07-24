@@ -41,7 +41,8 @@ export const useDrumpadState = ({
   // Initialize with current instrument and load default preset
   useEffect(() => {
     setStoreInstrument(currentInstrument);
-  }, [currentInstrument, setStoreInstrument]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentInstrument]);
 
   // Load and validate preset assignments when current preset or available samples change
   useEffect(() => {
@@ -58,7 +59,8 @@ export const useDrumpadState = ({
       setPadAssignments(smartDefaultPreset.padAssignments);
       setPadVolumes(smartDefaultPreset.padVolumes || {});
     }
-  }, [currentPreset, availableSamples, currentInstrument, createSmartDefaultPreset, loadStorePreset]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPreset, availableSamples, currentInstrument]);
 
   // Generate the fixed 16 pads
   const pads = useMemo(() => {
@@ -168,7 +170,8 @@ export const useDrumpadState = ({
     }
     setIsEditMode(false);
     setSelectedPadForAssign(null);
-  }, [availableSamples, currentInstrument, createSmartDefaultPreset, loadStorePreset]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableSamples, currentInstrument]);
 
   const toggleEditMode = useCallback(() => {
     setIsEditMode(prev => !prev);
@@ -194,7 +197,8 @@ export const useDrumpadState = ({
     }
     setIsEditMode(false);
     setSelectedPadForAssign(null);
-  }, [loadStorePreset, availableSamples]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableSamples]);
 
   // Optimized keyboard event handling
   useEffect(() => {

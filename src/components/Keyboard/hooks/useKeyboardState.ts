@@ -34,6 +34,10 @@ export const useKeyboardState = (props: Props) => {
       props.onSustainChange(false);
       props.onStopSustainedNotes();
     }
+    // Notify parent component of sustain toggle state change
+    if (props.onSustainToggleChange) {
+      props.onSustainToggleChange(newSustainToggle);
+    }
   }, [props]);
 
   // Optimized set operations for pressed keys
