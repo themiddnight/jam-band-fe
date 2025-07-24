@@ -44,6 +44,9 @@ export const useUnifiedInstrumentManager = (): UseUnifiedInstrumentManagerReturn
   const localEngine = useRef<InstrumentEngine | null>(null);
   const remoteEngines = useRef<Map<string, InstrumentEngine>>(new Map());
   const isInitialized = useRef<boolean>(false);
+  
+  // Track loading states to prevent concurrent requests
+  const loadingEngines = useRef<Map<string, Promise<InstrumentEngine>>>(new Map());
 
   // Initialize audio context
   const initializeAudioContext = useCallback(async () => {
@@ -108,25 +111,52 @@ export const useUnifiedInstrumentManager = (): UseUnifiedInstrumentManagerReturn
       await initializeAudioContext();
     }
 
+    const key = getEngineKey(config.userId, config.instrumentName, config.category);
+    
+    // Check if this engine is already being loaded
+    const existingLoadPromise = loadingEngines.current.get(key);
+    if (existingLoadPromise) {
+      console.log(`⏳ Engine ${key} already loading, waiting for existing load...`);
+      return existingLoadPromise;
+    }
+    
+    // Check if engine already exists and is ready
+    const existingEngine = remoteEngines.current.get(key);
+    if (existingEngine && existingEngine.isReady()) {
+      return existingEngine;
+    }
+
     const engineConfig: InstrumentEngineConfig = {
       ...config,
       isLocalUser: false,
     };
-
-    const key = getEngineKey(config.userId, config.instrumentName, config.category);
     
-    // Dispose existing engine with same key
-    const existingEngine = remoteEngines.current.get(key);
-    if (existingEngine) {
-      existingEngine.dispose();
+    // Create loading promise
+    const loadPromise = (async () => {
+      // Dispose existing engine with same key
+      if (existingEngine) {
+        existingEngine.dispose();
+      }
+
+      const engine = new InstrumentEngine(engineConfig);
+      await engine.initialize(audioContext.current!);
+      
+      remoteEngines.current.set(key, engine);
+      loadingEngines.current.delete(key); // Clean up loading state
+      
+      return engine;
+    })();
+    
+    // Track the loading promise
+    loadingEngines.current.set(key, loadPromise);
+    
+    try {
+      return await loadPromise;
+    } catch (error) {
+      // Clean up loading state on error
+      loadingEngines.current.delete(key);
+      throw error;
     }
-
-    const engine = new InstrumentEngine(engineConfig);
-    await engine.initialize(audioContext.current!);
-    
-    remoteEngines.current.set(key, engine);
-    
-    return engine;
   }, [initializeAudioContext, getEngineKey]);
 
   const getRemoteEngine = useCallback((userId: string, instrumentName: string, category: InstrumentCategory) => {
@@ -310,6 +340,9 @@ export const useUnifiedInstrumentManager = (): UseUnifiedInstrumentManagerReturn
       engine.dispose();
     });
     remoteEngines.current.clear();
+    
+    // Clear loading states
+    loadingEngines.current.clear();
     
     // Close audio context
     if (audioContext.current && audioContext.current.state !== 'closed') {

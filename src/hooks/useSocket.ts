@@ -563,7 +563,7 @@ export const useSocket = () => {
         // Check if we recently sent the same event
         const lastSent = recentNoteEvents.current.get(eventKey);
         if (lastSent && (now - lastSent) < dedupeWindow) {
-          console.log(`🔄 Skipping duplicate note event: ${eventKey} (${isDrumMachine ? 'drum' : 'other'} instrument)`);
+          // Skip duplicate note events silently
           return;
         }
       }

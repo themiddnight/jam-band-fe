@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef, useState } from "react";
+import { useEffect, useCallback, useRef, useState, useMemo } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useUserStore } from "../stores/userStore";
 import { useRoomStore } from "../stores/roomStore";
@@ -215,6 +215,12 @@ export default function Room() {
   // Handle instrument changes - preload new instruments
   useEffect(() => {
     const cleanup = onInstrumentChanged(async (data) => {
+      // Skip if this is the current user's own instrument change
+      if (currentUser && data.userId === currentUser.id) {
+        console.log(`⏭️ Skipping own instrument change for user ${data.username}`);
+        return;
+      }
+      
       try {
         await updateRemoteUserInstrument(
           data.userId,
@@ -239,11 +245,17 @@ export default function Room() {
     });
 
     return cleanup;
-  }, [onInstrumentChanged, updateRemoteUserInstrument, requestSynthParams]);
+  }, [onInstrumentChanged, updateRemoteUserInstrument, requestSynthParams, currentUser]);
 
   // Handle synthesizer parameter changes from remote users
   useEffect(() => {
     const cleanup = onSynthParamsChanged(async (data) => {
+      // Skip if this is the current user's own synth params change
+      if (currentUser && data.userId === currentUser.id) {
+        console.log(`⏭️ Skipping own synth params change for user ${data.username}`);
+        return;
+      }
+      
       try {
         await updateRemoteUserSynthParams(
           data.userId,
@@ -262,7 +274,7 @@ export default function Room() {
     });
 
     return cleanup;
-  }, [onSynthParamsChanged, updateRemoteUserSynthParams]);
+  }, [onSynthParamsChanged, updateRemoteUserSynthParams, currentUser]);
 
   // Sync synth parameters when joining a room with existing synthesizer users
   useEffect(() => {
@@ -294,18 +306,80 @@ export default function Room() {
     return cleanup;
   }, [onRequestSynthParamsResponse, currentCategory, synthState, socketUpdateSynthParams]);
 
+  // Track preloaded instruments to avoid redundant requests
+  const preloadedInstruments = useRef<Set<string>>(new Set());
+  
+  // Debounce mechanism to prevent infinite loops
+  const lastPreloadTime = useRef<number>(0);
+  const PRELOAD_DEBOUNCE_MS = 1000; // Minimum 1 second between preload attempts
+
+  // Memoize room users to prevent effect from running too frequently
+  const roomUsers = useMemo(() => {
+    return currentRoom?.users || [];
+  }, [currentRoom?.users]);
+
   // Preload all room instruments when room data changes
   useEffect(() => {
-    if (currentRoom && currentRoom.users && isAudioContextReady) {
-      const instrumentsToPreload = currentRoom.users.map(user => ({
-        userId: user.id,
-        username: user.username,
-        instrumentName: user.currentInstrument || 'acoustic_grand_piano',
-        category: user.currentCategory || 'melodic'
-      }));
-      preloadRoomInstruments(instrumentsToPreload);
+    const now = Date.now();
+    
+    // Only run if we have users and audio context is ready
+    if (roomUsers.length === 0 || !isAudioContextReady) {
+      return;
     }
-  }, [currentRoom, isAudioContextReady, preloadRoomInstruments]);
+    
+    // Check if there are any users with instruments that need preloading
+    const usersWithInstruments = roomUsers.filter(user => 
+      user.currentInstrument && user.currentCategory
+    );
+    
+    // If no users have instruments set, don't run at all
+    if (usersWithInstruments.length === 0) {
+      console.log(`📭 No users with instruments to preload`);
+      return;
+    }
+    
+    // Debounce check
+    if ((now - lastPreloadTime.current) <= PRELOAD_DEBOUNCE_MS) {
+      console.log(`⏸️ Skipping preload check - debounced (last run ${now - lastPreloadTime.current}ms ago)`);
+      return;
+    }
+    
+    console.log(`🔍 [${now}] Checking ${roomUsers.length} users for instrument preloading`);
+    lastPreloadTime.current = now;
+    
+    const instrumentsToPreload = usersWithInstruments
+      .filter((user): user is typeof user & { currentInstrument: string; currentCategory: string } => {
+        const instrumentKey = `${user.id}-${user.currentInstrument}-${user.currentCategory}`;
+        // Only preload if we haven't already preloaded this exact instrument for this user
+        if (preloadedInstruments.current.has(instrumentKey)) {
+          console.log(`⏭️ Skipping user ${user.username} - ${user.currentInstrument} already preloaded`);
+          return false;
+        }
+        
+        console.log(`✅ Will preload ${user.currentInstrument} (${user.currentCategory}) for user ${user.username}`);
+        return true;
+      })
+      .map(user => {
+        // Add to preloaded set here, after filtering
+        const instrumentKey = `${user.id}-${user.currentInstrument}-${user.currentCategory}`;
+        preloadedInstruments.current.add(instrumentKey);
+        
+        return {
+          userId: user.id,
+          username: user.username,
+          instrumentName: user.currentInstrument,
+          category: user.currentCategory
+        };
+      });
+    
+    if (instrumentsToPreload.length > 0) {
+      console.log(`🎵 Preloading ${instrumentsToPreload.length} new instruments for room users:`, instrumentsToPreload);
+      preloadRoomInstruments(instrumentsToPreload);
+    } else {
+      console.log(`📭 No new instruments to preload`);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomUsers, isAudioContextReady]); // Removed preloadRoomInstruments from deps
 
   // Handle incoming notes from other users with deduplication
   const recentReceivedNotes = useRef<Map<string, number>>(new Map());

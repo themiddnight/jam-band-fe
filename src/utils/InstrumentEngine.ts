@@ -276,16 +276,24 @@ export class InstrumentEngine {
     }
 
     if (this.isLoading && this.loadPromise) {
+      // If already loading, return the existing promise to prevent duplicate requests
+      console.log(`⏳ Instrument ${this.config.instrumentName} already loading for ${this.config.username}, waiting for existing load...`);
       return this.loadPromise;
     }
 
     this.isLoading = true;
+    console.log(`🎵 Starting to load ${this.config.instrumentName} (${this.config.category}) for ${this.config.isLocalUser ? 'local' : 'remote'} user ${this.config.username}`);
+    
     this.loadPromise = this._loadInstrument();
     
     try {
       const result = await this.loadPromise;
       this.isLoaded = true;
+      console.log(`✅ Successfully loaded ${this.config.instrumentName} for ${this.config.username}`);
       return result;
+    } catch (error) {
+      console.error(`❌ Failed to load ${this.config.instrumentName} for ${this.config.username}:`, error);
+      throw error;
     } finally {
       this.isLoading = false;
       this.loadPromise = null;

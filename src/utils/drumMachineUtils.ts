@@ -11,7 +11,6 @@ export interface DrumMachineInfo {
 export const getAvailableDrumMachines = async (): Promise<DrumMachineInfo[]> => {
   try {
     const drumMachineNames = await getDrumMachineNames();
-    console.log("Available drum machines from smplr:", drumMachineNames);
     
     return drumMachineNames.map((name: string) => {
       // All available drum machines are electronic, so use drumpad interface for all

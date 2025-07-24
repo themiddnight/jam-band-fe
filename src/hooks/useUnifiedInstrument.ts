@@ -132,6 +132,9 @@ export const useUnifiedInstrument = (
   // Add a state trigger to force synthState updates
   const [synthStateUpdateTrigger, setSynthStateUpdateTrigger] =
     useState<number>(0);
+    
+  // Track loading state to prevent concurrent requests
+  const isCurrentlyLoading = useRef<boolean>(false);
 
   // Initialize instrument values
   const getInitialInstrument = (): string => {
@@ -197,19 +200,14 @@ export const useUnifiedInstrument = (
       currentCategory === InstrumentCategory.DrumBeat &&
       isAudioContextReady
     ) {
-      console.log(
-        `🥁 Checking initial samples for drum machine: ${currentInstrument}`
-      );
+      // Check initial samples for drum machine
 
       const checkSamples = () => {
         const localEngine = instrumentManager.getLocalEngine();
         if (localEngine && localEngine.isReady()) {
           const actualSamples = instrumentManager.getLocalAvailableSamples();
           if (actualSamples.length > 0) {
-            console.log(
-              `✅ Found ${actualSamples.length} samples for ${currentInstrument}:`,
-              actualSamples
-            );
+            // Found samples for drum machine
             setAvailableSamples((prev) => {
               // Only update if samples actually changed to prevent infinite loops
               if (JSON.stringify(prev) !== JSON.stringify(actualSamples)) {
@@ -225,9 +223,7 @@ export const useUnifiedInstrument = (
 
       // Try immediately
       if (!checkSamples()) {
-        console.log(
-          `⏳ No samples found immediately for ${currentInstrument}, starting polling...`
-        );
+        // No samples found immediately, starting polling...
         // If no samples immediately, poll for them
         const pollInterval = setInterval(() => {
           if (checkSamples()) {
@@ -268,7 +264,6 @@ export const useUnifiedInstrument = (
       }
     }
   }, [
-    instrumentManager,
     currentCategory,
     currentInstrument,
     isAudioContextReady,
@@ -378,11 +373,17 @@ export const useUnifiedInstrument = (
     } else {
       setAvailableSamples([]);
     }
-  }, [instrumentManager, currentCategory]);
+  }, [currentCategory]);
 
   // Load instrument
   const loadInstrument = useCallback(
     async (instrumentName: string, category: InstrumentCategory) => {
+      // Prevent concurrent loading requests
+      if (isCurrentlyLoading.current) {
+        console.log(`⏳ Already loading an instrument, skipping duplicate request for ${instrumentName}`);
+        return;
+      }
+      
       const drumMachines = DRUM_MACHINES.map((dm) => dm.value);
       const synthesizers = SYNTHESIZER_INSTRUMENTS.map((s) => s.value);
       const soundfonts = SOUNDFONT_INSTRUMENTS.map((s) => s.value);
@@ -396,6 +397,7 @@ export const useUnifiedInstrument = (
         validatedCategory = InstrumentCategory.Melodic;
       }
 
+      isCurrentlyLoading.current = true;
       setIsLoadingInstrument(true);
       setAudioContextError(null);
 
@@ -454,7 +456,15 @@ export const useUnifiedInstrument = (
         // Refresh samples after a short delay to ensure drum machine is fully loaded
         if (validatedCategory === InstrumentCategory.DrumBeat) {
           setTimeout(() => {
-            refreshAvailableSamples();
+            if (currentCategory === InstrumentCategory.DrumBeat) {
+              const localEngine = instrumentManager.getLocalEngine();
+              if (localEngine && localEngine.isReady()) {
+                const actualSamples = instrumentManager.getLocalAvailableSamples();
+                if (actualSamples.length > 0) {
+                  setAvailableSamples(actualSamples);
+                }
+              }
+            }
           }, 100);
         }
         
@@ -480,6 +490,7 @@ export const useUnifiedInstrument = (
         );
         throw error;
       } finally {
+        isCurrentlyLoading.current = false;
         setIsLoadingInstrument(false);
       }
     },
@@ -487,7 +498,6 @@ export const useUnifiedInstrument = (
       instrumentManager,
       onSynthParamsChange,
       setPreferences,
-      refreshAvailableSamples,
     ]
   );
 
