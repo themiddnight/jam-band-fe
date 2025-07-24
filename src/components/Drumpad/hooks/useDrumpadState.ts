@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { 
   DRUMPAD_SHORTCUTS, 
   DRUMPAD_COLORS, 
@@ -20,6 +20,11 @@ export const useDrumpadState = ({
   const [padVolumes, setPadVolumes] = useState<Record<string, number>>({});
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
   const [selectedPadForAssign, setSelectedPadForAssign] = useState<string | null>(null);
+
+  // Add refs for better event handling performance
+  const processingKeys = useRef<Set<string>>(new Set());
+  const lastPlayTime = useRef<Map<string, number>>(new Map());
+  const MIN_PLAY_INTERVAL = 10; // Minimum 10ms between same pad hits to prevent spam
 
   // Store integration
   const {
@@ -104,6 +109,14 @@ export const useDrumpadState = ({
       return;
     }
 
+    // Prevent rapid-fire spam on the same pad
+    const now = Date.now();
+    const lastTime = lastPlayTime.current.get(padId);
+    if (lastTime && (now - lastTime) < MIN_PLAY_INTERVAL) {
+      return;
+    }
+    lastPlayTime.current.set(padId, now);
+
     setPressedPads(prev => new Set(prev).add(padId));
     
     if (sound) {
@@ -183,14 +196,40 @@ export const useDrumpadState = ({
     setSelectedPadForAssign(null);
   }, [loadStorePreset, availableSamples]);
 
-  // Keyboard event handling
+  // Optimized keyboard event handling
   useEffect(() => {
+    const currentProcessingKeys = processingKeys.current;
+    
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.repeat || isEditMode) return;
       
-      const padEntry = Object.entries(DRUMPAD_SHORTCUTS).find(([, key]) => key === e.key.toLowerCase());
+      const key = e.key.toLowerCase();
+      
+      // Check if the target is an input element
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.contentEditable === 'true' ||
+        target.closest('input, textarea, [contenteditable="true"]')
+      ) {
+        return;
+      }
+
+      // Early exit if key is being processed
+      if (currentProcessingKeys.has(key)) {
+        return;
+      }
+
+      const padEntry = Object.entries(DRUMPAD_SHORTCUTS).find(([, shortcutKey]) => shortcutKey === key);
       if (padEntry) {
+        e.preventDefault(); // Prevent default for drum pad keys
+        
         const [padId] = padEntry;
+        
+        // Mark key as being processed
+        currentProcessingKeys.add(key);
+        
         handlePadPress(padId, padAssignments[padId]);
       }
     };
@@ -198,7 +237,12 @@ export const useDrumpadState = ({
     const handleKeyUp = (e: KeyboardEvent) => {
       if (isEditMode) return;
       
-      const padEntry = Object.entries(DRUMPAD_SHORTCUTS).find(([, key]) => key === e.key.toLowerCase());
+      const key = e.key.toLowerCase();
+      
+      // Remove from processing keys
+      currentProcessingKeys.delete(key);
+      
+      const padEntry = Object.entries(DRUMPAD_SHORTCUTS).find(([, shortcutKey]) => shortcutKey === key);
       if (padEntry) {
         const [padId] = padEntry;
         handlePadRelease(padId);
@@ -211,6 +255,8 @@ export const useDrumpadState = ({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      // Clear processing keys on cleanup
+      currentProcessingKeys.clear();
     };
   }, [padAssignments, isEditMode, handlePadPress, handlePadRelease]);
 

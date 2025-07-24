@@ -62,7 +62,7 @@ export default function Room() {
     isAudioContextReady,
     audioContextError,
     initializeAudioContext,
-    playNotes,
+    playNote: playNotes,
     stopNotes,
     stopSustainedNotes,
     releaseKeyHeldNote,
@@ -727,74 +727,77 @@ export default function Room() {
         {/* Room Members */}
         <div className="w-full max-w-6xl mb-4">
           <div className="card bg-base-100 shadow-xl">
-            <div className="card-body">
-              <h3 className="card-title">Room Members</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="card-body p-4">
+              <div className="flex items-center justify-between">
+                {/* <h4 className="card-title">Room Members ({currentRoom?.users.length || 0})</h4> */}
+                {currentRoom?.pendingMembers && currentRoom.pendingMembers.length > 0 && (
+                  <div className="badge badge-warning badge-sm">
+                    {currentRoom.pendingMembers.length} pending
+                  </div>
+                )}
+              </div>
+              
+              {/* Active Members - Compact List */}
+              <div className="flex flex-wrap gap-2">
                 {currentRoom?.users.map((user) => (
-                  <div key={user.id} className="card bg-base-200">
-                    <div className="card-body p-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="font-semibold">{user.username}</h4>
-                          <p className="text-sm text-base-content/70">
-                            {user.role === "room_owner"
-                              ? "Owner"
-                              : user.role === "band_member"
-                              ? "Band Member"
-                              : "Audience"}
-                          </p>
-                          {user.currentInstrument && (
-                            <p className="text-xs text-base-content/50">
-                              {user.currentInstrument}
-                            </p>
-                          )}
-                        </div>
-                        {currentUser?.role === "room_owner" &&
-                          user.role === "band_member" && (
-                            <button
-                              onClick={() => transferOwnershipTo(user.id)}
-                              className="btn btn-xs btn-outline"
-                            >
-                              Make Owner
-                            </button>
-                          )}
-                      </div>
-                    </div>
+                  <div key={user.id} className="flex items-center gap-2 p-2 bg-base-200 rounded-lg min-w-fit">
+                    <div className={`w-2 h-2 rounded-full ${
+                      user.role === "room_owner" ? "bg-primary" : 
+                      user.role === "band_member" ? "bg-success" : "bg-base-content/30"
+                    }`}></div>
+                    <span className="font-medium text-sm whitespace-nowrap">{user.username}</span>
+                    {user.currentInstrument && (
+                      <span className="text-xs text-base-content/60 bg-base-300 px-2 py-1 rounded whitespace-nowrap">
+                        {user.currentInstrument.replace(/_/g, " ")}
+                      </span>
+                    )}
+                    <span className="text-xs text-base-content/50 whitespace-nowrap">
+                      {user.role === "room_owner" ? "Owner" : 
+                       user.role === "band_member" ? "Member" : "Audience"}
+                    </span>
+                    {currentUser?.role === "room_owner" && user.role === "band_member" && (
+                      <button
+                        onClick={() => transferOwnershipTo(user.id)}
+                        className="btn btn-xs btn-outline btn-ghost"
+                        title="Transfer ownership"
+                      >
+                        👑
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
 
-              {/* Pending Members */}
-              {currentRoom?.pendingMembers &&
-                currentRoom.pendingMembers.length > 0 && (
-                  <div className="mt-4">
-                    <h4 className="font-semibold mb-2">Pending Requests</h4>
-                    <div className="space-y-2">
-                      {currentRoom.pendingMembers.map((user) => (
-                        <div
-                          key={user.id}
-                          className="flex justify-between items-center p-3 bg-base-200 rounded"
-                        >
-                          <span>{user.username}</span>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleApproveMember(user.id)}
-                              className="btn btn-xs btn-success"
-                            >
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => handleRejectMember(user.id)}
-                              className="btn btn-xs btn-error"
-                            >
-                              Reject
-                            </button>
-                          </div>
+              {/* Pending Members - Compact */}
+              {currentRoom?.pendingMembers && currentRoom.pendingMembers.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-base-300">
+                  <h4 className="text-sm font-medium mb-2 text-base-content/70">Pending Requests</h4>
+                  <div className="space-y-1">
+                    {currentRoom.pendingMembers.map((user) => (
+                      <div
+                        key={user.id}
+                        className="flex justify-between items-center p-2 bg-warning/10 rounded-lg"
+                      >
+                        <span className="text-sm">{user.username}</span>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => handleApproveMember(user.id)}
+                            className="btn btn-xs btn-success"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            onClick={() => handleRejectMember(user.id)}
+                            className="btn btn-xs btn-error"
+                          >
+                            ✕
+                          </button>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </div>
-                )}
+                </div>
+              )}
             </div>
           </div>
         </div>

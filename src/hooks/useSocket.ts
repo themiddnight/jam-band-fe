@@ -495,19 +495,31 @@ export const useSocket = () => {
     (data: NoteData) => {
       // For mono synths, be more careful with deduplication to preserve key tracking
       const isMonoSynth = data.instrument === "analog_mono" || data.instrument === "fm_mono";
+      const isDrumMachine = data.category === "DrumBeat";
       
       // Create a unique key for this note event
       const eventKey = `${data.eventType}-${data.notes.join(',')}-${data.instrument}-${data.velocity}`;
       const now = Date.now();
       
-      // Only apply deduplication to note_on events for mono synths, or all events for other instruments
-      const shouldCheckDuplicate = !isMonoSynth || data.eventType === "note_on";
+      // Use different deduplication strategies based on instrument type
+      let dedupeWindow = NOTE_DEDUPE_WINDOW;
+      let shouldCheckDuplicate = true;
+      
+      if (isDrumMachine) {
+        // For drum machines, use a much shorter deduplication window to allow rapid hits
+        dedupeWindow = 15; // Reduced from 50ms to 15ms for drums
+        // Only deduplicate identical note events, not all events
+        shouldCheckDuplicate = data.eventType === "note_on";
+      } else if (isMonoSynth) {
+        // For mono synths, only check note_on events for deduplication
+        shouldCheckDuplicate = data.eventType === "note_on";
+      }
       
       if (shouldCheckDuplicate) {
         // Check if we recently sent the same event
         const lastSent = recentNoteEvents.current.get(eventKey);
-        if (lastSent && (now - lastSent) < NOTE_DEDUPE_WINDOW) {
-          console.log(`🔄 Skipping duplicate note event: ${eventKey}`);
+        if (lastSent && (now - lastSent) < dedupeWindow) {
+          console.log(`🔄 Skipping duplicate note event: ${eventKey} (${isDrumMachine ? 'drum' : 'other'} instrument)`);
           return;
         }
       }
@@ -518,7 +530,7 @@ export const useSocket = () => {
       
       // Clean up old entries periodically to prevent memory leaks
       if (recentNoteEvents.current.size > 100) {
-        const cutoff = now - NOTE_DEDUPE_WINDOW * 2;
+        const cutoff = now - Math.max(NOTE_DEDUPE_WINDOW, dedupeWindow) * 2;
         for (const [key, timestamp] of recentNoteEvents.current.entries()) {
           if (timestamp < cutoff) {
             recentNoteEvents.current.delete(key);

@@ -445,62 +445,101 @@ export const useInstrument = (
     };
   }, []);
 
-  const ensureAudioContextAndInstrument = useCallback(async () => {
-    try {
-      // Check AudioContext state first
-      if (!audioContext.current || audioContext.current.state !== "running") {
-        await initializeAudioContext();
-
-        // Extra wait for Safari to stabilize AudioContext
-        if (isSafari()) {
-          await new Promise((resolve) => setTimeout(resolve, 200));
-        }
-      }
-
-      // Verify AudioContext is actually running after initialization
-      if (!audioContext.current || audioContext.current.state !== "running") {
-        throw new Error("AudioContext failed to start properly");
-      }
-
-      // Load instrument if not already loaded
-      if (!instrument) {
-        await loadInstrument(currentInstrument);
-      }
-    } catch (error) {
-      console.error("Failed to ensure AudioContext and instrument:", error);
-      throw error;
-    }
-  }, [initializeAudioContext, loadInstrument, instrument, currentInstrument]);
-
-  const playNotes = useCallback(
+  const playNote = useCallback(
     async (notes: string[], velocity: number, isKeyHeld: boolean = false) => {
+      if (!audioContext.current || audioContext.current.state !== "running") {
+        console.warn("AudioContext not ready for playback");
+        return;
+      }
+
+      if (!instrument) {
+        console.warn("No instrument loaded for playback");
+        return;
+      }
+
       try {
-        // Handle synthesizer category with Tone.js
+        // Handle different instrument categories
         if (currentCategory === InstrumentCategory.Synthesizer) {
-          if (toneSynthesizer.isLoaded) {
-            toneSynthesizer.playNotes(notes, velocity);
-
-            // Handle key held notes for synthesizer
-            if (isKeyHeld) {
-              notes.forEach((note) => keyHeldNotes.current.add(note));
-            }
+          // Use Tone.js synthesizer directly
+          const synthState = toneSynthesizer.synthState;
+          if (synthState) {
+            await toneSynthesizer.playNotes(notes, velocity);
           }
-          return;
-        }
+        } else if (currentCategory === InstrumentCategory.DrumBeat) {
+          // Optimized drum machine playback with minimal latency
+          const currentTime = audioContext.current.currentTime;
+          
+          notes.forEach((note) => {
+            // Stop any existing note to prevent buildup
+            const existingNote = activeNotes.current.get(note);
+            if (existingNote) {
+              try {
+                if (typeof existingNote === 'function') {
+                  existingNote();
+                } else if (existingNote.stop) {
+                  existingNote.stop();
+                }
+              } catch (error) {
+                console.warn(`Warning stopping existing drum note:`, error);
+              }
+              activeNotes.current.delete(note);
+            }
 
-        // Handle other categories (Soundfont and DrumMachine)
-        await ensureAudioContextAndInstrument();
+            // Use precise timing for drum hits
+            const playedNote = instrument.start({
+              note,
+              velocity: Math.round(Math.max(1, Math.min(127, velocity * 127))),
+              time: currentTime + 0.001, // Minimal scheduling ahead for consistency
+            });
 
-        if (instrument && audioContext.current?.state === "running") {
+            if (playedNote) {
+              activeNotes.current.set(note, playedNote);
+              
+              // Auto-cleanup for drum samples after reasonable time
+              setTimeout(() => {
+                if (activeNotes.current.get(note) === playedNote) {
+                  activeNotes.current.delete(note);
+                }
+              }, 3000);
+
+              if (isKeyHeld) {
+                keyHeldNotes.current.add(note);
+              }
+
+              if (sustain && !isKeyHeld) {
+                sustainedNotes.current.add(playedNote);
+              }
+
+              // Auto-stop for non-sustained drum hits
+              if (!isKeyHeld && !sustain) {
+                setTimeout(() => {
+                  if (activeNotes.current.has(note) && !keyHeldNotes.current.has(note)) {
+                    try {
+                      if (typeof playedNote === 'function') {
+                        playedNote();
+                      } else if (playedNote.stop) {
+                        playedNote.stop();
+                      }
+                    } catch (error) {
+                      console.warn(`Warning auto-stopping drum note:`, error);
+                    }
+                    activeNotes.current.delete(note);
+                  }
+                }, 200); // Shorter timeout for drums
+              }
+            }
+          });
+        } else {
+          // Default handling for soundfont instruments
           notes.forEach((note) => {
             const existingNote = activeNotes.current.get(note);
             if (existingNote) {
-              existingNote(); // Call the stop function directly
+              existingNote();
             }
 
             const playedNote = instrument.start({
-              note: note,
-              velocity: velocity * 127, // smplr expects velocity 0-127
+              note,
+              velocity: Math.round(Math.max(1, Math.min(127, velocity * 127))),
               time: audioContext.current!.currentTime,
             });
 
@@ -510,18 +549,15 @@ export const useInstrument = (
               keyHeldNotes.current.add(note);
             }
 
-            if (!isKeyHeld && sustain) {
+            if (sustain && !isKeyHeld) {
               sustainedNotes.current.add(playedNote);
             }
 
             if (!isKeyHeld && !sustain) {
               setTimeout(() => {
-                if (
-                  activeNotes.current.has(note) &&
-                  !keyHeldNotes.current.has(note)
-                ) {
+                if (activeNotes.current.has(note) && !keyHeldNotes.current.has(note)) {
                   if (playedNote) {
-                    playedNote(); // Call the stop function directly
+                    playedNote();
                   }
                   activeNotes.current.delete(note);
                 }
@@ -530,17 +566,10 @@ export const useInstrument = (
           });
         }
       } catch (error) {
-        console.error("Error playing notes:", error);
+        console.error("Error playing note:", error);
       }
     },
-    [
-      instrument,
-      audioContext,
-      sustain,
-      ensureAudioContextAndInstrument,
-      currentCategory,
-      toneSynthesizer,
-    ]
+    [instrument, currentCategory, sustain, toneSynthesizer]
   );
 
   const stopNotes = (notes: string[]) => {
@@ -745,26 +774,15 @@ export const useInstrument = (
   const handleMidiNoteOn = useCallback(
     async (note: number, velocity: number) => {
       const noteNames = [
-        "C",
-        "C#",
-        "D",
-        "D#",
-        "E",
-        "F",
-        "F#",
-        "G",
-        "G#",
-        "A",
-        "A#",
-        "B",
+        "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
       ];
       const octave = Math.floor(note / 12) - 1;
       const noteName = noteNames[note % 12];
       const noteString = `${noteName}${octave}`;
 
-      await playNotes([noteString], velocity, true); // velocity is already normalized to 0-1
+      await playNote([noteString], velocity, true); // velocity is already normalized to 0-1
     },
-    [playNotes]
+    [playNote]
   );
 
   const handleMidiNoteOff = useCallback(
@@ -849,7 +867,7 @@ export const useInstrument = (
     audioContextError,
     initializeAudioContext,
     loadInstrument,
-    playNotes,
+    playNote,
     stopNotes,
     stopSustainedNotes,
     releaseKeyHeldNote,

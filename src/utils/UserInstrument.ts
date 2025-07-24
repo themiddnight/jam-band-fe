@@ -764,22 +764,43 @@ export class UserInstrument {
         // For drum machines, play samples
         console.log(`🥁 Playing drum samples:`, notes);
         notes.forEach(note => {
-          console.log(`🥁 Starting drum note:`, note, `with velocity:`, velocity * 127);
+          // Use more precise velocity scaling for drum machines
+          const scaledVelocity = Math.round(Math.max(1, Math.min(127, velocity * 127)));
+          console.log(`🥁 Starting drum note:`, note, `with velocity:`, scaledVelocity, `(from ${velocity})`);
           
-          // Stop existing note if playing
+          // For drum machines, stop existing note immediately to prevent buildup
           const existingNote = this.activeNotes.get(note);
           if (existingNote) {
-            existingNote(); // Call the stop function
+            try {
+              if (typeof existingNote === 'function') {
+                existingNote(); // Call the stop function
+              } else if (existingNote.stop) {
+                existingNote.stop(); // Call stop method if available
+              }
+            } catch (error) {
+              console.warn(`Warning stopping existing drum note ${note}:`, error);
+            }
+            this.activeNotes.delete(note);
           }
           
           const playedNote = this.instrument.start({
             note: note,
-            velocity: velocity * 127, // smplr expects velocity 0-127
-            time: this.audioContext!.currentTime,
+            velocity: scaledVelocity,
+            time: this.audioContext!.currentTime + 0.001, // Add tiny offset for better timing
           });
           
           // Store the note for later stopping
-          this.activeNotes.set(note, playedNote);
+          if (playedNote) {
+            this.activeNotes.set(note, playedNote);
+            
+            // For drum machines, automatically clean up after a reasonable time
+            // to prevent memory leaks from one-shot samples
+            setTimeout(() => {
+              if (this.activeNotes.get(note) === playedNote) {
+                this.activeNotes.delete(note);
+              }
+            }, 5000); // Clean up after 5 seconds
+          }
           
           // Track key-held notes
           if (isKeyHeld) {
@@ -787,16 +808,22 @@ export class UserInstrument {
           }
           
           // Only add to sustained notes if sustain is on AND note is not key-held
-          if (this.sustain && !isKeyHeld) {
+          if (this.sustain && !isKeyHeld && playedNote) {
             this.sustainedNotes.add(playedNote);
           }
           
           // Auto-stop non-key-held notes after timeout if sustain is off
-          if (!isKeyHeld && !this.sustain) {
+          if (!isKeyHeld && !this.sustain && playedNote) {
             setTimeout(() => {
               if (this.activeNotes.has(note) && !this.keyHeldNotes.has(note)) {
-                if (playedNote) {
-                  playedNote();
+                try {
+                  if (typeof playedNote === 'function') {
+                    playedNote();
+                  } else if (playedNote.stop) {
+                    playedNote.stop();
+                  }
+                } catch (error) {
+                  console.warn(`Warning auto-stopping drum note ${note}:`, error);
                 }
                 this.activeNotes.delete(note);
               }
@@ -807,7 +834,9 @@ export class UserInstrument {
         // For soundfont instruments
         console.log(`🎼 Playing soundfont notes:`, notes);
         notes.forEach(note => {
-          console.log(`🎼 Starting soundfont note:`, note, `with velocity:`, velocity * 127);
+          // Use more precise velocity scaling for soundfont instruments too
+          const scaledVelocity = Math.round(Math.max(1, Math.min(127, velocity * 127)));
+          console.log(`🎼 Starting soundfont note:`, note, `with velocity:`, scaledVelocity, `(from ${velocity})`);
           
           // Stop existing note if playing
           const existingNote = this.activeNotes.get(note);
@@ -817,8 +846,8 @@ export class UserInstrument {
           
           const playedNote = this.instrument.start({
             note: note,
-            velocity: velocity * 127, // smplr expects velocity 0-127
-            time: this.audioContext!.currentTime,
+            velocity: scaledVelocity,
+            time: this.audioContext!.currentTime + 0.001, // Add tiny offset for better timing
           });
           
           // Store the note for later stopping
