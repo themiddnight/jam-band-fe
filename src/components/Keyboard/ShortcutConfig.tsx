@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Modal } from '../shared/Modal';
 import { useKeyboardShortcutsStore } from '../../stores/keyboardShortcutsStore';
 import { getShortcutsByCategory } from '../../constants/keyboardShortcuts';
 
@@ -40,78 +41,69 @@ export const ShortcutConfig: React.FC<ShortcutConfigProps> = ({ isOpen, onClose 
     }
   };
 
-  if (!isOpen) return null;
-
   const categories = ['mode', 'chord', 'control', 'octave', 'velocity'] as const;
 
   return (
-    <div className={`modal ${isOpen ? 'modal-open' : ''}`}>
-      <div className="modal-box max-w-2xl max-h-[80vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Keyboard Shortcuts Configuration</h2>
-          <button
-            onClick={onClose}
-            className="btn btn-sm btn-circle btn-ghost"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="space-y-4">
-          {categories.map(category => (
-            <div key={category} className="card bg-base-200">
-              <div className="card-body p-4">
-                <h3 className="card-title text-base capitalize">
-                  {category} Controls
-                </h3>
-                <div className="space-y-2">
-                  {getShortcutsByCategory(shortcuts, category).map(([name, shortcut]) => (
-                    <div key={name} className="flex justify-between items-center">
-                      <span className="text-sm">{shortcut.description}</span>
-                      <button
-                        onClick={() => setEditingShortcut(name)}
-                        className={`btn btn-sm ${
-                          editingShortcut === name
-                            ? 'btn-primary'
-                            : 'btn-outline'
-                        }`}
-                        onKeyDown={(e) => editingShortcut === name && handleKeyPress(e, name)}
-                        tabIndex={editingShortcut === name ? 0 : -1}
-                      >
-                        {editingShortcut === name ? 'Press a key...' : shortcut.key.toUpperCase()}
-                      </button>
-                    </div>
-                  ))}
-                </div>
+    <Modal
+      open={isOpen}
+      setOpen={(open) => !open && onClose()}
+      title="Keyboard Shortcuts Configuration"
+      onCancel={onClose}
+      showOkButton={false}
+      size="2xl"
+    >
+      <div className="space-y-4">
+        {categories.map(category => (
+          <div key={category} className="card bg-base-200">
+            <div className="card-body p-4">
+              <h3 className="card-title text-base capitalize">
+                {category} Controls
+              </h3>
+              <div className="space-y-2">
+                {getShortcutsByCategory(shortcuts, category).map(([name, shortcut]) => (
+                  <div key={name} className="flex justify-between items-center">
+                    <span className="text-sm">{shortcut.description}</span>
+                    <button
+                      onClick={() => setEditingShortcut(name)}
+                      className={`btn btn-sm ${
+                        editingShortcut === name
+                          ? 'btn-primary'
+                          : 'btn-outline'
+                      }`}
+                      onKeyDown={(e) => editingShortcut === name && handleKeyPress(e, name)}
+                      tabIndex={editingShortcut === name ? 0 : -1}
+                    >
+                      {editingShortcut === name ? 'Press a key...' : shortcut.key.toUpperCase()}
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
-          ))}
-        </div>
-
-        <div className="modal-action">
-          <div className="flex gap-2">
-            <button
-              onClick={resetToDefaults}
-              className="btn btn-outline"
-            >
-              Reset to Defaults
-            </button>
-            <button
-              onClick={exportShortcuts}
-              className="btn btn-primary"
-            >
-              Export
-            </button>
-            <label className="btn btn-success cursor-pointer">
-              Import
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleImport}
-                className="hidden"
-              />
-            </label>
           </div>
+        ))}
+
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={exportShortcuts}
+            className="btn btn-primary"
+          >
+            Export
+          </button>
+          <label className="btn btn-success cursor-pointer">
+            Import
+            <input
+              type="file"
+              accept=".json"
+              onChange={handleImport}
+              className="hidden"
+            />
+          </label>
+          <button
+            onClick={resetToDefaults}
+            className="btn btn-outline"
+          >
+            Reset to Defaults
+          </button>
         </div>
 
         {importError && (
@@ -133,6 +125,6 @@ export const ShortcutConfig: React.FC<ShortcutConfigProps> = ({ isOpen, onClose 
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }; 

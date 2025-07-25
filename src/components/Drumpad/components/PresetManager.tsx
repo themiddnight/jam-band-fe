@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Modal } from '../../shared/Modal';
 import { useDrumpadPresetsStore } from '../../../stores/drumpadPresetsStore';
 import type { PresetManagerProps } from '../types/drumpad';
 
@@ -100,138 +101,112 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
       </div>
 
       {/* Save Preset Modal */}
-      {showSaveModal && (
-        <div className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold text-lg">Save Preset</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="label">
-                  <span className="label-text">Preset Name *</span>
-                </label>
-                <input
-                  type="text"
-                  value={presetName}
-                  onChange={(e) => setPresetName(e.target.value)}
-                  placeholder="Enter preset name"
-                  className="input input-bordered w-full"
-                  onKeyDown={(e) => e.key === 'Enter' && handleSavePreset()}
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="label">
-                  <span className="label-text">Description</span>
-                </label>
-                <textarea
-                  value={presetDescription}
-                  onChange={(e) => setPresetDescription(e.target.value)}
-                  placeholder="Optional description"
-                  className="textarea textarea-bordered w-full"
-                  rows={3}
-                />
-              </div>
-            </div>
-            <div className="modal-action">
-              <button
-                onClick={handleSavePreset}
-                disabled={!presetName.trim()}
-                className="btn btn-primary"
-              >
-                Save
-              </button>
-              <button
-                onClick={() => {
-                  setShowSaveModal(false);
-                  setPresetName('');
-                  setPresetDescription('');
-                }}
-                className="btn"
-              >
-                Cancel
-              </button>
-            </div>
+      <Modal
+        open={showSaveModal}
+        setOpen={setShowSaveModal}
+        title="Save Preset"
+        onOk={handleSavePreset}
+        onCancel={() => {
+          setShowSaveModal(false);
+          setPresetName('');
+          setPresetDescription('');
+        }}
+        okText="Save"
+        cancelText="Cancel"
+        showOkButton={!!presetName.trim()}
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="label">
+              <span className="label-text">Preset Name *</span>
+            </label>
+            <input
+              type="text"
+              value={presetName}
+              onChange={(e) => setPresetName(e.target.value)}
+              placeholder="Enter preset name"
+              className="input input-bordered w-full"
+              onKeyDown={(e) => e.key === 'Enter' && handleSavePreset()}
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="label">
+              <span className="label-text">Description</span>
+            </label>
+            <textarea
+              value={presetDescription}
+              onChange={(e) => setPresetDescription(e.target.value)}
+              placeholder="Optional description"
+              className="textarea textarea-bordered w-full"
+              rows={3}
+            />
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* Import/Export Modal */}
-      {showImportExport && (
-        <div className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold text-lg">Import/Export Presets</h3>
-            <div className="space-y-4">
-              <div>
-                <button
-                  onClick={handleExportPresets}
-                  disabled={!currentPreset}
-                  className="btn btn-success w-full"
-                >
-                  Export Current Preset
-                </button>
-              </div>
-              <div>
-                <label className="label">
-                  <span className="label-text">Import Preset (JSON)</span>
-                </label>
-                <textarea
-                  value={importData}
-                  onChange={(e) => setImportData(e.target.value)}
-                  placeholder="Paste preset JSON data here"
-                  className="textarea textarea-bordered w-full h-32 resize-none"
-                />
-                <button
-                  onClick={handleImportPresets}
-                  disabled={!importData.trim()}
-                  className="btn btn-primary mt-2"
-                >
-                  Import
-                </button>
-              </div>
-            </div>
-            <div className="modal-action">
-              <button
-                onClick={() => {
-                  setShowImportExport(false);
-                  setImportData('');
-                }}
-                className="btn"
-              >
-                Close
-              </button>
-            </div>
+      <Modal
+        open={showImportExport}
+        setOpen={setShowImportExport}
+        title="Import/Export Presets"
+        onCancel={() => {
+          setShowImportExport(false);
+          setImportData('');
+        }}
+        showOkButton={false}
+        size="lg"
+      >
+        <div className="space-y-4">
+          <div>
+            <button
+              onClick={handleExportPresets}
+              disabled={!currentPreset}
+              className="btn btn-success w-full"
+            >
+              Export Current Preset
+            </button>
+          </div>
+          <div>
+            <label className="label">
+              <span className="label-text">Import Preset (JSON)</span>
+            </label>
+            <textarea
+              value={importData}
+              onChange={(e) => setImportData(e.target.value)}
+              placeholder="Paste preset JSON data here"
+              className="textarea textarea-bordered w-full h-32 resize-none"
+            />
+            <button
+              onClick={handleImportPresets}
+              disabled={!importData.trim()}
+              className="btn btn-primary mt-2"
+            >
+              Import
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* Delete Preset Modal */}
-      {showDeleteModal && currentPreset && (
-        <div className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold text-lg text-error">Delete Preset</h3>
-            <p className="py-4">
-              Are you sure you want to delete "{currentPreset.name}"? This action cannot be undone.
-            </p>
-            <div className="modal-action">
-              <button
-                onClick={() => {
-                  onDeletePreset(currentPreset.id);
-                  setShowDeleteModal(false);
-                }}
-                className="btn btn-error"
-              >
-                Delete
-              </button>
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="btn"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={showDeleteModal}
+        setOpen={setShowDeleteModal}
+        title="Delete Preset"
+        onOk={() => {
+          if (currentPreset) {
+            onDeletePreset(currentPreset.id);
+            setShowDeleteModal(false);
+          }
+        }}
+        onCancel={() => setShowDeleteModal(false)}
+        okText="Delete"
+        cancelText="Cancel"
+      >
+        <p className="py-4">
+          Are you sure you want to delete "{currentPreset?.name}"? This action cannot be undone.
+        </p>
+      </Modal>
     </>
   );
 }; 

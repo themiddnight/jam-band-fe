@@ -10,6 +10,10 @@
   @apply p-3;
 }
 
+@utility modal-box {
+  @apply p-3 lg:p-4 xl:p-5;
+}
+
 @media (pointer: coarse) {
   html, body, * {
     -webkit-user-select: none !important;
@@ -65,7 +69,7 @@
 }
 
 .user-off {
-  animation: user-off 3s ease-in-out forwards;
+  animation: user-off 1s ease-in-out forwards;
 }
 
 @keyframes user-on {

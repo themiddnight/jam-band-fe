@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useUserStore } from '../stores/userStore';
 import { useRoomStore } from '../stores/roomStore';
 import { useSocket } from '../hooks/useSocket';
+import { Modal } from '../components/shared/Modal';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
@@ -54,8 +55,6 @@ export default function Lobby() {
       connect();
     }
   }, [username, connect, isConnected, isConnecting]);
-
-
 
   // Fetch rooms when socket connects
   useEffect(() => {
@@ -110,8 +109,7 @@ export default function Lobby() {
     }
   };
 
-  const handleUsernameSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleUsernameSubmit = () => {
     if (tempUsername.trim()) {
       setUsername(tempUsername.trim());
       setShowUsernameModal(false);
@@ -134,38 +132,10 @@ export default function Lobby() {
     }
   };
 
-  if (showUsernameModal) {
-    return (
-      <div className="min-h-dvh bg-base-200 flex items-center justify-center">
-        <div className="card bg-base-100 shadow-xl w-full max-w-md">
-          <div className="card-body">
-            <h2 className="card-title justify-center text-2xl mb-4">Welcome to Jam Band!</h2>
-            <p className="text-base-content/70 mb-6">
-              Please enter your username to continue
-            </p>
-            <form onSubmit={handleUsernameSubmit}>
-              <div className="form-control">
-                <input
-                  type="text"
-                  placeholder="Enter your username"
-                  className="input input-bordered w-full"
-                  value={tempUsername}
-                  onChange={(e) => setTempUsername(e.target.value)}
-                  autoFocus
-                  required
-                />
-              </div>
-              <div className="card-actions justify-end mt-4">
-                <button type="submit" className="btn btn-primary">
-                  Continue
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const handleUsernameClick = () => {
+    setTempUsername(username || '');
+    setShowUsernameModal(true);
+  };
 
   return (
     <div className="min-h-dvh bg-base-200 p-3">
@@ -180,7 +150,13 @@ export default function Lobby() {
                 {isConnected ? 'Connected' : isConnecting ? 'Connecting...' : 'Disconnected'}
               </span> */}
             </div>
-            <div className="badge badge-primary">{username}</div>
+            <button
+              onClick={handleUsernameClick}
+              className="badge badge-primary cursor-pointer hover:badge-secondary transition-colors"
+              title="Click to change username"
+            >
+              {username}
+            </button>
           </div>
         </div>
 
@@ -252,74 +228,100 @@ export default function Lobby() {
           </div>
         </div>
 
-        {/* Create Room Modal */}
-        {showCreateRoomModal && (
-          <div className="modal modal-open">
-            <div className="modal-box">
-              <h3 className="font-bold text-lg mb-4">Create New Room</h3>
-              <form onSubmit={handleCreateRoom}>
-                <div className="form-control">
-                  <label className="label">
-                    <span className="label-text">Room Name</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Enter room name"
-                    className="input input-bordered w-full"
-                    value={newRoomName}
-                    onChange={(e) => setNewRoomName(e.target.value)}
-                    autoFocus
-                    required
-                  />
-                </div>
-                <div className="modal-action">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCreateRoomModal(false);
-                      setNewRoomName('');
-                    }}
-                    className="btn btn-outline"
-                  >
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn btn-primary">
-                    Create Room
-                  </button>
-                </div>
-              </form>
+        {/* Username Modal */}
+        <Modal
+          open={showUsernameModal}
+          setOpen={setShowUsernameModal}
+          title={username ? "Change Username" : "Welcome to Jam Band!"}
+          onCancel={() => {
+            setShowUsernameModal(false);
+            setTempUsername('');
+          }}
+          onOk={handleUsernameSubmit}
+          okText={username ? "Update" : "Continue"}
+          cancelText="Cancel"
+          showOkButton={!!tempUsername.trim()}
+        >
+          <div className="space-y-4">
+            {!username && (
+              <p className="text-base-content/70">
+                Please enter your username to continue
+              </p>
+            )}
+            <div className="form-control">
+              <label className="label" htmlFor="username">
+                Username
+              </label>
+              <input
+                id="username"
+                type="text"
+                placeholder="Enter your username"
+                className="input input-bordered w-full"
+                value={tempUsername}
+                onChange={(e) => setTempUsername(e.target.value)}
+                autoFocus
+                required
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && tempUsername.trim()) {
+                    handleUsernameSubmit();
+                  }
+                }}
+              />
             </div>
-            <div className="modal-backdrop" onClick={() => {
-              setShowCreateRoomModal(false);
-              setNewRoomName('');
-            }}></div>
           </div>
-        )}
+        </Modal>
+
+        {/* Create Room Modal */}
+        <Modal
+          open={showCreateRoomModal}
+          setOpen={setShowCreateRoomModal}
+          title="Create New Room"
+          onCancel={() => {
+            setShowCreateRoomModal(false);
+            setNewRoomName('');
+          }}
+          onOk={() => {
+            if (newRoomName.trim()) {
+              handleCreateRoom({ preventDefault: () => {} } as React.FormEvent);
+            }
+          }}
+          okText="Create Room"
+          cancelText="Cancel"
+          showOkButton={!!newRoomName.trim()}
+        >
+          <form onSubmit={(e) => { e.preventDefault(); }}>
+            <div className="form-control">
+              <label className="label" htmlFor="newRoomName">
+                Room Name
+              </label>
+              <input
+                id="newRoomName"
+                type="text"
+                placeholder="Enter room name"
+                className="input input-bordered w-full"
+                value={newRoomName}
+                onChange={(e) => setNewRoomName(e.target.value)}
+                autoFocus
+                required
+              />
+            </div>
+          </form>
+        </Modal>
 
         {/* Rejection Modal */}
-        {showRejectionModal && (
-          <div className="modal modal-open">
-            <div className="modal-box">
-              <h3 className="font-bold text-lg mb-4 text-error">Request Rejected</h3>
-              <p className="text-base-content/70 mb-4">{rejectionMessage}</p>
-              <div className="modal-action">
-                <button
-                  onClick={() => {
-                    setShowRejectionModal(false);
-                    setRejectionMessage('');
-                  }}
-                  className="btn btn-primary"
-                >
-                  OK
-                </button>
-              </div>
-            </div>
-            <div className="modal-backdrop" onClick={() => {
-              setShowRejectionModal(false);
-              setRejectionMessage('');
-            }}></div>
-          </div>
-        )}
+        <Modal
+          open={showRejectionModal}
+          setOpen={setShowRejectionModal}
+          title="Request Rejected"
+          onOk={() => {
+            setShowRejectionModal(false);
+            setRejectionMessage('');
+          }}
+          okText="OK"
+          showCancelButton={false}
+        >
+          <p className="text-base-content/70">{rejectionMessage}</p>
+        </Modal>
       </div>
     </div>
   );

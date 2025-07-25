@@ -6,6 +6,7 @@ import type { SynthState } from "../../utils/InstrumentEngine";
 import type { SynthPreset } from "../../types/presets";
 import { LatencyControls } from "./LatencyControls";
 import { Knob } from "../shared/Knob";
+import { Modal } from '../shared/Modal';
 
 interface SynthControlsProps {
   currentInstrument: string;
@@ -183,125 +184,97 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
         )}
 
         {/* Save Preset Modal */}
-        {showPresetModal && (
-          <div className="modal modal-open">
-            <div className="modal-box">
-              <h3 className="font-bold text-lg ">Save Preset</h3>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={presetName}
-                  onChange={(e) => setPresetName(e.target.value)}
-                  placeholder="Enter preset name"
-                  className="input input-bordered w-full"
-                  onKeyDown={(e) => e.key === "Enter" && handleSavePreset()}
-                />
-              </div>
-              <div className="modal-action">
-                <button
-                  onClick={handleSavePreset}
-                  disabled={!presetName.trim()}
-                  className="btn btn-primary"
-                >
-                  Save
-                </button>
-                <button
-                  onClick={() => {
-                    setShowPresetModal(false);
-                    setPresetName("");
-                  }}
-                  className="btn"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
+        <Modal
+          open={showPresetModal}
+          setOpen={setShowPresetModal}
+          title="Save Preset"
+          onOk={handleSavePreset}
+          onCancel={() => {
+            setShowPresetModal(false);
+            setPresetName("");
+          }}
+          okText="Save"
+          cancelText="Cancel"
+          showOkButton={!!presetName.trim()}
+        >
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={presetName}
+              onChange={(e) => setPresetName(e.target.value)}
+              placeholder="Enter preset name"
+              className="input input-bordered w-full"
+              onKeyDown={(e) => e.key === "Enter" && handleSavePreset()}
+            />
           </div>
-        )}
+        </Modal>
 
         {/* Import/Export Modal */}
-        {showImportExport && (
-          <div className="modal modal-open">
-            <div className="modal-box">
-              <h3 className="font-bold text-lg ">Import/Export Presets</h3>
+        <Modal
+          open={showImportExport}
+          setOpen={setShowImportExport}
+          title="Import/Export Presets"
+          onCancel={() => {
+            setShowImportExport(false);
+            setImportData("");
+          }}
+          showOkButton={false}
+          size="lg"
+        >
+          <div className="space-y-4">
+            <div>
+              <button
+                onClick={handleExportPresets}
+                className="btn btn-success w-full"
+              >
+                Export All Presets
+              </button>
+            </div>
 
-              <div className="space-y-4">
-                <div>
-                  <button
-                    onClick={handleExportPresets}
-                    className="btn btn-success w-full"
-                  >
-                    Export All Presets
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <label className="label">
-                    <span className="label-text">Import Presets (JSON)</span>
-                  </label>
-                  <textarea
-                    value={importData}
-                    onChange={(e) => setImportData(e.target.value)}
-                    placeholder="Paste preset JSON data here"
-                    className="textarea textarea-bordered h-32 resize-none"
-                  />
-                  <button
-                    onClick={handleImportPresets}
-                    disabled={!importData.trim()}
-                    className="btn btn-primary mt-2"
-                  >
-                    Import
-                  </button>
-                </div>
-              </div>
-
-              <div className="modal-action">
-                <button
-                  onClick={() => {
-                    setShowImportExport(false);
-                    setImportData("");
-                  }}
-                  className="btn"
-                >
-                  Close
-                </button>
-              </div>
+            <div className="flex items-center gap-2">
+              <label className="label">
+                <span className="label-text">Import Presets (JSON)</span>
+              </label>
+              <textarea
+                value={importData}
+                onChange={(e) => setImportData(e.target.value)}
+                placeholder="Paste preset JSON data here"
+                className="textarea textarea-bordered h-32 resize-none"
+              />
+              <button
+                onClick={handleImportPresets}
+                disabled={!importData.trim()}
+                className="btn btn-primary mt-2"
+              >
+                Import
+              </button>
             </div>
           </div>
-        )}
+        </Modal>
 
         {/* Delete Preset Modal */}
-        {showDeleteModal && presetToDelete && (
-          <div className="modal modal-open">
-            <div className="modal-box">
-              <h3 className="font-bold text-lg text-error">Delete Preset</h3>
-              <p className="py-4">
-                Are you sure you want to delete "{presetToDelete.name}"? This action cannot be undone.
-              </p>
-              <div className="modal-action">
-                <button
-                  onClick={() => {
-                    presetManager.deletePreset(presetToDelete.id);
-                    setShowDeleteModal(false);
-                    setPresetToDelete(null);
-                  }}
-                  className="btn btn-error"
-                >
-                  Delete
-                </button>
-                <button
-                  onClick={() => {
-                    setShowDeleteModal(false);
-                    setPresetToDelete(null);
-                  }}
-                  className="btn"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <Modal
+          open={showDeleteModal}
+          setOpen={setShowDeleteModal}
+          title="Delete Preset"
+          onOk={() => {
+            if (presetToDelete) {
+              presetManager.deletePreset(presetToDelete.id);
+              setShowDeleteModal(false);
+              setPresetToDelete(null);
+            }
+          }}
+          onCancel={() => {
+            setShowDeleteModal(false);
+            setPresetToDelete(null);
+          }}
+          okText="Delete"
+          cancelText="Cancel"
+        >
+          <p className="py-4">
+            Are you sure you want to delete "{presetToDelete?.name}"? This action cannot be undone.
+          </p>
+        </Modal>
 
         {/* Analog Synthesizer Controls */}
         {isAnalog && (
