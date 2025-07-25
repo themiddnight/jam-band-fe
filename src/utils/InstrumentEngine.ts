@@ -1,7 +1,7 @@
 import { Soundfont, DrumMachine } from 'smplr';
 import * as Tone from 'tone';
 import { InstrumentCategory } from '../constants/instruments';
-import { getSafariLoadTimeout, handleSafariAudioError } from './webkitCompat';
+import { getSafariLoadTimeout, handleSafariAudioError, findNextCompatibleInstrument } from './webkitCompat';
 import { getOptimalAudioConfig } from '../constants/audioConfig';
 import { throttle } from './performanceUtils';
 
@@ -63,6 +63,7 @@ export interface InstrumentEngineConfig {
   category: InstrumentCategory;
   isLocalUser?: boolean;
   onSynthParamsChange?: (params: Partial<SynthState>) => void;
+  onInstrumentFallback?: (originalInstrument: string, fallbackInstrument: string, category: InstrumentCategory) => void;
 }
 
 export class InstrumentEngine {
@@ -284,7 +285,7 @@ export class InstrumentEngine {
     this.isLoading = true;
     console.log(`🎵 Starting to load ${this.config.instrumentName} (${this.config.category}) for ${this.config.isLocalUser ? 'local' : 'remote'} user ${this.config.username}`);
     
-    this.loadPromise = this._loadInstrument();
+    this.loadPromise = this._loadInstrumentWithFallback();
     
     try {
       const result = await this.loadPromise;
@@ -298,6 +299,72 @@ export class InstrumentEngine {
       this.isLoading = false;
       this.loadPromise = null;
     }
+  }
+
+  private async _loadInstrumentWithFallback(): Promise<any> {
+    const failedInstruments = new Set<string>();
+    let currentInstrument = this.config.instrumentName;
+    const currentCategory = this.config.category;
+    let maxAttempts = 5; // Limit the number of fallback attempts
+    
+    while (maxAttempts > 0) {
+      try {
+        console.log(`🎵 Attempting to load ${currentInstrument} (${currentCategory}) for ${this.config.username}`);
+        
+        // Update the config with the current instrument
+        this.config.instrumentName = currentInstrument;
+        this.config.category = currentCategory;
+        
+        const result = await this._loadInstrument();
+        console.log(`✅ Successfully loaded ${currentInstrument} for ${this.config.username}`);
+        return result;
+      } catch (error) {
+        maxAttempts--;
+        failedInstruments.add(currentInstrument);
+        
+        console.warn(`⚠️ Failed to load ${currentInstrument} for ${this.config.username}:`, error);
+        
+        // Check if this is a Safari audio decoding error
+        const isSafariError = error instanceof Error && (
+          error.message.includes('Safari audio decoding failed') ||
+          error.message.includes('Safari audio decoding error') ||
+          error.message.includes('EncodingError')
+        );
+        
+        if (!isSafariError) {
+          // If it's not a Safari-specific error, don't try fallbacks
+          throw error;
+        }
+        
+        // Try to find the next compatible instrument
+        const nextInstrument = await findNextCompatibleInstrument(
+          currentInstrument,
+          currentCategory,
+          failedInstruments
+        );
+        
+        if (!nextInstrument) {
+          console.error(`❌ No more compatible instruments available for ${this.config.username} in category ${currentCategory}`);
+          throw new Error(`No compatible instruments available in category ${currentCategory}`);
+        }
+        
+        console.log(`🔄 Trying next compatible instrument: ${nextInstrument} for ${this.config.username}`);
+        
+        // Notify about the fallback if callback is provided
+        if (this.config.onInstrumentFallback) {
+          this.config.onInstrumentFallback(this.config.instrumentName, nextInstrument, currentCategory);
+        }
+        
+        currentInstrument = nextInstrument;
+        
+        // If we're out of attempts, throw the error
+        if (maxAttempts <= 0) {
+          throw new Error(`Failed to load any compatible instrument after multiple attempts for ${this.config.username}`);
+        }
+      }
+    }
+    
+    throw new Error(`Failed to load any compatible instrument for ${this.config.username}`);
   }
 
   private async _loadInstrument(): Promise<any> {

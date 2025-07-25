@@ -136,7 +136,7 @@ export default function Lobby() {
 
   if (showUsernameModal) {
     return (
-      <div className="min-h-screen bg-base-200 flex items-center justify-center">
+      <div className="min-h-dvh bg-base-200 flex items-center justify-center">
         <div className="card bg-base-100 shadow-xl w-full max-w-md">
           <div className="card-body">
             <h2 className="card-title justify-center text-2xl mb-4">Welcome to Jam Band!</h2>
@@ -168,17 +168,17 @@ export default function Lobby() {
   }
 
   return (
-    <div className="min-h-dvh bg-base-200 p-4">
+    <div className="min-h-dvh bg-base-200 p-3">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-4xl font-bold text-primary">Jam Band</h1>
+          <h1 className="text-4xl font-bold text-primary">collab</h1>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-success' : isConnecting ? 'bg-warning' : 'bg-error'}`}></div>
-              <span className="text-sm">
+              {/* <span className="text-sm">
                 {isConnected ? 'Connected' : isConnecting ? 'Connecting...' : 'Disconnected'}
-              </span>
+              </span> */}
             </div>
             <div className="badge badge-primary">{username}</div>
           </div>

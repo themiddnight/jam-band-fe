@@ -31,6 +31,10 @@ export interface UseUnifiedInstrumentReturn {
   // Synthesizer state (for current local instrument)
   synthState: SynthState | null;
   isSynthesizerLoaded: boolean;
+  
+  // Instrument fallback state
+  lastFallbackInstrument: string | null;
+  lastFallbackCategory: InstrumentCategory | null;
 
   // Local instrument controls
   initializeAudioContext: () => Promise<void>;
@@ -132,6 +136,10 @@ export const useUnifiedInstrument = (
   // Add a state trigger to force synthState updates
   const [synthStateUpdateTrigger, setSynthStateUpdateTrigger] =
     useState<number>(0);
+  
+  // Instrument fallback state
+  const [lastFallbackInstrument, setLastFallbackInstrument] = useState<string | null>(null);
+  const [lastFallbackCategory, setLastFallbackCategory] = useState<InstrumentCategory | null>(null);
     
   // Track loading state to prevent concurrent requests
   const isCurrentlyLoading = useRef<boolean>(false);
@@ -339,6 +347,14 @@ export const useUnifiedInstrument = (
           instrumentName: validatedInstrument,
           category: validatedCategory,
           onSynthParamsChange,
+          onInstrumentFallback: (originalInstrument: string, fallbackInstrument: string, category: InstrumentCategory) => {
+            console.log(`🔄 Local instrument fallback: ${originalInstrument} → ${fallbackInstrument} (${category})`);
+            setLastFallbackInstrument(fallbackInstrument);
+            setLastFallbackCategory(category);
+            setCurrentInstrument(fallbackInstrument);
+            setCurrentCategory(category);
+            setPreferences(fallbackInstrument, category);
+          },
         });
       }
 
@@ -409,6 +425,14 @@ export const useUnifiedInstrument = (
             instrumentName,
             category: validatedCategory,
             onSynthParamsChange,
+            onInstrumentFallback: (originalInstrument: string, fallbackInstrument: string, category: InstrumentCategory) => {
+              console.log(`🔄 Local instrument fallback: ${originalInstrument} → ${fallbackInstrument} (${category})`);
+              setLastFallbackInstrument(fallbackInstrument);
+              setLastFallbackCategory(category);
+              setCurrentInstrument(fallbackInstrument);
+              setCurrentCategory(category);
+              setPreferences(fallbackInstrument, category);
+            },
           });
         } else {
           await instrumentManager.updateLocalInstrument(
@@ -701,6 +725,10 @@ export const useUnifiedInstrument = (
           `Failed to update remote instrument for user ${username}:`,
           error
         );
+        
+        // For remote users, we don't automatically try fallbacks
+        // The fallback will be handled by the remote user's own device
+        // We just log the error and continue
       }
     },
     [instrumentManager]
@@ -778,6 +806,10 @@ export const useUnifiedInstrument = (
     // Synthesizer state
     synthState,
     isSynthesizerLoaded,
+
+    // Instrument fallback state
+    lastFallbackInstrument,
+    lastFallbackCategory,
 
     // Local instrument controls
     initializeAudioContext,

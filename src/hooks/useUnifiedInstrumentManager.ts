@@ -16,6 +16,10 @@ export interface UseUnifiedInstrumentManagerReturn {
   updateRemoteInstrument: (userId: string, username: string, instrumentName: string, category: InstrumentCategory) => Promise<InstrumentEngine>;
   removeRemoteEngine: (userId: string) => void;
   
+  // Instrument fallback handling
+  onLocalInstrumentFallback?: (originalInstrument: string, fallbackInstrument: string, category: InstrumentCategory) => void;
+  onRemoteInstrumentFallback?: (userId: string, username: string, originalInstrument: string, fallbackInstrument: string, category: InstrumentCategory) => void;
+  
   // Playback methods (unified interface)
   playLocalNotes: (notes: string[], velocity: number, isKeyHeld?: boolean) => Promise<void>;
   stopLocalNotes: (notes: string[]) => Promise<void>;
@@ -84,6 +88,10 @@ export const useUnifiedInstrumentManager = (): UseUnifiedInstrumentManagerReturn
     const engineConfig: InstrumentEngineConfig = {
       ...config,
       isLocalUser: true,
+      onInstrumentFallback: (originalInstrument: string, fallbackInstrument: string, category: InstrumentCategory) => {
+        console.log(`🔄 Local instrument fallback: ${originalInstrument} → ${fallbackInstrument} (${category})`);
+        // This will be handled by the unified instrument hook
+      },
     };
 
     localEngine.current = new InstrumentEngine(engineConfig);
@@ -129,6 +137,10 @@ export const useUnifiedInstrumentManager = (): UseUnifiedInstrumentManagerReturn
     const engineConfig: InstrumentEngineConfig = {
       ...config,
       isLocalUser: false,
+      onInstrumentFallback: (originalInstrument: string, fallbackInstrument: string, category: InstrumentCategory) => {
+        console.log(`🔄 Remote instrument fallback for ${config.username}: ${originalInstrument} → ${fallbackInstrument} (${category})`);
+        // This will be handled by the unified instrument hook
+      },
     };
     
     // Create loading promise

@@ -374,6 +374,17 @@ export const useSocket = () => {
         // Clear pending approval state
         setPendingApproval(false);
         clearRoom();
+        
+        // Disconnect the socket to prevent any further interaction
+        if (socketRef.current) {
+          socketRef.current.disconnect();
+          socketRef.current = null;
+        }
+        
+        // Reset connection states
+        setIsConnected(false);
+        setIsConnectedState(false);
+        setIsConnecting(false);
 
         // Call the callback if set (for room owner to clear pending approval prompt)
         if (memberRejectedCallbackRef.current && data.userId) {
@@ -382,16 +393,7 @@ export const useSocket = () => {
       }
     );
 
-    socket.on("pending_member_cancelled", (data: { userId: string }) => {
-      console.log("Pending member cancelled:", data.userId);
-      // Remove the pending member from the room owner's view
-      removePendingMember(data.userId);
 
-      // Call the callback if set
-      if (guestCancelledCallbackRef.current) {
-        guestCancelledCallbackRef.current(data.userId);
-      }
-    });
 
     socket.on("pending_approval", (data: { message: string }) => {
       console.log("Pending approval:", data.message);
@@ -437,6 +439,8 @@ export const useSocket = () => {
 
         // Update the room store first
         updateUserInstrument(data.userId, data.instrument, data.category);
+        
+        console.log(`✅ Updated instrument for user ${data.username}: ${data.instrument} (${data.category})`);
 
         // Call the callback if set
         if (instrumentChangedCallbackRef.current) {
@@ -509,6 +513,15 @@ export const useSocket = () => {
     // Clear room state immediately to prevent reconnection
     clearRoom();
   }, [safeEmit, clearRoom]);
+
+  // Disconnect socket completely
+  const disconnect = useCallback(() => {
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+    clearRoom();
+  }, [clearRoom]);
 
   // Approve member
   const approveMember = useCallback(
@@ -707,6 +720,7 @@ export const useSocket = () => {
     createRoom,
     joinRoom,
     leaveRoom,
+    disconnect,
     approveMember,
     rejectMember,
     transferOwnershipTo,

@@ -220,7 +220,7 @@ export default function MidiStatus({
                 >
                   {isRequesting ? (
                     <>
-                      <span className="loading loading-spinner loading-xs"></span>
+                      <span className="loading loading-spinner mx-auto loading-xs"></span>
                       Requesting...
                     </>
                   ) : (

@@ -32,14 +32,21 @@ export default function Room() {
   const { username } = useUserStore();
   const { currentRoom, currentUser, pendingApproval, error, rejectionMessage, setError } =
     useRoomStore();
-  
+
   // State to track playing indicators for each user
   const [playingIndicators, setPlayingIndicators] = useState<Map<string, { velocity: number; timestamp: number }>>(new Map());
+
+  // State to track instrument fallback notifications
+  const [fallbackNotification, setFallbackNotification] = useState<{
+    message: string;
+    type: 'local' | 'remote';
+    username?: string;
+  } | null>(null);
 
   const {
     connect,
     joinRoom,
-    leaveRoom,
+    disconnect,
     approveMember,
     rejectMember,
     // transferOwnershipTo,
@@ -58,10 +65,10 @@ export default function Room() {
   } = useSocket();
 
   const scaleState = useScaleState();
-  
+
   // Track sustain toggle state for MIDI controller access
   const [sustainToggleState, setSustainToggleState] = useState<boolean>(false);
-  
+
   const {
     currentInstrument,
     currentCategory,
@@ -83,6 +90,8 @@ export default function Room() {
     updateSynthParams,
     loadPresetParams,
     isSynthesizerLoaded,
+    lastFallbackInstrument,
+    lastFallbackCategory,
     // Remote user methods
     playRemoteUserNote,
     stopRemoteUserNote,
@@ -133,11 +142,11 @@ export default function Room() {
   useEffect(() => {
     if (currentRoom && currentUser && currentCategory === InstrumentCategory.Synthesizer) {
       // Check if there are other users with synthesizers and request their parameters
-      const otherSynthUsers = currentRoom.users.filter(user => 
-        user.id !== currentUser.id && 
+      const otherSynthUsers = currentRoom.users.filter(user =>
+        user.id !== currentUser.id &&
         user.currentCategory === InstrumentCategory.Synthesizer
       );
-      
+
       if (otherSynthUsers.length > 0) {
         // Small delay to ensure we're fully connected
         setTimeout(() => {
@@ -174,7 +183,7 @@ export default function Room() {
 
   // Initialize audio context when needed
   // (This is now handled automatically by the unified instrument hook)
-  
+
   // Clean up is handled automatically by the unified instrument hook
 
   // Cleanup on component unmount
@@ -212,6 +221,24 @@ export default function Room() {
     return cleanup;
   }, [onUserLeft, cleanupRemoteUser]);
 
+  // Handle instrument fallback notifications
+  useEffect(() => {
+    if (lastFallbackInstrument && lastFallbackCategory) {
+      const message = `Safari compatibility: Switched from ${currentInstrument} to ${lastFallbackInstrument}`;
+      setFallbackNotification({
+        message,
+        type: 'local'
+      });
+
+      // Clear the notification after 5 seconds
+      const timeout = setTimeout(() => {
+        setFallbackNotification(null);
+      }, 5000);
+
+      return () => clearTimeout(timeout);
+    }
+  }, [lastFallbackInstrument, lastFallbackCategory, currentInstrument]);
+
   // Handle instrument changes - preload new instruments
   useEffect(() => {
     const cleanup = onInstrumentChanged(async (data) => {
@@ -220,7 +247,7 @@ export default function Room() {
         console.log(`⏭️ Skipping own instrument change for user ${data.username}`);
         return;
       }
-      
+
       try {
         await updateRemoteUserInstrument(
           data.userId,
@@ -255,7 +282,7 @@ export default function Room() {
         console.log(`⏭️ Skipping own synth params change for user ${data.username}`);
         return;
       }
-      
+
       try {
         await updateRemoteUserSynthParams(
           data.userId,
@@ -280,11 +307,11 @@ export default function Room() {
   useEffect(() => {
     if (currentRoom && currentUser && currentCategory === InstrumentCategory.Synthesizer && synthState && isSynthesizerLoaded) {
       // Check if there are other users with synthesizers and sync our parameters
-      const otherSynthUsers = currentRoom.users.filter(user => 
-        user.id !== currentUser.id && 
+      const otherSynthUsers = currentRoom.users.filter(user =>
+        user.id !== currentUser.id &&
         user.currentCategory === InstrumentCategory.Synthesizer
       );
-      
+
       if (otherSynthUsers.length > 0) {
         // Sync the complete synth state to ensure all parameters are synchronized
         setTimeout(() => {
@@ -308,7 +335,7 @@ export default function Room() {
 
   // Track preloaded instruments to avoid redundant requests
   const preloadedInstruments = useRef<Set<string>>(new Set());
-  
+
   // Debounce mechanism to prevent infinite loops
   const lastPreloadTime = useRef<number>(0);
   const PRELOAD_DEBOUNCE_MS = 1000; // Minimum 1 second between preload attempts
@@ -321,32 +348,32 @@ export default function Room() {
   // Preload all room instruments when room data changes
   useEffect(() => {
     const now = Date.now();
-    
+
     // Only run if we have users and audio context is ready
     if (roomUsers.length === 0 || !isAudioContextReady) {
       return;
     }
-    
+
     // Check if there are any users with instruments that need preloading
-    const usersWithInstruments = roomUsers.filter(user => 
+    const usersWithInstruments = roomUsers.filter(user =>
       user.currentInstrument && user.currentCategory
     );
-    
+
     // If no users have instruments set, don't run at all
     if (usersWithInstruments.length === 0) {
       console.log(`📭 No users with instruments to preload`);
       return;
     }
-    
+
     // Debounce check
     if ((now - lastPreloadTime.current) <= PRELOAD_DEBOUNCE_MS) {
       console.log(`⏸️ Skipping preload check - debounced (last run ${now - lastPreloadTime.current}ms ago)`);
       return;
     }
-    
+
     console.log(`🔍 [${now}] Checking ${roomUsers.length} users for instrument preloading`);
     lastPreloadTime.current = now;
-    
+
     const instrumentsToPreload = usersWithInstruments
       .filter((user): user is typeof user & { currentInstrument: string; currentCategory: string } => {
         const instrumentKey = `${user.id}-${user.currentInstrument}-${user.currentCategory}`;
@@ -355,7 +382,7 @@ export default function Room() {
           console.log(`⏭️ Skipping user ${user.username} - ${user.currentInstrument} already preloaded`);
           return false;
         }
-        
+
         console.log(`✅ Will preload ${user.currentInstrument} (${user.currentCategory}) for user ${user.username}`);
         return true;
       })
@@ -363,7 +390,7 @@ export default function Room() {
         // Add to preloaded set here, after filtering
         const instrumentKey = `${user.id}-${user.currentInstrument}-${user.currentCategory}`;
         preloadedInstruments.current.add(instrumentKey);
-        
+
         return {
           userId: user.id,
           username: user.username,
@@ -371,14 +398,14 @@ export default function Room() {
           category: user.currentCategory
         };
       });
-    
+
     if (instrumentsToPreload.length > 0) {
       console.log(`🎵 Preloading ${instrumentsToPreload.length} new instruments for room users:`, instrumentsToPreload);
       preloadRoomInstruments(instrumentsToPreload);
     } else {
       console.log(`📭 No new instruments to preload`);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomUsers, isAudioContextReady]); // Removed preloadRoomInstruments from deps
 
   // Handle incoming notes from other users with deduplication
@@ -389,9 +416,9 @@ export default function Room() {
   const handleNotePlayed = useCallback((data: { username: string; velocity: number }) => {
     setPlayingIndicators(prev => {
       const newMap = new Map(prev);
-      newMap.set(data.username, { 
-        velocity: data.velocity, 
-        timestamp: Date.now() 
+      newMap.set(data.username, {
+        velocity: data.velocity,
+        timestamp: Date.now()
       });
       return newMap;
     });
@@ -404,14 +431,14 @@ export default function Room() {
 
       // For mono synths, be more careful with deduplication to preserve key tracking
       const isMonoSynth = data.instrument === "analog_mono" || data.instrument === "fm_mono";
-      
+
       // Create a unique key for this received note event
       const eventKey = `${data.userId}-${data.eventType}-${data.notes.join(',')}-${data.instrument}-${data.velocity}`;
       const now = Date.now();
-      
+
       // Only apply deduplication to note_on events for mono synths, or all events for other instruments
       const shouldCheckDuplicate = !isMonoSynth || data.eventType === "note_on";
-      
+
       if (shouldCheckDuplicate) {
         // Check if we recently processed the same event
         const lastProcessed = recentReceivedNotes.current.get(eventKey);
@@ -419,10 +446,10 @@ export default function Room() {
           return;
         }
       }
-      
+
       // Record this event
       recentReceivedNotes.current.set(eventKey, now);
-      
+
       // Clean up old entries periodically
       if (recentReceivedNotes.current.size > 100) {
         const cutoff = now - NOTE_RECEIVE_DEDUPE_WINDOW * 2;
@@ -512,6 +539,7 @@ export default function Room() {
   // Handle instrument changes
   useEffect(() => {
     if (currentInstrument && currentCategory) {
+      console.log(`🎵 Sending instrument change to backend: ${currentInstrument} (${currentCategory})`);
       changeInstrument(currentInstrument, currentCategory);
     }
   }, [currentInstrument, currentCategory, changeInstrument]);
@@ -741,7 +769,8 @@ export default function Room() {
 
   // Leave room
   const handleLeaveRoom = () => {
-    leaveRoom();
+    // Disconnect socket to prevent automatic reconnection
+    disconnect();
     navigate("/");
   };
 
@@ -758,7 +787,7 @@ export default function Room() {
               Your request to join as a band member is pending approval from the
               room owner.
             </p>
-            <div className="loading loading-spinner loading-lg text-primary"></div>
+            <div className="loading loading-spinner mx-auto loading-lg text-primary"></div>
             <div className="card-actions justify-center mt-4">
               <button onClick={handleLeaveRoom} className="btn btn-outline">
                 Cancel
@@ -773,7 +802,7 @@ export default function Room() {
   // Render connecting state
   if (isConnecting || (!isConnected && !currentRoom)) {
     return (
-      <div className="min-h-screen bg-base-200 flex items-center justify-center">
+      <div className="min-h-dvh bg-base-200 flex items-center justify-center">
         <div className="card bg-base-100 shadow-xl w-full max-w-md">
           <div className="card-body text-center">
             <h2 className="card-title justify-center text-xl">
@@ -784,7 +813,7 @@ export default function Room() {
                 ? "Establishing connection to server..."
                 : "Joining room..."}
             </p>
-            <div className="loading loading-spinner loading-lg text-primary"></div>
+            <div className="loading loading-spinner mx-auto loading-lg text-primary"></div>
             <div className="card-actions justify-center mt-4">
               <button onClick={handleLeaveRoom} className="btn btn-outline">
                 Cancel
@@ -801,7 +830,7 @@ export default function Room() {
   // Render error state
   if (error) {
     return (
-      <div className="min-h-screen bg-base-200 flex items-center justify-center">
+      <div className="min-h-dvh bg-base-200 flex items-center justify-center p-4">
         <div className="card bg-base-100 shadow-xl w-full max-w-md">
           <div className="card-body text-center">
             <h2 className="card-title justify-center text-xl text-error">
@@ -821,39 +850,59 @@ export default function Room() {
 
   // Render room interface
   return (
-    <div className="min-h-screen bg-base-200 p-3">
+    <div className="min-h-dvh bg-base-200 p-3">
       <div className="flex flex-col items-center">
+        {/* Fallback Notification */}
+        {fallbackNotification && (
+          <div className="alert alert-info mb-4 w-full max-w-6xl">
+            <div>
+              <h4 className="font-bold">Safari Compatibility</h4>
+              <p className="text-sm">{fallbackNotification.message}</p>
+            </div>
+            <button
+              onClick={() => setFallbackNotification(null)}
+              className="btn btn-sm btn-ghost"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         {/* Room Header */}
         <div className="w-full max-w-6xl mb-4">
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-2xl font-bold">{currentRoom?.name}</h1>
-              <p className="text-base-content/70">
-                {currentUser?.role === "room_owner"
-                  ? "Room Owner"
-                  : currentUser?.role === "band_member"
-                  ? "Band Member"
-                  : "Audience"}
-              </p>
+              <div>
+                <span className="mr-2">
+                  {currentUser?.username}
+                </span>
+                <span className="text-sm text-base-content/70">
+                  {currentUser?.role === "room_owner"
+                    ? "Room Owner"
+                    : currentUser?.role === "band_member"
+                      ? "Band Member"
+                      : "Audience"}
+                </span>
+              </div>
             </div>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <div
-                  className={`w-3 h-3 rounded-full ${
-                    isConnected
+                  className={`w-3 h-3 rounded-full ${isConnected
                       ? "bg-success"
                       : isConnecting
-                      ? "bg-warning"
-                      : "bg-error"
-                  }`}
+                        ? "bg-warning"
+                        : "bg-error"
+                    }`}
                 ></div>
-                <span className="text-sm">
+                {/* <span className="text-sm">
                   {isConnected
                     ? "Connected"
                     : isConnecting
-                    ? "Connecting..."
-                    : "Disconnected"}
-                </span>
+                      ? "Connecting..."
+                      : "Disconnected"}
+                </span> */}
               </div>
               <button
                 onClick={handleLeaveRoom}
@@ -866,80 +915,83 @@ export default function Room() {
         </div>
 
         {/* Room Members */}
-        <div className="w-full max-w-6xl mb-4">
+        <div className="w-full max-w-6xl mb-3">
           <div className="card bg-base-100 shadow-xl">
-            <div className="card-body p-4">
-              <div className="flex items-center justify-between">
-                {/* <h4 className="card-title">Room Members ({currentRoom?.users.length || 0})</h4> */}
+            <div className="card-body p-2">
+              {/* <div className="flex items-center justify-between">
+                <h4 className="card-title">Room Members ({currentRoom?.users.length || 0})</h4>
                 {currentRoom?.pendingMembers && currentRoom.pendingMembers.length > 0 && (
                   <div className="badge badge-warning badge-sm">
                     {currentRoom.pendingMembers.length} pending
                   </div>
                 )}
-              </div>
-              
+              </div> */}
+
               {/* Active Members - Compact List */}
               <div className="flex flex-wrap gap-2">
-                {currentRoom?.users.map((user) => {
-                  const playingIndicator = playingIndicators.get(user.username);
-                  
-                  return (
-                    <div key={user.id} className="flex items-center gap-2 p-2 bg-base-200 rounded-lg min-w-fit">
-                      <PlayingIndicator velocity={playingIndicator?.velocity || 0} />
-                      <span className="font-medium text-sm whitespace-nowrap">{user.username}</span>
-                      {user.currentInstrument && (
-                        <span className="text-xs text-base-content/60 bg-base-300 px-2 py-1 rounded whitespace-nowrap">
-                          {user.currentInstrument.replace(/_/g, " ")}
-                        </span>
-                      )}
-                      <span className="text-xs whitespace-nowrap">
-                        {user.role === "room_owner" ? "👑" : 
-                         user.role === "band_member" ? "🎸" : ""}
-                      </span>
-                      {/* {currentUser?.role === "room_owner" && user.role === "band_member" && (
-                        <button
-                          onClick={() => transferOwnershipTo(user.id)}
-                          className="btn btn-xs btn-outline btn-ghost"
-                          title="Transfer ownership"
-                        >
-                          👑
-                        </button>
-                      )} */}
-                    </div>
-                  );
-                })}
-              </div>
+                {currentRoom?.users
+                  .slice() // make a shallow copy to avoid mutating original
+                  .sort((a, b) => {
+                    const roleOrder = {
+                      room_owner: 0,
+                      band_member: 1,
+                      audience: 2,
+                    };
+                    return (roleOrder[a.role] ?? 3) - (roleOrder[b.role] ?? 3);
+                  })
+                  .map((user) => {
+                    const playingIndicator = playingIndicators.get(user.username);
 
-              {/* Pending Members - Compact */}
-              {currentRoom?.pendingMembers && currentRoom.pendingMembers.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-base-300">
-                  <h4 className="text-sm font-medium mb-2 text-base-content/70">Pending Requests</h4>
-                  <div className="space-y-1">
-                    {currentRoom.pendingMembers.map((user) => (
-                      <div
-                        key={user.id}
-                        className="flex justify-between items-center p-2 bg-warning/10 rounded-lg"
-                      >
-                        <span className="text-sm">{user.username}</span>
-                        <div className="flex gap-1">
+                    return (
+                      <div key={user.id} className="flex items-center gap-2 p-2 bg-base-200 rounded-lg min-w-fit">
+                        {user.role !== 'audience' && <PlayingIndicator velocity={playingIndicator?.velocity || 0} />}
+                        <span className="font-medium text-sm whitespace-nowrap">{user.username}</span>
+                        {user.role !== 'audience' && user.currentInstrument ? (
+                          <span className="text-xs text-base-content/60 bg-base-300 px-2 py-1 rounded whitespace-nowrap">
+                            {user.currentInstrument.replace(/_/g, " ")}
+                          </span>
+                        ) : null}
+                        <span className="text-xs whitespace-nowrap">
+                          {user.role === "room_owner" ? "👑" :
+                            user.role === "band_member" ? "🎹" : "🦻🏼"}
+                        </span>
+                        {/* {currentUser?.role === "room_owner" && user.role === "band_member" && (
                           <button
-                            onClick={() => handleApproveMember(user.id)}
-                            className="btn btn-xs btn-success"
+                            onClick={() => transferOwnershipTo(user.id)}
+                            className="btn btn-xs btn-outline btn-ghost"
+                            title="Transfer ownership"
                           >
-                            ✓
+                            👑
                           </button>
-                          <button
-                            onClick={() => handleRejectMember(user.id)}
-                            className="btn btn-xs btn-error"
-                          >
-                            ✕
-                          </button>
-                        </div>
+                        )} */}
                       </div>
-                    ))}
+                    );
+                  })}
+
+                {/* Pending Members - Compact */}
+                {currentRoom?.pendingMembers && currentRoom.pendingMembers.map((user) => (
+                  <div
+                    key={user.id}
+                    className="flex justify-between items-center gap-2 p-2 bg-warning/30 rounded-lg"
+                  >
+                    <span className="text-sm">{user.username}</span>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => handleApproveMember(user.id)}
+                        className="btn btn-xs btn-success"
+                      >
+                        ✓
+                      </button>
+                      <button
+                        onClick={() => handleRejectMember(user.id)}
+                        className="btn btn-xs btn-error"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -949,49 +1001,49 @@ export default function Room() {
         {/* Instrument Controls */}
         {(currentUser?.role === "room_owner" ||
           currentUser?.role === "band_member") && (
-          <>
-            <div className="flex gap-2 flex-wrap w-full max-w-6xl mb-3">
-              <MidiStatus
-                isConnected={midiController.isConnected}
-                getMidiInputs={midiController.getMidiInputs}
-                onRequestAccess={midiController.requestMidiAccess}
-                connectionError={midiController.connectionError}
-                isRequesting={midiController.isRequesting}
-                refreshMidiDevices={midiController.refreshMidiDevices}
-              />
-              <ScaleSelector
-                rootNote={scaleState.rootNote}
-                scale={scaleState.scale}
-                onRootNoteChange={scaleState.setRootNote}
-                onScaleChange={scaleState.setScale}
-              />
-              <InstrumentCategorySelector
-                currentCategory={currentCategory}
-                currentInstrument={currentInstrument}
-                onCategoryChange={handleCategoryChange}
-                onInstrumentChange={handleInstrumentChange}
-                isLoading={isLoadingInstrument}
-                dynamicDrumMachines={dynamicDrumMachines}
-              />
-            </div>
+            <>
+              <div className="flex gap-2 flex-wrap w-full max-w-6xl mb-3">
+                <MidiStatus
+                  isConnected={midiController.isConnected}
+                  getMidiInputs={midiController.getMidiInputs}
+                  onRequestAccess={midiController.requestMidiAccess}
+                  connectionError={midiController.connectionError}
+                  isRequesting={midiController.isRequesting}
+                  refreshMidiDevices={midiController.refreshMidiDevices}
+                />
+                <ScaleSelector
+                  rootNote={scaleState.rootNote}
+                  scale={scaleState.scale}
+                  onRootNoteChange={scaleState.setRootNote}
+                  onScaleChange={scaleState.setScale}
+                />
+                <InstrumentCategorySelector
+                  currentCategory={currentCategory}
+                  currentInstrument={currentInstrument}
+                  onCategoryChange={handleCategoryChange}
+                  onInstrumentChange={handleInstrumentChange}
+                  isLoading={isLoadingInstrument}
+                  dynamicDrumMachines={dynamicDrumMachines}
+                />
+              </div>
 
-            {/* Synthesizer Controls */}
-            {currentCategory === InstrumentCategory.Synthesizer &&
-              synthState && (
-                <div className="w-full max-w-6xl mb-3">
-                  <SynthControls
-                    currentInstrument={currentInstrument}
-                    synthState={synthState}
-                    onParamChange={updateSynthParams}
-                    onLoadPreset={loadPresetParams}
-                  />
-                </div>
-              )}
+              {/* Synthesizer Controls */}
+              {currentCategory === InstrumentCategory.Synthesizer &&
+                synthState && (
+                  <div className="w-full max-w-6xl mb-3">
+                    <SynthControls
+                      currentInstrument={currentInstrument}
+                      synthState={synthState}
+                      onParamChange={updateSynthParams}
+                      onLoadPreset={loadPresetParams}
+                    />
+                  </div>
+                )}
 
-            {/* Instrument Interface */}
-            {renderInstrumentControl()}
-          </>
-        )}
+              {/* Instrument Interface */}
+              {renderInstrumentControl()}
+            </>
+          )}
 
         {/* Audience View */}
         {currentUser?.role === "audience" && (
@@ -1035,7 +1087,7 @@ export default function Room() {
             <h3 className="card-title justify-center text-xl">
               Initializing Audio...
             </h3>
-            <div className="loading loading-spinner loading-lg text-primary"></div>
+            <div className="loading loading-spinner mx-auto loading-lg text-primary"></div>
             <p className="text-base-content/70 mt-4">
               Setting up audio system for the jam session...
             </p>
@@ -1056,7 +1108,7 @@ export default function Room() {
             <h3 className="card-title justify-center text-xl">
               Loading Instrument...
             </h3>
-            <div className="loading loading-spinner loading-lg text-primary"></div>
+            <div className="loading loading-spinner mx-auto loading-lg text-primary"></div>
             <p className="text-base-content/70 mt-4">
               Loading {currentInstrument.replace(/_/g, " ")}...
             </p>
