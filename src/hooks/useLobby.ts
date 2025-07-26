@@ -3,18 +3,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useUserStore } from '../stores/userStore';
 import { useRoomStore } from '../stores/roomStore';
 import { useSocket } from './useSocket';
+import { useRooms } from '../services/useRooms';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
-interface Room {
-  id: string;
-  name: string;
-  userCount: number;
-  owner: string;
-  isPrivate: boolean;
-  isHidden: boolean;
-  createdAt: string;
-}
 
 export function useLobby() {
   const navigate = useNavigate();
@@ -23,10 +14,11 @@ export function useLobby() {
   const { connect, createRoom, isConnected, isConnecting, onRoomCreated, onRoomClosed } = useSocket();
   const { currentRoom } = useRoomStore();
 
+  // Use TanStack Query for room fetching
+  const { data: rooms, isLoading: loading, refetch: fetchRooms } = useRooms();
+
   const [showUsernameModal, setShowUsernameModal] = useState(false);
   const [tempUsername, setTempUsername] = useState('');
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [loading, setLoading] = useState(false);
   const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
   const [newRoomName, setNewRoomName] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
@@ -59,21 +51,6 @@ export function useLobby() {
     }
   }, [username, connect, isConnected, isConnecting]);
 
-  // Fetch rooms when socket connects
-  useEffect(() => {
-    if (isConnected) {
-      fetchRooms();
-    }
-  }, [isConnected]);
-
-  // Periodic room list refresh
-  useEffect(() => {
-    if (isConnected) {
-      const interval = setInterval(fetchRooms, 10000); // Refresh every 10 seconds
-      return () => clearInterval(interval);
-    }
-  }, [isConnected]);
-
   // Listen for room creation and deletion broadcasts
   useEffect(() => {
     if (!isConnected) return;
@@ -83,14 +60,15 @@ export function useLobby() {
       fetchRooms();
     };
 
-    const handleRoomClosed = (roomId: string) => {
-      setRooms(prevRooms => prevRooms.filter(room => room.id !== roomId));
+    const handleRoomClosed = () => {
+      // Refresh the room list when a room is closed
+      fetchRooms();
     };
 
     // Set up the room created and closed callbacks
     onRoomCreated(handleRoomCreated);
     onRoomClosed(handleRoomClosed);
-  }, [isConnected, onRoomCreated, onRoomClosed]);
+  }, [isConnected, onRoomCreated, onRoomClosed, fetchRooms]);
 
   // Redirect to room when created
   useEffect(() => {
@@ -99,18 +77,7 @@ export function useLobby() {
     }
   }, [currentRoom, navigate]);
 
-  const fetchRooms = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(`${BACKEND_URL}/api/rooms`);
-      const data = await response.json();
-      setRooms(data);
-    } catch {
-      // Failed to fetch rooms
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   const handleUsernameSubmit = () => {
     if (tempUsername.trim()) {
@@ -172,7 +139,7 @@ export function useLobby() {
   return {
     // State
     username,
-    rooms,
+    rooms: rooms || [],
     loading,
     showUsernameModal,
     tempUsername,

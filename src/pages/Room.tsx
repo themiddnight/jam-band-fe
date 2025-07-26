@@ -25,17 +25,17 @@ export default function Room() {
     currentUser,
     pendingApproval,
     error,
-    
+
     // Connection state
     isConnected,
     isConnecting,
-    
+
     // UI state
     playingIndicators,
     fallbackNotification,
     showLeaveConfirmModal,
     setShowLeaveConfirmModal,
-    
+
     // Instrument state
     currentInstrument,
     currentCategory,
@@ -46,13 +46,13 @@ export default function Room() {
     audioContextError,
     synthState,
     isSynthesizerLoaded,
-    
+
     // Scale state
     scaleState,
-    
+
     // MIDI controller
     midiController,
-    
+
     // Handlers
     handlePlayNote,
     handleStopNote,
@@ -65,14 +65,14 @@ export default function Room() {
     handleLeaveRoomClick,
     handleLeaveRoomConfirm,
     clearFallbackNotification,
-    
+
     // Instrument management
     handleInstrumentChange,
     handleCategoryChange,
     getCurrentInstrumentControlType,
     updateSynthParams,
     loadPresetParams,
-    
+
     // Audio management
     stopSustainedNotes,
   } = useRoom();
@@ -87,19 +87,17 @@ export default function Room() {
     try {
       const roomUrl = `${window.location.origin}/room/${currentRoom?.id}`;
       await navigator.clipboard.writeText(roomUrl);
-      
+
       // Show a temporary success message
       const button = document.getElementById('copy-room-url');
       if (button) {
         const originalText = button.textContent;
         button.textContent = 'Copied!';
         button.classList.add('btn-success');
-        button.classList.remove('btn-outline');
-        
+
         setTimeout(() => {
           button.textContent = originalText;
           button.classList.remove('btn-success');
-          button.classList.add('btn-outline');
         }, 2000);
       }
     } catch (error) {
@@ -209,41 +207,30 @@ export default function Room() {
 
         {/* Room Header */}
         <div className="w-full max-w-6xl mb-4">
+          {/* Room Name and Copy URL Button */}
           <div className="flex justify-between items-center">
-            <div>
+            <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold">{currentRoom?.name}</h1>
-              <div>
-                <span className="mr-2">
-                  {currentUser?.username}
-                </span>
-                <span className="text-sm text-base-content/70">
-                  {currentUser?.role === "room_owner"
-                    ? "Room Owner"
-                    : currentUser?.role === "band_member"
-                      ? "Band Member"
-                      : "Audience"}
-                </span>
-              </div>
+              <button
+                id="copy-room-url"
+                onClick={handleCopyRoomUrl}
+                className="btn btn-xs"
+                title="Copy room URL to clipboard"
+              >
+                📋
+              </button>
             </div>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <div
                   className={`w-3 h-3 rounded-full ${isConnected
-                      ? "bg-success"
-                      : isConnecting
-                        ? "bg-warning"
-                        : "bg-error"
+                    ? "bg-success"
+                    : isConnecting
+                      ? "bg-warning"
+                      : "bg-error"
                     }`}
                 ></div>
               </div>
-              <button
-                id="copy-room-url"
-                onClick={handleCopyRoomUrl}
-                className="btn btn-outline btn-sm"
-                title="Copy room URL to clipboard"
-              >
-                📋 Copy URL
-              </button>
               <button
                 onClick={handleLeaveRoomClick}
                 className="btn btn-outline btn-sm"
@@ -251,6 +238,20 @@ export default function Room() {
                 Leave Room
               </button>
             </div>
+          </div>
+
+          {/* User Name and Role */}
+          <div>
+            <span className="mr-2">
+              {currentUser?.username}
+            </span>
+            <span className="text-sm text-base-content/70">
+              {currentUser?.role === "room_owner"
+                ? "Room Owner"
+                : currentUser?.role === "band_member"
+                  ? "Band Member"
+                  : "Audience"}
+            </span>
           </div>
         </div>
 

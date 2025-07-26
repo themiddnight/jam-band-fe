@@ -46,8 +46,8 @@ export const melodyAdvancedKeys = [
   "'",
   "]",
 ];
-export const chordRootKeys = ["a", "s", "d", "f", "g", "h", "j"];
-export const chordTriadKeys = ["q", "w", "e", "r", "t", "y", "u"];
+export const chordRootKeys = ["g", "h", "j", "k", "l", ";", "'"];
+export const chordTriadKeys = ["t", "y", "u", "i", "o", "p", "["];
 
 export const whiteKeyMapping = [
   "a",

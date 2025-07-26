@@ -195,7 +195,7 @@ export const useSocket = () => {
 
     // Use environment variable for backend URL
     const backendUrl =
-      import.meta.env.VITE_BACKEND_URL || "http://localhost:3001";
+      import.meta.env.VITE_API_URL || "http://localhost:3001";
     const socket = io(backendUrl, {
       reconnection: true,
       reconnectionAttempts: 5,

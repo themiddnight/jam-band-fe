@@ -8,6 +8,7 @@ import { ChordKeys } from "./components/ChordKeys";
 import { AdvancedKeys } from "./components/AdvancedKeys";
 import { ShortcutConfig } from "./ShortcutConfig";
 import { useKeyboardShortcutsStore } from "../../stores/keyboardShortcutsStore";
+import { getKeyDisplayName } from "../../constants/keyboardShortcuts";
 import type { Scale } from "../../hooks/useScaleState";
 
 export interface Props {
@@ -169,242 +170,233 @@ export default function Keyboard({
   return (
     <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
       <div className="card-body p-3">
-        <div className="flex gap-5 mb-3">
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <h3 className="card-title text-base">Mode Controls</h3>
-              <button
-                onClick={() => setShowShortcutConfig(true)}
-                className="btn btn-xs touch-manipulation"
-                title="Configure keyboard shortcuts"
-              >
-                ⚙️
-              </button>
-            </div>
-
-            <div className="flex gap-3 flex-wrap">
-              <div className="block join">
-                <button
-                  onClick={() => setMainMode("simple")}
-                  className={`btn btn-sm join-item touch-manipulation ${mainMode === "simple" ? "btn-primary" : "btn-outline"
-                    }`}
-                >
-                  Simple
-                </button>
-                <button
-                  onClick={() => setMainMode("advanced")}
-                  className={`btn btn-sm join-item touch-manipulation ${mainMode === "advanced" ? "btn-primary" : "btn-outline"
-                    }`}
-                >
-                  Basic
-                </button>
-              </div>
-
-              {mainMode === "simple" && (
-                <div className="block join">
-                  <button
-                    onClick={() => setSimpleMode("melody")}
-                    className={`btn btn-sm join-item touch-manipulation ${simpleMode === "melody" ? "btn-success" : "btn-outline"
-                      }`}
-                  >
-                    Notes{" "}
-                    <kbd className="kbd kbd-xs">
-                      {shortcuts.toggleMelodyChord.key.toUpperCase()}
-                    </kbd>
-                  </button>
-                  <button
-                    onClick={() => setSimpleMode("chord")}
-                    className={`btn btn-sm join-item touch-manipulation ${simpleMode === "chord" ? "btn-success" : "btn-outline"
-                      }`}
-                  >
-                    Chord{" "}
-                    <kbd className="kbd kbd-xs">
-                      {shortcuts.toggleMelodyChord.key.toUpperCase()}
-                    </kbd>
-                  </button>
-                </div>
-              )}
-            </div>
+        <div className="flex justify-between items-center mb-1">
+          <div className="flex items-center gap-2">
+            <h3 className="card-title text-base">Mode Controls</h3>
+            <button
+              onClick={() => setShowShortcutConfig(true)}
+              className="btn btn-xs touch-manipulation"
+              title="Configure keyboard shortcuts"
+            >
+              ⚙️
+            </button>
           </div>
 
-          <div className="space-y-4">
-            <h3 className="card-title text-base">Controls</h3>
-
-            <div className="flex items-start gap-3 flex-wrap">
-
-              <div className="flex items-center gap-2">
-                <label className="label py-1">
-                  <span className="label-text text-sm">
-                    Octave: {currentOctave}
-                  </span>
-                </label>
-                <div className="join">
-                  <button
-                    onClick={() =>
-                      setCurrentOctave(Math.max(0, currentOctave - 1))
-                    }
-                    className="btn btn-sm btn-outline join-item touch-manipulation"
-                  >
-                    - <kbd className="kbd kbd-xs">Z</kbd>
-                  </button>
-                  <button
-                    onClick={() =>
-                      setCurrentOctave(Math.min(8, currentOctave + 1))
-                    }
-                    className="btn btn-sm btn-outline join-item touch-manipulation"
-                  >
-                    + <kbd className="kbd kbd-xs">X</kbd>
-                  </button>
-                </div>
-              </div>
-
-              {mainMode === "simple" && simpleMode === "chord" && (
-                <div className="flex items-center gap-2">
-                  <label className="label py-1">
-                    <span className="label-text text-sm">
-                      Voicing: {chordVoicing}
-                    </span>
-                  </label>
-                  <div className="join">
-                    <button
-                      onClick={() =>
-                        setChordVoicing(Math.max(-2, chordVoicing - 1))
-                      }
-                      className="btn btn-sm btn-outline join-item touch-manipulation"
-                    >
-                      - <kbd className="kbd kbd-xs">C</kbd>
-                    </button>
-                    <button
-                      onClick={() =>
-                        setChordVoicing(Math.min(4, chordVoicing + 1))
-                      }
-                      className="btn btn-sm btn-outline join-item touch-manipulation"
-                    >
-                      + <kbd className="kbd kbd-xs">V</kbd>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-
-              <div className="join">
+          <div className="flex gap-3 flex-wrap justify-end">
+            {mainMode === "simple" && (
+              <div className="block join">
                 <button
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    if (keyboardStateData.sustainToggle) {
-                      // If toggle mode is active, sustain button stops current sustained notes
-                      // This creates the "inverse" behavior where tapping sustain stops sound
-                      onStopSustainedNotes();
-                      // Also temporarily turn off sustain to communicate with remote users
-                      // then immediately turn it back on to maintain the toggle state
-                      keyboardStateData.setSustain(false);
-                      // Use setTimeout to ensure the sustain off message is sent before turning it back on
-                      setTimeout(() => {
-                        keyboardStateData.setSustain(true);
-                      }, 10);
-                    } else {
-                      // Normal momentary sustain behavior
-                      keyboardStateData.setSustain(true);
-                    }
-                  }}
-                  onMouseUp={(e) => {
-                    e.preventDefault();
-                    if (keyboardStateData.sustainToggle) {
-                      // If toggle mode is active, releasing sustain should resume sustain mode
-                      // This creates the "inverse" behavior where lifting sustain resumes sustain
-                      keyboardStateData.setSustain(true);
-                    } else {
-                      // Normal momentary sustain behavior - turn off sustain
-                      keyboardStateData.setSustain(false);
-                      onStopSustainedNotes();
-                    }
-                  }}
-                  onMouseLeave={() => {
-                    if (!keyboardStateData.sustainToggle) {
-                      keyboardStateData.setSustain(false);
-                      onStopSustainedNotes();
-                    }
-                  }}
-                  {...useTouchEvents(
-                    () => {
-                      if (keyboardStateData.sustainToggle) {
-                        // If toggle mode is active, tapping sustain stops current sustained notes
-                        onStopSustainedNotes();
-                        // Also temporarily turn off sustain to communicate with remote users
-                        // then immediately turn it back on to maintain the toggle state
-                        keyboardStateData.setSustain(false);
-                        // Use setTimeout to ensure the sustain off message is sent before turning it back on
-                        setTimeout(() => {
-                          keyboardStateData.setSustain(true);
-                        }, 10);
-                      } else {
-                        keyboardStateData.setSustain(true);
-                      }
-                    },
-                    () => {
-                      if (keyboardStateData.sustainToggle) {
-                        // If toggle mode is active, releasing sustain should resume sustain mode
-                        keyboardStateData.setSustain(true);
-                      } else {
-                        keyboardStateData.setSustain(false);
-                        onStopSustainedNotes();
-                      }
-                    }
-                  )}
-                  className={`btn btn-sm join-item touch-manipulation select-none ${(keyboardStateData.sustain &&
-                      !keyboardStateData.sustainToggle) ||
-                      (keyboardStateData.sustainToggle &&
-                        keyboardStateData.hasSustainedNotes)
-                      ? "btn-warning"
-                      : "btn-outline"
-                    }`}
-                  style={{
-                    WebkitTapHighlightColor: 'transparent',
-                    WebkitTouchCallout: 'none',
-                    WebkitUserSelect: 'none',
-                    touchAction: 'manipulation'
-                  }}
-                >
-                  Sustain <kbd className="kbd kbd-xs">Space</kbd>
-                </button>
-                <button
-                  onClick={() => {
-                    keyboardStateData.setSustainToggle(
-                      !keyboardStateData.sustainToggle
-                    );
-                  }}
-                  className={`btn btn-sm join-item touch-manipulation ${keyboardStateData.sustainToggle
-                      ? "btn-success"
-                      : "btn-outline"
+                  onClick={() => setSimpleMode("melody")}
+                  className={`btn btn-sm join-item touch-manipulation ${simpleMode === "melody" ? "btn-success" : "btn-outline"
                     }`}
                 >
-                  {keyboardStateData.sustainToggle ? "🔒" : "🔓"}
-                  <kbd className="kbd kbd-xs">'</kbd>
+                  Notes{" "}
+                  <kbd className="kbd kbd-xs">
+                    {getKeyDisplayName(shortcuts.toggleMelodyChord.key)}
+                  </kbd>
+                </button>
+                <button
+                  onClick={() => setSimpleMode("chord")}
+                  className={`btn btn-sm join-item touch-manipulation ${simpleMode === "chord" ? "btn-success" : "btn-outline"
+                    }`}
+                >
+                  Chord{" "}
+                  <kbd className="kbd kbd-xs">
+                    {getKeyDisplayName(shortcuts.toggleMelodyChord.key)}
+                  </kbd>
                 </button>
               </div>
-
-              <div className="flex items-center gap-2">
-                <label className="label py-1">
-                  <span className="label-text text-sm">
-                    Velocity: {Math.round(velocity * 9)}
-                  </span>
-                </label>
-                <input
-                  type="range"
-                  min="1"
-                  max="9"
-                  value={Math.round(velocity * 9)}
-                  onChange={(e) => setVelocity(parseInt(e.target.value) / 9)}
-                  className="range range-sm range-primary w-20"
-                />
-              </div>
-
+            )}
+            <div className="block join">
+              <button
+                onClick={() => setMainMode("simple")}
+                className={`btn btn-sm join-item touch-manipulation ${mainMode === "simple" ? "btn-primary" : "btn-outline"
+                  }`}
+              >
+                Simple
+              </button>
+              <button
+                onClick={() => setMainMode("advanced")}
+                className={`btn btn-sm join-item touch-manipulation ${mainMode === "advanced" ? "btn-primary" : "btn-outline"
+                  }`}
+              >
+                Basic
+              </button>
             </div>
           </div>
         </div>
 
         <div className="bg-neutral p-4 rounded-lg shadow-2xl overflow-auto">
           {renderVirtualKeyboard()}
+        </div>
+
+        <div className="flex justify-center items-center gap-3 flex-wrap mt-1">
+          <div className="join">
+            <button
+              onMouseDown={(e) => {
+                e.preventDefault();
+                if (keyboardStateData.sustainToggle) {
+                  // If toggle mode is active, sustain button stops current sustained notes
+                  // This creates the "inverse" behavior where tapping sustain stops sound
+                  onStopSustainedNotes();
+                  // Also temporarily turn off sustain to communicate with remote users
+                  // then immediately turn it back on to maintain the toggle state
+                  keyboardStateData.setSustain(false);
+                  // Use setTimeout to ensure the sustain off message is sent before turning it back on
+                  setTimeout(() => {
+                    keyboardStateData.setSustain(true);
+                  }, 10);
+                } else {
+                  // Normal momentary sustain behavior
+                  keyboardStateData.setSustain(true);
+                }
+              }}
+              onMouseUp={(e) => {
+                e.preventDefault();
+                if (keyboardStateData.sustainToggle) {
+                  // If toggle mode is active, releasing sustain should resume sustain mode
+                  // This creates the "inverse" behavior where lifting sustain resumes sustain
+                  keyboardStateData.setSustain(true);
+                } else {
+                  // Normal momentary sustain behavior - turn off sustain
+                  keyboardStateData.setSustain(false);
+                  onStopSustainedNotes();
+                }
+              }}
+              onMouseLeave={() => {
+                if (!keyboardStateData.sustainToggle) {
+                  keyboardStateData.setSustain(false);
+                  onStopSustainedNotes();
+                }
+              }}
+              {...useTouchEvents(
+                () => {
+                  if (keyboardStateData.sustainToggle) {
+                    // If toggle mode is active, tapping sustain stops current sustained notes
+                    onStopSustainedNotes();
+                    // Also temporarily turn off sustain to communicate with remote users
+                    // then immediately turn it back on to maintain the toggle state
+                    keyboardStateData.setSustain(false);
+                    // Use setTimeout to ensure the sustain off message is sent before turning it back on
+                    setTimeout(() => {
+                      keyboardStateData.setSustain(true);
+                    }, 10);
+                  } else {
+                    keyboardStateData.setSustain(true);
+                  }
+                },
+                () => {
+                  if (keyboardStateData.sustainToggle) {
+                    // If toggle mode is active, releasing sustain should resume sustain mode
+                    keyboardStateData.setSustain(true);
+                  } else {
+                    keyboardStateData.setSustain(false);
+                    onStopSustainedNotes();
+                  }
+                }
+              )}
+              className={`btn btn-sm join-item touch-manipulation select-none ${(keyboardStateData.sustain &&
+                !keyboardStateData.sustainToggle) ||
+                (keyboardStateData.sustainToggle &&
+                  keyboardStateData.hasSustainedNotes)
+                ? "btn-warning"
+                : "btn-outline"
+                }`}
+              style={{
+                WebkitTapHighlightColor: 'transparent',
+                WebkitTouchCallout: 'none',
+                WebkitUserSelect: 'none',
+                touchAction: 'manipulation'
+              }}
+            >
+              Sustain <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.sustain.key)}</kbd>
+            </button>
+            <button
+              onClick={() => {
+                keyboardStateData.setSustainToggle(
+                  !keyboardStateData.sustainToggle
+                );
+              }}
+              className={`btn btn-sm join-item touch-manipulation ${keyboardStateData.sustainToggle
+                ? "btn-success"
+                : "btn-outline"
+                }`}
+            >
+              {keyboardStateData.sustainToggle ? "🔒" : "🔓"}
+              <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.sustainToggle.key)}</kbd>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="label py-1">
+              <span className="label-text text-sm">
+                Velocity: {Math.round(velocity * 9)}
+              </span>
+            </label>
+            <input
+              type="range"
+              min="1"
+              max="9"
+              value={Math.round(velocity * 9)}
+              onChange={(e) => setVelocity(parseInt(e.target.value) / 9)}
+              className="range range-sm range-primary w-20"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label className="label py-1">
+              <span className="label-text text-sm">
+                Octave: {currentOctave}
+              </span>
+            </label>
+            <div className="join">
+              <button
+                onClick={() =>
+                  setCurrentOctave(Math.max(0, currentOctave - 1))
+                }
+                className="btn btn-sm btn-outline join-item touch-manipulation"
+              >
+                - <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.octaveDown.key)}</kbd>
+              </button>
+              <button
+                onClick={() =>
+                  setCurrentOctave(Math.min(8, currentOctave + 1))
+                }
+                className="btn btn-sm btn-outline join-item touch-manipulation"
+              >
+                + <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.octaveUp.key)}</kbd>
+              </button>
+            </div>
+          </div>
+
+          {mainMode === "simple" && simpleMode === "chord" && (
+            <div className="flex items-center gap-2">
+              <label className="label py-1">
+                <span className="label-text text-sm">
+                  Voicing: {chordVoicing}
+                </span>
+              </label>
+              <div className="join">
+                <button
+                  onClick={() =>
+                    setChordVoicing(Math.max(-2, chordVoicing - 1))
+                  }
+                  className="btn btn-sm btn-outline join-item touch-manipulation"
+                >
+                  - <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.voicingDown.key)}</kbd>
+                </button>
+                <button
+                  onClick={() =>
+                    setChordVoicing(Math.min(4, chordVoicing + 1))
+                  }
+                  className="btn btn-sm btn-outline join-item touch-manipulation"
+                >
+                  + <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.voicingUp.key)}</kbd>
+                </button>
+              </div>
+            </div>
+          )}
+
         </div>
 
         <ShortcutConfig

@@ -36,31 +36,31 @@ export const DEFAULT_SHORTCUTS: KeyboardShortcuts = {
   },
   
   dominant7: {
-    key: '[',
+    key: 'q',
     description: 'Add dominant 7th to chord',
     category: 'chord'
   },
   
   major7: {
-    key: ']',
+    key: 'w',
     description: 'Add major 7th to chord',
     category: 'chord'
   },
   
   sus2: {
-    key: ',',
+    key: 'a',
     description: 'Convert chord to sus2',
     category: 'chord'
   },
   
   sus4: {
-    key: '.',
+    key: 's',
     description: 'Convert chord to sus4',
     category: 'chord'
   },
   
   majMinToggle: {
-    key: '/',
+    key: 'd',
     description: 'Toggle between major and minor chord quality',
     category: 'chord'
   },
@@ -72,7 +72,7 @@ export const DEFAULT_SHORTCUTS: KeyboardShortcuts = {
   },
   
   sustainToggle: {
-    key: "'",
+    key: "\\",
     description: 'Toggle sustain mode',
     category: 'control'
   },
@@ -115,4 +115,42 @@ export const getChordModifierKeys = (shortcuts: KeyboardShortcuts): string[] => 
     shortcuts.sus4.key,
     shortcuts.majMinToggle.key
   ];
+}; 
+
+// Helper function to convert keys to readable display names
+export const getKeyDisplayName = (key: string): string => {
+  switch (key) {
+    case ' ':
+      return 'SPACE';
+    case '\\':
+      return '\\';
+    case 'shift':
+      return 'SHIFT';
+    case 'ctrl':
+      return 'CTRL';
+    case 'alt':
+      return 'ALT';
+    case 'meta':
+      return 'META';
+    case 'enter':
+      return 'ENTER';
+    case 'tab':
+      return 'TAB';
+    case 'escape':
+      return 'ESC';
+    case 'backspace':
+      return 'BACKSPACE';
+    case 'delete':
+      return 'DEL';
+    case 'arrowup':
+      return '↑';
+    case 'arrowdown':
+      return '↓';
+    case 'arrowleft':
+      return '←';
+    case 'arrowright':
+      return '→';
+    default:
+      return key.toUpperCase();
+  }
 }; 

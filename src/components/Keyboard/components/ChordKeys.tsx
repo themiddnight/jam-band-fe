@@ -1,4 +1,5 @@
 import { useKeyboardShortcutsStore } from "../../../stores/keyboardShortcutsStore";
+import { getKeyDisplayName } from "../../../constants/keyboardShortcuts";
 import type { Scale } from "../../../hooks/useScaleState";
 import { chordTriadKeys } from "../../../constants/virtualKeyboardKeys";
 import type { KeyboardKey } from "../types/keyboard";
@@ -179,7 +180,85 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
   );
   
   return (
-    <div className="flex justify-center gap-10 flex-wrap sm:flex-nowrap w-fit mx-auto">
+    <div className="flex justify-center gap-10 flex-col-reverse flex-wrap sm:flex-row sm:flex-nowrap w-fit mx-auto">
+
+      {/* Chord Modifiers Display */}
+      <div className="text-center">
+        <p className="text-white text-sm mb-2">
+          Chord Modifiers (hold while playing triads)
+        </p>
+        <div className="flex gap-2 mb-4">
+          <button
+            onMouseDown={() => onModifierPress(shortcuts.dominant7.key)}
+            onMouseUp={() => onModifierRelease(shortcuts.dominant7.key)}
+            onMouseLeave={() => onModifierRelease(shortcuts.dominant7.key)}
+            {...dominant7TouchHandlers}
+            className={`px-2 py-1 rounded text-xs touch-manipulation ${
+              chordModifiers.has(shortcuts.dominant7.key)
+                ? "bg-yellow-500 text-black"
+                : "bg-gray-600 text-gray-300"
+            }`}
+          >
+            dom7 <kbd className="kbd kbd-sm">{getKeyDisplayName(shortcuts.dominant7.key)}</kbd>
+          </button>
+          <button
+            onMouseDown={() => onModifierPress(shortcuts.major7.key)}
+            onMouseUp={() => onModifierRelease(shortcuts.major7.key)}
+            onMouseLeave={() => onModifierRelease(shortcuts.major7.key)}
+            {...major7TouchHandlers}
+            className={`px-2 py-1 rounded text-xs touch-manipulation ${
+              chordModifiers.has(shortcuts.major7.key)
+                ? "bg-yellow-500 text-black"
+                : "bg-gray-600 text-gray-300"
+            }`}
+          >
+            maj7 <kbd className="kbd kbd-sm">{getKeyDisplayName(shortcuts.major7.key)}</kbd>
+          </button>
+        </div>
+
+        <div className="flex gap-2 mb-4">
+          <button
+            onMouseDown={() => onModifierPress(shortcuts.sus2.key)}
+            onMouseUp={() => onModifierRelease(shortcuts.sus2.key)}
+            onMouseLeave={() => onModifierRelease(shortcuts.sus2.key)}
+            {...sus2TouchHandlers}
+            className={`px-2 py-1 rounded text-xs touch-manipulation ${
+              chordModifiers.has(shortcuts.sus2.key)
+                ? "bg-green-500 text-black"
+                : "bg-gray-600 text-gray-300"
+            }`}
+          >
+            sus2 <kbd className="kbd kbd-sm">{getKeyDisplayName(shortcuts.sus2.key)}</kbd>
+          </button>
+          <button
+            onMouseDown={() => onModifierPress(shortcuts.sus4.key)}
+            onMouseUp={() => onModifierRelease(shortcuts.sus4.key)}
+            onMouseLeave={() => onModifierRelease(shortcuts.sus4.key)}
+            {...sus4TouchHandlers}
+            className={`px-2 py-1 rounded text-xs touch-manipulation ${
+              chordModifiers.has(shortcuts.sus4.key)
+                ? "bg-green-500 text-black"
+                : "bg-gray-600 text-gray-300"
+            }`}
+          >
+            sus4 <kbd className="kbd kbd-sm">{getKeyDisplayName(shortcuts.sus4.key)}</kbd>
+          </button>
+          <button
+            onMouseDown={() => onModifierPress(shortcuts.majMinToggle.key)}
+            onMouseUp={() => onModifierRelease(shortcuts.majMinToggle.key)}
+            onMouseLeave={() => onModifierRelease(shortcuts.majMinToggle.key)}
+            {...majMinToggleTouchHandlers}
+            className={`px-2 py-1 rounded text-xs touch-manipulation ${
+              chordModifiers.has(shortcuts.majMinToggle.key)
+                ? "bg-blue-500 text-black"
+                : "bg-gray-600 text-gray-300"
+            }`}
+          >
+            maj/min <kbd className="kbd kbd-sm">{getKeyDisplayName(shortcuts.majMinToggle.key)}</kbd>
+          </button>
+        </div>
+      </div>
+      
       {/* Keys */}
       <div className="flex flex-col gap-4">
         {/* Triads */}
@@ -235,83 +314,6 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
               />
             ))}
           </div>
-        </div>
-      </div>
-
-      {/* Chord Modifiers Display */}
-      <div className="text-center">
-        <p className="text-white text-sm mb-2">
-          Chord Modifiers (hold while playing triads)
-        </p>
-        <div className="flex gap-2 mb-4">
-          <button
-            onMouseDown={() => onModifierPress(shortcuts.dominant7.key)}
-            onMouseUp={() => onModifierRelease(shortcuts.dominant7.key)}
-            onMouseLeave={() => onModifierRelease(shortcuts.dominant7.key)}
-            {...dominant7TouchHandlers}
-            className={`px-2 py-1 rounded text-xs touch-manipulation ${
-              chordModifiers.has(shortcuts.dominant7.key)
-                ? "bg-yellow-500 text-black"
-                : "bg-gray-600 text-gray-300"
-            }`}
-          >
-            dom7 <kbd className="kbd kbd-sm">{shortcuts.dominant7.key.toUpperCase()}</kbd>
-          </button>
-          <button
-            onMouseDown={() => onModifierPress(shortcuts.major7.key)}
-            onMouseUp={() => onModifierRelease(shortcuts.major7.key)}
-            onMouseLeave={() => onModifierRelease(shortcuts.major7.key)}
-            {...major7TouchHandlers}
-            className={`px-2 py-1 rounded text-xs touch-manipulation ${
-              chordModifiers.has(shortcuts.major7.key)
-                ? "bg-yellow-500 text-black"
-                : "bg-gray-600 text-gray-300"
-            }`}
-          >
-            maj7 <kbd className="kbd kbd-sm">{shortcuts.major7.key.toUpperCase()}</kbd>
-          </button>
-        </div>
-
-        <div className="flex gap-2 mb-4">
-          <button
-            onMouseDown={() => onModifierPress(shortcuts.sus2.key)}
-            onMouseUp={() => onModifierRelease(shortcuts.sus2.key)}
-            onMouseLeave={() => onModifierRelease(shortcuts.sus2.key)}
-            {...sus2TouchHandlers}
-            className={`px-2 py-1 rounded text-xs touch-manipulation ${
-              chordModifiers.has(shortcuts.sus2.key)
-                ? "bg-green-500 text-black"
-                : "bg-gray-600 text-gray-300"
-            }`}
-          >
-            sus2 <kbd className="kbd kbd-sm">{shortcuts.sus2.key.toUpperCase()}</kbd>
-          </button>
-          <button
-            onMouseDown={() => onModifierPress(shortcuts.sus4.key)}
-            onMouseUp={() => onModifierRelease(shortcuts.sus4.key)}
-            onMouseLeave={() => onModifierRelease(shortcuts.sus4.key)}
-            {...sus4TouchHandlers}
-            className={`px-2 py-1 rounded text-xs touch-manipulation ${
-              chordModifiers.has(shortcuts.sus4.key)
-                ? "bg-green-500 text-black"
-                : "bg-gray-600 text-gray-300"
-            }`}
-          >
-            sus4 <kbd className="kbd kbd-sm">{shortcuts.sus4.key.toUpperCase()}</kbd>
-          </button>
-          <button
-            onMouseDown={() => onModifierPress(shortcuts.majMinToggle.key)}
-            onMouseUp={() => onModifierRelease(shortcuts.majMinToggle.key)}
-            onMouseLeave={() => onModifierRelease(shortcuts.majMinToggle.key)}
-            {...majMinToggleTouchHandlers}
-            className={`px-2 py-1 rounded text-xs touch-manipulation ${
-              chordModifiers.has(shortcuts.majMinToggle.key)
-                ? "bg-blue-500 text-black"
-                : "bg-gray-600 text-gray-300"
-            }`}
-          >
-            maj/min <kbd className="kbd kbd-sm">{shortcuts.majMinToggle.key.toUpperCase()}</kbd>
-          </button>
         </div>
       </div>
       

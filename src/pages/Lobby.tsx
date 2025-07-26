@@ -66,7 +66,7 @@ export default function Lobby() {
               <h2 className="card-title">Available Rooms</h2>
               <div className="flex gap-2">
                 <button
-                  onClick={fetchRooms}
+                  onClick={() => fetchRooms()}
                   className="btn btn-sm btn-outline"
                   disabled={loading}
                 >
@@ -104,25 +104,26 @@ export default function Lobby() {
                                 <span className="badge badge-neutral badge-sm">Hidden</span>
                               )}
                             </div>
-                            <p className="text-sm text-base-content/70">
+                            <p className="text-xs text-base-content/70">
                               {room.userCount} member{room.userCount !== 1 ? 's' : ''}
                             </p>
-                            <p className="text-xs text-base-content/50">
+                            {/* <p className="text-xs text-base-content/50">
                               Created {new Date(room.createdAt).toLocaleDateString()}
-                            </p>
+                            </p> */}
                           </div>
-                          <div className="flex gap-2 flex-wrap justify-end">
+                          <div className="flex items-center gap-2 flex-wrap justify-end">
+                            <span className="text-xs text-base-content/70">Join as:</span>
                             <button
                               onClick={() => handleJoinRoom(room.id, 'band_member')}
-                              className="btn btn-sm btn-primary"
+                              className="btn btn-xs btn-primary"
                             >
-                              Join as Band Member
+                              Band Member
                             </button>
                             <button
                               onClick={() => handleJoinRoom(room.id, 'audience')}
-                              className="btn btn-sm btn-outline"
+                              className="btn btn-xs btn-outline"
                             >
-                              Join as Audience
+                              Audience
                             </button>
                           </div>
                         </div>
@@ -206,36 +207,32 @@ export default function Lobby() {
               
               <div className="form-control">
                 <label className="label cursor-pointer">
-                  <span className="label-text">Private Room</span>
                   <input
                     type="checkbox"
                     className="checkbox checkbox-primary"
                     checked={isPrivate}
                     onChange={(e) => setIsPrivate(e.target.checked)}
                   />
+                  <span className="label-text select-none">Private Room</span>
                 </label>
-                <label className="label">
-                  <span className="label-text-alt text-base-content/70">
-                    Band members need approval to join
-                  </span>
-                </label>
+                <p className="text-sm text-base-content/50">
+                  Band members need approval to join
+                </p>
               </div>
 
               <div className="form-control">
                 <label className="label cursor-pointer">
-                  <span className="label-text">Hidden Room</span>
                   <input
                     type="checkbox"
                     className="checkbox checkbox-primary"
                     checked={isHidden}
                     onChange={(e) => setIsHidden(e.target.checked)}
                   />
+                  <span className="label-text select-none">Hidden Room</span>
                 </label>
-                <label className="label">
-                  <span className="label-text-alt text-base-content/70">
-                    Room won't appear in the public list
-                  </span>
-                </label>
+                <p className="text-sm text-base-content/50">
+                  Room won't appear in the public list
+                </p>
               </div>
             </div>
           </form>
