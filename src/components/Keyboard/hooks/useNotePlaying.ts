@@ -61,9 +61,8 @@ export const useNotePlaying = (
     virtualKeyboard.setActiveTriadChords(
       (prev: Map<number, string[]>) => new Map(prev).set(keyIndex, chord)
     );
-    for (const note of chord) {
-      await keyboardState.playNote(note, keyboardState.velocity, true);
-    }
+    // Play all notes simultaneously to avoid flam
+    await Promise.all(chord.map(note => keyboardState.playNote(note, keyboardState.velocity, true)));
     virtualKeyboard.setPressedTriads((prev: Set<number>) =>
       new Set(prev).add(keyIndex)
     );

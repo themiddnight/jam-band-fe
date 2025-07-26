@@ -98,7 +98,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
   };
 
   return (
-    <div className="card bg-neutral text-neutral-content shadow-xl">
+    <div className="card bg-base-100 shadow-xl">
       <div className="card-body">
         <div className="flex justify-between items-center gap-5">
           <div className="flex gap-2">
@@ -233,7 +233,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
 
             <div className="flex items-center gap-2">
               <label className="label">
-                <span className="label-text">Import Presets (JSON)</span>
+                <span className="label-text text-base-content">Import Presets (JSON)</span>
               </label>
               <textarea
                 value={importData}
@@ -311,7 +311,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         color="primary"
                       />
                       <label className="label">
-                        <span className="label-text text-neutral-content text-xs">
+                        <span className="label-text text-base-content text-xs">
                           Volume
                         </span>
                       </label>
@@ -339,7 +339,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         color="secondary"
                       />
                       <label className="label">
-                        <span className="label-text text-neutral-content text-xs">
+                        <span className="label-text text-base-content text-xs">
                           Freq
                         </span>
                       </label>
@@ -358,7 +358,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         color="secondary"
                       />
                       <label className="label">
-                        <span className="label-text text-neutral-content text-xs">
+                        <span className="label-text text-base-content text-xs">
                           Res
                         </span>
                       </label>
@@ -385,7 +385,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         color="accent"
                       />
                       <label className="label">
-                        <span className="label-text text-neutral-content text-xs">
+                        <span className="label-text text-base-content text-xs">
                           Attack
                         </span>
                       </label>
@@ -402,7 +402,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         color="accent"
                       />
                       <label className="label">
-                        <span className="label-text text-neutral-content text-xs">
+                        <span className="label-text text-base-content text-xs">
                           Decay
                         </span>
                       </label>
@@ -421,7 +421,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         color="accent"
                       />
                       <label className="label">
-                        <span className="label-text text-neutral-content text-xs">
+                        <span className="label-text text-base-content text-xs">
                           Sustain
                         </span>
                       </label>
@@ -440,7 +440,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         color="accent"
                       />
                       <label className="label">
-                        <span className="label-text text-neutral-content text-xs">
+                        <span className="label-text text-base-content text-xs">
                           Release
                         </span>
                       </label>
@@ -467,7 +467,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         color="info"
                       />
                       <label className="label">
-                        <span className="label-text text-neutral-content text-xs">
+                        <span className="label-text text-base-content text-xs">
                           Attack
                         </span>
                       </label>
@@ -486,7 +486,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         color="info"
                       />
                       <label className="label">
-                        <span className="label-text text-neutral-content text-xs">
+                        <span className="label-text text-base-content text-xs">
                           Decay
                         </span>
                       </label>
@@ -505,7 +505,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         color="info"
                       />
                       <label className="label">
-                        <span className="label-text text-neutral-content text-xs">
+                        <span className="label-text text-base-content text-xs">
                           Sustain
                         </span>
                       </label>
@@ -524,7 +524,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         color="info"
                       />
                       <label className="label">
-                        <span className="label-text text-neutral-content text-xs">
+                        <span className="label-text text-base-content text-xs">
                           Release
                         </span>
                       </label>
@@ -555,7 +555,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       color="primary"
                     />
                     <label className="label">
-                      <span className="label-text text-neutral-content text-xs">
+                      <span className="label-text text-base-content text-xs">
                         Volume
                       </span>
                     </label>
@@ -582,7 +582,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       color="secondary"
                     />
                     <label className="label">
-                      <span className="label-text text-neutral-content text-xs">
+                      <span className="label-text text-base-content text-xs">
                         Modulation Index
                       </span>
                     </label>
@@ -601,7 +601,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       color="secondary"
                     />
                     <label className="label">
-                      <span className="label-text text-neutral-content text-xs">
+                      <span className="label-text text-base-content text-xs">
                         Harmonicity
                       </span>
                     </label>
@@ -626,7 +626,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       color="accent"
                     />
                     <label className="label">
-                      <span className="label-text text-neutral-content text-xs">
+                      <span className="label-text text-base-content text-xs">
                         Attack
                       </span>
                     </label>
@@ -643,7 +643,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       color="accent"
                     />
                     <label className="label">
-                      <span className="label-text text-neutral-content text-xs">
+                      <span className="label-text text-base-content text-xs">
                         Decay
                       </span>
                     </label>
@@ -660,7 +660,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       color="accent"
                     />
                     <label className="label">
-                      <span className="label-text text-neutral-content text-xs">
+                      <span className="label-text text-base-content text-xs">
                         Sustain
                       </span>
                     </label>
@@ -677,7 +677,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       color="accent"
                     />
                     <label className="label">
-                      <span className="label-text text-neutral-content text-xs">
+                      <span className="label-text text-base-content text-xs">
                         Release
                       </span>
                     </label>
@@ -702,7 +702,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       color="info"
                     />
                     <label className="label">
-                      <span className="label-text text-neutral-content text-xs">
+                      <span className="label-text text-base-content text-xs">
                         Attack
                       </span>
                     </label>
@@ -719,7 +719,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       color="info"
                     />
                     <label className="label">
-                      <span className="label-text text-neutral-content text-xs">
+                      <span className="label-text text-base-content text-xs">
                         Decay
                       </span>
                     </label>
@@ -736,7 +736,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       color="info"
                     />
                     <label className="label">
-                      <span className="label-text text-neutral-content text-xs">
+                      <span className="label-text text-base-content text-xs">
                         Sustain
                       </span>
                     </label>
@@ -753,7 +753,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       color="info"
                     />
                     <label className="label">
-                      <span className="label-text text-neutral-content text-xs">
+                      <span className="label-text text-base-content text-xs">
                         Release
                       </span>
                     </label>

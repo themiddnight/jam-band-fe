@@ -48,17 +48,20 @@ export const useChordModifiers = (
               virtualKeyboard.chordModifiers
             );
 
+            // Release notes that are no longer in the chord
             chord.forEach((note: string) => {
               if (!newChord.includes(note)) {
                 keyboardState.releaseKeyHeldNote(note);
               }
             });
 
-            newChord.forEach((note: string) => {
-              if (!chord.includes(note)) {
-                keyboardState.playNote(note, keyboardState.velocity, true);
-              }
-            });
+            // Play new notes simultaneously to avoid flam
+            const newNotes = newChord.filter((note: string) => !chord.includes(note));
+            if (newNotes.length > 0) {
+              Promise.all(newNotes.map((note: string) => 
+                keyboardState.playNote(note, keyboardState.velocity, true)
+              ));
+            }
 
             virtualKeyboard.setActiveTriadChords(
               (prev: Map<number, string[]>) =>
@@ -70,7 +73,7 @@ export const useChordModifiers = (
       return true;
     }
     return false;
-  }, [keyboardState, virtualKeyboard, shortcuts]);
+  }, [keyboardState, virtualKeyboard, shortcuts, scaleState.rootNote, scaleState.scale]);
 
   return { handleChordModifierPress, handleChordModifierRelease };
 }; 

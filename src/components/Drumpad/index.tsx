@@ -64,10 +64,12 @@ export default function Drumpad({
       if (isSliderClick) {
         // If it's a slider click, play the sound with current volume
         const sound = drumpadState.padAssignments[padId];
-        if (sound) {
+        if (sound && availableSamples.includes(sound)) {
           const padVolume = drumpadState.padVolumes[padId] || 1;
           const effectiveVelocity = Math.min(velocity * padVolume, 1);
           onPlayNotes([sound], effectiveVelocity, false);
+        } else {
+          console.warn(`Sample not available: ${sound}`);
         }
       } else {
         // If it's a pad click, open the sound selection modal
@@ -81,7 +83,11 @@ export default function Drumpad({
 
   // Handle sound preview
   const handleSoundPreview = (sound: string) => {
-    onPlayNotes([sound], velocity, false);
+    if (availableSamples.includes(sound)) {
+      onPlayNotes([sound], velocity, false);
+    } else {
+      console.warn(`Sample not available for preview: ${sound}`);
+    }
   };
 
   // Handle sound assignment from modal
@@ -164,6 +170,15 @@ export default function Drumpad({
 
         {/* Drum Pad Grid */}
         <div className="flex gap-8 justify-evenly flex-wrap bg-black p-4 rounded-lg overflow-auto">
+          {/* Loading indicator when no samples are available */}
+          {availableSamples.length === 0 && (
+            <div className="flex items-center justify-center w-full py-8">
+              <div className="text-center">
+                <div className="loading loading-spinner loading-lg text-primary mb-2"></div>
+                <p className="text-white text-sm">Loading drum samples...</p>
+              </div>
+            </div>
+          )}
           {/* Group A */}
           <div>
             <div className="space-y-3">
@@ -178,6 +193,7 @@ export default function Drumpad({
                     onPress={(isSliderClick) => handlePadPressInEditMode(pad.id, isSliderClick)}
                     onRelease={() => handlePadRelease(pad.id)}
                     onVolumeChange={(volume) => handlePadVolumeChange(pad.id, volume)}
+                    availableSamples={availableSamples}
                   />
                 ))}
               </div>
@@ -192,6 +208,7 @@ export default function Drumpad({
                     onPress={(isSliderClick) => handlePadPressInEditMode(pad.id, isSliderClick)}
                     onRelease={() => handlePadRelease(pad.id)}
                     onVolumeChange={(volume) => handlePadVolumeChange(pad.id, volume)}
+                    availableSamples={availableSamples}
                   />
                 ))}
               </div>
@@ -212,6 +229,7 @@ export default function Drumpad({
                     onPress={(isSliderClick) => handlePadPressInEditMode(pad.id, isSliderClick)}
                     onRelease={() => handlePadRelease(pad.id)}
                     onVolumeChange={(volume) => handlePadVolumeChange(pad.id, volume)}
+                    availableSamples={availableSamples}
                   />
                 ))}
               </div>
@@ -226,6 +244,7 @@ export default function Drumpad({
                     onPress={(isSliderClick) => handlePadPressInEditMode(pad.id, isSliderClick)}
                     onRelease={() => handlePadRelease(pad.id)}
                     onVolumeChange={(volume) => handlePadVolumeChange(pad.id, volume)}
+                    availableSamples={availableSamples}
                   />
                 ))}
               </div>

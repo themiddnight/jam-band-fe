@@ -8,7 +8,8 @@ export const PadButton: React.FC<PadButtonProps> = ({
   selectedPadForAssign,
   onPress,
   onRelease,
-  onVolumeChange
+  onVolumeChange,
+  availableSamples = []
 }) => {
   const touchHandlers = useTouchEvents(onPress, onRelease);
 
@@ -26,6 +27,9 @@ export const PadButton: React.FC<PadButtonProps> = ({
     onPress(false);
   };
 
+  // Check if the pad's sound is available
+  const isSoundAvailable = !pad.sound || availableSamples.includes(pad.sound);
+
   return (
     <div className="relative">
       <button
@@ -33,13 +37,16 @@ export const PadButton: React.FC<PadButtonProps> = ({
           w-20 h-20 rounded-lg border-2 transition-all duration-100 flex flex-col items-center justify-center gap-1
           ${pad.isPressed ? 'scale-95 border-gray-800' : 
             isEditMode ? 'border-orange-400 animate-pulse' : 'border-gray-300'}
-          ${pad.color} hover:brightness-110
+          ${isSoundAvailable ? pad.color : 'bg-gray-600'} 
+          ${isSoundAvailable ? 'hover:brightness-110' : 'opacity-50 cursor-not-allowed'}
           ${isEditMode && selectedPadForAssign === pad.id ? 'ring-4 ring-yellow-400' : ''}
+          ${!isSoundAvailable ? 'border-red-500' : ''}
           touch-manipulation
         `}
         onMouseDown={handleButtonPress}
         onMouseUp={onRelease}
         onMouseLeave={onRelease}
+        disabled={!isSoundAvailable}
         {...touchHandlers}
       >
         <span className="text-xs font-bold text-white drop-shadow-lg">
@@ -48,6 +55,12 @@ export const PadButton: React.FC<PadButtonProps> = ({
         <kbd className="kbd kbd-sm">
           {pad.keyboardShortcut.toUpperCase()}
         </kbd>
+        {/* Show warning icon if sound is not available */}
+        {!isSoundAvailable && (
+          <div className="absolute top-1 right-1">
+            <span className="text-red-500 text-xs">⚠️</span>
+          </div>
+        )}
       </button>
       
       {/* Volume Slider - Only show in edit mode */}

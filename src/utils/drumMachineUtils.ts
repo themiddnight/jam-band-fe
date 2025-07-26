@@ -8,9 +8,9 @@ export interface DrumMachineInfo {
 }
 
 // Function to get available drum machines
-export const getAvailableDrumMachines = async (): Promise<DrumMachineInfo[]> => {
+export const getAvailableDrumMachines = (): DrumMachineInfo[] => {
   try {
-    const drumMachineNames = await getDrumMachineNames();
+    const drumMachineNames = getDrumMachineNames();
     
     return drumMachineNames.map((name: string) => {
       // All available drum machines are electronic, so use drumpad interface for all
@@ -39,9 +39,9 @@ export const getAvailableDrumMachines = async (): Promise<DrumMachineInfo[]> => 
 // Cache for drum machines
 let cachedDrumMachines: DrumMachineInfo[] | null = null;
 
-export const getCachedDrumMachines = async (): Promise<DrumMachineInfo[]> => {
+export const getCachedDrumMachines = (): DrumMachineInfo[] => {
   if (!cachedDrumMachines) {
-    cachedDrumMachines = await getAvailableDrumMachines();
+    cachedDrumMachines = getAvailableDrumMachines();
   }
   return cachedDrumMachines;
 }; 

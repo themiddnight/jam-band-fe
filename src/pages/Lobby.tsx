@@ -1,141 +1,36 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useUserStore } from '../stores/userStore';
-import { useRoomStore } from '../stores/roomStore';
-import { useSocket } from '../hooks/useSocket';
+import { useLobby } from '../hooks/useLobby';
 import { Modal } from '../components/shared/Modal';
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
-
-interface Room {
-  id: string;
-  name: string;
-  userCount: number;
-  owner: string;
-  createdAt: string;
-}
-
 export default function Lobby() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { username, setUsername } = useUserStore();
-  const { connect, createRoom, isConnected, isConnecting, onRoomCreated, onRoomClosed } = useSocket();
-  const { currentRoom } = useRoomStore();
-
-  const [showUsernameModal, setShowUsernameModal] = useState(false);
-  const [tempUsername, setTempUsername] = useState('');
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
-  const [newRoomName, setNewRoomName] = useState('');
-  const [showRejectionModal, setShowRejectionModal] = useState(false);
-  const [rejectionMessage, setRejectionMessage] = useState<string>('');
-
-  // Check if username is set
-  useEffect(() => {
-    if (!username) {
-      setShowUsernameModal(true);
-    }
-  }, [username]);
-
-  // Check for rejection message in location state
-  useEffect(() => {
-    const state = location.state as { rejectionMessage?: string } | null;
-    if (state?.rejectionMessage) {
-      setRejectionMessage(state.rejectionMessage);
-      setShowRejectionModal(true);
-      // Clear the state to prevent showing the modal again on refresh
-      navigate(location.pathname, { replace: true });
-    }
-  }, [location.state, navigate, location.pathname]);
-
-  // Connect to socket and fetch rooms
-  useEffect(() => {
-    if (username && !isConnected && !isConnecting) {
-      connect();
-    }
-  }, [username, connect, isConnected, isConnecting]);
-
-  // Fetch rooms when socket connects
-  useEffect(() => {
-    if (isConnected) {
-      fetchRooms();
-    }
-  }, [isConnected]);
-
-  // Periodic room list refresh
-  useEffect(() => {
-    if (isConnected) {
-      const interval = setInterval(fetchRooms, 10000); // Refresh every 10 seconds
-      return () => clearInterval(interval);
-    }
-  }, [isConnected]);
-
-  // Listen for room creation and deletion broadcasts
-  useEffect(() => {
-    if (!isConnected) return;
-
-    const handleRoomCreated = () => {
-      // Refresh the room list immediately when a new room is created
-      fetchRooms();
-    };
-
-    const handleRoomClosed = (roomId: string) => {
-      setRooms(prevRooms => prevRooms.filter(room => room.id !== roomId));
-    };
-
-    // Set up the room created and closed callbacks
-    onRoomCreated(handleRoomCreated);
-    onRoomClosed(handleRoomClosed);
-  }, [isConnected, onRoomCreated, onRoomClosed]);
-
-  // Redirect to room when created
-  useEffect(() => {
-    if (currentRoom) {
-      navigate(`/room/${currentRoom.id}`);
-    }
-  }, [currentRoom, navigate]);
-
-  const fetchRooms = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(`${BACKEND_URL}/api/rooms`);
-      const data = await response.json();
-      setRooms(data);
-    } catch {
-      // Failed to fetch rooms
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUsernameSubmit = () => {
-    if (tempUsername.trim()) {
-      setUsername(tempUsername.trim());
-      setShowUsernameModal(false);
-      setTempUsername('');
-    }
-  };
-
-  const handleCreateRoom = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newRoomName.trim() && username) {
-      createRoom(newRoomName.trim(), username);
-      setShowCreateRoomModal(false);
-      setNewRoomName('');
-    }
-  };
-
-  const handleJoinRoom = (roomId: string, role: 'band_member' | 'audience') => {
-    if (username) {
-      navigate(`/room/${roomId}`, { state: { role } });
-    }
-  };
-
-  const handleUsernameClick = () => {
-    setTempUsername(username || '');
-    setShowUsernameModal(true);
-  };
+  const {
+    // State
+    username,
+    rooms,
+    loading,
+    showUsernameModal,
+    tempUsername,
+    showCreateRoomModal,
+    newRoomName,
+    showRejectionModal,
+    rejectionMessage,
+    isConnected,
+    isConnecting,
+    
+    // Actions
+    fetchRooms,
+    handleUsernameSubmit,
+    handleJoinRoom,
+    handleUsernameClick,
+    handleCreateRoomModalClose,
+    handleUsernameModalClose,
+    handleRejectionModalClose,
+    handleCreateRoomSubmit,
+    handleCreateRoomButtonClick,
+    
+    // Setters
+    setTempUsername,
+    setNewRoomName,
+  } = useLobby();
 
   return (
     <div className="min-h-dvh bg-base-200 p-3">
@@ -174,7 +69,7 @@ export default function Lobby() {
                   {loading ? 'Loading...' : 'Refresh'}
                 </button>
                 <button
-                  onClick={() => setShowCreateRoomModal(true)}
+                  onClick={handleCreateRoomButtonClick}
                   className="btn btn-sm btn-primary"
                 >
                   Create
@@ -231,12 +126,9 @@ export default function Lobby() {
         {/* Username Modal */}
         <Modal
           open={showUsernameModal}
-          setOpen={setShowUsernameModal}
+          setOpen={handleUsernameModalClose}
           title={username ? "Change Username" : "Welcome to Jam Band!"}
-          onCancel={() => {
-            setShowUsernameModal(false);
-            setTempUsername('');
-          }}
+          onCancel={handleUsernameModalClose}
           onOk={handleUsernameSubmit}
           okText={username ? "Update" : "Continue"}
           cancelText="Cancel"
@@ -274,17 +166,10 @@ export default function Lobby() {
         {/* Create Room Modal */}
         <Modal
           open={showCreateRoomModal}
-          setOpen={setShowCreateRoomModal}
+          setOpen={handleCreateRoomModalClose}
           title="Create New Room"
-          onCancel={() => {
-            setShowCreateRoomModal(false);
-            setNewRoomName('');
-          }}
-          onOk={() => {
-            if (newRoomName.trim()) {
-              handleCreateRoom({ preventDefault: () => {} } as React.FormEvent);
-            }
-          }}
+          onCancel={handleCreateRoomModalClose}
+          onOk={handleCreateRoomSubmit}
           okText="Create Room"
           cancelText="Cancel"
           showOkButton={!!newRoomName.trim()}
@@ -311,13 +196,10 @@ export default function Lobby() {
         {/* Rejection Modal */}
         <Modal
           open={showRejectionModal}
-          setOpen={setShowRejectionModal}
+          setOpen={handleRejectionModalClose}
           title="Request Rejected"
-          onOk={() => {
-            setShowRejectionModal(false);
-            setRejectionMessage('');
-          }}
-          okText="OK"
+          onOk={handleRejectionModalClose}
+          okText="Return to Lobby"
           showCancelButton={false}
         >
           <p className="text-base-content/70">{rejectionMessage}</p>

@@ -364,9 +364,8 @@ export const useVirtualKeyboard = (
       
       if (keyboardState) {
         // Use keyboard state system to respect sustain settings
-        for (const note of chord) {
-          await keyboardState.playNote(note, velocity, true);
-        }
+        // Play all notes simultaneously to avoid flam
+        await Promise.all(chord.map(note => keyboardState.playNote(note, velocity, true)));
       } else {
         // Fallback to direct call (for backward compatibility)
         onPlayNotes(chord, velocity, true);

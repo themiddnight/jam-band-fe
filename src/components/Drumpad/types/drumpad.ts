@@ -71,6 +71,7 @@ export interface PadButtonProps {
   onPress: (isSliderClick?: boolean) => void;
   onRelease: () => void;
   onVolumeChange: (volume: number) => void;
+  availableSamples?: string[];
 }
 
 export interface PresetManagerProps {

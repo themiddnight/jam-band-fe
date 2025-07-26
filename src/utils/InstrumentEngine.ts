@@ -257,12 +257,38 @@ export class InstrumentEngine {
   getAvailableSamples(): string[] {
     if (this.config.category === InstrumentCategory.DrumBeat && this.instrument && this.instrument.getSampleNames) {
       try {
-        return this.instrument.getSampleNames();
+        const samples = this.instrument.getSampleNames();
+        // Ensure we have actual samples, not just an empty array
+        if (Array.isArray(samples) && samples.length > 0) {
+          return samples;
+        }
+        return [];
       } catch (error) {
         console.warn(`Failed to get samples from drum machine: ${error}`);
         return [];
       }
     }
+    return [];
+  }
+
+  async waitForSamples(maxWaitTime: number = 5000): Promise<string[]> {
+    if (this.config.category !== InstrumentCategory.DrumBeat) {
+      return [];
+    }
+
+    const startTime = Date.now();
+    
+    while (Date.now() - startTime < maxWaitTime) {
+      const samples = this.getAvailableSamples();
+      if (samples.length > 0) {
+        return samples;
+      }
+      
+      // Wait a bit before checking again
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    console.warn(`Timeout waiting for drum machine samples after ${maxWaitTime}ms`);
     return [];
   }
 

@@ -46,13 +46,18 @@ export const useDrumpadState = ({
 
   // Load and validate preset assignments when current preset or available samples change
   useEffect(() => {
-    if (currentPreset?.padAssignments && availableSamples.length > 0) {
+    if (availableSamples.length === 0) {
+      // Don't process anything if no samples are available yet
+      return;
+    }
+
+    if (currentPreset?.padAssignments) {
       // Validate the preset against available samples
       const validatedPreset = validatePresetAssignments(currentPreset, availableSamples);
       setPadAssignments(validatedPreset.padAssignments);
       // Load pad volumes from preset or use defaults
       setPadVolumes(validatedPreset.padVolumes || {});
-    } else if (availableSamples.length > 0) {
+    } else {
       // If no preset is loaded, create and load a smart default preset
       const smartDefaultPreset = createSmartDefaultPreset(currentInstrument, availableSamples);
       loadStorePreset(smartDefaultPreset);
@@ -122,12 +127,17 @@ export const useDrumpadState = ({
     setPressedPads(prev => new Set(prev).add(padId));
     
     if (sound) {
-      // Calculate effective velocity using global velocity and pad-specific volume
-      const padVolume = padVolumes[padId] || 1;
-      const effectiveVelocity = Math.min(velocity * padVolume, 1); // Cap at 1.0
-      await onPlayNotes([sound], effectiveVelocity, false);
+      // Check if the sound is available before playing
+      if (availableSamples.includes(sound)) {
+        // Calculate effective velocity using global velocity and pad-specific volume
+        const padVolume = padVolumes[padId] || 1;
+        const effectiveVelocity = Math.min(velocity * padVolume, 1); // Cap at 1.0
+        await onPlayNotes([sound], effectiveVelocity, false);
+      } else {
+        console.warn(`Sample not available: ${sound}`);
+      }
     }
-  }, [onPlayNotes, velocity, padVolumes, isEditMode]);
+  }, [onPlayNotes, velocity, padVolumes, isEditMode, availableSamples]);
 
   const handlePadRelease = useCallback((padId: string) => {
     if (isEditMode) return;

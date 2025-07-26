@@ -422,10 +422,8 @@ export const useSocket = () => {
       clearRoom();
     });
 
-    socket.on("note_played", (data: NoteReceivedData) => {
-      console.log("Note received:", data);
-      // This will be handled by the component using the hook
-    });
+    // Note: The note_played event is handled by the onNoteReceived callback
+    // No need for a separate listener here
 
     socket.on(
       "instrument_changed",

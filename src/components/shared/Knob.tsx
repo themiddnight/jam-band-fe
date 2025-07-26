@@ -320,7 +320,7 @@ export const Knob: React.FC<KnobProps> = ({
         ref={knobRef}
         className={`absolute inset-0 rounded-full border-2 ${getColorClasses(
           "border"
-        )} bg-neutral cursor-pointer transition-transform duration-100 ${
+        )} bg-base-200 cursor-pointer transition-transform duration-100 ${
           disabled ? "opacity-50 cursor-not-allowed" : ""
         }`}
         style={knobStyle}

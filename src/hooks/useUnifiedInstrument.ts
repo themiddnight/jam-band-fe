@@ -275,6 +275,7 @@ export const useUnifiedInstrument = (
     currentCategory,
     currentInstrument,
     isAudioContextReady,
+    instrumentManager,
   ]);
 
   // Current user info (mock - in real app this would come from user context)
@@ -389,7 +390,7 @@ export const useUnifiedInstrument = (
     } else {
       setAvailableSamples([]);
     }
-  }, [currentCategory]);
+  }, [currentCategory, instrumentManager]);
 
   // Load instrument
   const loadInstrument = useCallback(
@@ -451,12 +452,25 @@ export const useUnifiedInstrument = (
         if (validatedCategory === InstrumentCategory.DrumBeat) {
           const localEngine = instrumentManager.getLocalEngine();
           if (localEngine && localEngine.isReady()) {
-            // Get actual available samples from the drum machine
-            const actualSamples = instrumentManager.getLocalAvailableSamples();
+            // Try to get samples immediately
+            let actualSamples = instrumentManager.getLocalAvailableSamples();
+            
+            if (actualSamples.length === 0) {
+              // If no samples available immediately, wait for them
+              try {
+                console.log('Waiting for drum machine samples to load...');
+                actualSamples = await localEngine.waitForSamples(3000); // Wait up to 3 seconds
+                console.log('Drum machine samples loaded:', actualSamples);
+              } catch (error) {
+                console.warn('Error waiting for drum machine samples:', error);
+              }
+            }
+            
             if (actualSamples.length > 0) {
               setAvailableSamples(actualSamples);
             } else {
-              // Fallback to default samples if drum machine doesn't expose samples yet
+              // Fallback to default samples if still no samples available
+              console.warn('No samples available from drum machine, using fallback samples');
               setAvailableSamples([
                 "kick",
                 "snare",
@@ -475,21 +489,6 @@ export const useUnifiedInstrument = (
           }
         } else {
           setAvailableSamples([]);
-        }
-
-        // Refresh samples after a short delay to ensure drum machine is fully loaded
-        if (validatedCategory === InstrumentCategory.DrumBeat) {
-          setTimeout(() => {
-            if (currentCategory === InstrumentCategory.DrumBeat) {
-              const localEngine = instrumentManager.getLocalEngine();
-              if (localEngine && localEngine.isReady()) {
-                const actualSamples = instrumentManager.getLocalAvailableSamples();
-                if (actualSamples.length > 0) {
-                  setAvailableSamples(actualSamples);
-                }
-              }
-            }
-          }, 100);
         }
         
         // For synthesizers, ensure parameters are synchronized after instrument change
@@ -788,9 +787,8 @@ export const useUnifiedInstrument = (
   // Initialize on mount
   useEffect(() => {
     // Load cached drum machines
-    getCachedDrumMachines().then((machines) => {
-      setDynamicDrumMachines(machines);
-    });
+    const machines = getCachedDrumMachines();
+    setDynamicDrumMachines(machines);
   }, []);
 
   return {
