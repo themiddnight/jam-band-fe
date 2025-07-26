@@ -1,4 +1,4 @@
-import { NOTE_NAMES } from "../hooks/useScaleState";
+import { NOTE_NAMES } from "../utils/musicUtils";
 import type { Scale } from "../hooks/useScaleState";
 
 export interface ScaleSelectorProps {

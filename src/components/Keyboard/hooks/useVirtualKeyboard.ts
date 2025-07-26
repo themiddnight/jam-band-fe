@@ -10,6 +10,7 @@ import {
   melodySimpleKeysUpper,
   whiteKeyMapping,
 } from "../../../constants/virtualKeyboardKeys";
+import { getChordFromDegree } from "../../../utils/musicUtils";
 
 export const useVirtualKeyboard = (
   getScaleNotes: (root: string, scaleType: Scale, octave: number) => string[],
@@ -51,6 +52,7 @@ export const useVirtualKeyboard = (
     [getScaleNotes, rootNote, scale, currentOctave]
   );
 
+  // Use centralized chord generation function
   const getChord = useCallback(
     (
       root: string,
@@ -59,122 +61,28 @@ export const useVirtualKeyboard = (
       voicing: number = 0,
       modifiers: Set<string> = new Set()
     ): string[] => {
-      const allNotes = [
-        "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
-      ];
-      const getNoteIndex = (note: string) => {
-        if (!note) return 0;
-        const noteName = note.slice(0, -1);
-        const octave = parseInt(note.slice(-1));
-        return allNotes.indexOf(noteName) + octave * 12;
-      };
-      const getNoteFromIndex = (index: number) => {
-        const noteName = allNotes[index % 12];
-        const octave = Math.floor(index / 12);
-        return `${noteName}${octave}`;
-      };
-
-      const baseOctave = 3 + voicing;
-      const scaleNotes = getScaleNotes(root, scaleType, baseOctave);
-
-      const rootNoteOfChord = scaleNotes[degree % 7];
-      const rootNoteIndex = getNoteIndex(rootNoteOfChord);
-
-      const scaleNoteNames = getScaleNotes(root, scaleType, 0).map((n) =>
-        n.slice(0, -1)
-      );
-
-      // Determine original diatonic quality
-      const rootNoteName = scaleNoteNames[degree % 7];
-      const thirdNoteNameFromScale = scaleNoteNames[(degree + 2) % 7];
-      const fifthNoteNameFromScale = scaleNoteNames[(degree + 4) % 7];
-
-      const rootPitch = allNotes.indexOf(rootNoteName);
-      let thirdPitch = allNotes.indexOf(thirdNoteNameFromScale);
-      if (thirdPitch < rootPitch) thirdPitch += 12;
-      let fifthPitch = allNotes.indexOf(fifthNoteNameFromScale);
-      if (fifthPitch < rootPitch) fifthPitch += 12;
-
-      const thirdInterval = thirdPitch - rootPitch;
-      const fifthInterval = fifthPitch - rootPitch;
-
-      let quality: "major" | "minor" | "diminished" | "augmented" = "major";
-      if (thirdInterval === 3 && fifthInterval === 7) {
-        quality = "minor";
-      } else if (thirdInterval === 3 && fifthInterval === 6) {
-        quality = "diminished";
-      } else if (thirdInterval === 4 && fifthInterval === 8) {
-        quality = "augmented";
-      }
-
-      // Handle quality modifier
+      // Convert shortcut keys to modifier names for the centralized function
+      const convertedModifiers = new Set<string>();
+      
       if (modifiers.has(shortcuts.majMinToggle.key)) {
-        if (quality === "major") quality = "minor";
-        else quality = "major"; // a simple toggle for now
+        convertedModifiers.add("majMinToggle");
       }
-
-      let chordIntervals: number[] = [];
-
-      // Handle sus modifiers
       if (modifiers.has(shortcuts.sus2.key)) {
-        // sus2
-        chordIntervals = [0, 2, 7];
-      } else if (modifiers.has(shortcuts.sus4.key)) {
-        // sus4
-        chordIntervals = [0, 5, 7];
-      } else {
-        switch (quality) {
-          case "major":
-            chordIntervals = [0, 4, 7];
-            break;
-          case "minor":
-            chordIntervals = [0, 3, 7];
-            break;
-          case "diminished":
-            chordIntervals = [0, 3, 6];
-            break;
-          case "augmented":
-            chordIntervals = [0, 4, 8];
-            break;
-        }
+        convertedModifiers.add("sus2");
       }
-
-      const chordNotes = chordIntervals.map((interval) =>
-        getNoteFromIndex(rootNoteIndex + interval)
-      );
-
-      const finalChordNotes = chordNotes.map((note) => {
-        const noteIndex = getNoteIndex(note);
-        const noteOctave = Math.floor(noteIndex / 12);
-        if (noteOctave < baseOctave) {
-          return getNoteFromIndex(noteIndex + 12);
-        }
-        if (noteOctave > baseOctave) {
-          return getNoteFromIndex(noteIndex - 12);
-        }
-        return note;
-      });
-
+      if (modifiers.has(shortcuts.sus4.key)) {
+        convertedModifiers.add("sus4");
+      }
       if (modifiers.has(shortcuts.dominant7.key)) {
-        const rootNoteIndex = getNoteIndex(rootNoteOfChord);
-        let seventhNoteIndex = rootNoteIndex + 10;
-        const highestNoteIndex =
-          getNoteIndex(finalChordNotes[finalChordNotes.length - 1]);
-        if (seventhNoteIndex <= highestNoteIndex) seventhNoteIndex += 12;
-        finalChordNotes.push(getNoteFromIndex(seventhNoteIndex));
+        convertedModifiers.add("dominant7");
       }
       if (modifiers.has(shortcuts.major7.key)) {
-        const rootNoteIndex = getNoteIndex(rootNoteOfChord);
-        let seventhNoteIndex = rootNoteIndex + 11;
-        const highestNoteIndex =
-          getNoteIndex(finalChordNotes[finalChordNotes.length - 1]);
-        if (seventhNoteIndex <= highestNoteIndex) seventhNoteIndex += 12;
-        finalChordNotes.push(getNoteFromIndex(seventhNoteIndex));
+        convertedModifiers.add("major7");
       }
-
-      return finalChordNotes.sort((a, b) => getNoteIndex(a) - getNoteIndex(b));
+      
+      return getChordFromDegree(root, scaleType, degree, voicing, convertedModifiers);
     },
-    [getScaleNotes, shortcuts]
+    [shortcuts]
   );
 
   const generateVirtualKeys = useMemo((): KeyboardKey[] => {

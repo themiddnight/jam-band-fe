@@ -11,13 +11,15 @@ interface Room {
   name: string;
   userCount: number;
   owner: string;
+  isPrivate: boolean;
+  isHidden: boolean;
   createdAt: string;
 }
 
 export function useLobby() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { username, setUsername } = useUserStore();
+  const { username, userId, setUsername } = useUserStore();
   const { connect, createRoom, isConnected, isConnecting, onRoomCreated, onRoomClosed } = useSocket();
   const { currentRoom } = useRoomStore();
 
@@ -27,6 +29,8 @@ export function useLobby() {
   const [loading, setLoading] = useState(false);
   const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
   const [newRoomName, setNewRoomName] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [isHidden, setIsHidden] = useState(false);
   const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [rejectionMessage, setRejectionMessage] = useState<string>('');
 
@@ -118,15 +122,17 @@ export function useLobby() {
 
   const handleCreateRoom = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newRoomName.trim() && username) {
-      createRoom(newRoomName.trim(), username);
+    if (newRoomName.trim() && username && userId) {
+      createRoom(newRoomName.trim(), username, userId, isPrivate, isHidden);
       setShowCreateRoomModal(false);
       setNewRoomName('');
+      setIsPrivate(false);
+      setIsHidden(false);
     }
   };
 
   const handleJoinRoom = (roomId: string, role: 'band_member' | 'audience') => {
-    if (username) {
+    if (username && userId) {
       navigate(`/room/${roomId}`, { state: { role } });
     }
   };
@@ -139,6 +145,8 @@ export function useLobby() {
   const handleCreateRoomModalClose = () => {
     setShowCreateRoomModal(false);
     setNewRoomName('');
+    setIsPrivate(false);
+    setIsHidden(false);
   };
 
   const handleUsernameModalClose = () => {
@@ -170,6 +178,8 @@ export function useLobby() {
     tempUsername,
     showCreateRoomModal,
     newRoomName,
+    isPrivate,
+    isHidden,
     showRejectionModal,
     rejectionMessage,
     isConnected,
@@ -192,6 +202,8 @@ export function useLobby() {
     setTempUsername,
     setShowCreateRoomModal,
     setNewRoomName,
+    setIsPrivate,
+    setIsHidden,
     setShowRejectionModal,
   };
 } 

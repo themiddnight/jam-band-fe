@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState } from "react";
+import { useRef, useCallback, useState, useMemo } from "react";
 import { io, Socket } from "socket.io-client";
 import { useRoomStore } from "../stores/roomStore";
 import { useUserStore } from "../stores/userStore";
@@ -64,6 +64,7 @@ export const useSocket = () => {
   const pendingOperationsRef = useRef<Array<() => void>>([]);
   const lastRoomCreatedRef = useRef<string>("");
   const connectingRef = useRef<boolean>(false);
+  const roomCreatedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Performance optimizations
   const messageQueueRef = useRef<Array<{ event: string; data: any; timestamp: number }>>([]);
@@ -81,7 +82,6 @@ export const useSocket = () => {
     setIsConnected,
     setPendingApproval,
     setError,
-    setRejectionMessage,
     addUser,
     removeUser,
     addPendingMember,
@@ -166,12 +166,10 @@ export const useSocket = () => {
   }, [queueMessage]);
 
   // Throttled emit for synth parameters with lodash
-  const throttledEmit = useCallback(
-    (event: string, data: any) => {
-      throttle((evt: string, dat: any) => {
-        safeEmit(evt, dat);
-      }, 16)(event, data);
-    },
+  const throttledEmit = useMemo(
+    () => throttle((event: string, data: any) => {
+      safeEmit(event, data);
+    }, 16),
     [safeEmit]
   );
 
@@ -254,11 +252,18 @@ export const useSocket = () => {
         name: string;
         userCount: number;
         owner: string;
+        isPrivate: boolean;
+        isHidden: boolean;
         createdAt: string;
       }) => {
         console.log("Room created broadcast received:", data);
 
-        // Prevent duplicate calls for the same room
+        // Clear any existing timeout for the previous room
+        if (roomCreatedTimeoutRef.current) {
+          clearTimeout(roomCreatedTimeoutRef.current);
+        }
+
+        // Prevent duplicate calls for the same room within a longer window
         if (lastRoomCreatedRef.current === data.id) {
           console.log(
             "Skipping duplicate room created broadcast for:",
@@ -272,12 +277,13 @@ export const useSocket = () => {
           roomCreatedCallbackRef.current(data);
         }
 
-        // Reset the last room created reference after a delay to allow for legitimate duplicates
-        setTimeout(() => {
+        // Reset the last room created reference after a longer delay
+        roomCreatedTimeoutRef.current = setTimeout(() => {
           if (lastRoomCreatedRef.current === data.id) {
             lastRoomCreatedRef.current = "";
           }
-        }, 1000);
+          roomCreatedTimeoutRef.current = null;
+        }, 5000); // Increased from 1 second to 5 seconds
       }
     );
 
@@ -295,11 +301,11 @@ export const useSocket = () => {
           pendingMembers: data.pendingMembers,
         });
 
-        // Set currentUser based on the current username
-        const currentUsername = useUserStore.getState().username;
-        if (currentUsername) {
+        // Set currentUser based on the current userId
+        const currentUserId = useUserStore.getState().userId;
+        if (currentUserId) {
           const currentUserData = data.users.find(
-            (user: any) => user.username === currentUsername
+            (user: any) => user.id === currentUserId
           );
           if (currentUserData) {
             console.log(
@@ -347,10 +353,10 @@ export const useSocket = () => {
         setPendingApproval(false);
 
         // Update currentUser if this approval is for the current user
-        const currentUsername = useUserStore.getState().username;
-        if (currentUsername) {
+        const currentUserId = useUserStore.getState().userId;
+        if (currentUserId) {
           const approvedUser = data.room.users.find(
-            (user: any) => user.username === currentUsername
+            (user: any) => user.id === currentUserId
           );
           if (approvedUser) {
             console.log("Updating current user after approval:", approvedUser);
@@ -369,13 +375,11 @@ export const useSocket = () => {
       "member_rejected",
       (data: { message: string; userId?: string }) => {
         console.log("Member rejected:", data.message);
-        // Set rejection message instead of error for proper handling
-        setRejectionMessage(data.message);
-        // Clear pending approval state
+        // Clear pending approval state and room
         setPendingApproval(false);
         clearRoom();
         
-        // Disconnect the socket to prevent any further interaction
+        // Disconnect socket and redirect to lobby for rejected users
         if (socketRef.current) {
           socketRef.current.disconnect();
           socketRef.current = null;
@@ -385,6 +389,9 @@ export const useSocket = () => {
         setIsConnected(false);
         setIsConnectedState(false);
         setIsConnecting(false);
+        
+        // Redirect to lobby with error message
+        setError("Your request to join was rejected by the room owner");
 
         // Call the callback if set (for room owner to clear pending approval prompt)
         if (memberRejectedCallbackRef.current && data.userId) {
@@ -392,8 +399,6 @@ export const useSocket = () => {
         }
       }
     );
-
-
 
     socket.on("pending_approval", (data: { message: string }) => {
       console.log("Pending approval:", data.message);
@@ -419,6 +424,11 @@ export const useSocket = () => {
       if (roomClosedCallbackRef.current) {
         roomClosedCallbackRef.current(data.roomId);
       }
+      clearRoom();
+    });
+
+    socket.on("leave_confirmed", () => {
+      // Clear room state when backend confirms successful leave
       clearRoom();
     });
 
@@ -468,7 +478,6 @@ export const useSocket = () => {
       }
     });
 
-
   }, [
     isConnecting,
     setIsConnected,
@@ -481,36 +490,34 @@ export const useSocket = () => {
     addPendingMember,
     removePendingMember,
     setPendingApproval,
-    setRejectionMessage,
     clearRoom,
     transferOwnership,
     updateUserInstrument,
-
   ]);
 
   // Create room
   const createRoom = useCallback(
-    (name: string, username: string) => {
-      safeEmit("create_room", { name, username });
+    (name: string, username: string, userId: string, isPrivate: boolean = false, isHidden: boolean = false) => {
+      safeEmit("create_room", { name, username, userId, isPrivate, isHidden });
     },
     [safeEmit]
   );
 
   // Join room
   const joinRoom = useCallback(
-    (roomId: string, username: string, role: "band_member" | "audience") => {
-      safeEmit("join_room", { roomId, username, role });
+    (roomId: string, username: string, userId: string, role: "band_member" | "audience") => {
+      safeEmit("join_room", { roomId, username, userId, role });
     },
     [safeEmit]
   );
 
   // Leave room
-  const leaveRoom = useCallback(() => {
-    safeEmit("leave_room", {});
-
-    // Clear room state immediately to prevent reconnection
-    clearRoom();
-  }, [safeEmit, clearRoom]);
+  const leaveRoom = useCallback((isIntendedLeave: boolean = false) => {
+    safeEmit("leave_room", { isIntendedLeave });
+    
+    // Don't clear room state immediately - let the disconnect and navigation handle it
+    // This prevents the room interface from showing before the backend confirms the leave
+  }, [safeEmit]);
 
   // Disconnect socket completely
   const disconnect = useCallback(() => {
@@ -617,8 +624,6 @@ export const useSocket = () => {
     safeEmit("request_synth_params", {});
   }, [safeEmit]);
 
-
-
   // Handle note received
   const onNoteReceived = useCallback(
     (callback: (data: NoteReceivedData) => void) => {
@@ -702,6 +707,12 @@ export const useSocket = () => {
     if (batchTimeoutRef.current) {
       clearTimeout(batchTimeoutRef.current);
       batchTimeoutRef.current = null;
+    }
+    
+    // Clear room creation timeout
+    if (roomCreatedTimeoutRef.current) {
+      clearTimeout(roomCreatedTimeoutRef.current);
+      roomCreatedTimeoutRef.current = null;
     }
     
     // Process any remaining messages in queue

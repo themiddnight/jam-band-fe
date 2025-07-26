@@ -82,6 +82,39 @@ export default function Room() {
     preloadCriticalComponents();
   }, []);
 
+  // Copy room URL to clipboard
+  const handleCopyRoomUrl = async () => {
+    try {
+      const roomUrl = `${window.location.origin}/room/${currentRoom?.id}`;
+      await navigator.clipboard.writeText(roomUrl);
+      
+      // Show a temporary success message
+      const button = document.getElementById('copy-room-url');
+      if (button) {
+        const originalText = button.textContent;
+        button.textContent = 'Copied!';
+        button.classList.add('btn-success');
+        button.classList.remove('btn-outline');
+        
+        setTimeout(() => {
+          button.textContent = originalText;
+          button.classList.remove('btn-success');
+          button.classList.add('btn-outline');
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Failed to copy room URL:', error);
+      // Fallback for older browsers
+      const roomUrl = `${window.location.origin}/room/${currentRoom?.id}`;
+      const textArea = document.createElement('textarea');
+      textArea.value = roomUrl;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+    }
+  };
+
   // Render pending approval modal
   if (pendingApproval || (currentRoom && currentUser && currentRoom.pendingMembers.some(member => member.id === currentUser.id))) {
     return (
@@ -203,6 +236,14 @@ export default function Room() {
                     }`}
                 ></div>
               </div>
+              <button
+                id="copy-room-url"
+                onClick={handleCopyRoomUrl}
+                className="btn btn-outline btn-sm"
+                title="Copy room URL to clipboard"
+              >
+                📋 Copy URL
+              </button>
               <button
                 onClick={handleLeaveRoomClick}
                 className="btn btn-outline btn-sm"

@@ -1,6 +1,7 @@
-import { useState, useMemo, useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { FretboardBase, type FretboardConfig } from "../shared/FretboardBase";
 import { generateFretPositions, getScaleNotes, type Scale } from "../../utils/musicUtils";
+import { useInstrumentState } from "../../hooks/useInstrumentState";
 
 export interface GuitarProps {
   scaleState: {
@@ -9,8 +10,6 @@ export interface GuitarProps {
     getScaleNotes: (root: string, scaleType: Scale, octave: number) => string[];
   };
   onPlayNotes: (notes: string[], velocity: number, isKeyHeld: boolean) => void;
-  onStopNotes: (notes: string[]) => void;
-  onStopSustainedNotes: () => void;
   onReleaseKeyHeldNote: (note: string) => void;
   onSustainChange: (sustain: boolean) => void;
 }
@@ -21,9 +20,15 @@ export default function Guitar({
   onReleaseKeyHeldNote,
   onSustainChange,
 }: GuitarProps) {
-  const [velocity, setVelocity] = useState<number>(0.7);
-  const [sustain, setSustain] = useState<boolean>(false);
-  const [pressedFrets, setPressedFrets] = useState<Set<string>>(new Set());
+  const {
+    velocity,
+    sustain,
+    pressedFrets,
+    handleVelocityChange,
+    handleFretPress,
+    handleFretRelease,
+  } = useInstrumentState();
+
   const [mode, setMode] = useState<'melody' | 'chord'>('melody');
 
   // Guitar configuration
@@ -56,39 +61,47 @@ export default function Guitar({
     [config.strings, config.openNotes, config.frets, pressedFrets, scaleNotes]
   );
 
-  const handleFretPress = useCallback(async (stringIndex: number, fret: number, note: string) => {
-    const fretKey = `${stringIndex}-${fret}`;
-    setPressedFrets(prev => new Set(prev).add(fretKey));
+  const handleFretPressWithNote = useCallback(async (stringIndex: number, fret: number, note: string) => {
+    handleFretPress(stringIndex, fret);
     
     if (mode === 'melody') {
-      // Single note playing
       await onPlayNotes([note], velocity, true);
     } else {
-      // Chord mode - this will be expanded in future
-      // For now, just play the single note
-      await onPlayNotes([note], velocity, true);
+      // Chord mode - play the note and its third and fifth
+      const noteName = note.slice(0, -1);
+      const octave = parseInt(note.slice(-1));
+      const noteIndex = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].indexOf(noteName);
+      const thirdIndex = (noteIndex + 4) % 12;
+      const fifthIndex = (noteIndex + 7) % 12;
+      const thirdNote = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][thirdIndex] + octave;
+      const fifthNote = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][fifthIndex] + octave;
+      await onPlayNotes([note, thirdNote, fifthNote], velocity, true);
     }
-  }, [mode, velocity, onPlayNotes]);
+  }, [mode, velocity, onPlayNotes, handleFretPress]);
 
-  const handleFretRelease = useCallback((stringIndex: number, fret: number, note: string) => {
-    const fretKey = `${stringIndex}-${fret}`;
-    setPressedFrets(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(fretKey);
-      return newSet;
-    });
-    
+  const handleFretReleaseWithNote = useCallback((stringIndex: number, fret: number, note: string) => {
+    handleFretRelease(stringIndex, fret);
     onReleaseKeyHeldNote(note);
-  }, [onReleaseKeyHeldNote]);
+    
+    if (mode === 'chord') {
+      // Release chord notes
+      const noteName = note.slice(0, -1);
+      const octave = parseInt(note.slice(-1));
+      const noteIndex = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].indexOf(noteName);
+      const thirdIndex = (noteIndex + 4) % 12;
+      const fifthIndex = (noteIndex + 7) % 12;
+      const thirdNote = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][thirdIndex] + octave;
+      const fifthNote = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][fifthIndex] + octave;
+      onReleaseKeyHeldNote(thirdNote);
+      onReleaseKeyHeldNote(fifthNote);
+    }
+  }, [mode, onReleaseKeyHeldNote, handleFretRelease]);
 
   const handleSustainChange = useCallback((newSustain: boolean) => {
-    setSustain(newSustain);
+    // This state is now managed by useInstrumentState
+    // setSustain(newSustain);
     onSustainChange(newSustain);
   }, [onSustainChange]);
-
-  const handleVelocityChange = useCallback((newVelocity: number) => {
-    setVelocity(newVelocity);
-  }, []);
 
   return (
     <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
@@ -152,8 +165,8 @@ export default function Guitar({
         <FretboardBase
           config={config}
           positions={positions}
-          onFretPress={handleFretPress}
-          onFretRelease={handleFretRelease}
+          onFretPress={handleFretPressWithNote}
+          onFretRelease={handleFretReleaseWithNote}
           velocity={velocity}
           onVelocityChange={handleVelocityChange}
           className="guitar-fretboard"

@@ -25,13 +25,11 @@ interface RoomState {
   isConnected: boolean;
   pendingApproval: boolean;
   error: string | null;
-  rejectionMessage: string | null;
   setCurrentRoom: (room: Room | null) => void;
   setCurrentUser: (user: RoomUser | null) => void;
   setIsConnected: (connected: boolean) => void;
   setPendingApproval: (pending: boolean) => void;
   setError: (error: string | null) => void;
-  setRejectionMessage: (message: string | null) => void;
   updateUserInstrument: (userId: string, instrument: string, category: string) => void;
   addUser: (user: RoomUser) => void;
   removeUser: (userId: string) => void;
@@ -48,7 +46,6 @@ export const useRoomStore = create<RoomState>((set, get) => ({
   isConnected: false,
   pendingApproval: false,
   error: null,
-  rejectionMessage: null,
 
   setCurrentRoom: (room) => {
     if (room) {
@@ -68,7 +65,6 @@ export const useRoomStore = create<RoomState>((set, get) => ({
   setIsConnected: (connected) => set({ isConnected: connected }),
   setPendingApproval: (pending) => set({ pendingApproval: pending }),
   setError: (error) => set({ error }),
-  setRejectionMessage: (message) => set({ rejectionMessage: message }),
 
   updateUserInstrument: (userId, instrument, category) => {
     const { currentRoom } = get();
@@ -182,7 +178,6 @@ export const useRoomStore = create<RoomState>((set, get) => ({
     currentUser: null,
     isConnected: false,
     pendingApproval: false,
-    error: null,
-    rejectionMessage: null
+    error: null
   })
 })); 

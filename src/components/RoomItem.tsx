@@ -13,6 +13,8 @@ export default function RoomItem({
   onJoinAsAudience, 
   onCopyRoomUrl 
 }: RoomItemProps) {
+  const userCount = room.users.length;
+
   return (
     <div className="card bg-base-200">
       <div className="card-body p-4">
@@ -29,7 +31,7 @@ export default function RoomItem({
               </button>
             </div>
             <p className="text-sm text-base-content/70">
-              {room.userCount} member{room.userCount !== 1 ? 's' : ''}
+              {userCount} member{userCount !== 1 ? 's' : ''}
             </p>
             <p className="text-xs text-base-content/50">
               Created {new Date(room.createdAt).toLocaleDateString()}
@@ -37,6 +39,9 @@ export default function RoomItem({
             <div className="flex items-center gap-2 mt-1">
               {room.isPrivate && (
                 <span className="badge badge-warning badge-xs">Private</span>
+              )}
+              {room.isHidden && (
+                <span className="badge badge-neutral badge-xs">Hidden</span>
               )}
             </div>
           </div>

@@ -1,6 +1,7 @@
-import { useState, useMemo, useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { FretboardBase, type FretboardConfig } from "../shared/FretboardBase";
 import { generateFretPositions, getScaleNotes, type Scale } from "../../utils/musicUtils";
+import { useInstrumentState } from "../../hooks/useInstrumentState";
 
 export interface BassProps {
   scaleState: {
@@ -21,9 +22,15 @@ export default function Bass({
   onReleaseKeyHeldNote,
   onSustainChange,
 }: BassProps) {
-  const [velocity, setVelocity] = useState<number>(0.7);
-  const [sustain, setSustain] = useState<boolean>(false);
-  const [pressedFrets, setPressedFrets] = useState<Set<string>>(new Set());
+  const {
+    velocity,
+    sustain,
+    pressedFrets,
+    handleVelocityChange,
+    handleFretPress,
+    handleFretRelease,
+  } = useInstrumentState();
+
   const [octaveMode, setOctaveMode] = useState<boolean>(false);
 
   // Bass configuration
@@ -56,52 +63,33 @@ export default function Bass({
     [config.strings, config.openNotes, config.frets, pressedFrets, scaleNotes]
   );
 
-  const handleFretPress = useCallback(async (stringIndex: number, fret: number, note: string) => {
-    const fretKey = `${stringIndex}-${fret}`;
-    setPressedFrets(prev => new Set(prev).add(fretKey));
+  const handleFretPressWithNote = useCallback(async (stringIndex: number, fret: number, note: string) => {
+    handleFretPress(stringIndex, fret);
     
     if (octaveMode) {
-      // In octave mode, play the note and its octave
-      const baseNote = note.slice(0, -1); // Remove octave
-      const octave = parseInt(note.slice(-1));
-      const octaveNote = `${baseNote}${octave + 1}`;
-      
+      // Play octave (root + octave above)
+      const octaveNote = note.slice(0, -1) + (parseInt(note.slice(-1)) + 1);
       await onPlayNotes([note, octaveNote], velocity, true);
     } else {
-      // Regular single note playing
       await onPlayNotes([note], velocity, true);
     }
-  }, [octaveMode, velocity, onPlayNotes]);
+  }, [octaveMode, velocity, onPlayNotes, handleFretPress]);
 
-  const handleFretRelease = useCallback((stringIndex: number, fret: number, note: string) => {
-    const fretKey = `${stringIndex}-${fret}`;
-    setPressedFrets(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(fretKey);
-      return newSet;
-    });
+  const handleFretReleaseWithNote = useCallback((stringIndex: number, fret: number, note: string) => {
+    handleFretRelease(stringIndex, fret);
+    onReleaseKeyHeldNote(note);
     
     if (octaveMode) {
-      // Release both the note and its octave
-      const baseNote = note.slice(0, -1);
-      const octave = parseInt(note.slice(-1));
-      const octaveNote = `${baseNote}${octave + 1}`;
-      
-      onReleaseKeyHeldNote(note);
+      const octaveNote = note.slice(0, -1) + (parseInt(note.slice(-1)) + 1);
       onReleaseKeyHeldNote(octaveNote);
-    } else {
-      onReleaseKeyHeldNote(note);
     }
-  }, [octaveMode, onReleaseKeyHeldNote]);
+  }, [octaveMode, onReleaseKeyHeldNote, handleFretRelease]);
 
   const handleSustainChange = useCallback((newSustain: boolean) => {
-    setSustain(newSustain);
+    // This state is now managed by useInstrumentState
+    // setSustain(newSustain); 
     onSustainChange(newSustain);
   }, [onSustainChange]);
-
-  const handleVelocityChange = useCallback((newVelocity: number) => {
-    setVelocity(newVelocity);
-  }, []);
 
   return (
     <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
@@ -165,8 +153,8 @@ export default function Bass({
         <FretboardBase
           config={config}
           positions={positions}
-          onFretPress={handleFretPress}
-          onFretRelease={handleFretRelease}
+          onFretPress={handleFretPressWithNote}
+          onFretRelease={handleFretReleaseWithNote}
           velocity={velocity}
           onVelocityChange={handleVelocityChange}
           className="bass-fretboard"

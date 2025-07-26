@@ -1,8 +1,17 @@
 import { Routes, Route } from 'react-router-dom';
 import Lobby from './pages/Lobby';
 import Room from './pages/Room';
+import { useUserStore } from './stores/userStore';
+import { useLayoutEffect } from 'react';
 
 export default function App() {
+  const { ensureUserId } = useUserStore();
+
+  // Ensure userId exists on first app entry
+  useLayoutEffect(() => {
+    ensureUserId();
+  }, [ensureUserId]);
+
   return (
     <Routes>
       <Route path="/" element={<Lobby />} />

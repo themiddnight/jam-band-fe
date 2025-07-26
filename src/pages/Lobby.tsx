@@ -15,6 +15,8 @@ export default function Lobby() {
     rejectionMessage,
     isConnected,
     isConnecting,
+    isPrivate,
+    isHidden,
     
     // Actions
     fetchRooms,
@@ -30,6 +32,8 @@ export default function Lobby() {
     // Setters
     setTempUsername,
     setNewRoomName,
+    setIsPrivate,
+    setIsHidden,
   } = useLobby();
 
   return (
@@ -91,7 +95,15 @@ export default function Lobby() {
                       <div className="card-body p-4">
                         <div className="flex justify-between items-start">
                           <div>
-                            <h3 className="font-semibold">{room.name}</h3>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold">{room.name}</h3>
+                              {room.isPrivate && (
+                                <span className="badge badge-warning badge-sm">Private</span>
+                              )}
+                              {room.isHidden && (
+                                <span className="badge badge-neutral badge-sm">Hidden</span>
+                              )}
+                            </div>
                             <p className="text-sm text-base-content/70">
                               {room.userCount} member{room.userCount !== 1 ? 's' : ''}
                             </p>
@@ -175,20 +187,56 @@ export default function Lobby() {
           showOkButton={!!newRoomName.trim()}
         >
           <form onSubmit={(e) => { e.preventDefault(); }}>
-            <div className="form-control">
-              <label className="label" htmlFor="newRoomName">
-                Room Name
-              </label>
-              <input
-                id="newRoomName"
-                type="text"
-                placeholder="Enter room name"
-                className="input input-bordered w-full"
-                value={newRoomName}
-                onChange={(e) => setNewRoomName(e.target.value)}
-                autoFocus
-                required
-              />
+            <div className="space-y-4">
+              <div className="form-control">
+                <label className="label" htmlFor="newRoomName">
+                  Room Name
+                </label>
+                <input
+                  id="newRoomName"
+                  type="text"
+                  placeholder="Enter room name"
+                  className="input input-bordered w-full"
+                  value={newRoomName}
+                  onChange={(e) => setNewRoomName(e.target.value)}
+                  autoFocus
+                  required
+                />
+              </div>
+              
+              <div className="form-control">
+                <label className="label cursor-pointer">
+                  <span className="label-text">Private Room</span>
+                  <input
+                    type="checkbox"
+                    className="checkbox checkbox-primary"
+                    checked={isPrivate}
+                    onChange={(e) => setIsPrivate(e.target.checked)}
+                  />
+                </label>
+                <label className="label">
+                  <span className="label-text-alt text-base-content/70">
+                    Band members need approval to join
+                  </span>
+                </label>
+              </div>
+
+              <div className="form-control">
+                <label className="label cursor-pointer">
+                  <span className="label-text">Hidden Room</span>
+                  <input
+                    type="checkbox"
+                    className="checkbox checkbox-primary"
+                    checked={isHidden}
+                    onChange={(e) => setIsHidden(e.target.checked)}
+                  />
+                </label>
+                <label className="label">
+                  <span className="label-text-alt text-base-content/70">
+                    Room won't appear in the public list
+                  </span>
+                </label>
+              </div>
             </div>
           </form>
         </Modal>

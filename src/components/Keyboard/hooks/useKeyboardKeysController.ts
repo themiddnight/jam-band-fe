@@ -165,10 +165,12 @@ export const useKeyboardKeysController = (
         return;
       }
 
-      // Handle note stopping
-      handleNoteStopping(key);
+      // Handle note stopping for regular note keys
+      if (noteKeys.includes(key)) {
+        handleNoteStopping(key);
+      }
     },
-    [updateHeldKeys, handleChordModifierRelease, handleSustainRelease, controlKeys, handleNoteStopping, keyboardState]
+    [updateHeldKeys, handleChordModifierRelease, handleSustainRelease, controlKeys, noteKeys, handleNoteStopping]
   );
 
   return { handleKeyDown, handleKeyUp };

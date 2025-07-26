@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { useEffect, useCallback, useRef, useState, useMemo } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useUserStore } from "../stores/userStore";
@@ -14,8 +15,8 @@ export const useRoom = () => {
   const location = useLocation();
   const role = location.state?.role as "band_member" | "audience";
 
-  const { username } = useUserStore();
-  const { currentRoom, currentUser, pendingApproval, error, rejectionMessage, setError } =
+  const { username, userId } = useUserStore();
+  const { currentRoom, currentUser, pendingApproval, error, setError } =
     useRoomStore();
 
   // State to track playing indicators for each user
@@ -33,10 +34,12 @@ export const useRoom = () => {
 
   // State for leave room confirmation modal
   const [showLeaveConfirmModal, setShowLeaveConfirmModal] = useState<boolean>(false);
+  const [hasLeftRoom, setHasLeftRoom] = useState<boolean>(false);
 
   const {
     connect,
     joinRoom,
+    leaveRoom,
     disconnect,
     approveMember,
     rejectMember,
@@ -93,10 +96,13 @@ export const useRoom = () => {
 
   // Initialize room
   useEffect(() => {
-    if (!roomId || !username) {
+    if (!roomId || !username || !userId) {
       navigate("/");
       return;
     }
+
+    // Reset leave room state when component mounts
+    setHasLeftRoom(false);
 
     // Clear any previous error
     setError(null);
@@ -108,6 +114,7 @@ export const useRoom = () => {
   }, [
     roomId,
     username,
+    userId,
     connect,
     isConnected,
     isConnecting,
@@ -117,11 +124,11 @@ export const useRoom = () => {
 
   // Join room when socket is connected
   useEffect(() => {
-    if (isConnected && roomId && username) {
+    if (isConnected && roomId && username && userId && !hasLeftRoom) {
       // Join the room (this will establish the session even if we're already in the room)
-      joinRoom(roomId, username, role);
+      joinRoom(roomId, username, userId, role);
     }
-  }, [isConnected, roomId, username, role, joinRoom]);
+  }, [isConnected, roomId, username, userId, role, joinRoom, hasLeftRoom]);
 
   // Request synth parameters when joining a room with synthesizer users
   useEffect(() => {
@@ -148,19 +155,15 @@ export const useRoom = () => {
         // If room not found, redirect back to lobby
         navigate("/");
       } else if (error.includes("rejected") || error.includes("Your request was rejected")) {
-        // If user was rejected, redirect to lobby immediately
-        navigate("/");
+        // If user was rejected, redirect to lobby immediately with rejection message
+        navigate("/", { 
+          state: { 
+            rejectionMessage: error 
+          } 
+        });
       }
     }
   }, [error, navigate]);
-
-  // Handle rejection message and redirect to lobby
-  useEffect(() => {
-    if (rejectionMessage) {
-      // Redirect to lobby with rejection message
-      navigate("/", { state: { rejectionMessage } });
-    }
-  }, [rejectionMessage, navigate]);
 
   // Cleanup on component unmount
   useEffect(() => {
@@ -295,7 +298,7 @@ export const useRoom = () => {
         }, 500);
       }
     }
-  }, [currentRoom, currentUser, currentCategory, synthState, socketUpdateSynthParams, isSynthesizerLoaded]);
+  }, [currentRoom, currentUser, currentCategory, socketUpdateSynthParams, isSynthesizerLoaded]);
 
   // Handle requests for synth parameters from new users
   useEffect(() => {
@@ -307,7 +310,7 @@ export const useRoom = () => {
     });
 
     return cleanup;
-  }, [onRequestSynthParamsResponse, currentCategory, synthState, socketUpdateSynthParams]);
+  }, [onRequestSynthParamsResponse, currentCategory, socketUpdateSynthParams]);
 
   // Track preloaded instruments to avoid redundant requests
   const preloadedInstruments = useRef<Set<string>>(new Set());
@@ -381,7 +384,6 @@ export const useRoom = () => {
     } else {
       console.log(`📭 No new instruments to preload`);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomUsers, isAudioContextReady]); // Removed preloadRoomInstruments from deps
 
   // Handle incoming notes from other users with deduplication
@@ -740,18 +742,40 @@ export const useRoom = () => {
     [rejectMember]
   );
 
-  // Leave room
+  // Leave room (for canceling pending approval)
   const handleLeaveRoom = useCallback(() => {
-    // Disconnect socket to prevent automatic reconnection
+    // For canceling pending approval, we don't need to send intentional leave flag
+    // since the user is not actually in the room yet
     disconnect();
     navigate("/");
   }, [disconnect, navigate]);
 
   // Handle leave room confirmation
-  const handleLeaveRoomConfirm = useCallback(() => {
+  const handleLeaveRoomConfirm = useCallback(async () => {
     setShowLeaveConfirmModal(false);
-    handleLeaveRoom();
-  }, [handleLeaveRoom]);
+    
+    try {
+      // Set flag to prevent rejoining the room
+      setHasLeftRoom(true);
+      
+      // Send leave event to backend with intentional leave flag
+      // This ensures the user will need approval to rejoin the private room
+      leaveRoom(true);
+      
+      // Small delay to ensure the leave event is sent before disconnecting
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Disconnect socket to prevent automatic reconnection
+      disconnect();
+      
+      // Immediately redirect to lobby
+      navigate("/");
+    } catch (error) {
+      console.error("Error during leave room process:", error);
+      // Ensure we still navigate even if there's an error
+      navigate("/");
+    }
+  }, [leaveRoom, disconnect, navigate]);
 
   // Handle leave room button click - shows confirmation modal
   const handleLeaveRoomClick = useCallback(() => {
@@ -770,7 +794,6 @@ export const useRoom = () => {
     currentUser,
     pendingApproval,
     error,
-    rejectionMessage,
     role,
     username,
     

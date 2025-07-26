@@ -1,18 +1,39 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { v4 as uuidv4 } from 'uuid';
 
 interface UserState {
   username: string | null;
+  userId: string | null;
   setUsername: (username: string) => void;
-  clearUsername: () => void;
+  setUserId: (userId: string) => void;
+  generateUserId: () => string;
+  clearUser: () => void;
+  ensureUserId: () => string;
 }
 
 export const useUserStore = create<UserState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       username: null,
+      userId: null,
       setUsername: (username: string) => set({ username }),
-      clearUsername: () => set({ username: null }),
+      setUserId: (userId: string) => set({ userId }),
+      generateUserId: () => {
+        const userId = uuidv4();
+        set({ userId });
+        return userId;
+      },
+      clearUser: () => set({ username: null, userId: null }),
+      ensureUserId: () => {
+        const { userId } = get();
+        if (!userId) {
+          const newUserId = uuidv4();
+          set({ userId: newUserId });
+          return newUserId;
+        }
+        return userId;
+      },
     }),
     {
       name: 'user-store',

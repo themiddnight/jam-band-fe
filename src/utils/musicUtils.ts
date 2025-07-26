@@ -106,8 +106,27 @@ export const getChordFromDegree = (
   const chordNotes = chordIntervals.map((interval) =>
     getNoteFromIndex(rootNoteIndex + interval)
   );
+
+  // Add seventh notes if modifiers are present
+  let finalChordNotes = [...chordNotes];
   
-  return chordNotes.map((note) => {
+  if (modifiers.has("dominant7")) {
+    const rootNoteIndex = getNoteIndex(rootNoteOfChord);
+    let seventhNoteIndex = rootNoteIndex + 10;
+    const highestNoteIndex = getNoteIndex(finalChordNotes[finalChordNotes.length - 1]);
+    if (seventhNoteIndex <= highestNoteIndex) seventhNoteIndex += 12;
+    finalChordNotes = [...finalChordNotes, getNoteFromIndex(seventhNoteIndex)];
+  }
+  
+  if (modifiers.has("major7")) {
+    const rootNoteIndex = getNoteIndex(rootNoteOfChord);
+    let seventhNoteIndex = rootNoteIndex + 11;
+    const highestNoteIndex = getNoteIndex(finalChordNotes[finalChordNotes.length - 1]);
+    if (seventhNoteIndex <= highestNoteIndex) seventhNoteIndex += 12;
+    finalChordNotes = [...finalChordNotes, getNoteFromIndex(seventhNoteIndex)];
+  }
+
+  return finalChordNotes.map((note) => {
     const noteIndex = getNoteIndex(note);
     const noteOctave = Math.floor(noteIndex / 12);
     if (noteOctave < baseOctave) {
@@ -117,7 +136,7 @@ export const getChordFromDegree = (
       return getNoteFromIndex(noteIndex - 12);
     }
     return note;
-  });
+  }).sort((a, b) => getNoteIndex(a) - getNoteIndex(b));
 };
 
 // Helper function to get note index
@@ -137,11 +156,15 @@ const getNoteFromIndex = (index: number): string => {
 
 // Generate chord name from scale degree
 export const getChordName = (rootNote: string, scale: Scale, degree: number): string => {
+  // Get the root note index
   const rootIndex = NOTE_NAMES.indexOf(rootNote);
+  
+  // Get the scale notes
   const scaleIntervals = SCALES[scale];
   const chordRootIndex = (rootIndex + scaleIntervals[degree % 7]) % 12;
   const chordRootName = NOTE_NAMES[chordRootIndex];
   
+  // Define chord qualities for each degree in major and minor scales
   const MAJOR_CHORD_QUALITIES = ["", "m", "m", "", "", "m", "dim"];
   const MINOR_CHORD_QUALITIES = ["m", "dim", "", "m", "m", "", ""];
   

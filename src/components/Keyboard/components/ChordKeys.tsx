@@ -4,34 +4,7 @@ import { chordTriadKeys } from "../../../constants/virtualKeyboardKeys";
 import type { KeyboardKey } from "../types/keyboard";
 import { useTouchEvents } from "../../../hooks/useTouchEvents";
 import { memo } from "react";
-
-// Helper function to generate chord names based on scale and degree
-const getChordName = (rootNote: string, scale: Scale, degree: number): string => {
-  const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-  
-  // Get the root note index
-  const rootIndex = NOTE_NAMES.indexOf(rootNote);
-  
-  // Define scale intervals
-  const SCALES = {
-    major: [0, 2, 4, 5, 7, 9, 11],
-    minor: [0, 2, 3, 5, 7, 8, 10],
-  };
-  
-  // Get the scale notes
-  const scaleIntervals = SCALES[scale];
-  const chordRootIndex = (rootIndex + scaleIntervals[degree % 7]) % 12;
-  const chordRootName = NOTE_NAMES[chordRootIndex];
-  
-  // Define chord qualities for each degree in major and minor scales
-  const MAJOR_CHORD_QUALITIES = ["", "m", "m", "", "", "m", "dim"];
-  const MINOR_CHORD_QUALITIES = ["m", "dim", "", "m", "m", "", ""];
-  
-  const qualities = scale === "major" ? MAJOR_CHORD_QUALITIES : MINOR_CHORD_QUALITIES;
-  const quality = qualities[degree % 7];
-  
-  return chordRootName + quality;
-};
+import { getChordName } from "../../../utils/musicUtils";
 
 // Memoized triad button component
 const TriadButton = memo(({
