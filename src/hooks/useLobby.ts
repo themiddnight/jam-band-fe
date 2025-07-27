@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useUserStore } from '../stores/userStore';
 import { useRoomStore } from '../stores/roomStore';
 import { useSocket } from './useSocket';
-import { useRooms } from '../services/useRooms';
+import { useRoomQuery } from '../services/useRooms';
 
 
 
@@ -15,7 +15,8 @@ export function useLobby() {
   const { currentRoom } = useRoomStore();
 
   // Use TanStack Query for room fetching
-  const { data: rooms, isLoading: loading, refetch: fetchRooms } = useRooms();
+  const { roomsQuery } = useRoomQuery();
+  const { data: rooms, isLoading: loading, refetch: fetchRooms } = roomsQuery;
 
   const [showUsernameModal, setShowUsernameModal] = useState(false);
   const [tempUsername, setTempUsername] = useState('');

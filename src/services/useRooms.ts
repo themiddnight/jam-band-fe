@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
-import { getRoomList, getHealthCheck } from './api';
-import type { RoomListResponse } from './api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getRoomList, getHealthCheck, leaveRoom } from './api';
+import type { RoomListResponse, LeaveRoomResponse } from './api';
 
 // Query keys for caching
 export const roomKeys = {
@@ -11,21 +11,10 @@ export const roomKeys = {
   detail: (id: string) => [...roomKeys.details(), id] as const,
 };
 
-// Custom hook for fetching room list
-export const useRooms = () => {
-  return useQuery<RoomListResponse>({
-    queryKey: roomKeys.lists(),
-    queryFn: getRoomList,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: true,
-  });
-};
+export function useRoomQuery() {
+  const queryClient = useQueryClient();
 
-// Custom hook for health check
-export const useHealthCheck = () => {
-  return useQuery({
+  const healthCheckQuery = useQuery({
     queryKey: ['health'],
     queryFn: getHealthCheck,
     staleTime: 30 * 1000, // 30 seconds
@@ -33,4 +22,32 @@ export const useHealthCheck = () => {
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
   });
-}; 
+
+  const roomsQuery = useQuery<RoomListResponse>({
+    queryKey: roomKeys.lists(),
+    queryFn: getRoomList,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+  });
+
+  const roomLeaveMutate = useMutation<LeaveRoomResponse, Error, { roomId: string; userId: string }>({
+    mutationFn: ({ roomId, userId }) => leaveRoom(roomId, userId),
+    onSuccess: (data) => {
+      // Invalidate room list to refresh the lobby
+      queryClient.invalidateQueries({ queryKey: roomKeys.lists() });
+      
+      console.log('Successfully left room:', data.message);
+    },
+    onError: (error) => {
+      console.error('Failed to leave room:', error);
+    },
+  });
+
+  return {
+    healthCheckQuery,
+    roomsQuery,
+    roomLeaveMutate,
+  };
+} 

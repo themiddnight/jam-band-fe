@@ -7,6 +7,7 @@ import { useSocket } from "./useSocket";
 import { useUnifiedInstrument } from "./useUnifiedInstrument";
 import { useScaleState } from "./useScaleState";
 import { useMidiController } from "./useMidiController";
+import { useRoomQuery } from "../services/useRooms";
 import { InstrumentCategory } from "../constants/instruments";
 
 export const useRoom = () => {
@@ -39,7 +40,6 @@ export const useRoom = () => {
   const {
     connect,
     joinRoom,
-    leaveRoom,
     disconnect,
     approveMember,
     rejectMember,
@@ -750,32 +750,47 @@ export const useRoom = () => {
     navigate("/");
   }, [disconnect, navigate]);
 
+  // Get the leave room mutation
+  const { roomLeaveMutate } = useRoomQuery();
+
   // Handle leave room confirmation
   const handleLeaveRoomConfirm = useCallback(async () => {
     setShowLeaveConfirmModal(false);
+    
+    if (!roomId || !userId) {
+      console.error("Missing roomId or userId for leave room");
+      navigate("/");
+      return;
+    }
     
     try {
       // Set flag to prevent rejoining the room
       setHasLeftRoom(true);
       
-      // Send leave event to backend with intentional leave flag
-      // This ensures the user will need approval to rejoin the private room
-      leaveRoom(true);
+      // Use HTTP-based leave room
+      const result = await roomLeaveMutate.mutateAsync({ roomId, userId });
       
-      // Small delay to ensure the leave event is sent before disconnecting
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Disconnect socket to prevent automatic reconnection
-      disconnect();
-      
-      // Immediately redirect to lobby
-      navigate("/");
+      if (result.success) {
+        console.log("Successfully left room via HTTP:", result.message);
+        
+        // Disconnect socket to prevent automatic reconnection
+        disconnect();
+        
+        // Immediately redirect to lobby
+        navigate("/");
+      } else {
+        console.error("Failed to leave room:", result.message);
+        // Still navigate to lobby even if HTTP request failed
+        disconnect();
+        navigate("/");
+      }
     } catch (error) {
       console.error("Error during leave room process:", error);
       // Ensure we still navigate even if there's an error
+      disconnect();
       navigate("/");
     }
-  }, [leaveRoom, disconnect, navigate]);
+  }, [roomLeaveMutate, roomId, userId, disconnect, navigate]);
 
   // Handle leave room button click - shows confirmation modal
   const handleLeaveRoomClick = useCallback(() => {

@@ -28,6 +28,12 @@ export interface HealthCheckResponse {
   timestamp: string;
 }
 
+export interface LeaveRoomResponse {
+  success: boolean;
+  message: string;
+  roomClosed?: boolean;
+}
+
 // API functions
 // Health check endpoint
 export async function getHealthCheck(): Promise<HealthCheckResponse> {
@@ -38,5 +44,11 @@ export async function getHealthCheck(): Promise<HealthCheckResponse> {
 // Get room list endpoint
 export async function getRoomList(): Promise<RoomListResponse> {
   const response = await axiosInstance.get(endpoints.listRooms);
+  return response.data;
+}
+
+// Leave room endpoint
+export async function leaveRoom(roomId: string, userId: string): Promise<LeaveRoomResponse> {
+  const response = await axiosInstance.post(endpoints.leaveRoom(roomId), { userId });
   return response.data;
 }
