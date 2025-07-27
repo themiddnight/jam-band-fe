@@ -58,9 +58,11 @@ export const useChordModifiers = (
             // Play new notes simultaneously to avoid flam
             const newNotes = newChord.filter((note: string) => !chord.includes(note));
             if (newNotes.length > 0) {
-              Promise.all(newNotes.map((note: string) => 
-                keyboardState.playNote(note, keyboardState.velocity, true)
-              ));
+              // Play all new notes simultaneously by calling playNote for each note without await
+              // This ensures all notes are triggered at the same time without waiting for each one
+              newNotes.forEach((note: string) => {
+                keyboardState.playNote(note, keyboardState.velocity, true);
+              });
             }
 
             virtualKeyboard.setActiveTriadChords(
