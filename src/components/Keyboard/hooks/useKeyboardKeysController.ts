@@ -10,7 +10,7 @@ import { useControlKeys } from "./useControlKeys";
 import { useChordModifiers } from "./useChordModifiers";
 import { useNotePlaying } from "./useNotePlaying";
 import { useNoteStopping } from "./useNoteStopping";
-import { useKeyboardShortcutsStore } from "../../../stores/keyboardShortcutsStore";
+import { DEFAULT_KEYBOARD_SHORTCUTS } from "../../../constants/keyboardShortcuts";
 import type {
   KeyboardState,
   ScaleState,
@@ -41,15 +41,14 @@ export const useKeyboardKeysController = (
 
   // Memoize control keys for faster lookup
   const controlKeys = useMemo(() => {
-    const shortcuts = useKeyboardShortcutsStore.getState().shortcuts;
     return new Set([
-      shortcuts.octaveDown.key,
-      shortcuts.octaveUp.key,
-      shortcuts.voicingDown.key,
-      shortcuts.voicingUp.key,
-      shortcuts.toggleMelodyChord.key,
-      shortcuts.sustain.key,
-      shortcuts.sustainToggle.key,
+      DEFAULT_KEYBOARD_SHORTCUTS.octaveDown.key,
+      DEFAULT_KEYBOARD_SHORTCUTS.octaveUp.key,
+      DEFAULT_KEYBOARD_SHORTCUTS.voicingDown.key,
+      DEFAULT_KEYBOARD_SHORTCUTS.voicingUp.key,
+      DEFAULT_KEYBOARD_SHORTCUTS.toggleMelodyChord.key,
+      DEFAULT_KEYBOARD_SHORTCUTS.sustain.key,
+      DEFAULT_KEYBOARD_SHORTCUTS.sustainToggle.key,
       ...Array.from({length: 9}, (_, i) => (i + 1).toString()),
     ]);
   }, []);

@@ -28,7 +28,7 @@ export interface KeyboardShortcuts {
   voicingUp: KeyboardShortcut;
 }
 
-export const DEFAULT_SHORTCUTS: KeyboardShortcuts = {
+export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
   toggleMelodyChord: {
     key: 'shift',
     description: 'Toggle between melody and chord modes',

@@ -206,33 +206,37 @@ export default function Lobby() {
               </div>
               
               <div className="form-control">
-                <label className="label cursor-pointer">
+                <label className="label cursor-pointer flex items-start gap-2">
                   <input
                     type="checkbox"
                     className="checkbox checkbox-primary"
                     checked={isPrivate}
                     onChange={(e) => setIsPrivate(e.target.checked)}
                   />
-                  <span className="label-text select-none">Private Room</span>
+                  <div className="flex flex-col">
+                    <span className="label-text select-none">Private Room</span>
+                    <p className="text-sm text-base-content/50">
+                      Band members need approval to join
+                    </p>
+                  </div>
                 </label>
-                <p className="text-sm text-base-content/50">
-                  Band members need approval to join
-                </p>
               </div>
 
               <div className="form-control">
-                <label className="label cursor-pointer">
+                <label className="label cursor-pointer flex items-start gap-2">
                   <input
                     type="checkbox"
                     className="checkbox checkbox-primary"
                     checked={isHidden}
-                    onChange={(e) => setIsHidden(e.target.checked)}
+                    onChange={(e) => setIsHidden(e.target.checked)} 
                   />
-                  <span className="label-text select-none">Hidden Room</span>
+                  <div className="flex flex-col">
+                    <span className="label-text select-none">Hidden Room</span>
+                    <p className="text-sm text-base-content/50">
+                      Room won't appear in the public list
+                    </p>
+                  </div>
                 </label>
-                <p className="text-sm text-base-content/50">
-                  Room won't appear in the public list
-                </p>
               </div>
             </div>
           </form>

@@ -1,6 +1,5 @@
 import { useCallback } from 'react';
-import { getChordModifierKeys } from '../../../constants/keyboardShortcuts';
-import { useKeyboardShortcutsStore } from '../../../stores/keyboardShortcutsStore';
+import { getChordModifierKeys, DEFAULT_KEYBOARD_SHORTCUTS } from '../../../constants/keyboardShortcuts';
 import type { KeyboardState, ScaleState, VirtualKeyboardState } from '../../../types/keyboard';
 
 export const useChordModifiers = (
@@ -8,7 +7,7 @@ export const useChordModifiers = (
   scaleState: ScaleState,
   virtualKeyboard: VirtualKeyboardState
 ) => {
-  const shortcuts = useKeyboardShortcutsStore((state) => state.shortcuts);
+  const shortcuts = DEFAULT_KEYBOARD_SHORTCUTS;
 
   const handleChordModifierPress = useCallback((key: string) => {
     if (

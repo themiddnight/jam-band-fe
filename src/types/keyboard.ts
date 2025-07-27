@@ -22,9 +22,9 @@ export interface KeyboardState {
   setSustain: (sustain: boolean) => void;
   setSustainToggle: (sustainToggle: boolean) => void;
   setHeldKeys: React.Dispatch<React.SetStateAction<Set<string>>>;
-  setSimpleMode: React.Dispatch<React.SetStateAction<"melody" | "chord">>;
-  setCurrentOctave: React.Dispatch<React.SetStateAction<number>>;
-  setVelocity: React.Dispatch<React.SetStateAction<number>>;
+  setSimpleMode: (mode: "melody" | "chord") => void;
+  setCurrentOctave: (octave: number) => void;
+  setVelocity: (velocity: number) => void;
   playNote: (note: string, velocity: number, isKeyHeld: boolean) => void;
   releaseKeyHeldNote: (note: string) => void;
   stopSustainedNotes: () => void;
@@ -32,7 +32,7 @@ export interface KeyboardState {
 
 export interface VirtualKeyboardState {
   chordVoicing: number;
-  setChordVoicing: React.Dispatch<React.SetStateAction<number>>;
+  setChordVoicing: (voicing: number) => void;
   chordModifiers: Set<string>;
   setChordModifiers: React.Dispatch<React.SetStateAction<Set<string>>>;
   activeTriadChords: Map<number, string[]>;

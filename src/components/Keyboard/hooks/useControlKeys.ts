@@ -1,12 +1,12 @@
 import { useCallback } from 'react';
-import { useKeyboardShortcutsStore } from '../../../stores/keyboardShortcutsStore';
+import { DEFAULT_KEYBOARD_SHORTCUTS } from '../../../constants/keyboardShortcuts';
 import type { KeyboardState, VirtualKeyboardState } from '../../../types/keyboard';
 
 export const useControlKeys = (
   keyboardState: KeyboardState,
   virtualKeyboard: VirtualKeyboardState
 ) => {
-  const shortcuts = useKeyboardShortcutsStore((state) => state.shortcuts);
+  const shortcuts = DEFAULT_KEYBOARD_SHORTCUTS;
 
   const handleSustain = useCallback((key: string) => {
     if (key === shortcuts.sustain.key) {
@@ -74,8 +74,8 @@ export const useControlKeys = (
   const handleToggleMelodyChord = useCallback((key: string) => {
     if (key === shortcuts.toggleMelodyChord.key) {
       if (keyboardState.mainMode === "simple") {
-        keyboardState.setSimpleMode((prev: string) =>
-          prev === "melody" ? "chord" : "melody"
+        keyboardState.setSimpleMode(
+          keyboardState.simpleMode === "melody" ? "chord" : "melody"
         );
       }
       return true;
@@ -85,11 +85,11 @@ export const useControlKeys = (
 
   const handleOctaveControls = useCallback((key: string) => {
     if (key === shortcuts.octaveDown.key) {
-      keyboardState.setCurrentOctave((prev: number) => Math.max(0, prev - 1));
+      keyboardState.setCurrentOctave(Math.max(0, keyboardState.currentOctave - 1));
       return true;
     }
     if (key === shortcuts.octaveUp.key) {
-      keyboardState.setCurrentOctave((prev: number) => Math.min(8, prev + 1));
+      keyboardState.setCurrentOctave(Math.min(8, keyboardState.currentOctave + 1));
       return true;
     }
     return false;
@@ -101,9 +101,7 @@ export const useControlKeys = (
         keyboardState.mainMode === "simple" &&
         keyboardState.simpleMode === "chord"
       ) {
-        virtualKeyboard.setChordVoicing((prev: number) =>
-          Math.max(-2, prev - 1)
-        );
+        virtualKeyboard.setChordVoicing(Math.max(-2, virtualKeyboard.chordVoicing - 1));
       }
       return true;
     }
@@ -112,9 +110,7 @@ export const useControlKeys = (
         keyboardState.mainMode === "simple" &&
         keyboardState.simpleMode === "chord"
       ) {
-        virtualKeyboard.setChordVoicing((prev: number) =>
-          Math.min(4, prev + 1)
-        );
+        virtualKeyboard.setChordVoicing(Math.min(4, virtualKeyboard.chordVoicing + 1));
       }
       return true;
     }

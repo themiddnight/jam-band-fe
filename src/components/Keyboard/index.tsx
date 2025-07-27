@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useVirtualKeyboard } from "./hooks/useVirtualKeyboard";
 import { useKeyboardKeysController } from "./hooks/useKeyboardKeysController";
 import { useKeyboardState } from "./hooks/useKeyboardState";
@@ -6,9 +6,7 @@ import { useTouchEvents } from "../../hooks/useTouchEvents";
 import { MelodyKeys } from "./components/MelodyKeys";
 import { ChordKeys } from "./components/ChordKeys";
 import { AdvancedKeys } from "./components/AdvancedKeys";
-import { ShortcutConfig } from "./ShortcutConfig";
-import { useKeyboardShortcutsStore } from "../../stores/keyboardShortcutsStore";
-import { getKeyDisplayName } from "../../constants/keyboardShortcuts";
+import { getKeyDisplayName, DEFAULT_KEYBOARD_SHORTCUTS } from "../../constants/keyboardShortcuts";
 import type { Scale } from "../../hooks/useScaleState";
 
 export interface Props {
@@ -37,8 +35,7 @@ export default function Keyboard({
   onSustainChange,
   onSustainToggleChange,
 }: Props) {
-  const shortcuts = useKeyboardShortcutsStore((state) => state.shortcuts);
-  const [showShortcutConfig, setShowShortcutConfig] = useState<boolean>(false);
+  const shortcuts = DEFAULT_KEYBOARD_SHORTCUTS;
 
   // Use the new keyboard state hook
   const keyboardStateData = useKeyboardState({
@@ -85,17 +82,25 @@ export default function Keyboard({
     handleModifierRelease,
   } = virtualKeyboard;
 
-  // Create a keyboard state object that matches the interface expected by useKeyboardKeyboard
+  // Create a keyboard state object that matches the interface expected by useKeyboardKeysController
   const keyboardState = {
     mainMode,
     simpleMode,
     currentOctave,
     velocity,
-    setMainMode,
+    sustain: keyboardStateData.sustain,
+    sustainToggle: keyboardStateData.sustainToggle,
+    hasSustainedNotes: keyboardStateData.hasSustainedNotes,
+    heldKeys: keyboardStateData.heldKeys,
+    setSustain: keyboardStateData.setSustain,
+    setSustainToggle: keyboardStateData.setSustainToggle,
+    setHeldKeys: keyboardStateData.setHeldKeys,
     setSimpleMode,
     setCurrentOctave,
     setVelocity,
-    ...keyboardStateData,
+    playNote: keyboardStateData.playNote,
+    releaseKeyHeldNote: keyboardStateData.releaseKeyHeldNote,
+    stopSustainedNotes: keyboardStateData.stopSustainedNotes,
   };
 
   const { handleKeyDown, handleKeyUp } = useKeyboardKeysController(
@@ -173,13 +178,6 @@ export default function Keyboard({
         <div className="flex justify-between items-center mb-1">
           <div className="flex items-center gap-2">
             <h3 className="card-title text-base">Mode Controls</h3>
-            <button
-              onClick={() => setShowShortcutConfig(true)}
-              className="btn btn-xs touch-manipulation"
-              title="Configure keyboard shortcuts"
-            >
-              ⚙️
-            </button>
           </div>
 
           <div className="flex gap-3 flex-wrap justify-end">
@@ -269,7 +267,7 @@ export default function Keyboard({
                   onStopSustainedNotes();
                 }
               }}
-              {...useTouchEvents(
+              ref={useTouchEvents(
                 () => {
                   if (keyboardStateData.sustainToggle) {
                     // If toggle mode is active, tapping sustain stops current sustained notes
@@ -294,7 +292,7 @@ export default function Keyboard({
                     onStopSustainedNotes();
                   }
                 }
-              )}
+              ).ref as React.Ref<HTMLButtonElement>}
               className={`btn btn-sm join-item touch-manipulation select-none ${(keyboardStateData.sustain &&
                 !keyboardStateData.sustainToggle) ||
                 (keyboardStateData.sustainToggle &&
@@ -398,11 +396,6 @@ export default function Keyboard({
           )}
 
         </div>
-
-        <ShortcutConfig
-          isOpen={showShortcutConfig}
-          onClose={() => setShowShortcutConfig(false)}
-        />
       </div>
     </div>
   );

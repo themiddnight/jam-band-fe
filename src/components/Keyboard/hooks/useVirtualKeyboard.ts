@@ -1,7 +1,8 @@
 import { useState, useCallback, useMemo } from "react";
-import { useKeyboardShortcutsStore } from "../../../stores/keyboardShortcutsStore";
+import { useVirtualKeyboardStore } from "../../../stores/virtualKeyboardStore";
+import { DEFAULT_KEYBOARD_SHORTCUTS } from "../../../constants/keyboardShortcuts";
 import type { Scale } from "../../../hooks/useScaleState";
-import type { MainMode, KeyboardKey, SimpleMode } from "../types/keyboard";
+import type { KeyboardKey } from "../types/keyboard";
 import {
   blackKeyMapping,
   chordRootKeys,
@@ -20,12 +21,19 @@ export const useVirtualKeyboard = (
   onReleaseKeyHeldNote: (note: string) => void,
   keyboardState?: any // Add keyboardState parameter
 ) => {
-  const shortcuts = useKeyboardShortcutsStore((state) => state.shortcuts);
-  const [mainMode, setMainMode] = useState<MainMode>("simple");
-  const [simpleMode, setSimpleMode] = useState<SimpleMode>("melody");
-  const [currentOctave, setCurrentOctave] = useState<number>(2);
-  const [velocity, setVelocity] = useState<number>(0.7);
-  const [chordVoicing, setChordVoicing] = useState<number>(0);
+  const shortcuts = DEFAULT_KEYBOARD_SHORTCUTS;
+  const {
+    mainMode,
+    simpleMode,
+    currentOctave,
+    velocity,
+    chordVoicing,
+    setMainMode,
+    setSimpleMode,
+    setCurrentOctave,
+    setVelocity,
+    setChordVoicing,
+  } = useVirtualKeyboardStore();
   const [chordModifiers, setChordModifiers] = useState<Set<string>>(new Set());
   const [pressedTriads, setPressedTriads] = useState<Set<number>>(new Set());
   const [activeTriadChords, setActiveTriadChords] = useState<
@@ -242,14 +250,14 @@ export const useVirtualKeyboard = (
   );
 
   const handleModifierPress = useCallback((modifier: string) => {
-    setChordModifiers((prev) => {
+    setChordModifiers((prev: Set<string>) => {
       if (prev.has(modifier)) return prev;
       return new Set(prev).add(modifier);
     });
   }, []);
 
   const handleModifierRelease = useCallback((modifier: string) => {
-    setChordModifiers((prev) => {
+    setChordModifiers((prev: Set<string>) => {
       if (!prev.has(modifier)) return prev;
       const newSet = new Set(prev);
       newSet.delete(modifier);
@@ -262,7 +270,7 @@ export const useVirtualKeyboard = (
       const chord = getChord(rootNote, scale, index, chordVoicing, chordModifiers);
       
       // Optimized Map update - only create new Map if chord is different
-      setActiveTriadChords((prev) => {
+      setActiveTriadChords((prev: Map<number, string[]>) => {
         const existingChord = prev.get(index);
         if (existingChord && JSON.stringify(existingChord) === JSON.stringify(chord)) {
           return prev;
@@ -283,7 +291,7 @@ export const useVirtualKeyboard = (
       }
       
       // Optimized Set update - only create new Set if needed
-      setPressedTriads((prev) => {
+      setPressedTriads((prev: Set<number>) => {
         if (prev.has(index)) return prev;
         return new Set(prev).add(index);
       });
@@ -304,7 +312,7 @@ export const useVirtualKeyboard = (
         }
         
         // Optimized Map update - only create new Map if needed
-        setActiveTriadChords((prev) => {
+        setActiveTriadChords((prev: Map<number, string[]>) => {
           if (!prev.has(index)) return prev;
           const newMap = new Map(prev);
           newMap.delete(index);
@@ -313,7 +321,7 @@ export const useVirtualKeyboard = (
       }
       
       // Optimized Set update - only create new Set if needed
-      setPressedTriads((prev) => {
+      setPressedTriads((prev: Set<number>) => {
         if (!prev.has(index)) return prev;
         const newSet = new Set(prev);
         newSet.delete(index);
@@ -348,5 +356,5 @@ export const useVirtualKeyboard = (
     handleTriadRelease,
     handleModifierPress,
     handleModifierRelease,
-  };
+  } as const;
 };
