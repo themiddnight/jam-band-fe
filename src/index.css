@@ -1,1 +1,91 @@
 @import "tailwindcss";
+@plugin "daisyui";
+
+@utility kbd {
+  @apply bg-black/10;
+  @apply hidden lg:inline-block;
+}
+
+@utility card-body {
+  @apply p-3;
+}
+
+@utility modal-box {
+  @apply p-3 lg:p-4 xl:p-5;
+}
+
+@media (pointer: coarse) {
+  html, body, * {
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    user-select: none !important;
+  }
+}
+
+
+/* Touch-friendly styles for keyboard components */
+.touch-manipulation {
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  /* Prevent double-tap zoom */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent zoom on double-tap for touch devices */
+@media (pointer: coarse) {
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+}
+
+/* Improve button feedback on touch devices */
+@media (hover: none) and (pointer: coarse) {
+  .touch-manipulation:active {
+    transform: scale(0.95);
+  }
+}
+
+/* Prevent text selection on touch devices */
+@media (pointer: coarse) {
+  .touch-manipulation {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+}
+
+/* user indicator animation */
+
+.user-on {
+  animation: user-on 10ms ease-in-out forwards;
+}
+
+.user-off {
+  animation: user-off 1s ease-in-out forwards;
+}
+
+@keyframes user-on {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes user-off {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}

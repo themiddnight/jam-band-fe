@@ -1,15 +1,8 @@
 import { useState, useCallback } from "react";
+import { NOTE_NAMES, SCALES, type Scale } from "../utils/musicUtils";
 
-export type Scale = "major" | "minor";
-
-export const SCALES = {
-  major: [0, 2, 4, 5, 7, 9, 11],
-  minor: [0, 2, 3, 5, 7, 8, 10],
-};
-
-export const NOTE_NAMES = [
-  "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
-];
+// Re-export Scale type for backward compatibility
+export type { Scale };
 
 export const useScaleState = () => {
   const [scale, setScale] = useState<Scale>("major");
