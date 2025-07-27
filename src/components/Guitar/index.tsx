@@ -1,7 +1,12 @@
-import { useCallback, useMemo, useState } from "react";
-import { FretboardBase, type FretboardConfig } from "../shared/FretboardBase";
-import { generateFretPositions, getScaleNotes, type Scale } from "../../utils/musicUtils";
+import { useEffect } from "react";
+import { useGuitarState } from "./hooks/useGuitarState";
+import { useGuitarKeysController } from "./hooks/useGuitarKeysController";
 import { useInstrumentState } from "../../hooks/useInstrumentState";
+import { BasicFretboard } from "./components/BasicFretboard";
+import { SimpleNoteKeys } from "./components/SimpleNoteKeys";
+import { SimpleChordKeys } from "./components/SimpleChordKeys";
+import { getChordFromDegree } from "../../utils/musicUtils";
+import type { Scale } from "../../hooks/useScaleState";
 
 export interface GuitarProps {
   scaleState: {
@@ -10,167 +15,339 @@ export interface GuitarProps {
     getScaleNotes: (root: string, scaleType: Scale, octave: number) => string[];
   };
   onPlayNotes: (notes: string[], velocity: number, isKeyHeld: boolean) => void;
+  onStopNotes: (notes: string[]) => void;
+  onStopSustainedNotes: () => void;
   onReleaseKeyHeldNote: (note: string) => void;
   onSustainChange: (sustain: boolean) => void;
+  onSustainToggleChange?: (sustainToggle: boolean) => void;
 }
 
 export default function Guitar({
   scaleState,
   onPlayNotes,
+  onStopNotes,
+  onStopSustainedNotes,
   onReleaseKeyHeldNote,
   onSustainChange,
+  onSustainToggleChange,
 }: GuitarProps) {
+
+  // Use the guitar state hook
+  const guitarStateData = useGuitarState({
+    scaleState,
+    onPlayNotes,
+    onStopNotes,
+    onStopSustainedNotes,
+    onReleaseKeyHeldNote,
+    onSustainChange,
+    onSustainToggleChange,
+  });
+
   const {
+    mode,
+    setMode,
     velocity,
+    setVelocity,
     sustain,
+    setSustain,
+    sustainToggle,
+    setSustainToggle,
+    currentOctave,
+    setCurrentOctave,
+    chordVoicing,
+    setChordVoicing,
+    chordModifiers,
+    setChordModifiers,
+    pressedNotes,
+    setPressedNotes,
+    pressedChords,
+    setPressedChords,
+    strumConfig,
+    setStrumSpeed,
+    setStrumDirection,
+    playNote,
+    releaseKeyHeldNote,
+    stopSustainedNotes,
+  } = guitarStateData;
+
+  // Use instrument state for fretboard functionality
+  const {
     pressedFrets,
-    handleVelocityChange,
     handleFretPress,
     handleFretRelease,
   } = useInstrumentState();
 
-  const [mode, setMode] = useState<'melody' | 'chord'>('melody');
-
-  // Guitar configuration
-  const config: FretboardConfig = {
-    strings: ["E", "A", "D", "G", "B", "E"],
-    frets: 12,
-    openNotes: ["E2", "A2", "D3", "G3", "B3", "E4"],
-    mode: mode,
-    showNoteNames: true,
-    showFretNumbers: true,
-    highlightScaleNotes: true,
+  // Handle strum chord for simple chord mode with proper timing
+  const handleStrumChord = async (chordIndex: number, direction: 'up' | 'down') => {
+    // Generate 5-note chord: root note starting from E2 + 4 chord notes
+    let chordNotes = getChordFromDegree(
+      scaleState.rootNote,
+      scaleState.scale,
+      chordIndex,
+      chordVoicing,
+      chordModifiers
+    );
+    
+    // Ensure we have exactly 5 notes by adding additional chord tones if needed
+    if (chordNotes.length < 5) {
+      // Add octave variations of existing chord tones
+      const baseChordNotes = [...chordNotes];
+      for (let i = 0; i < baseChordNotes.length && chordNotes.length < 5; i++) {
+        const note = baseChordNotes[i];
+        const noteName = note.slice(0, -1);
+        const octave = parseInt(note.slice(-1));
+        const higherOctaveNote = `${noteName}${octave + 1}`;
+        
+        // Only add if not already in the chord
+        if (!chordNotes.includes(higherOctaveNote)) {
+          chordNotes.push(higherOctaveNote);
+        }
+      }
+    }
+    
+    // Take only the first 5 notes
+    chordNotes = chordNotes.slice(0, 5);
+    
+    // Play notes with strum timing
+    const noteOrder = direction === 'up' ? chordNotes : [...chordNotes].reverse();
+    
+    for (let i = 0; i < noteOrder.length; i++) {
+      setTimeout(async () => {
+        await onPlayNotes([noteOrder[i]], velocity, true);
+      }, i * strumConfig.speed);
+    }
   };
 
-  // Generate scale notes for highlighting
-  const scaleNotes = useMemo(() => 
-    getScaleNotes(scaleState.rootNote, scaleState.scale, 3)
-      .map(note => note.slice(0, -1)), // Remove octave for highlighting
-    [scaleState.rootNote, scaleState.scale]
-  );
-
-  // Generate fret positions using pure utility function
-  const positions = useMemo(() => 
-    generateFretPositions(
-      config.strings,
-      config.openNotes,
-      config.frets,
-      pressedFrets,
-      scaleNotes
-    ),
-    [config.strings, config.openNotes, config.frets, pressedFrets, scaleNotes]
-  );
-
-  const handleFretPressWithNote = useCallback(async (stringIndex: number, fret: number, note: string) => {
+  // Handle fret press/release for basic mode
+  const handleBasicFretPress = async (stringIndex: number, fret: number) => {
     handleFretPress(stringIndex, fret);
-    
-    if (mode === 'melody') {
-      await onPlayNotes([note], velocity, true);
-    } else {
-      // Chord mode - play the note and its third and fifth
-      const noteName = note.slice(0, -1);
-      const octave = parseInt(note.slice(-1));
-      const noteIndex = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].indexOf(noteName);
-      const thirdIndex = (noteIndex + 4) % 12;
-      const fifthIndex = (noteIndex + 7) % 12;
-      const thirdNote = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][thirdIndex] + octave;
-      const fifthNote = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][fifthIndex] + octave;
-      await onPlayNotes([note, thirdNote, fifthNote], velocity, true);
-    }
-  }, [mode, velocity, onPlayNotes, handleFretPress]);
+  };
 
-  const handleFretReleaseWithNote = useCallback((stringIndex: number, fret: number, note: string) => {
+  const handleBasicFretRelease = (stringIndex: number, fret: number) => {
     handleFretRelease(stringIndex, fret);
-    onReleaseKeyHeldNote(note);
-    
-    if (mode === 'chord') {
-      // Release chord notes
-      const noteName = note.slice(0, -1);
-      const octave = parseInt(note.slice(-1));
-      const noteIndex = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].indexOf(noteName);
-      const thirdIndex = (noteIndex + 4) % 12;
-      const fifthIndex = (noteIndex + 7) % 12;
-      const thirdNote = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][thirdIndex] + octave;
-      const fifthNote = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][fifthIndex] + octave;
-      onReleaseKeyHeldNote(thirdNote);
-      onReleaseKeyHeldNote(fifthNote);
-    }
-  }, [mode, onReleaseKeyHeldNote, handleFretRelease]);
+  };
 
-  const handleSustainChange = useCallback((newSustain: boolean) => {
-    // This state is now managed by useInstrumentState
-    // setSustain(newSustain);
-    onSustainChange(newSustain);
-  }, [onSustainChange]);
+  const handleBasicPlayNote = async (note: string) => {
+    await onPlayNotes([note], velocity, true);
+  };
+
+  const handleBasicReleaseNote = (note: string) => {
+    onReleaseKeyHeldNote(note);
+  };
+
+  // Handle note press/release for simple note mode
+  const handleNotePress = (note: string) => {
+    const newPressedNotes = new Set(pressedNotes);
+    newPressedNotes.add(note);
+    setPressedNotes(newPressedNotes);
+  };
+
+  const handleNoteRelease = (note: string) => {
+    const newPressedNotes = new Set(pressedNotes);
+    newPressedNotes.delete(note);
+    setPressedNotes(newPressedNotes);
+    releaseKeyHeldNote(note);
+  };
+
+  // Handle chord press/release for simple chord mode
+  const handleChordPress = (chordIndex: number) => {
+    const newPressedChords = new Set(pressedChords);
+    newPressedChords.add(chordIndex);
+    setPressedChords(newPressedChords);
+  };
+
+  const handleChordRelease = (chordIndex: number) => {
+    const newPressedChords = new Set(pressedChords);
+    newPressedChords.delete(chordIndex);
+    setPressedChords(newPressedChords);
+    
+    // Stop chord notes when releasing chord button - same 5-note logic as strum
+    let chordNotes = getChordFromDegree(
+      scaleState.rootNote,
+      scaleState.scale,
+      chordIndex,
+      chordVoicing,
+      chordModifiers
+    );
+    
+    // Ensure we have exactly 5 notes by adding additional chord tones if needed
+    if (chordNotes.length < 5) {
+      // Add octave variations of existing chord tones
+      const baseChordNotes = [...chordNotes];
+      for (let i = 0; i < baseChordNotes.length && chordNotes.length < 5; i++) {
+        const note = baseChordNotes[i];
+        const noteName = note.slice(0, -1);
+        const octave = parseInt(note.slice(-1));
+        const higherOctaveNote = `${noteName}${octave + 1}`;
+        
+        // Only add if not already in the chord
+        if (!chordNotes.includes(higherOctaveNote)) {
+          chordNotes.push(higherOctaveNote);
+        }
+      }
+    }
+    
+    // Take only the first 5 notes
+    chordNotes = chordNotes.slice(0, 5);
+    
+    for (const note of chordNotes) {
+      onReleaseKeyHeldNote(note);
+    }
+  };
+
+  // Create a guitar state object that matches the interface expected by useGuitarKeysController
+  const guitarState = {
+    mode: { type: mode, description: mode },
+    velocity,
+    sustain,
+    sustainToggle,
+    currentOctave,
+    chordVoicing,
+    chordModifiers,
+    pressedNotes,
+    pressedChords,
+    strumConfig,
+  };
+
+  // Create guitar controls object
+  const guitarControls = {
+    mode: guitarState.mode.type,
+    setMode: (mode: 'basic' | 'simple-note' | 'simple-chord') => {
+      setMode(mode);
+    },
+    velocity,
+    setVelocity,
+    sustain,
+    setSustain,
+    sustainToggle,
+    setSustainToggle,
+    currentOctave,
+    setCurrentOctave,
+    chordVoicing,
+    setChordVoicing,
+    chordModifiers,
+    setChordModifiers,
+    pressedNotes,
+    setPressedNotes,
+    pressedChords,
+    setPressedChords,
+    strumConfig,
+    setStrumSpeed,
+    setStrumDirection,
+    playNote: handleBasicPlayNote,
+    stopNote: handleBasicReleaseNote,
+    releaseKeyHeldNote,
+    stopSustainedNotes,
+    handleStrumChord,
+    handleChordRelease,
+  };
+
+  const { handleKeyDown, handleKeyUp } = useGuitarKeysController({
+    guitarState,
+    scaleState,
+    guitarControls,
+  });
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [handleKeyDown, handleKeyUp]);
+
+  const renderGuitarMode = () => {
+    switch (mode) {
+      case 'basic':
+        return (
+          <BasicFretboard
+            scaleState={scaleState}
+            velocity={velocity}
+            sustain={sustain}
+            sustainToggle={sustainToggle}
+            pressedFrets={pressedFrets}
+            onFretPress={handleBasicFretPress}
+            onFretRelease={handleBasicFretRelease}
+            onVelocityChange={setVelocity}
+            onSustainChange={setSustain}
+            onSustainToggleChange={setSustainToggle}
+            onPlayNote={handleBasicPlayNote}
+            onReleaseNote={handleBasicReleaseNote}
+            onStopSustainedNotes={stopSustainedNotes}
+          />
+        );
+      case 'simple-note':
+        return (
+          <SimpleNoteKeys
+            scaleState={scaleState}
+            currentOctave={currentOctave}
+            velocity={velocity}
+            pressedNotes={pressedNotes}
+            onNotePress={handleNotePress}
+            onNoteRelease={handleNoteRelease}
+            onPlayNote={playNote}
+            onOctaveChange={setCurrentOctave}
+            onVelocityChange={setVelocity}
+          />
+        );
+      case 'simple-chord':
+        return (
+          <SimpleChordKeys
+            scaleState={scaleState}
+            chordVoicing={chordVoicing}
+            velocity={velocity}
+            pressedChords={pressedChords}
+            chordModifiers={chordModifiers}
+            strumConfig={strumConfig}
+            onChordPress={handleChordPress}
+            onChordRelease={handleChordRelease}
+            onStrumChord={handleStrumChord}
+            onChordVoicingChange={setChordVoicing}
+            onVelocityChange={setVelocity}
+            onStrumSpeedChange={setStrumSpeed}
+            onChordModifierChange={setChordModifiers}
+          />
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
-      <div className="card-body">
-        <h3 className="card-title text-xl mb-4">Guitar</h3>
-        
-        {/* Mode Selection */}
-        <div className="flex items-center gap-4 mb-4">
-          <div className="join">
-            <button
-              onClick={() => setMode('melody')}
-              className={`btn btn-sm ${
-                mode === 'melody'
-                  ? 'btn-primary'
-                  : 'btn-outline'
-              }`}
-            >
-              Melody
-            </button>
-            <button
-              onClick={() => setMode('chord')}
-              className={`btn btn-sm ${
-                mode === 'chord'
-                  ? 'btn-primary'
-                  : 'btn-outline'
-              }`}
-            >
-              Chord (Coming Soon)
-            </button>
-          </div>
-          
-          {/* Sustain Toggle */}
+      <div className="card-body p-3">
+        <div className="flex justify-between items-center mb-1">
           <div className="flex items-center gap-2">
-            <label className="label cursor-pointer">
-              <input
-                type="checkbox"
-                checked={sustain}
-                onChange={(e) => handleSustainChange(e.target.checked)}
-                className="checkbox checkbox-sm"
-              />
-              <span className="label-text ml-2">Sustain</span>
-            </label>
+            <h3 className="card-title text-base">Guitar Controls</h3>
           </div>
-        </div>
-        
-        {/* Velocity Control */}
-        <div className="flex items-center gap-2 mb-4">
-          <label className="label">
-            <span className="label-text">Velocity: {Math.round(velocity * 9)}</span>
-          </label>
-          <input
-            type="range"
-            min="1"
-            max="9"
-            value={Math.round(velocity * 9)}
-            onChange={(e) => handleVelocityChange(parseInt(e.target.value) / 9)}
-            className="range range-primary w-32"
-          />
+
+          <div className="flex gap-3 flex-wrap justify-end">
+            <div className="block join">
+              <button
+                onClick={() => setMode('basic')}
+                className={`btn btn-sm join-item touch-manipulation ${mode === 'basic' ? 'btn-primary' : 'btn-outline'}`}
+              >
+                Basic
+              </button>
+              <button
+                onClick={() => setMode('simple-note')}
+                className={`btn btn-sm join-item touch-manipulation ${mode === 'simple-note' ? 'btn-primary' : 'btn-outline'}`}
+              >
+                Simple - Note
+              </button>
+              <button
+                onClick={() => setMode('simple-chord')}
+                className={`btn btn-sm join-item touch-manipulation ${mode === 'simple-chord' ? 'btn-primary' : 'btn-outline'}`}
+              >
+                Simple - Chord
+              </button>
+            </div>
+          </div>
         </div>
 
-        <FretboardBase
-          config={config}
-          positions={positions}
-          onFretPress={handleFretPressWithNote}
-          onFretRelease={handleFretReleaseWithNote}
-          velocity={velocity}
-          onVelocityChange={handleVelocityChange}
-          className="guitar-fretboard"
-        />
+        {renderGuitarMode()}
       </div>
     </div>
   );
