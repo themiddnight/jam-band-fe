@@ -108,12 +108,31 @@ export default function Guitar({
     // Take only the first 5 notes
     chordNotes = chordNotes.slice(0, 5);
     
-    // Play notes with strum timing
-    const noteOrder = direction === 'up' ? chordNotes : [...chordNotes].reverse();
+    // Sort notes by pitch (low to high) for proper strumming
+    chordNotes.sort((a, b) => {
+      const noteA = a.slice(0, -1);
+      const octaveA = parseInt(a.slice(-1));
+      const noteB = b.slice(0, -1);
+      const octaveB = parseInt(b.slice(-1));
+      
+      if (octaveA !== octaveB) {
+        return octaveA - octaveB;
+      }
+      
+      // Simple note comparison (C < D < E < F < G < A < B)
+      const noteOrder = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+      return noteOrder.indexOf(noteA) - noteOrder.indexOf(noteB);
+    });
+    
+    // Play notes with strum timing - up strum plays high to low (like real guitar)
+    const noteOrder = direction === 'up' ? [...chordNotes].reverse() : chordNotes;
+    
+    // Use 70% velocity for strum up (,) button
+    const strumVelocity = direction === 'up' ? velocity * 0.7 : velocity;
     
     for (let i = 0; i < noteOrder.length; i++) {
       setTimeout(async () => {
-        await onPlayNotes([noteOrder[i]], velocity, true);
+        await onPlayNotes([noteOrder[i]], strumVelocity, true);
       }, i * strumConfig.speed);
     }
   };
@@ -127,8 +146,9 @@ export default function Guitar({
     handleFretRelease(stringIndex, fret);
   };
 
-  const handleBasicPlayNote = async (note: string) => {
-    await onPlayNotes([note], velocity, true);
+  const handleBasicPlayNote = async (note: string, customVelocity?: number) => {
+    const noteVelocity = customVelocity !== undefined ? customVelocity : velocity;
+    await onPlayNotes([note], noteVelocity, true);
   };
 
   const handleBasicReleaseNote = (note: string) => {

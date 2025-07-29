@@ -15,7 +15,7 @@ interface SimpleNoteKeysProps {
   pressedNotes: Set<string>;
   onNotePress: (note: string) => void;
   onNoteRelease: (note: string) => void;
-  onPlayNote: (note: string) => void;
+  onPlayNote: (note: string, velocity?: number) => void;
   onOctaveChange: (octave: number) => void;
   onVelocityChange: (velocity: number) => void;
 }
@@ -133,20 +133,20 @@ export const SimpleNoteKeys: React.FC<SimpleNoteKeysProps> = ({
           <div className="flex justify-center gap-4 mb-4">
             <button
               onMouseDown={() => {
-                // Play all pressed notes
+                // Play all pressed notes with 70% velocity for ',' button
                 for (const note of pressedNotes) {
-                  onPlayNote(note);
+                  onPlayNote(note, velocity * 0.7);
                 }
               }}
               className="btn btn-primary btn-lg"
             >
-              Play Notes <kbd className="kbd kbd-sm">{getKeyDisplayName(',')}</kbd>
+              Play Notes (70%) <kbd className="kbd kbd-sm">{getKeyDisplayName(',')}</kbd>
             </button>
             <button
               onMouseDown={() => {
-                // Play all pressed notes
+                // Play all pressed notes with full velocity
                 for (const note of pressedNotes) {
-                  onPlayNote(note);
+                  onPlayNote(note, velocity);
                 }
               }}
               className="btn btn-secondary btn-lg"

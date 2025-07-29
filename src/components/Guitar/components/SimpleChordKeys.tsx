@@ -156,25 +156,25 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
           <div className="flex justify-center gap-4 mb-4">
             <button
               onMouseDown={() => {
-                // Strum all pressed chords down
-                for (const chordIndex of pressedChords) {
-                  onStrumChord(chordIndex, 'down');
-                }
-              }}
-              className="btn btn-primary btn-lg"
-            >
-              Strum Down <kbd className="kbd kbd-sm">{getKeyDisplayName(',')}</kbd>
-            </button>
-            <button
-              onMouseDown={() => {
-                // Strum all pressed chords up
+                // Strum all pressed chords up (,) - uses 70% velocity
                 for (const chordIndex of pressedChords) {
                   onStrumChord(chordIndex, 'up');
                 }
               }}
+              className="btn btn-primary btn-lg"
+            >
+              Strum Up (70%) <kbd className="kbd kbd-sm">{getKeyDisplayName(',')}</kbd>
+            </button>
+            <button
+              onMouseDown={() => {
+                // Strum all pressed chords down (.)
+                for (const chordIndex of pressedChords) {
+                  onStrumChord(chordIndex, 'down');
+                }
+              }}
               className="btn btn-secondary btn-lg"
             >
-              Strum Up <kbd className="kbd kbd-sm">{getKeyDisplayName('.')}</kbd>
+              Strum Down <kbd className="kbd kbd-sm">{getKeyDisplayName('.')}</kbd>
             </button>
           </div>
 

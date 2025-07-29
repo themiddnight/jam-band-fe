@@ -32,7 +32,7 @@ interface UseGuitarKeysControllerProps {
     strumConfig: { speed: number; direction: 'up' | 'down'; isActive: boolean };
     setStrumSpeed: (speed: number) => void;
     setStrumDirection: (direction: 'up' | 'down') => void;
-    playNote: (note: string, isKeyHeld?: boolean) => Promise<void>;
+    playNote: (note: string, velocity?: number) => Promise<void>;
     stopNote: (note: string) => void;
     releaseKeyHeldNote: (note: string) => void;
     stopSustainedNotes: () => void;
@@ -132,9 +132,10 @@ export const useGuitarKeysController = ({
 
         // Play note
         if (key === ',' || key === '.') {
-          // Play all pressed notes
+          // Play all pressed notes with velocity adjustment for ',' key
           for (const note of guitarState.pressedNotes) {
-            await guitarControls.playNote(note, true);
+            const noteVelocity = key === ',' ? guitarState.velocity * 0.7 : guitarState.velocity;
+            await guitarControls.playNote(note, noteVelocity);
           }
           return;
         }
@@ -162,7 +163,7 @@ export const useGuitarKeysController = ({
 
         // Strum controls
         if (key === ',' || key === '.') {
-          const direction = key === ',' ? 'down' : 'up';
+          const direction = key === ',' ? 'up' : 'down';
           guitarControls.setStrumDirection(direction);
           // Play all pressed chords with strum effect
           for (const chordIndex of guitarState.pressedChords) {

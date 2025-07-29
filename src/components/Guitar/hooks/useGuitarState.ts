@@ -49,8 +49,9 @@ export const useGuitarState = ({
     onSustainToggleChange?.(newSustainToggle);
   }, [onSustainToggleChange]);
 
-  const playNote = useCallback(async (note: string, isKeyHeld: boolean = true) => {
-    await onPlayNotes([note], velocity, isKeyHeld);
+  const playNote = useCallback(async (note: string, customVelocity?: number) => {
+    const noteVelocity = customVelocity !== undefined ? customVelocity : velocity;
+    await onPlayNotes([note], noteVelocity, true);
   }, [onPlayNotes, velocity]);
 
   const stopNote = useCallback((note: string) => {
