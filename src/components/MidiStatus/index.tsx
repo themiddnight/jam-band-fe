@@ -73,7 +73,7 @@ export default function MidiStatus({
     const timeout = setTimeout(() => {
       setShowTooltip(false);
     }, 300); // 300ms delay before hiding
-    setTooltipTimeout(timeout);
+    setTooltipTimeout(timeout as unknown as number);
   };
 
   const getStatusBadge = () => {

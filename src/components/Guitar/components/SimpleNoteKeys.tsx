@@ -1,8 +1,9 @@
 import { useMemo } from "react";
-import { useTouchEvents } from "../../../hooks/useTouchEvents";
 import { getKeyDisplayName, DEFAULT_GUITAR_SHORTCUTS } from "../../../constants/guitarShortcuts";
 import type { Scale } from "../../../hooks/useScaleState";
-import type { GuitarNote } from "../types/guitar";
+import type { GuitarNote, GuitarState } from "../types/guitar";
+import { VirtualKeyButton } from "../../shared/VirtualKeyButton";
+import { usePlayButtonTouchEvents } from "../../../hooks/usePlayButtonTouchEvents";
 
 interface SimpleNoteKeysProps {
   scaleState: {
@@ -12,105 +13,97 @@ interface SimpleNoteKeysProps {
   };
   currentOctave: number;
   velocity: number;
-  pressedNotes: Set<string>;
-  onNotePress: (note: string) => void;
-  onNoteRelease: (note: string) => void;
-  onPlayNote: (note: string, velocity?: number) => void;
   onOctaveChange: (octave: number) => void;
   onVelocityChange: (velocity: number) => void;
+  // New props for string-based behavior
+  handleNotePress: (stringId: 'lower' | 'higher', note: string) => void;
+  handleNoteRelease: (stringId: 'lower' | 'higher', note: string) => void;
+  handlePlayButtonPress: (stringId: 'lower' | 'higher', customVelocity?: number) => void;
+  handleHammerOnPress: (stringId: 'lower' | 'higher', note: string) => void;
+  guitarState: GuitarState;
 }
 
 export const SimpleNoteKeys: React.FC<SimpleNoteKeysProps> = ({
   scaleState,
   currentOctave,
   velocity,
-  pressedNotes,
-  onNotePress,
-  onNoteRelease,
-  onPlayNote,
   onOctaveChange,
   onVelocityChange,
+  handleNotePress,
+  handleNoteRelease,
+  handlePlayButtonPress,
+  handleHammerOnPress,
+  guitarState,
 }) => {
   const shortcuts = DEFAULT_GUITAR_SHORTCUTS;
 
+  // Create touch handlers for play buttons
+  const playNotes70TouchHandlers = usePlayButtonTouchEvents({
+    onPlay: () => {
+      // Play notes for both strings with 70% velocity
+      handlePlayButtonPress('lower', velocity * 0.7);
+      handlePlayButtonPress('higher', velocity * 0.7);
+    }
+  });
+
+  const playNotesFullTouchHandlers = usePlayButtonTouchEvents({
+    onPlay: () => {
+      // Play notes for both strings with full velocity
+      handlePlayButtonPress('lower', velocity);
+      handlePlayButtonPress('higher', velocity);
+    }
+  });
+
   // Generate note keys for both octaves
   const noteKeys = useMemo(() => {
-    const keys: GuitarNote[] = [];
+    const baseOctaveNoteKeys: GuitarNote[] = [];
+    const higherOctaveNoteKeys: GuitarNote[] = [];
     
-    // Lower octave notes (ASDFGHJ)
-    const lowerOctaveNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, currentOctave);
-    const lowerOctaveKeys = shortcuts.lowerOctaveNotes.key.split('');
+    // Get scale notes for current and next octaves
+    const currentScaleNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, currentOctave);
+    const nextOctaveScaleNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, currentOctave + 1);
+    const upperOctaveScaleNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, currentOctave + 2);
     
-    lowerOctaveNotes.forEach((note, index) => {
-      if (lowerOctaveKeys[index]) {
-        keys.push({
+    // Base octave notes (ASDFGHJKL;') - 11 keys
+    // Use pattern: [...currentScaleNotes, ...nextOctaveScaleNotes]
+    const baseOctaveNotes = [...currentScaleNotes, ...nextOctaveScaleNotes];
+    const baseOctaveKeyChars = shortcuts.lowerOctaveNotes.key.split('');
+    
+    baseOctaveKeyChars.forEach((keyChar, index) => {
+      if (index < baseOctaveNotes.length) {
+        const note = baseOctaveNotes[index];
+        const octave = index < currentScaleNotes.length ? currentOctave : currentOctave + 1;
+        const isPressed = guitarState.strings.lower.pressedNotes.has(note);
+        baseOctaveNoteKeys.push({
           note,
-          octave: currentOctave,
-          isPressed: pressedNotes.has(note),
-          keyboardKey: lowerOctaveKeys[index],
+          octave,
+          isPressed,
+          keyboardKey: keyChar,
         });
       }
     });
 
-    // Higher octave notes (QWERTYU)
-    const higherOctaveNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, currentOctave + 1);
-    const higherOctaveKeys = shortcuts.higherOctaveNotes.key.split('');
+    // Higher octave notes (QWERTYUIOP[]) - 12 keys
+    // Use pattern: [...nextOctaveScaleNotes, ...upperOctaveScaleNotes]
+    const higherOctaveNotes = [...nextOctaveScaleNotes, ...upperOctaveScaleNotes];
+    const higherOctaveKeyChars = shortcuts.higherOctaveNotes.key.split('');
     
-    higherOctaveNotes.forEach((note, index) => {
-      if (higherOctaveKeys[index]) {
-        keys.push({
+    higherOctaveKeyChars.forEach((keyChar, index) => {
+      if (index < higherOctaveNotes.length) {
+        const note = higherOctaveNotes[index];
+        const octave = index < nextOctaveScaleNotes.length ? currentOctave + 1 : currentOctave + 2;
+        const isPressed = guitarState.strings.higher.pressedNotes.has(note);
+        higherOctaveNoteKeys.push({
           note,
-          octave: currentOctave + 1,
-          isPressed: pressedNotes.has(note),
-          keyboardKey: higherOctaveKeys[index],
+          octave,
+          isPressed,
+          keyboardKey: keyChar,
         });
       }
     });
 
-    return keys;
-  }, [scaleState, currentOctave, pressedNotes, shortcuts]);
-
-  // Memoized note button component
-  const NoteButton = ({ noteKey }: { noteKey: GuitarNote }) => {
-    const touchHandlers = useTouchEvents(
-      () => onNotePress(noteKey.note),
-      () => onNoteRelease(noteKey.note)
-    );
-
-    return (
-      <button
-        onMouseDown={() => onNotePress(noteKey.note)}
-        onMouseUp={() => onNoteRelease(noteKey.note)}
-        onMouseLeave={() => onNoteRelease(noteKey.note)}
-        ref={touchHandlers.ref}
-        onContextMenu={touchHandlers.onContextMenu}
-        className={`w-16 h-20 border-2 border-gray-300 rounded-lg
-                transition-all duration-100 focus:outline-none flex flex-col justify-between p-1
-                touch-manipulation select-none
-                ${
-                  noteKey.isPressed
-                    ? "bg-blue-500 text-white border-blue-600 scale-95 shadow-inner"
-                    : "bg-blue-100 border-blue-300 hover:bg-blue-200 hover:border-blue-400 active:bg-blue-300"
-                }`}
-        style={{
-          WebkitTapHighlightColor: 'transparent',
-          WebkitTouchCallout: 'none',
-          WebkitUserSelect: 'none',
-          touchAction: 'manipulation'
-        }}
-      >
-        <div className={`text-xs ${noteKey.isPressed ? 'text-blue-200' : 'text-gray-500'}`}>
-          {noteKey.keyboardKey?.toUpperCase()}
-        </div>
-        <div className={`text-sm font-semibold ${noteKey.isPressed ? 'text-white' : 'text-gray-700'}`}>
-          {noteKey.note}
-        </div>
-        <div className={`text-xs ${noteKey.isPressed ? 'text-blue-200' : 'text-gray-500'}`}>
-          {noteKey.octave}
-        </div>
-      </button>
-    );
-  };
+    return { baseOctaveKeys: baseOctaveNoteKeys, higherOctaveKeys: higherOctaveNoteKeys };
+  }, [scaleState, currentOctave, guitarState.strings, shortcuts]);
 
   return (
     <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
@@ -122,34 +115,100 @@ export const SimpleNoteKeys: React.FC<SimpleNoteKeysProps> = ({
         </div>
 
         <div className="bg-neutral p-4 rounded-lg shadow-2xl">
-          {/* Note Keys */}
-          <div className="grid grid-cols-7 gap-2 mb-4">
-            {noteKeys.map((noteKey, index) => (
-              <NoteButton key={index} noteKey={noteKey} />
-            ))}
+          {/* Note Keys - Separated into two rows */}
+          <div className="flex flex-col gap-4 mb-4">
+            {/* Higher octave row (QWERTYUIOP[]) */}
+            {noteKeys.higherOctaveKeys.length > 0 && (
+              <div className="flex justify-center gap-1">
+                {noteKeys.higherOctaveKeys.map((noteKey, index) => (
+                  <VirtualKeyButton
+                    key={`higher-${index}`}
+                    keyboardKey={noteKey.keyboardKey}
+                    note={noteKey.note}
+                    isPressed={noteKey.isPressed}
+                    onPress={() => {
+                      // Always try hammer-on first if within window, regardless of key held state
+                      const string = guitarState.strings.higher;
+                      const currentTime = Date.now();
+                      const isHammerOnWindow = currentTime - string.lastPlayTime <= guitarState.hammerOnState.windowMs;
+                      
+                      if (string.isHammerOnEnabled && isHammerOnWindow && string.lastPlayedNote !== noteKey.note) {
+                        // Try hammer-on - let the hook determine if it's valid
+                        handleHammerOnPress('higher', noteKey.note);
+                      } else {
+                        // Normal note press
+                        handleNotePress('higher', noteKey.note);
+                      }
+                    }}
+                    onRelease={() => handleNoteRelease('higher', noteKey.note)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Base octave row (ASDFGHJKL;') */}
+            {noteKeys.baseOctaveKeys.length > 0 && (
+              <div className="flex justify-center gap-1">
+                {noteKeys.baseOctaveKeys.map((noteKey, index) => (
+                  <VirtualKeyButton
+                    key={`base-${index}`}
+                    keyboardKey={noteKey.keyboardKey}
+                    note={noteKey.note}
+                    isPressed={noteKey.isPressed}
+                    onPress={() => {
+                      // Always try hammer-on first if within window, regardless of key held state
+                      const string = guitarState.strings.lower;
+                      const currentTime = Date.now();
+                      const isHammerOnWindow = currentTime - string.lastPlayTime <= guitarState.hammerOnState.windowMs;
+                      
+                      if (string.isHammerOnEnabled && isHammerOnWindow && string.lastPlayedNote !== noteKey.note) {
+                        // Try hammer-on - let the hook determine if it's valid
+                        handleHammerOnPress('lower', noteKey.note);
+                      } else {
+                        // Normal note press
+                        handleNotePress('lower', noteKey.note);
+                      }
+                    }}
+                    onRelease={() => handleNoteRelease('lower', noteKey.note)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Play Buttons */}
           <div className="flex justify-center gap-4 mb-4">
             <button
               onMouseDown={() => {
-                // Play all pressed notes with 70% velocity for ',' button
-                for (const note of pressedNotes) {
-                  onPlayNote(note, velocity * 0.7);
-                }
+                // Play notes for both strings with 70% velocity
+                handlePlayButtonPress('lower', velocity * 0.7);
+                handlePlayButtonPress('higher', velocity * 0.7);
               }}
-              className="btn btn-primary btn-lg"
+              {...playNotes70TouchHandlers}
+              className="btn btn-primary btn-lg touch-manipulation"
+              style={{
+                WebkitTapHighlightColor: 'transparent',
+                WebkitTouchCallout: 'none',
+                WebkitUserSelect: 'none',
+                touchAction: 'manipulation'
+              }}
             >
               Play Notes (70%) <kbd className="kbd kbd-sm">{getKeyDisplayName(',')}</kbd>
             </button>
             <button
               onMouseDown={() => {
-                // Play all pressed notes with full velocity
-                for (const note of pressedNotes) {
-                  onPlayNote(note, velocity);
-                }
+                // Play notes for both strings with full velocity
+                handlePlayButtonPress('lower', velocity);
+                handlePlayButtonPress('higher', velocity);
               }}
-              className="btn btn-secondary btn-lg"
+              {...playNotesFullTouchHandlers}
+              className="btn btn-secondary btn-lg touch-manipulation"
+              style={{
+                WebkitTapHighlightColor: 'transparent',
+                WebkitTouchCallout: 'none',
+                WebkitUserSelect: 'none',
+                touchAction: 'manipulation'
+              }}
             >
               Play Notes <kbd className="kbd kbd-sm">{getKeyDisplayName('.')}</kbd>
             </button>
@@ -200,8 +259,14 @@ export const SimpleNoteKeys: React.FC<SimpleNoteKeysProps> = ({
 
           {/* Instructions */}
           <div className="text-center text-sm text-gray-600 mt-4">
-            <p>Hold note keys (ASDFGHJ/QWERTYU) then press play buttons (,.) to play notes</p>
-            <p>Release note keys to stop the sound</p>
+            <p>1. Hold note keys (ASDFGHJKL;' / QWERTYUIOP[]) then press play buttons (,.) to play notes</p>
+            <p>2. After playing, press any note within 200ms for hammer-on (70% velocity)</p>
+            <p>3. Or lift the active note while holding lower note for pull-off (70% velocity)</p>
+            <p>4. Chain hammer-on/pull-off continuously - each action resets the 200ms timer</p>
+            <p>5. Release all note keys to stop the sound</p>
+            <p className="text-xs text-blue-600 mt-2">
+              🎸 Guitar Mode: Real guitar behavior with chaining hammer-on/pull-off techniques
+            </p>
           </div>
         </div>
       </div>

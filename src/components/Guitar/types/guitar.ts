@@ -21,7 +21,7 @@ export interface GuitarChord {
 }
 
 export interface GuitarMode {
-  type: 'basic' | 'simple-note' | 'simple-chord';
+  type: 'basic' | 'melody' | 'chord';
   description: string;
 }
 
@@ -29,6 +29,23 @@ export interface StrumConfig {
   speed: number; // milliseconds between notes
   direction: 'up' | 'down';
   isActive: boolean;
+}
+
+// New types for guitar string behavior
+export interface GuitarString {
+  id: 'lower' | 'higher';
+  pressedNotes: Set<string>;
+  activeNote: string | null;
+  lastPlayedNote: string | null;
+  lastPlayTime: number;
+  isHammerOnEnabled: boolean;
+}
+
+export interface HammerOnState {
+  isEnabled: boolean;
+  lastPlayTime: number;
+  lastPlayedNote: string | null;
+  windowMs: number;
 }
 
 export interface GuitarState {
@@ -42,4 +59,10 @@ export interface GuitarState {
   pressedNotes: Set<string>;
   pressedChords: Set<number>;
   strumConfig: StrumConfig;
+  // New properties for string behavior
+  strings: {
+    lower: GuitarString;
+    higher: GuitarString;
+  };
+  hammerOnState: HammerOnState;
 } 

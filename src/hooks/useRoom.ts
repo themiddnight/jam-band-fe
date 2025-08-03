@@ -10,6 +10,8 @@ import { useMidiController } from "./useMidiController";
 import { useRoomQuery } from "../services/useRooms";
 import { InstrumentCategory } from "../constants/instruments";
 
+
+
 export const useRoom = () => {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
@@ -173,18 +175,23 @@ export const useRoom = () => {
     };
   }, [socketCleanup]);
 
-  // Cleanup old playing indicators
+  // Cleanup old playing indicators - optimized to prevent unnecessary re-renders
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
       setPlayingIndicators(prev => {
+        let hasChanges = false;
         const newMap = new Map(prev);
+        
         for (const [username, indicator] of newMap.entries()) {
           if (now - indicator.timestamp > 200) { // Remove after 200ms
             newMap.delete(username);
+            hasChanges = true;
           }
         }
-        return newMap;
+        
+        // Only return new Map if there were actual changes
+        return hasChanges ? newMap : prev;
       });
     }, 100); // Check every 100ms
 
@@ -317,14 +324,34 @@ export const useRoom = () => {
 
   // Debounce mechanism to prevent infinite loops
   const lastPreloadTime = useRef<number>(0);
-  const PRELOAD_DEBOUNCE_MS = 1000; // Minimum 1 second between preload attempts
+  const PRELOAD_DEBOUNCE_MS = 500; // Reduced to 500ms since we're only checking on instrument changes
 
   // Memoize room users to prevent effect from running too frequently
   const roomUsers = useMemo(() => {
-    return currentRoom?.users || [];
+    if (!currentRoom?.users) return [];
+    
+    // Create a stable reference by serializing user data that matters for preloading
+    return currentRoom.users.map(user => ({
+      id: user.id,
+      username: user.username,
+      currentInstrument: user.currentInstrument,
+      currentCategory: user.currentCategory
+    }));
   }, [currentRoom?.users]);
 
-  // Preload all room instruments when room data changes
+  // Create a more stable dependency for preloading - only track instrument changes
+  const instrumentChanges = useMemo(() => {
+    if (!currentRoom?.users) return '';
+    
+    // Create a hash of all user instruments to detect changes
+    return currentRoom.users
+      .filter(user => user.currentInstrument && user.currentCategory)
+      .map(user => `${user.id}:${user.currentInstrument}:${user.currentCategory}`)
+      .sort()
+      .join('|');
+  }, [currentRoom?.users]);
+
+  // Preload all room instruments when instrument changes occur
   useEffect(() => {
     const now = Date.now();
 
@@ -340,17 +367,14 @@ export const useRoom = () => {
 
     // If no users have instruments set, don't run at all
     if (usersWithInstruments.length === 0) {
-      console.log(`📭 No users with instruments to preload`);
       return;
     }
 
     // Debounce check
     if ((now - lastPreloadTime.current) <= PRELOAD_DEBOUNCE_MS) {
-      console.log(`⏸️ Skipping preload check - debounced (last run ${now - lastPreloadTime.current}ms ago)`);
       return;
     }
 
-    console.log(`🔍 [${now}] Checking ${roomUsers.length} users for instrument preloading`);
     lastPreloadTime.current = now;
 
     const instrumentsToPreload = usersWithInstruments
@@ -358,11 +382,9 @@ export const useRoom = () => {
         const instrumentKey = `${user.id}-${user.currentInstrument}-${user.currentCategory}`;
         // Only preload if we haven't already preloaded this exact instrument for this user
         if (preloadedInstruments.current.has(instrumentKey)) {
-          console.log(`⏭️ Skipping user ${user.username} - ${user.currentInstrument} already preloaded`);
           return false;
         }
 
-        console.log(`✅ Will preload ${user.currentInstrument} (${user.currentCategory}) for user ${user.username}`);
         return true;
       })
       .map(user => {
@@ -379,26 +401,33 @@ export const useRoom = () => {
       });
 
     if (instrumentsToPreload.length > 0) {
-      console.log(`🎵 Preloading ${instrumentsToPreload.length} new instruments for room users:`, instrumentsToPreload);
+      console.log(`🎵 Preloading ${instrumentsToPreload.length} new instruments for room users`);
       preloadRoomInstruments(instrumentsToPreload);
-    } else {
-      console.log(`📭 No new instruments to preload`);
     }
-  }, [roomUsers, isAudioContextReady]); // Removed preloadRoomInstruments from deps
+  }, [instrumentChanges, isAudioContextReady, preloadRoomInstruments]);
 
   // Handle incoming notes from other users with deduplication
   const recentReceivedNotes = useRef<Map<string, number>>(new Map());
   const NOTE_RECEIVE_DEDUPE_WINDOW = 50; // 50ms window to prevent duplicate processing
 
-  // Handle playing indicators for all users (including self)
+  // Handle playing indicators for all users (including self) - optimized
   const handleNotePlayed = useCallback((data: { username: string; velocity: number }) => {
     setPlayingIndicators(prev => {
-      const newMap = new Map(prev);
-      newMap.set(data.username, {
+      const existing = prev.get(data.username);
+      const newIndicator = {
         velocity: data.velocity,
         timestamp: Date.now()
-      });
-      return newMap;
+      };
+      
+      // Only update if the data has actually changed
+      if (!existing || existing.velocity !== newIndicator.velocity || 
+          Math.abs(existing.timestamp - newIndicator.timestamp) > 10) {
+        const newMap = new Map(prev);
+        newMap.set(data.username, newIndicator);
+        return newMap;
+      }
+      
+      return prev;
     });
   }, []);
 

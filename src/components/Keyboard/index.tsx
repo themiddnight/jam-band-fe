@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { useVirtualKeyboard } from "./hooks/useVirtualKeyboard";
 import { useKeyboardKeysController } from "./hooks/useKeyboardKeysController";
 import { useKeyboardState } from "./hooks/useKeyboardState";
-import { useTouchEvents } from "../../hooks/useTouchEvents";
 import { MelodyKeys } from "./components/MelodyKeys";
 import { ChordKeys } from "./components/ChordKeys";
 import { AdvancedKeys } from "./components/AdvancedKeys";
@@ -267,32 +266,45 @@ export default function Keyboard({
                   onStopSustainedNotes();
                 }
               }}
-              ref={useTouchEvents(
-                () => {
-                  if (keyboardStateData.sustainToggle) {
-                    // If toggle mode is active, tapping sustain stops current sustained notes
-                    onStopSustainedNotes();
-                    // Also temporarily turn off sustain to communicate with remote users
-                    // then immediately turn it back on to maintain the toggle state
-                    keyboardStateData.setSustain(false);
-                    // Use setTimeout to ensure the sustain off message is sent before turning it back on
-                    setTimeout(() => {
-                      keyboardStateData.setSustain(true);
-                    }, 10);
-                  } else {
+              onTouchStart={(e) => {
+                e.preventDefault();
+                if (keyboardStateData.sustainToggle) {
+                  // If toggle mode is active, tapping sustain stops current sustained notes
+                  onStopSustainedNotes();
+                  // Also temporarily turn off sustain to communicate with remote users
+                  // then immediately turn it back on to maintain the toggle state
+                  keyboardStateData.setSustain(false);
+                  // Use setTimeout to ensure the sustain off message is sent before turning it back on
+                  setTimeout(() => {
                     keyboardStateData.setSustain(true);
-                  }
-                },
-                () => {
-                  if (keyboardStateData.sustainToggle) {
-                    // If toggle mode is active, releasing sustain should resume sustain mode
-                    keyboardStateData.setSustain(true);
-                  } else {
-                    keyboardStateData.setSustain(false);
-                    onStopSustainedNotes();
-                  }
+                  }, 10);
+                } else {
+                  keyboardStateData.setSustain(true);
                 }
-              ).ref as React.Ref<HTMLButtonElement>}
+              }}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                if (keyboardStateData.sustainToggle) {
+                  // If toggle mode is active, releasing sustain should resume sustain mode
+                  keyboardStateData.setSustain(true);
+                } else {
+                  keyboardStateData.setSustain(false);
+                  onStopSustainedNotes();
+                }
+              }}
+              onTouchCancel={(e) => {
+                e.preventDefault();
+                if (keyboardStateData.sustainToggle) {
+                  // If toggle mode is active, releasing sustain should resume sustain mode
+                  keyboardStateData.setSustain(true);
+                } else {
+                  keyboardStateData.setSustain(false);
+                  onStopSustainedNotes();
+                }
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+              }}
               className={`btn btn-sm join-item touch-manipulation select-none ${(keyboardStateData.sustain &&
                 !keyboardStateData.sustainToggle) ||
                 (keyboardStateData.sustainToggle &&

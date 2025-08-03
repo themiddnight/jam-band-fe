@@ -56,13 +56,13 @@ export const DEFAULT_GUITAR_SHORTCUTS: GuitarShortcuts = {
   
   // Note controls (Simple - Note mode)
   lowerOctaveNotes: {
-    key: 'asdfghj',
+    key: 'asdfghjkl;\'',
     description: 'Lower octave note keys',
     category: 'octave'
   },
   
   higherOctaveNotes: {
-    key: 'qwertyu',
+    key: 'qwertyuiop[]',
     description: 'Higher octave note keys',
     category: 'octave'
   },

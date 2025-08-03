@@ -37,8 +37,7 @@ const TriadButton = memo(({
       onMouseDown={() => onTriadPress(index)}
       onMouseUp={() => onTriadRelease(index)}
       onMouseLeave={() => onTriadRelease(index)}
-      ref={triadTouchHandlers.ref}
-      onContextMenu={triadTouchHandlers.onContextMenu}
+      {...triadTouchHandlers}
       className={`w-12 h-20 border-2 border-gray-300 bg-purple-100 hover:bg-purple-200 
               transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1
               touch-manipulation
@@ -95,8 +94,7 @@ const RootNoteButton = memo(({
       onMouseDown={() => onKeyPress(keyData)}
       onMouseUp={() => onKeyRelease(keyData)}
       onMouseLeave={() => onKeyRelease(keyData)}
-      ref={keyTouchHandlers.ref}
-      onContextMenu={keyTouchHandlers.onContextMenu}
+      {...keyTouchHandlers}
       className={`
         w-12 h-20 border-2 border-gray-300 bg-white hover:bg-gray-100 
         transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1
@@ -194,8 +192,7 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
             onMouseDown={() => onModifierPress(shortcuts.dominant7.key)}
             onMouseUp={() => onModifierRelease(shortcuts.dominant7.key)}
             onMouseLeave={() => onModifierRelease(shortcuts.dominant7.key)}
-            ref={dominant7TouchHandlers.ref}
-            onContextMenu={dominant7TouchHandlers.onContextMenu}
+            {...dominant7TouchHandlers}
             className={`px-2 py-1 rounded text-xs touch-manipulation ${
               chordModifiers.has(shortcuts.dominant7.key)
                 ? "bg-yellow-500 text-black"
@@ -208,8 +205,7 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
             onMouseDown={() => onModifierPress(shortcuts.major7.key)}
             onMouseUp={() => onModifierRelease(shortcuts.major7.key)}
             onMouseLeave={() => onModifierRelease(shortcuts.major7.key)}
-            ref={major7TouchHandlers.ref}
-            onContextMenu={major7TouchHandlers.onContextMenu}
+            {...major7TouchHandlers}
             className={`px-2 py-1 rounded text-xs touch-manipulation ${
               chordModifiers.has(shortcuts.major7.key)
                 ? "bg-yellow-500 text-black"
@@ -225,8 +221,7 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
             onMouseDown={() => onModifierPress(shortcuts.sus2.key)}
             onMouseUp={() => onModifierRelease(shortcuts.sus2.key)}
             onMouseLeave={() => onModifierRelease(shortcuts.sus2.key)}
-            ref={sus2TouchHandlers.ref}
-            onContextMenu={sus2TouchHandlers.onContextMenu}
+            {...sus2TouchHandlers}
             className={`px-2 py-1 rounded text-xs touch-manipulation ${
               chordModifiers.has(shortcuts.sus2.key)
                 ? "bg-green-500 text-black"
@@ -239,8 +234,7 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
             onMouseDown={() => onModifierPress(shortcuts.sus4.key)}
             onMouseUp={() => onModifierRelease(shortcuts.sus4.key)}
             onMouseLeave={() => onModifierRelease(shortcuts.sus4.key)}
-            ref={sus4TouchHandlers.ref}
-            onContextMenu={sus4TouchHandlers.onContextMenu}
+            {...sus4TouchHandlers}
             className={`px-2 py-1 rounded text-xs touch-manipulation ${
               chordModifiers.has(shortcuts.sus4.key)
                 ? "bg-green-500 text-black"
@@ -253,8 +247,7 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
             onMouseDown={() => onModifierPress(shortcuts.majMinToggle.key)}
             onMouseUp={() => onModifierRelease(shortcuts.majMinToggle.key)}
             onMouseLeave={() => onModifierRelease(shortcuts.majMinToggle.key)}
-            ref={majMinToggleTouchHandlers.ref}
-            onContextMenu={majMinToggleTouchHandlers.onContextMenu}
+            {...majMinToggleTouchHandlers}
             className={`px-2 py-1 rounded text-xs touch-manipulation ${
               chordModifiers.has(shortcuts.majMinToggle.key)
                 ? "bg-blue-500 text-black"

@@ -167,7 +167,7 @@ export const BasicFretboard: React.FC<BasicFretboardProps> = ({
                   onStopSustainedNotes();
                 }
               }}
-              ref={useTouchEvents(
+              {...useTouchEvents(
                 () => {
                   if (sustainToggle) {
                     // If toggle mode is active, tapping sustain stops current sustained notes
@@ -192,7 +192,7 @@ export const BasicFretboard: React.FC<BasicFretboardProps> = ({
                     onStopSustainedNotes();
                   }
                 }
-              ).ref as React.Ref<HTMLButtonElement>}
+              )}
               className={`btn btn-sm join-item touch-manipulation select-none ${(sustain &&
                 !sustainToggle) ||
                 (sustainToggle &&

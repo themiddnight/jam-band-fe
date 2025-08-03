@@ -4,6 +4,7 @@ import { getKeyDisplayName, DEFAULT_GUITAR_SHORTCUTS } from "../../../constants/
 import { getChordFromDegree } from "../../../utils/musicUtils";
 import type { Scale } from "../../../hooks/useScaleState";
 import type { GuitarChord } from "../types/guitar";
+import { usePlayButtonTouchEvents } from "../../../hooks/usePlayButtonTouchEvents";
 
 interface SimpleChordKeysProps {
   scaleState: {
@@ -42,6 +43,25 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
   onChordModifierChange,
 }) => {
   const shortcuts = DEFAULT_GUITAR_SHORTCUTS;
+
+  // Create touch handlers for strum buttons
+  const strumUpTouchHandlers = usePlayButtonTouchEvents({
+    onPlay: () => {
+      // Strum all pressed chords up (,) - uses 70% velocity
+      for (const chordIndex of pressedChords) {
+        onStrumChord(chordIndex, 'up');
+      }
+    }
+  });
+
+  const strumDownTouchHandlers = usePlayButtonTouchEvents({
+    onPlay: () => {
+      // Strum all pressed chords down (.)
+      for (const chordIndex of pressedChords) {
+        onStrumChord(chordIndex, 'down');
+      }
+    }
+  });
 
   // Generate chord keys
   const chordKeys = useMemo(() => {
@@ -83,8 +103,7 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
         onMouseDown={() => onChordPress(chordKey.degree)}
         onMouseUp={() => onChordRelease(chordKey.degree)}
         onMouseLeave={() => onChordRelease(chordKey.degree)}
-        ref={touchHandlers.ref}
-        onContextMenu={touchHandlers.onContextMenu}
+        {...touchHandlers}
         className={`w-20 h-24 border-2 border-gray-300 rounded-lg
                 transition-all duration-100 focus:outline-none flex flex-col justify-between p-1
                 touch-manipulation select-none
@@ -161,7 +180,14 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
                   onStrumChord(chordIndex, 'up');
                 }
               }}
-              className="btn btn-primary btn-lg"
+              {...strumUpTouchHandlers}
+              className="btn btn-primary btn-lg touch-manipulation"
+              style={{
+                WebkitTapHighlightColor: 'transparent',
+                WebkitTouchCallout: 'none',
+                WebkitUserSelect: 'none',
+                touchAction: 'manipulation'
+              }}
             >
               Strum Up (70%) <kbd className="kbd kbd-sm">{getKeyDisplayName(',')}</kbd>
             </button>
@@ -172,7 +198,14 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
                   onStrumChord(chordIndex, 'down');
                 }
               }}
-              className="btn btn-secondary btn-lg"
+              {...strumDownTouchHandlers}
+              className="btn btn-secondary btn-lg touch-manipulation"
+              style={{
+                WebkitTapHighlightColor: 'transparent',
+                WebkitTouchCallout: 'none',
+                WebkitUserSelect: 'none',
+                touchAction: 'manipulation'
+              }}
             >
               Strum Down <kbd className="kbd kbd-sm">{getKeyDisplayName('.')}</kbd>
             </button>

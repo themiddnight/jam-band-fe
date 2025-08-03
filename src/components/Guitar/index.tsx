@@ -65,9 +65,13 @@ export default function Guitar({
     strumConfig,
     setStrumSpeed,
     setStrumDirection,
-    playNote,
     releaseKeyHeldNote,
     stopSustainedNotes,
+    // New string-based functions
+    handleNotePress,
+    handleNoteRelease,
+    handlePlayButtonPress,
+    handleHammerOnPress,
   } = guitarStateData;
 
   // Use instrument state for fretboard functionality
@@ -155,20 +159,6 @@ export default function Guitar({
     onReleaseKeyHeldNote(note);
   };
 
-  // Handle note press/release for simple note mode
-  const handleNotePress = (note: string) => {
-    const newPressedNotes = new Set(pressedNotes);
-    newPressedNotes.add(note);
-    setPressedNotes(newPressedNotes);
-  };
-
-  const handleNoteRelease = (note: string) => {
-    const newPressedNotes = new Set(pressedNotes);
-    newPressedNotes.delete(note);
-    setPressedNotes(newPressedNotes);
-    releaseKeyHeldNote(note);
-  };
-
   // Handle chord press/release for simple chord mode
   const handleChordPress = (chordIndex: number) => {
     const newPressedChords = new Set(pressedChords);
@@ -227,12 +217,15 @@ export default function Guitar({
     pressedNotes,
     pressedChords,
     strumConfig,
+    // Include the new string state
+    strings: guitarStateData.guitarState.strings,
+    hammerOnState: guitarStateData.guitarState.hammerOnState,
   };
 
   // Create guitar controls object
   const guitarControls = {
     mode: guitarState.mode.type,
-    setMode: (mode: 'basic' | 'simple-note' | 'simple-chord') => {
+    setMode: (mode: 'basic' | 'melody' | 'chord') => {
       setMode(mode);
     },
     velocity,
@@ -260,6 +253,11 @@ export default function Guitar({
     stopSustainedNotes,
     handleStrumChord,
     handleChordRelease,
+    // New string-based functions
+    handleNotePress,
+    handleNoteRelease,
+    handlePlayButtonPress,
+    handleHammerOnPress,
   };
 
   const { handleKeyDown, handleKeyUp } = useGuitarKeysController({
@@ -298,21 +296,23 @@ export default function Guitar({
             onStopSustainedNotes={stopSustainedNotes}
           />
         );
-      case 'simple-note':
+      case 'melody':
         return (
           <SimpleNoteKeys
             scaleState={scaleState}
             currentOctave={currentOctave}
             velocity={velocity}
-            pressedNotes={pressedNotes}
-            onNotePress={handleNotePress}
-            onNoteRelease={handleNoteRelease}
-            onPlayNote={playNote}
             onOctaveChange={setCurrentOctave}
             onVelocityChange={setVelocity}
+            // Pass the new string-based functions
+            handleNotePress={handleNotePress}
+            handleNoteRelease={handleNoteRelease}
+            handlePlayButtonPress={handlePlayButtonPress}
+            handleHammerOnPress={handleHammerOnPress}
+            guitarState={guitarStateData.guitarState}
           />
         );
-      case 'simple-chord':
+      case 'chord':
         return (
           <SimpleChordKeys
             scaleState={scaleState}
@@ -352,16 +352,16 @@ export default function Guitar({
                 Basic
               </button>
               <button
-                onClick={() => setMode('simple-note')}
-                className={`btn btn-sm join-item touch-manipulation ${mode === 'simple-note' ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => setMode('melody')}
+                className={`btn btn-sm join-item touch-manipulation ${mode === 'melody' ? 'btn-primary' : 'btn-outline'}`}
               >
-                Simple - Note
+                Melody
               </button>
               <button
-                onClick={() => setMode('simple-chord')}
-                className={`btn btn-sm join-item touch-manipulation ${mode === 'simple-chord' ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => setMode('chord')}
+                className={`btn btn-sm join-item touch-manipulation ${mode === 'chord' ? 'btn-primary' : 'btn-outline'}`}
               >
-                Simple - Chord
+                Chord
               </button>
             </div>
           </div>

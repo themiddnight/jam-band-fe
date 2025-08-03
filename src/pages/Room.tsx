@@ -18,7 +18,8 @@ import { Modal } from "../components/shared/Modal";
 import { preloadCriticalComponents } from "../utils/componentPreloader";
 import { getSafariUserMessage } from "../utils/webkitCompat";
 
-export default function Room() {
+const Room = React.memo(() => {
+
   const {
     // Room state
     currentRoom,
@@ -76,6 +77,31 @@ export default function Room() {
     // Audio management
     stopSustainedNotes,
   } = useRoom();
+
+  // Memoize commonProps to prevent child component re-renders
+  const commonProps = React.useMemo(() => ({
+    scaleState: {
+      rootNote: scaleState.rootNote,
+      scale: scaleState.scale,
+      getScaleNotes: scaleState.getScaleNotes,
+    },
+    onPlayNotes: handlePlayNote,
+    onStopNotes: handleStopNote,
+    onStopSustainedNotes: stopSustainedNotes,
+    onReleaseKeyHeldNote: handleReleaseKeyHeldNote,
+    onSustainChange: handleSustainChange,
+    onSustainToggleChange: handleSustainToggleChange,
+  }), [
+    scaleState.rootNote,
+    scaleState.scale,
+    scaleState.getScaleNotes,
+    handlePlayNote,
+    handleStopNote,
+    stopSustainedNotes,
+    handleReleaseKeyHeldNote,
+    handleSustainChange,
+    handleSustainToggleChange,
+  ]);
 
   // Preload critical components when component mounts
   React.useEffect(() => {
@@ -400,19 +426,6 @@ export default function Room() {
 
   function renderInstrumentControl() {
     const controlType = getCurrentInstrumentControlType();
-    const commonProps = {
-      scaleState: {
-        rootNote: scaleState.rootNote,
-        scale: scaleState.scale,
-        getScaleNotes: scaleState.getScaleNotes,
-      },
-      onPlayNotes: handlePlayNote,
-      onStopNotes: handleStopNote,
-      onStopSustainedNotes: stopSustainedNotes,
-      onReleaseKeyHeldNote: handleReleaseKeyHeldNote,
-      onSustainChange: handleSustainChange,
-      onSustainToggleChange: handleSustainToggleChange,
-    };
 
     // Show loading indicator while audio context is initializing
     if (!isAudioContextReady) {
@@ -502,4 +515,8 @@ export default function Room() {
         return <Keyboard {...commonProps} />;
     }
   }
-}
+});
+
+Room.displayName = 'Room';
+
+export default Room;
