@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback } from "react";
 import {
   melodySimpleKeys,
   melodySimpleKeysUpper,
@@ -13,99 +13,96 @@ export const useNoteStopping = (
   scaleState: ScaleState,
   virtualKeyboard: VirtualKeyboardState
 ) => {
-  const stopMelodyNote = useCallback((keyIndex: number, octaveOffset: number = 0) => {
-    const scaleNotes = scaleState.getScaleNotes(
-      scaleState.rootNote,
-      scaleState.scale,
-      keyboardState.currentOctave + octaveOffset
-    );
-    if (keyIndex < scaleNotes.length) {
-      keyboardState.releaseKeyHeldNote(scaleNotes[keyIndex]);
-    } else {
-      const nextOctaveNotes = scaleState.getScaleNotes(
+  const handleNoteStopping = useCallback(
+    (key: string) => {
+      // Check if the key is a note key
+      const isNoteKey =
+        melodySimpleKeys.includes(key) ||
+        melodySimpleKeysUpper.includes(key) ||
+        melodyAdvancedKeys.includes(key) ||
+        chordRootKeys.includes(key) ||
+        chordTriadKeys.includes(key);
+
+      if (!isNoteKey) {
+        return;
+      }
+
+      // Get scale notes for current octave
+      const currentScaleNotes = scaleState.getScaleNotes(
         scaleState.rootNote,
         scaleState.scale,
-        keyboardState.currentOctave + octaveOffset + 1
+        keyboardState.currentOctave
       );
-      if (keyIndex - scaleNotes.length < nextOctaveNotes.length) {
-        keyboardState.releaseKeyHeldNote(
-          nextOctaveNotes[keyIndex - scaleNotes.length]
-        );
-      }
-    }
-  }, [keyboardState, scaleState]);
 
-  const stopChordNote = useCallback((keyIndex: number) => {
-    const scaleNotes = scaleState.getScaleNotes(
-      scaleState.rootNote,
-      scaleState.scale,
-      keyboardState.currentOctave
-    );
-    if (keyIndex < scaleNotes.length) {
-      keyboardState.releaseKeyHeldNote(scaleNotes[keyIndex]);
-    }
-  }, [keyboardState, scaleState]);
-
-  const stopTriadChord = useCallback((keyIndex: number) => {
-    const chord = virtualKeyboard.activeTriadChords.get(keyIndex);
-    if (chord) {
-      chord.forEach((note: string) =>
-        keyboardState.releaseKeyHeldNote(note)
+      // Get scale notes for next octave
+      const nextOctaveScaleNotes = scaleState.getScaleNotes(
+        scaleState.rootNote,
+        scaleState.scale,
+        keyboardState.currentOctave + 1
       );
-      virtualKeyboard.setActiveTriadChords(
-        (prev: Map<number, string[]>) => {
-          const newMap = new Map(prev);
-          newMap.delete(keyIndex);
-          return newMap;
-        }
+
+      // Get scale notes for upper octave
+      const upperOctaveScaleNotes = scaleState.getScaleNotes(
+        scaleState.rootNote,
+        scaleState.scale,
+        keyboardState.currentOctave + 2
       );
-    }
-    virtualKeyboard.setPressedTriads((prev: Set<number>) => {
-      const newSet = new Set(prev);
-      newSet.delete(keyIndex);
-      return newSet;
-    });
-  }, [keyboardState, virtualKeyboard]);
 
-  const stopAdvancedNote = useCallback((keyIndex: number) => {
-    const noteMapping = [
-      "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
-      "C", "C#", "D", "D#", "E", "F", "F#",
-    ];
-    const octaveOffset = keyIndex >= 12 ? 1 : 0;
-    const note = `${noteMapping[keyIndex]}${keyboardState.currentOctave + octaveOffset}`;
-    keyboardState.releaseKeyHeldNote(note);
-  }, [keyboardState]);
+      let note: string | undefined;
 
-  const handleNoteStopping = useCallback((key: string) => {
-    if (keyboardState.mainMode === "simple") {
-      if (keyboardState.simpleMode === "melody") {
-        // Lower row keys
+      if (keyboardState.mode === "simple-melody") {
+        // Handle melody keys
         if (melodySimpleKeys.includes(key)) {
           const keyIndex = melodySimpleKeys.indexOf(key);
-          stopMelodyNote(keyIndex);
-        }
-        // Upper row keys
-        else if (melodySimpleKeysUpper.includes(key)) {
+          const lowerRowNotes = [...currentScaleNotes, ...nextOctaveScaleNotes];
+          note = lowerRowNotes[keyIndex];
+        } else if (melodySimpleKeysUpper.includes(key)) {
           const keyIndex = melodySimpleKeysUpper.indexOf(key);
-          stopMelodyNote(keyIndex, 1);
+          const upperRowNotes = [...nextOctaveScaleNotes, ...upperOctaveScaleNotes];
+          note = upperRowNotes[keyIndex];
         }
-      } else if (keyboardState.simpleMode === "chord") {
+      } else if (keyboardState.mode === "simple-chord") {
+        // Handle chord keys
         if (chordRootKeys.includes(key)) {
           const keyIndex = chordRootKeys.indexOf(key);
-          stopChordNote(keyIndex);
+          note = currentScaleNotes[keyIndex];
         } else if (chordTriadKeys.includes(key)) {
           const keyIndex = chordTriadKeys.indexOf(key);
-          stopTriadChord(keyIndex);
+          const chord = virtualKeyboard.activeTriadChords.get(keyIndex);
+          if (chord) {
+            chord.forEach((note: string) => keyboardState.releaseKeyHeldNote(note));
+            virtualKeyboard.setActiveTriadChords((prev: Map<number, string[]>) => {
+              const newMap = new Map(prev);
+              newMap.delete(keyIndex);
+              return newMap;
+            });
+          }
+          virtualKeyboard.setPressedTriads((prev: Set<number>) => {
+            const newSet = new Set(prev);
+            newSet.delete(keyIndex);
+            return newSet;
+          });
+          return;
+        }
+      } else if (keyboardState.mode === "basic") {
+        // Handle advanced mode keys
+        if (melodyAdvancedKeys.includes(key)) {
+          const keyIndex = melodyAdvancedKeys.indexOf(key);
+          const allNotes = [...currentScaleNotes, ...nextOctaveScaleNotes, ...upperOctaveScaleNotes];
+          note = allNotes[keyIndex];
         }
       }
-    } else if (keyboardState.mainMode === "advanced") {
-      if (melodyAdvancedKeys.includes(key)) {
-        const keyIndex = melodyAdvancedKeys.indexOf(key);
-        stopAdvancedNote(keyIndex);
+
+      if (note) {
+        keyboardState.releaseKeyHeldNote(note);
       }
-    }
-  }, [keyboardState, stopMelodyNote, stopChordNote, stopTriadChord, stopAdvancedNote]);
+    },
+    [
+      keyboardState,
+      scaleState,
+      virtualKeyboard,
+    ]
+  );
 
   return { handleNoteStopping };
 }; 

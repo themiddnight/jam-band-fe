@@ -1,10 +1,10 @@
-import { useMemo } from "react";
-import { useTouchEvents } from "../../../hooks/useTouchEvents";
+import { useMemo, memo } from "react";
 import { getKeyDisplayName, DEFAULT_GUITAR_SHORTCUTS } from "../../../constants/guitarShortcuts";
-import { getChordFromDegree } from "../../../utils/musicUtils";
+import { getChordFromDegree, getChordName } from "../../../utils/musicUtils";
 import type { Scale } from "../../../hooks/useScaleState";
 import type { GuitarChord } from "../types/guitar";
-import { usePlayButtonTouchEvents } from "../../../hooks/usePlayButtonTouchEvents";
+import { useTouchEvents } from "../../../hooks/useTouchEvents";
+import { InstrumentButton } from "../../shared/InstrumentButton";
 
 interface SimpleChordKeysProps {
   scaleState: {
@@ -13,61 +13,125 @@ interface SimpleChordKeysProps {
     getScaleNotes: (root: string, scaleType: Scale, octave: number) => string[];
   };
   chordVoicing: number;
-  velocity: number;
   pressedChords: Set<number>;
   chordModifiers: Set<string>;
-  strumConfig: { speed: number; direction: 'up' | 'down'; isActive: boolean };
   onChordPress: (chordIndex: number) => void;
   onChordRelease: (chordIndex: number) => void;
   onStrumChord: (chordIndex: number, direction: 'up' | 'down') => void;
-  onChordVoicingChange: (voicing: number) => void;
-  onVelocityChange: (velocity: number) => void;
-  onStrumSpeedChange: (speed: number) => void;
-
   onChordModifierChange: (modifiers: Set<string>) => void;
 }
+
+// Memoized chord button component - moved outside main component
+const ChordButton = memo(({
+  chordKey,
+  chordModifiers,
+  shortcuts,
+  scaleState,
+  onChordPress,
+  onChordRelease
+}: {
+  chordKey: GuitarChord;
+  chordModifiers: Set<string>;
+  shortcuts: any;
+  scaleState: {
+    rootNote: string;
+    scale: Scale;
+  };
+  onChordPress: (chordIndex: number) => void;
+  onChordRelease: (chordIndex: number) => void;
+}) => {
+  // Generate chord name based on current modifiers (like Keyboard)
+  let chordSuffix = "";
+  if (chordModifiers.has(shortcuts.sus2.key)) chordSuffix += "sus2";
+  else if (chordModifiers.has(shortcuts.sus4.key)) chordSuffix += "sus4";
+  if (chordModifiers.has(shortcuts.dominant7.key))
+    chordSuffix += chordSuffix ? "+7" : "7";
+  else if (chordModifiers.has(shortcuts.major7.key))
+    chordSuffix += chordSuffix ? "+M7" : "M7";
+  if (chordModifiers.has(shortcuts.majMinToggle.key))
+    chordSuffix = chordSuffix.includes("sus")
+      ? chordSuffix
+      : chordSuffix + (scaleState.scale === "major" ? "m" : "M");
+
+  return (
+    <InstrumentButton
+      keyboardKey={chordKey.keyboardKey}
+      chordName={getChordName(scaleState.rootNote, scaleState.scale, chordKey.degree)}
+      chordSuffix={chordSuffix}
+      isPressed={chordKey.isPressed}
+      onPress={() => onChordPress(chordKey.degree)}
+      onRelease={() => onChordRelease(chordKey.degree)}
+      variant="chord"
+      size="md"
+    />
+  );
+});
+
+ChordButton.displayName = 'ChordButton';
 
 export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
   scaleState,
   chordVoicing,
-  velocity,
   pressedChords,
   chordModifiers,
-  strumConfig,
   onChordPress,
   onChordRelease,
   onStrumChord,
-  onChordVoicingChange,
-  onVelocityChange,
-  onStrumSpeedChange,
   onChordModifierChange,
 }) => {
   const shortcuts = DEFAULT_GUITAR_SHORTCUTS;
 
   // Create touch handlers for strum buttons
-  const strumUpTouchHandlers = usePlayButtonTouchEvents({
-    onPlay: () => {
+  const strumUpTouchHandlers = useTouchEvents({
+    onPress: () => {
       // Strum all pressed chords up (,) - uses 70% velocity
       for (const chordIndex of pressedChords) {
         onStrumChord(chordIndex, 'up');
       }
-    }
+    },
+    onRelease: () => { },
+    isPlayButton: true
   });
 
-  const strumDownTouchHandlers = usePlayButtonTouchEvents({
-    onPlay: () => {
+  const strumDownTouchHandlers = useTouchEvents({
+    onPress: () => {
       // Strum all pressed chords down (.)
       for (const chordIndex of pressedChords) {
         onStrumChord(chordIndex, 'down');
       }
-    }
+    },
+    onRelease: () => { },
+    isPlayButton: true
   });
+
+  // Convert shortcut keys to modifier names for chord generation
+  const convertChordModifiers = (modifiers: Set<string>): Set<string> => {
+    const convertedModifiers = new Set<string>();
+
+    if (modifiers.has('q')) {
+      convertedModifiers.add("dominant7");
+    }
+    if (modifiers.has('w')) {
+      convertedModifiers.add("major7");
+    }
+    if (modifiers.has('e')) {
+      convertedModifiers.add("sus2");
+    }
+    if (modifiers.has('r')) {
+      convertedModifiers.add("sus4");
+    }
+    if (modifiers.has('t')) {
+      convertedModifiers.add("majMinToggle");
+    }
+
+    return convertedModifiers;
+  };
 
   // Generate chord keys
   const chordKeys = useMemo(() => {
     const keys: GuitarChord[] = [];
     const chordKeyNames = shortcuts.chordNotes.key.split('');
-    
+
     // Generate 7 chords (one for each scale degree)
     for (let i = 0; i < 7; i++) {
       const chordNotes = getChordFromDegree(
@@ -75,9 +139,9 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
         scaleState.scale,
         i,
         chordVoicing,
-        chordModifiers
+        convertChordModifiers(chordModifiers)
       );
-      
+
       keys.push({
         rootNote: scaleState.rootNote,
         scale: scaleState.scale,
@@ -91,272 +155,166 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
     return keys;
   }, [scaleState, chordVoicing, chordModifiers, pressedChords, shortcuts]);
 
-  // Memoized chord button component
-  const ChordButton = ({ chordKey }: { chordKey: GuitarChord }) => {
-    const touchHandlers = useTouchEvents(
-      () => onChordPress(chordKey.degree),
-      () => onChordRelease(chordKey.degree)
-    );
+  // Create touch handlers for modifiers (exactly like Keyboard)
+  const dominant7TouchHandlers = useTouchEvents({
+    onPress: () => onChordModifierChange(new Set([...chordModifiers, shortcuts.dominant7.key])),
+    onRelease: () => onChordModifierChange(new Set([...chordModifiers].filter(m => m !== shortcuts.dominant7.key)))
+  });
 
-    return (
-      <button
-        onMouseDown={() => onChordPress(chordKey.degree)}
-        onMouseUp={() => onChordRelease(chordKey.degree)}
-        onMouseLeave={() => onChordRelease(chordKey.degree)}
-        {...touchHandlers}
-        className={`w-20 h-24 border-2 border-gray-300 rounded-lg
-                transition-all duration-100 focus:outline-none flex flex-col justify-between p-1
-                touch-manipulation select-none
-                ${
-                  chordKey.isPressed
-                    ? "bg-purple-500 text-white border-purple-600 scale-95 shadow-inner"
-                    : "bg-purple-100 border-purple-300 hover:bg-purple-200 hover:border-purple-400 active:bg-purple-300"
-                }`}
-        style={{
-          WebkitTapHighlightColor: 'transparent',
-          WebkitTouchCallout: 'none',
-          WebkitUserSelect: 'none',
-          touchAction: 'manipulation'
-        }}
-      >
-        <div className={`text-xs ${chordKey.isPressed ? 'text-purple-200' : 'text-gray-500'}`}>
-          {chordKey.keyboardKey?.toUpperCase()}
-        </div>
-        <div className={`text-sm font-semibold ${chordKey.isPressed ? 'text-white' : 'text-gray-700'}`}>
-          {chordKey.degree + 1}
-        </div>
-        <div className={`text-xs ${chordKey.isPressed ? 'text-purple-200' : 'text-gray-500'}`}>
-          {chordKey.notes.slice(0, 3).join(' ')}
-        </div>
-      </button>
-    );
-  };
+  const major7TouchHandlers = useTouchEvents({
+    onPress: () => onChordModifierChange(new Set([...chordModifiers, shortcuts.major7.key])),
+    onRelease: () => onChordModifierChange(new Set([...chordModifiers].filter(m => m !== shortcuts.major7.key)))
+  });
 
-  // Memoized modifier button component
-  const ModifierButton = ({ 
-    keyName, 
-    label, 
-    isActive, 
-    onToggle 
-  }: { 
-    keyName: string; 
-    label: string; 
-    isActive: boolean; 
-    onToggle: () => void;
-  }) => {
-    return (
-      <button
-        onClick={onToggle}
-        className={`btn btn-sm ${isActive ? 'btn-success' : 'btn-outline'}`}
-      >
-        {label} <kbd className="kbd kbd-xs">{getKeyDisplayName(keyName)}</kbd>
-      </button>
-    );
-  };
+  const sus2TouchHandlers = useTouchEvents({
+    onPress: () => onChordModifierChange(new Set([...chordModifiers, shortcuts.sus2.key])),
+    onRelease: () => onChordModifierChange(new Set([...chordModifiers].filter(m => m !== shortcuts.sus2.key)))
+  });
+
+  const sus4TouchHandlers = useTouchEvents({
+    onPress: () => onChordModifierChange(new Set([...chordModifiers, shortcuts.sus4.key])),
+    onRelease: () => onChordModifierChange(new Set([...chordModifiers].filter(m => m !== shortcuts.sus4.key)))
+  });
+
+  const majMinToggleTouchHandlers = useTouchEvents({
+    onPress: () => onChordModifierChange(new Set([...chordModifiers, shortcuts.majMinToggle.key])),
+    onRelease: () => onChordModifierChange(new Set([...chordModifiers].filter(m => m !== shortcuts.majMinToggle.key)))
+  });
 
   return (
-    <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
-      <div className="card-body p-3">
-        <div className="flex justify-between items-center mb-1">
-          <div className="flex items-center gap-2">
-            <h3 className="card-title text-base">Simple - Chord Mode</h3>
+    <div className="flex justify-center items-center gap-10 flex-col flex-wrap sm:flex-row sm:flex-nowrap w-fit mx-auto">
+      <div className="flex flex-col gap-2">
+        {/* Chord Modifiers Display - exactly like Keyboard */}
+        <div className="text-center">
+          <p className="text-white text-sm mb-2">
+            Chord Modifiers (hold while playing triads)
+          </p>
+          <div className="flex justify-center gap-2 mb-4">
+            <button
+              onMouseDown={() => onChordModifierChange(new Set([...chordModifiers, shortcuts.dominant7.key]))}
+              onMouseUp={() => onChordModifierChange(new Set([...chordModifiers].filter(m => m !== shortcuts.dominant7.key)))}
+              onMouseLeave={() => onChordModifierChange(new Set([...chordModifiers].filter(m => m !== shortcuts.dominant7.key)))}
+              ref={dominant7TouchHandlers.ref as React.RefObject<HTMLButtonElement>}
+              className={`px-2 py-1 rounded text-xs touch-manipulation ${chordModifiers.has(shortcuts.dominant7.key)
+                ? "bg-yellow-500 text-black"
+                : "bg-gray-600 text-gray-300"
+                }`}
+            >
+              dom7 <kbd className="kbd kbd-sm">{getKeyDisplayName(shortcuts.dominant7.key)}</kbd>
+            </button>
+            <button
+              onMouseDown={() => onChordModifierChange(new Set([...chordModifiers, shortcuts.major7.key]))}
+              onMouseUp={() => onChordModifierChange(new Set([...chordModifiers].filter(m => m !== shortcuts.major7.key)))}
+              onMouseLeave={() => onChordModifierChange(new Set([...chordModifiers].filter(m => m !== shortcuts.major7.key)))}
+              ref={major7TouchHandlers.ref as React.RefObject<HTMLButtonElement>}
+              className={`px-2 py-1 rounded text-xs touch-manipulation ${chordModifiers.has(shortcuts.major7.key)
+                ? "bg-yellow-500 text-black"
+                : "bg-gray-600 text-gray-300"
+                }`}
+            >
+              maj7 <kbd className="kbd kbd-sm">{getKeyDisplayName(shortcuts.major7.key)}</kbd>
+            </button>
+
+            <button
+              onMouseDown={() => onChordModifierChange(new Set([...chordModifiers, shortcuts.sus2.key]))}
+              onMouseUp={() => onChordModifierChange(new Set([...chordModifiers].filter(m => m !== shortcuts.sus2.key)))}
+              onMouseLeave={() => onChordModifierChange(new Set([...chordModifiers].filter(m => m !== shortcuts.sus2.key)))}
+              ref={sus2TouchHandlers.ref as React.RefObject<HTMLButtonElement>}
+              className={`px-2 py-1 rounded text-xs touch-manipulation ${chordModifiers.has(shortcuts.sus2.key)
+                ? "bg-green-500 text-black"
+                : "bg-gray-600 text-gray-300"
+                }`}
+            >
+              sus2 <kbd className="kbd kbd-sm">{getKeyDisplayName(shortcuts.sus2.key)}</kbd>
+            </button>
+            <button
+              onMouseDown={() => onChordModifierChange(new Set([...chordModifiers, shortcuts.sus4.key]))}
+              onMouseUp={() => onChordModifierChange(new Set([...chordModifiers].filter(m => m !== shortcuts.sus4.key)))}
+              onMouseLeave={() => onChordModifierChange(new Set([...chordModifiers].filter(m => m !== shortcuts.sus4.key)))}
+              ref={sus4TouchHandlers.ref as React.RefObject<HTMLButtonElement>}
+              className={`px-2 py-1 rounded text-xs touch-manipulation ${chordModifiers.has(shortcuts.sus4.key)
+                ? "bg-green-500 text-black"
+                : "bg-gray-600 text-gray-300"
+                }`}
+            >
+              sus4 <kbd className="kbd kbd-sm">{getKeyDisplayName(shortcuts.sus4.key)}</kbd>
+            </button>
+            <button
+              onMouseDown={() => onChordModifierChange(new Set([...chordModifiers, shortcuts.majMinToggle.key]))}
+              onMouseUp={() => onChordModifierChange(new Set([...chordModifiers].filter(m => m !== shortcuts.majMinToggle.key)))}
+              onMouseLeave={() => onChordModifierChange(new Set([...chordModifiers].filter(m => m !== shortcuts.majMinToggle.key)))}
+              ref={majMinToggleTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
+              className={`px-2 py-1 rounded text-xs touch-manipulation ${chordModifiers.has(shortcuts.majMinToggle.key)
+                ? "bg-blue-500 text-black"
+                : "bg-gray-600 text-gray-300"
+                }`}
+            >
+              maj/min <kbd className="kbd kbd-sm">{getKeyDisplayName(shortcuts.majMinToggle.key)}</kbd>
+            </button>
           </div>
         </div>
 
-        <div className="bg-neutral p-4 rounded-lg shadow-2xl">
-          {/* Chord Keys */}
-          <div className="grid grid-cols-7 gap-2 mb-4">
-            {chordKeys.map((chordKey, index) => (
-              <ChordButton key={index} chordKey={chordKey} />
-            ))}
-          </div>
-
-          {/* Strum Buttons */}
-          <div className="flex justify-center gap-4 mb-4">
-            <button
-              onMouseDown={() => {
-                // Strum all pressed chords up (,) - uses 70% velocity
-                for (const chordIndex of pressedChords) {
-                  onStrumChord(chordIndex, 'up');
-                }
-              }}
-              {...strumUpTouchHandlers}
-              className="btn btn-primary btn-lg touch-manipulation"
-              style={{
-                WebkitTapHighlightColor: 'transparent',
-                WebkitTouchCallout: 'none',
-                WebkitUserSelect: 'none',
-                touchAction: 'manipulation'
-              }}
-            >
-              Strum Up (70%) <kbd className="kbd kbd-sm">{getKeyDisplayName(',')}</kbd>
-            </button>
-            <button
-              onMouseDown={() => {
-                // Strum all pressed chords down (.)
-                for (const chordIndex of pressedChords) {
-                  onStrumChord(chordIndex, 'down');
-                }
-              }}
-              {...strumDownTouchHandlers}
-              className="btn btn-secondary btn-lg touch-manipulation"
-              style={{
-                WebkitTapHighlightColor: 'transparent',
-                WebkitTouchCallout: 'none',
-                WebkitUserSelect: 'none',
-                touchAction: 'manipulation'
-              }}
-            >
-              Strum Down <kbd className="kbd kbd-sm">{getKeyDisplayName('.')}</kbd>
-            </button>
-          </div>
-
-          {/* Chord Modifiers */}
-          <div className="flex justify-center gap-2 mb-4 flex-wrap">
-            <ModifierButton
-              keyName={shortcuts.dominant7.key}
-              label="Dom7"
-              isActive={chordModifiers.has('dominant7')}
-              onToggle={() => {
-                const newModifiers = new Set(chordModifiers);
-                if (newModifiers.has('dominant7')) {
-                  newModifiers.delete('dominant7');
-                } else {
-                  newModifiers.add('dominant7');
-                }
-                onChordModifierChange(newModifiers);
-              }}
-            />
-            <ModifierButton
-              keyName={shortcuts.major7.key}
-              label="Maj7"
-              isActive={chordModifiers.has('major7')}
-              onToggle={() => {
-                const newModifiers = new Set(chordModifiers);
-                if (newModifiers.has('major7')) {
-                  newModifiers.delete('major7');
-                } else {
-                  newModifiers.add('major7');
-                }
-                onChordModifierChange(newModifiers);
-              }}
-            />
-            <ModifierButton
-              keyName={shortcuts.sus2.key}
-              label="Sus2"
-              isActive={chordModifiers.has('sus2')}
-              onToggle={() => {
-                const newModifiers = new Set(chordModifiers);
-                if (newModifiers.has('sus2')) {
-                  newModifiers.delete('sus2');
-                } else {
-                  newModifiers.add('sus2');
-                }
-                onChordModifierChange(newModifiers);
-              }}
-            />
-            <ModifierButton
-              keyName={shortcuts.sus4.key}
-              label="Sus4"
-              isActive={chordModifiers.has('sus4')}
-              onToggle={() => {
-                const newModifiers = new Set(chordModifiers);
-                if (newModifiers.has('sus4')) {
-                  newModifiers.delete('sus4');
-                } else {
-                  newModifiers.add('sus4');
-                }
-                onChordModifierChange(newModifiers);
-              }}
-            />
-            <ModifierButton
-              keyName={shortcuts.majMinToggle.key}
-              label="Maj/Min"
-              isActive={chordModifiers.has('majMinToggle')}
-              onToggle={() => {
-                const newModifiers = new Set(chordModifiers);
-                if (newModifiers.has('majMinToggle')) {
-                  newModifiers.delete('majMinToggle');
-                } else {
-                  newModifiers.add('majMinToggle');
-                }
-                onChordModifierChange(newModifiers);
-              }}
-            />
-          </div>
-
-          {/* Controls */}
-          <div className="flex justify-center items-center gap-3 flex-wrap">
-            {/* Voicing Controls */}
-            <div className="flex items-center gap-2">
-              <label className="label py-1">
-                <span className="label-text text-sm">
-                  Voicing: {chordVoicing}
-                </span>
-              </label>
-              <div className="join">
-                <button
-                  onClick={() => onChordVoicingChange(Math.max(-2, chordVoicing - 1))}
-                  className="btn btn-sm btn-outline join-item touch-manipulation"
-                >
-                  - <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.voicingDown.key)}</kbd>
-                </button>
-                <button
-                  onClick={() => onChordVoicingChange(Math.min(4, chordVoicing + 1))}
-                  className="btn btn-sm btn-outline join-item touch-manipulation"
-                >
-                  + <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.voicingUp.key)}</kbd>
-                </button>
-              </div>
-            </div>
-
-            {/* Strum Speed Controls */}
-            <div className="flex items-center gap-2">
-              <label className="label py-1">
-                <span className="label-text text-sm">
-                  Speed: {strumConfig.speed}ms
-                </span>
-              </label>
-              <div className="join">
-                <button
-                  onClick={() => onStrumSpeedChange(Math.max(5, strumConfig.speed - 10))}
-                  className="btn btn-sm btn-outline join-item touch-manipulation"
-                >
-                  - <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.strumSpeedDown.key)}</kbd>
-                </button>
-                <button
-                  onClick={() => onStrumSpeedChange(Math.min(100, strumConfig.speed + 10))}
-                  className="btn btn-sm btn-outline join-item touch-manipulation"
-                >
-                  + <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.strumSpeedUp.key)}</kbd>
-                </button>
-              </div>
-            </div>
-
-            {/* Velocity Control */}
-            <div className="flex items-center gap-2">
-              <label className="label py-1">
-                <span className="label-text text-sm">
-                  Velocity: {Math.round(velocity * 9)}
-                </span>
-              </label>
-              <input
-                type="range"
-                min="1"
-                max="9"
-                value={Math.round(velocity * 9)}
-                onChange={(e) => onVelocityChange(parseInt(e.target.value) / 9)}
-                className="range range-sm range-primary w-20"
-              />
+        {/* Keys - exactly like Keyboard */}
+        <div className="flex flex-col gap-4">
+          {/* Triads */}
+          <div className="text-center">
+            <p className="text-white text-sm mb-2">Triads</p>
+            <div className="flex justify-center gap-1">
+              {chordKeys.map((chordKey, index) => (
+                <ChordButton
+                  key={index}
+                  chordKey={chordKey}
+                  chordModifiers={chordModifiers}
+                  shortcuts={shortcuts}
+                  scaleState={scaleState}
+                  onChordPress={onChordPress}
+                  onChordRelease={onChordRelease}
+                />
+              ))}
             </div>
           </div>
+        </div>
+      </div>
 
-          {/* Instructions */}
-          <div className="text-center text-sm text-gray-600 mt-4">
-            <p>Hold chord keys (ASDFGHJ) then press strum buttons (,.) to play chords</p>
-            <p>Release chord keys to stop the sound</p>
-            <p>Use modifiers (QWERT) to change chord quality</p>
-          </div>
+      {/* Strum Buttons */}
+      <div className="text-center">
+        <div className="flex justify-center gap-4 flex-col lg:flex-row">
+          <button
+            onMouseDown={() => {
+              // Strum all pressed chords up (,) - uses 70% velocity
+              for (const chordIndex of pressedChords) {
+                onStrumChord(chordIndex, 'up');
+              }
+            }}
+            ref={strumUpTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
+            className="btn btn-primary btn-lg lg:btn-sm touch-manipulation"
+            style={{
+              WebkitTapHighlightColor: 'transparent',
+              WebkitTouchCallout: 'none',
+              WebkitUserSelect: 'none',
+              touchAction: 'manipulation'
+            }}
+          >
+            Strum Up <kbd className="kbd kbd-sm">{getKeyDisplayName(',')}</kbd>
+          </button>
+          <button
+            onMouseDown={() => {
+              // Strum all pressed chords down (.)
+              for (const chordIndex of pressedChords) {
+                onStrumChord(chordIndex, 'down');
+              }
+            }}
+            ref={strumDownTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
+            className="btn btn-secondary btn-lg lg:btn-sm touch-manipulation"
+            style={{
+              WebkitTapHighlightColor: 'transparent',
+              WebkitTouchCallout: 'none',
+              WebkitUserSelect: 'none',
+              touchAction: 'manipulation'
+            }}
+          >
+            Strum Down <kbd className="kbd kbd-sm">{getKeyDisplayName('.')}</kbd>
+          </button>
         </div>
       </div>
     </div>

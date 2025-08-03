@@ -11,7 +11,7 @@ export const PadButton: React.FC<PadButtonProps> = ({
   onVolumeChange,
   availableSamples = []
 }) => {
-  const touchHandlers = useTouchEvents(onPress, onRelease);
+  const touchHandlers = useTouchEvents({ onPress, onRelease });
 
   // Handle slider click to preview sound with current volume
   const handleSliderClick = (e: React.MouseEvent) => {
@@ -43,11 +43,11 @@ export const PadButton: React.FC<PadButtonProps> = ({
           ${!isSoundAvailable ? 'border-red-500' : ''}
           touch-manipulation
         `}
+        ref={touchHandlers.ref as React.RefObject<HTMLButtonElement>}
         onMouseDown={handleButtonPress}
         onMouseUp={onRelease}
         onMouseLeave={onRelease}
         disabled={!isSoundAvailable}
-        {...touchHandlers}
       >
         <span className="text-xs font-bold text-white drop-shadow-lg">
           {pad.label}

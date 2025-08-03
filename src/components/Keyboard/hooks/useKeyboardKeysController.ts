@@ -46,7 +46,7 @@ export const useKeyboardKeysController = (
       DEFAULT_KEYBOARD_SHORTCUTS.octaveUp.key,
       DEFAULT_KEYBOARD_SHORTCUTS.voicingDown.key,
       DEFAULT_KEYBOARD_SHORTCUTS.voicingUp.key,
-      DEFAULT_KEYBOARD_SHORTCUTS.toggleMelodyChord.key,
+      DEFAULT_KEYBOARD_SHORTCUTS.toggleMode.key,
       DEFAULT_KEYBOARD_SHORTCUTS.sustain.key,
       DEFAULT_KEYBOARD_SHORTCUTS.sustainToggle.key,
       ...Array.from({length: 9}, (_, i) => (i + 1).toString()),
@@ -75,12 +75,15 @@ export const useKeyboardKeysController = (
 
       // Check if the target is an input element (input, textarea, contenteditable)
       const target = event.target as HTMLElement;
-      if (
+      const isInputElement = (
         target.tagName === 'INPUT' ||
         target.tagName === 'TEXTAREA' ||
         target.contentEditable === 'true' ||
         target.closest('input, textarea, [contenteditable="true"]')
-      ) {
+      );
+      
+      // Only skip for input elements if it's not a control key
+      if (isInputElement && !controlKeys.has(key)) {
         return;
       }
 
@@ -128,6 +131,7 @@ export const useKeyboardKeysController = (
       handleNotePlaying,
       updateHeldKeys,
       noteKeys,
+      controlKeys,
     ]
   );
 
@@ -137,12 +141,15 @@ export const useKeyboardKeysController = (
 
       // Check if the target is an input element (input, textarea, contenteditable)
       const target = event.target as HTMLElement;
-      if (
+      const isInputElement = (
         target.tagName === 'INPUT' ||
         target.tagName === 'TEXTAREA' ||
         target.contentEditable === 'true' ||
         target.closest('input, textarea, [contenteditable="true"]')
-      ) {
+      );
+      
+      // Only skip for input elements if it's not a control key
+      if (isInputElement && !controlKeys.has(key)) {
         return;
       }
 

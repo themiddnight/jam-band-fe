@@ -1,8 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { FretboardBase, type FretboardConfig } from "../../shared/FretboardBase";
 import { generateFretPositions, getScaleNotes, type Scale } from "../../../utils/musicUtils";
-import { useTouchEvents } from "../../../hooks/useTouchEvents";
-import { getKeyDisplayName, DEFAULT_GUITAR_SHORTCUTS } from "../../../constants/guitarShortcuts";
 
 interface BasicFretboardProps {
   scaleState: {
@@ -17,29 +15,20 @@ interface BasicFretboardProps {
   onFretPress: (stringIndex: number, fret: number, note: string) => void;
   onFretRelease: (stringIndex: number, fret: number, note: string) => void;
   onVelocityChange: (velocity: number) => void;
-  onSustainChange: (sustain: boolean) => void;
-  onSustainToggleChange: (sustainToggle: boolean) => void;
   onPlayNote: (note: string) => void;
   onReleaseNote: (note: string) => void;
-  onStopSustainedNotes: () => void;
 }
 
 export const BasicFretboard: React.FC<BasicFretboardProps> = ({
   scaleState,
-  velocity,
   sustain,
   sustainToggle,
   pressedFrets,
   onFretPress,
   onFretRelease,
-  onVelocityChange,
-  onSustainChange,
-  onSustainToggleChange,
   onPlayNote,
   onReleaseNote,
-  onStopSustainedNotes,
 }) => {
-  const shortcuts = DEFAULT_GUITAR_SHORTCUTS;
 
   // Guitar configuration
   const config: FretboardConfig = {
@@ -108,138 +97,15 @@ export const BasicFretboard: React.FC<BasicFretboardProps> = ({
   };
 
   return (
-    <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
-      <div className="card-body p-3">
-        <div className="flex justify-between items-center mb-1">
-          <div className="flex items-center gap-2">
-            <h3 className="card-title text-base">Basic Fretboard</h3>
-          </div>
-        </div>
-
-        <div className="bg-neutral p-4 rounded-lg shadow-2xl overflow-auto">
-          <FretboardBase
-            config={config}
-            positions={positions}
-            onFretPress={handleFretPressWithNote}
-            onFretRelease={handleFretReleaseWithNote}
-            velocity={velocity}
-            onVelocityChange={onVelocityChange}
-            className="guitar-fretboard"
-          />
-        </div>
-
-        <div className="flex justify-center items-center gap-3 flex-wrap mt-1">
-          <div className="join">
-            <button
-              onMouseDown={(e) => {
-                e.preventDefault();
-                if (sustainToggle) {
-                  // If toggle mode is active, sustain button stops current sustained notes
-                  // This creates the "inverse" behavior where tapping sustain stops sound
-                  onStopSustainedNotes();
-                  // Also temporarily turn off sustain to communicate with remote users
-                  // then immediately turn it back on to maintain the toggle state
-                  onSustainChange(false);
-                  // Use setTimeout to ensure the sustain off message is sent before turning it back on
-                  setTimeout(() => {
-                    onSustainChange(true);
-                  }, 10);
-                } else {
-                  // Normal momentary sustain behavior
-                  onSustainChange(true);
-                }
-              }}
-              onMouseUp={(e) => {
-                e.preventDefault();
-                if (sustainToggle) {
-                  // If toggle mode is active, releasing sustain should resume sustain mode
-                  // This creates the "inverse" behavior where lifting sustain resumes sustain
-                  onSustainChange(true);
-                } else {
-                  // Normal momentary sustain behavior - turn off sustain
-                  onSustainChange(false);
-                  onStopSustainedNotes();
-                }
-              }}
-              onMouseLeave={() => {
-                if (!sustainToggle) {
-                  onSustainChange(false);
-                  onStopSustainedNotes();
-                }
-              }}
-              {...useTouchEvents(
-                () => {
-                  if (sustainToggle) {
-                    // If toggle mode is active, tapping sustain stops current sustained notes
-                    onStopSustainedNotes();
-                    // Also temporarily turn off sustain to communicate with remote users
-                    // then immediately turn it back on to maintain the toggle state
-                    onSustainChange(false);
-                    // Use setTimeout to ensure the sustain off message is sent before turning it back on
-                    setTimeout(() => {
-                      onSustainChange(true);
-                    }, 10);
-                  } else {
-                    onSustainChange(true);
-                  }
-                },
-                () => {
-                  if (sustainToggle) {
-                    // If toggle mode is active, releasing sustain should resume sustain mode
-                    onSustainChange(true);
-                  } else {
-                    onSustainChange(false);
-                    onStopSustainedNotes();
-                  }
-                }
-              )}
-              className={`btn btn-sm join-item touch-manipulation select-none ${(sustain &&
-                !sustainToggle) ||
-                (sustainToggle &&
-                  false) // TODO: hasSustainedNotes
-                ? "btn-warning"
-                : "btn-outline"
-                }`}
-              style={{
-                WebkitTapHighlightColor: 'transparent',
-                WebkitTouchCallout: 'none',
-                WebkitUserSelect: 'none',
-                touchAction: 'manipulation'
-              }}
-            >
-              Sustain <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.sustain.key)}</kbd>
-            </button>
-            <button
-              onClick={() => {
-                onSustainToggleChange(!sustainToggle);
-              }}
-              className={`btn btn-sm join-item touch-manipulation ${sustainToggle
-                ? "btn-success"
-                : "btn-outline"
-                }`}
-            >
-              {sustainToggle ? "🔒" : "🔓"}
-              <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.sustainToggle.key)}</kbd>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="label py-1">
-              <span className="label-text text-sm">
-                Velocity: {Math.round(velocity * 9)}
-              </span>
-            </label>
-            <input
-              type="range"
-              min="1"
-              max="9"
-              value={Math.round(velocity * 9)}
-              onChange={(e) => onVelocityChange(parseInt(e.target.value) / 9)}
-              className="range range-sm range-primary w-20"
-            />
-          </div>
-        </div>
-      </div>
+    <div className="flex flex-col gap-4">
+      {/* Fretboard */}
+      <FretboardBase
+        config={config}
+        positions={positions}
+        onFretPress={handleFretPressWithNote}
+        onFretRelease={handleFretReleaseWithNote}
+        className="guitar-fretboard"
+      />
     </div>
   );
 }; 

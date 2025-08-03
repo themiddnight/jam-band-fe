@@ -24,11 +24,11 @@ const DrumButton: React.FC<{
   onPress: () => void;
   onRelease: () => void;
 }> = ({ label, className, disabled, onPress, onRelease }) => {
-  const touchHandlers = useTouchEvents(onPress, onRelease);
+  const touchHandlers = useTouchEvents({ onPress, onRelease });
 
   return (
     <button
-      {...touchHandlers}
+      ref={touchHandlers.ref as React.RefObject<HTMLButtonElement>}
       onMouseDown={onPress}
       onMouseUp={onRelease}
       onMouseLeave={onRelease}

@@ -1,25 +1,22 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { MainMode, SimpleMode } from '../components/Keyboard/types/keyboard';
+import type { KeyboardMode } from '../components/Keyboard/types/keyboard';
 
 interface VirtualKeyboardState {
   // Main states
-  mainMode: MainMode;
-  simpleMode: SimpleMode;
+  mode: KeyboardMode;
   currentOctave: number;
   velocity: number;
   chordVoicing: number;
   
   // Actions
-  setMainMode: (mode: MainMode) => void;
-  setSimpleMode: (mode: SimpleMode) => void;
+  setMode: (mode: KeyboardMode) => void;
   setCurrentOctave: (octave: number) => void;
   setVelocity: (velocity: number) => void;
   setChordVoicing: (voicing: number) => void;
   
   // Utility actions
-  toggleMainMode: () => void;
-  toggleSimpleMode: () => void;
+  toggleMode: () => void;
   incrementOctave: () => void;
   decrementOctave: () => void;
   incrementVelocity: () => void;
@@ -32,25 +29,20 @@ export const useVirtualKeyboardStore = create<VirtualKeyboardState>()(
   persist(
     (set) => ({
       // Initial state
-      mainMode: 'simple',
-      simpleMode: 'melody',
+      mode: 'simple-melody',
       currentOctave: 2,
       velocity: 0.7,
       chordVoicing: 0,
       
       // Basic setters
-      setMainMode: (mode) => set({ mainMode: mode }),
-      setSimpleMode: (mode) => set({ simpleMode: mode }),
+      setMode: (mode) => set({ mode }),
       setCurrentOctave: (octave) => set({ currentOctave: Math.max(0, Math.min(8, octave)) }),
       setVelocity: (velocity) => set({ velocity: Math.max(0, Math.min(1, velocity)) }),
       setChordVoicing: (voicing) => set({ chordVoicing: Math.max(-2, Math.min(2, voicing)) }),
       
       // Toggle actions
-      toggleMainMode: () => set((state) => ({ 
-        mainMode: state.mainMode === 'simple' ? 'advanced' : 'simple' 
-      })),
-      toggleSimpleMode: () => set((state) => ({ 
-        simpleMode: state.simpleMode === 'melody' ? 'chord' : 'melody' 
+      toggleMode: () => set((state) => ({ 
+        mode: state.mode === 'simple-melody' ? 'simple-chord' : 'simple-melody' 
       })),
       
       // Increment/Decrement actions

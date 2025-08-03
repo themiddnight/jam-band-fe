@@ -35,20 +35,17 @@ export const VirtualKeyButton = memo<VirtualKeyButtonProps>(({
   onRelease,
   className = "",
 }) => {
-  const touchHandlers = useTouchEvents(onPress, onRelease);
+  const touchHandlers = useTouchEvents({ onPress, onRelease });
   const octave = getOctaveFromNote(note);
   const baseBgColor = getOctaveBackgroundColor(octave);
   const pressedBgColor = getPressedOctaveBackgroundColor(octave);
 
   return (
     <button
+      ref={touchHandlers.ref as React.RefObject<HTMLButtonElement>}
       onMouseDown={onPress}
       onMouseUp={onRelease}
       onMouseLeave={onRelease}
-      onTouchStart={touchHandlers.onTouchStart}
-      onTouchEnd={touchHandlers.onTouchEnd}
-      onTouchCancel={touchHandlers.onTouchCancel}
-      onContextMenu={touchHandlers.onContextMenu}
       className={`
         w-12 h-24 border-2 border-gray-300 hover:bg-gray-100 
         transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1

@@ -71,17 +71,17 @@ export const useControlKeys = (
     return false;
   }, [keyboardState]);
 
-  const handleToggleMelodyChord = useCallback((key: string) => {
-    if (key === shortcuts.toggleMelodyChord.key) {
-      if (keyboardState.mainMode === "simple") {
-        keyboardState.setSimpleMode(
-          keyboardState.simpleMode === "melody" ? "chord" : "melody"
-        );
+  const handleToggleMode = useCallback((key: string) => {
+    if (key === shortcuts.toggleMode.key) {
+      if (virtualKeyboard.mode === "simple-melody") {
+        virtualKeyboard.setMode("simple-chord");
+      } else if (virtualKeyboard.mode === "simple-chord") {
+        virtualKeyboard.setMode("simple-melody");
       }
       return true;
     }
     return false;
-  }, [keyboardState, shortcuts.toggleMelodyChord.key]);
+  }, [virtualKeyboard, shortcuts.toggleMode.key]);
 
   const handleOctaveControls = useCallback((key: string) => {
     if (key === shortcuts.octaveDown.key) {
@@ -97,36 +97,30 @@ export const useControlKeys = (
 
   const handleVoicingControls = useCallback((key: string) => {
     if (key === shortcuts.voicingDown.key) {
-      if (
-        keyboardState.mainMode === "simple" &&
-        keyboardState.simpleMode === "chord"
-      ) {
+      if (virtualKeyboard.mode === "simple-chord") {
         virtualKeyboard.setChordVoicing(Math.max(-2, virtualKeyboard.chordVoicing - 1));
       }
       return true;
     }
     if (key === shortcuts.voicingUp.key) {
-      if (
-        keyboardState.mainMode === "simple" &&
-        keyboardState.simpleMode === "chord"
-      ) {
+      if (virtualKeyboard.mode === "simple-chord") {
         virtualKeyboard.setChordVoicing(Math.min(4, virtualKeyboard.chordVoicing + 1));
       }
       return true;
     }
     return false;
-  }, [keyboardState, virtualKeyboard, shortcuts.voicingDown.key, shortcuts.voicingUp.key]);
+  }, [virtualKeyboard, shortcuts.voicingDown.key, shortcuts.voicingUp.key]);
 
   const handleAllControlKeys = useCallback((key: string) => {
     return (
       handleSustain(key) ||
       handleSustainToggle(key) ||
       handleVelocity(key) ||
-      handleToggleMelodyChord(key) ||
+      handleToggleMode(key) ||
       handleOctaveControls(key) ||
       handleVoicingControls(key)
     );
-  }, [handleSustain, handleSustainToggle, handleVelocity, handleToggleMelodyChord, handleOctaveControls, handleVoicingControls]);
+  }, [handleSustain, handleSustainToggle, handleVelocity, handleToggleMode, handleOctaveControls, handleVoicingControls]);
 
   return { handleAllControlKeys, handleSustainRelease };
 }; 

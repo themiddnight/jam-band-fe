@@ -155,8 +155,6 @@ export default function Bass({
           positions={positions}
           onFretPress={handleFretPressWithNote}
           onFretRelease={handleFretReleaseWithNote}
-          velocity={velocity}
-          onVelocityChange={handleVelocityChange}
           className="bass-fretboard"
         />
       </div>

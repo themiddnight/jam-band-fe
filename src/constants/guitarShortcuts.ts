@@ -6,7 +6,7 @@ export interface GuitarShortcut {
 
 export interface GuitarShortcuts {
   // Mode controls
-  toggleNoteChord: GuitarShortcut;
+  toggleMode: GuitarShortcut;
   
   // Note controls (Simple - Note mode)
   lowerOctaveNotes: GuitarShortcut;
@@ -48,9 +48,9 @@ export interface GuitarShortcuts {
 }
 
 export const DEFAULT_GUITAR_SHORTCUTS: GuitarShortcuts = {
-  toggleNoteChord: {
+  toggleMode: {
     key: 'shift',
-    description: 'Toggle between note and chord modes',
+    description: 'Toggle between melody and chord modes',
     category: 'mode'
   },
   

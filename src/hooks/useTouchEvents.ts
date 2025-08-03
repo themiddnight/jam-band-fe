@@ -1,56 +1,82 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 
 interface TouchEventHandlers {
-  onTouchStart: (e: React.TouchEvent) => void;
-  onTouchEnd: (e: React.TouchEvent) => void;
-  onTouchCancel: (e: React.TouchEvent) => void;
-  onContextMenu: (e: React.MouseEvent) => void;
+  ref: React.RefObject<HTMLElement | null>;
 }
 
-export const useTouchEvents = (
-  onPress: (isSliderClick?: boolean) => void,
-  onRelease: () => void
-): TouchEventHandlers => {
+interface UseTouchEventsProps {
+  onPress: (isSliderClick?: boolean) => void;
+  onRelease: () => void;
+  isPlayButton?: boolean; // For play button behavior (no press state tracking)
+}
+
+export const useTouchEvents = ({
+  onPress,
+  onRelease,
+  isPlayButton = false
+}: UseTouchEventsProps): TouchEventHandlers => {
+  const elementRef = useRef<HTMLElement>(null);
   const isPressed = useRef<boolean>(false);
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+  const handleTouchStart = useCallback((e: TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
     
-    if (!isPressed.current) {
+    if (isPlayButton) {
+      onPress(false);
+    } else if (!isPressed.current) {
       isPressed.current = true;
       onPress(false);
     }
-  }, [onPress]);
+  }, [onPress, isPlayButton]);
 
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+  const handleTouchEnd = useCallback((e: TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (isPressed.current) {
+    if (isPlayButton) {
+      // Play button doesn't track press state
+    } else if (isPressed.current) {
       isPressed.current = false;
       onRelease();
     }
-  }, [onRelease]);
+  }, [onRelease, isPlayButton]);
 
-  const handleTouchCancel = useCallback((e: React.TouchEvent) => {
+  const handleTouchCancel = useCallback((e: TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (isPressed.current) {
+    if (isPlayButton) {
+      // Play button doesn't track press state
+    } else if (isPressed.current) {
       isPressed.current = false;
       onRelease();
     }
-  }, [onRelease]);
+  }, [onRelease, isPlayButton]);
 
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+  const handleContextMenu = useCallback((e: MouseEvent) => {
     e.preventDefault();
   }, []);
 
+  useEffect(() => {
+    const element = elementRef.current;
+    if (!element) return;
+
+    // Add event listeners with passive: false to allow preventDefault
+    element.addEventListener('touchstart', handleTouchStart, { passive: false });
+    element.addEventListener('touchend', handleTouchEnd, { passive: false });
+    element.addEventListener('touchcancel', handleTouchCancel, { passive: false });
+    element.addEventListener('contextmenu', handleContextMenu, { passive: false });
+
+    return () => {
+      element.removeEventListener('touchstart', handleTouchStart);
+      element.removeEventListener('touchend', handleTouchEnd);
+      element.removeEventListener('touchcancel', handleTouchCancel);
+      element.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, [handleTouchStart, handleTouchEnd, handleTouchCancel, handleContextMenu]);
+
   return {
-    onTouchStart: handleTouchStart,
-    onTouchEnd: handleTouchEnd,
-    onTouchCancel: handleTouchCancel,
-    onContextMenu: handleContextMenu,
+    ref: elementRef,
   };
 }; 

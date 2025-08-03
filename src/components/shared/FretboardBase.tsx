@@ -25,8 +25,6 @@ export interface FretboardBaseProps {
   positions: FretPosition[];
   onFretPress: (stringIndex: number, fret: number, note: string) => void;
   onFretRelease: (stringIndex: number, fret: number, note: string) => void;
-  velocity: number;
-  onVelocityChange: (velocity: number) => void;
   className?: string;
 }
 
@@ -39,7 +37,7 @@ const FretButton: React.FC<{
   onRelease: () => void;
   showNoteNames?: boolean;
 }> = ({ stringIndex, fret, position, onPress, onRelease, showNoteNames = true }) => {
-  const touchHandlers = useTouchEvents(onPress, onRelease);
+  const touchHandlers = useTouchEvents({ onPress, onRelease });
 
   const isPressed = position.isPressed;
   const isHighlighted = position.isHighlighted;
@@ -48,6 +46,7 @@ const FretButton: React.FC<{
   return (
     <button
       key={`${stringIndex}-${fret}`}
+      ref={touchHandlers.ref as React.RefObject<HTMLButtonElement>}
       className={`
         relative w-12 h-8 border border-gray-300 transition-all duration-100
         ${isPressed ? 'bg-blue-500 scale-95' : 'bg-gray-100 hover:bg-gray-200'}
@@ -59,7 +58,6 @@ const FretButton: React.FC<{
       onMouseDown={onPress}
       onMouseUp={onRelease}
       onMouseLeave={onRelease}
-      {...touchHandlers}
     >
       {showNoteNames && (
         <span className={`text-xs ${isPressed ? 'text-white' : 'text-gray-700'}`}>
@@ -75,8 +73,6 @@ export const FretboardBase: React.FC<FretboardBaseProps> = ({
   positions,
   onFretPress,
   onFretRelease,
-  velocity,
-  onVelocityChange,
   className = "",
 }) => {
   const { strings, frets, showNoteNames = true, showFretNumbers = true } = config;
@@ -106,7 +102,7 @@ export const FretboardBase: React.FC<FretboardBaseProps> = ({
     if (!showFretNumbers) return null;
     
     return (
-      <div className="flex mb-2">
+      <div className="flex mb-2 ml-10">
         {Array.from({ length: frets + 1 }, (_, fret) => (
           <div key={fret} className="w-12 text-center text-xs text-gray-500">
             {fret}
@@ -116,25 +112,8 @@ export const FretboardBase: React.FC<FretboardBaseProps> = ({
     );
   };
 
-  const renderVelocityControl = () => (
-    <div className="mb-4 flex items-center gap-2">
-      <label className="text-sm text-gray-600">Velocity:</label>
-      <input
-        type="range"
-        min="0.1"
-        max="1"
-        step="0.1"
-        value={velocity}
-        onChange={(e) => onVelocityChange(parseFloat(e.target.value))}
-        className="w-32"
-      />
-      <span className="text-sm text-gray-600">{Math.round(velocity * 100)}%</span>
-    </div>
-  );
-
   return (
-    <div className={`fretboard-base ${className}`}>
-      {renderVelocityControl()}
+    <div className={`fretboard-base mx-auto ${className}`}>
       {renderFretNumbers()}
       <div className="fretboard-grid">
         {strings.map((stringName, stringIndex) => (

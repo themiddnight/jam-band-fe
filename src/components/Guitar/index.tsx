@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { useGuitarState } from "./hooks/useGuitarState";
 import { useGuitarKeysController } from "./hooks/useGuitarKeysController";
 import { useInstrumentState } from "../../hooks/useInstrumentState";
@@ -7,6 +6,9 @@ import { SimpleNoteKeys } from "./components/SimpleNoteKeys";
 import { SimpleChordKeys } from "./components/SimpleChordKeys";
 import { getChordFromDegree } from "../../utils/musicUtils";
 import type { Scale } from "../../hooks/useScaleState";
+import BaseInstrument from "../shared/BaseInstrument";
+import { DEFAULT_GUITAR_SHORTCUTS } from "../../constants/guitarShortcuts";
+import { getKeyDisplayName } from "../../constants/guitarShortcuts";
 
 export interface GuitarProps {
   scaleState: {
@@ -81,6 +83,35 @@ export default function Guitar({
     handleFretRelease,
   } = useInstrumentState();
 
+  // Get shortcuts
+  const shortcuts = DEFAULT_GUITAR_SHORTCUTS;
+
+  // Check if there are sustained notes
+  const hasSustainedNotes = false; // Guitar doesn't use sustained notes in the same way as keyboard
+
+  // Convert shortcut keys to modifier names for chord generation
+  const convertChordModifiers = (modifiers: Set<string>): Set<string> => {
+    const convertedModifiers = new Set<string>();
+    
+    if (modifiers.has('q')) {
+      convertedModifiers.add("dominant7");
+    }
+    if (modifiers.has('w')) {
+      convertedModifiers.add("major7");
+    }
+    if (modifiers.has('e')) {
+      convertedModifiers.add("sus2");
+    }
+    if (modifiers.has('r')) {
+      convertedModifiers.add("sus4");
+    }
+    if (modifiers.has('t')) {
+      convertedModifiers.add("majMinToggle");
+    }
+    
+    return convertedModifiers;
+  };
+
   // Handle strum chord for simple chord mode with proper timing
   const handleStrumChord = async (chordIndex: number, direction: 'up' | 'down') => {
     // Generate 5-note chord: root note starting from E2 + 4 chord notes
@@ -89,7 +120,7 @@ export default function Guitar({
       scaleState.scale,
       chordIndex,
       chordVoicing,
-      chordModifiers
+      convertChordModifiers(chordModifiers)
     );
     
     // Ensure we have exactly 5 notes by adding additional chord tones if needed
@@ -177,7 +208,7 @@ export default function Guitar({
       scaleState.scale,
       chordIndex,
       chordVoicing,
-      chordModifiers
+      convertChordModifiers(chordModifiers)
     );
     
     // Ensure we have exactly 5 notes by adding additional chord tones if needed
@@ -266,15 +297,7 @@ export default function Guitar({
     guitarControls,
   });
 
-  useEffect(() => {
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
 
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
-    };
-  }, [handleKeyDown, handleKeyUp]);
 
   const renderGuitarMode = () => {
     switch (mode) {
@@ -289,11 +312,8 @@ export default function Guitar({
             onFretPress={handleBasicFretPress}
             onFretRelease={handleBasicFretRelease}
             onVelocityChange={setVelocity}
-            onSustainChange={setSustain}
-            onSustainToggleChange={setSustainToggle}
             onPlayNote={handleBasicPlayNote}
             onReleaseNote={handleBasicReleaseNote}
-            onStopSustainedNotes={stopSustainedNotes}
           />
         );
       case 'melody':
@@ -302,8 +322,6 @@ export default function Guitar({
             scaleState={scaleState}
             currentOctave={currentOctave}
             velocity={velocity}
-            onOctaveChange={setCurrentOctave}
-            onVelocityChange={setVelocity}
             // Pass the new string-based functions
             handleNotePress={handleNotePress}
             handleNoteRelease={handleNoteRelease}
@@ -317,16 +335,11 @@ export default function Guitar({
           <SimpleChordKeys
             scaleState={scaleState}
             chordVoicing={chordVoicing}
-            velocity={velocity}
             pressedChords={pressedChords}
             chordModifiers={chordModifiers}
-            strumConfig={strumConfig}
             onChordPress={handleChordPress}
             onChordRelease={handleChordRelease}
             onStrumChord={handleStrumChord}
-            onChordVoicingChange={setChordVoicing}
-            onVelocityChange={setVelocity}
-            onStrumSpeedChange={setStrumSpeed}
             onChordModifierChange={setChordModifiers}
           />
         );
@@ -335,40 +348,84 @@ export default function Guitar({
     }
   };
 
-  return (
-    <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
-      <div className="card-body p-3">
-        <div className="flex justify-between items-center mb-1">
-          <div className="flex items-center gap-2">
-            <h3 className="card-title text-base">Guitar Controls</h3>
-          </div>
-
-          <div className="flex gap-3 flex-wrap justify-end">
-            <div className="block join">
-              <button
-                onClick={() => setMode('basic')}
-                className={`btn btn-sm join-item touch-manipulation ${mode === 'basic' ? 'btn-primary' : 'btn-outline'}`}
-              >
-                Basic
-              </button>
-              <button
-                onClick={() => setMode('melody')}
-                className={`btn btn-sm join-item touch-manipulation ${mode === 'melody' ? 'btn-primary' : 'btn-outline'}`}
-              >
-                Melody
-              </button>
-              <button
-                onClick={() => setMode('chord')}
-                className={`btn btn-sm join-item touch-manipulation ${mode === 'chord' ? 'btn-primary' : 'btn-outline'}`}
-              >
-                Chord
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {renderGuitarMode()}
-      </div>
+  // Mode controls JSX
+  const modeControls = (
+    <div className="block join">
+      <button
+        onClick={() => setMode('melody')}
+        className={`btn btn-sm join-item touch-manipulation ${mode === 'melody' ? 'btn-primary' : 'btn-outline'}`}
+      >
+        Melody{" "}
+        <kbd className="kbd kbd-xs">
+          {getKeyDisplayName(shortcuts.toggleMode.key)}
+        </kbd>
+      </button>
+      <button
+        onClick={() => setMode('chord')}
+        className={`btn btn-sm join-item touch-manipulation ${mode === 'chord' ? 'btn-primary' : 'btn-outline'}`}
+      >
+        Chord{" "}
+        <kbd className="kbd kbd-xs">
+          {getKeyDisplayName(shortcuts.toggleMode.key)}
+        </kbd>
+      </button>
+      <button
+        onClick={() => setMode('basic')}
+        className={`btn btn-sm join-item touch-manipulation ${mode === 'basic' ? 'btn-primary' : 'btn-outline'}`}
+      >
+        Basic
+      </button>
     </div>
+  );
+
+  // Get control configuration based on mode
+  const getControlConfig = () => {
+    switch (mode) {
+      case 'basic':
+        return {
+          velocity: true,
+          sustain: true,
+        };
+      case 'melody':
+        return {
+          velocity: true,
+          octave: true,
+        };
+      case 'chord':
+        return {
+          velocity: true,
+          chordVoicing: true,
+          brushingSpeed: true,
+        };
+      default:
+        return {};
+    }
+  };
+
+  return (
+    <BaseInstrument
+      title="Guitar"
+      shortcuts={shortcuts}
+      modeControls={modeControls}
+      controlConfig={getControlConfig()}
+      velocity={velocity}
+      setVelocity={setVelocity}
+      currentOctave={currentOctave}
+      setCurrentOctave={setCurrentOctave}
+      sustain={sustain}
+      setSustain={setSustain}
+      sustainToggle={sustainToggle}
+      setSustainToggle={setSustainToggle}
+      onStopSustainedNotes={stopSustainedNotes}
+      hasSustainedNotes={hasSustainedNotes}
+      chordVoicing={chordVoicing}
+      setChordVoicing={setChordVoicing}
+      brushingSpeed={strumConfig.speed}
+      setBrushingSpeed={setStrumSpeed}
+      handleKeyDown={handleKeyDown}
+      handleKeyUp={handleKeyUp}
+    >
+      {renderGuitarMode()}
+    </BaseInstrument>
   );
 } 

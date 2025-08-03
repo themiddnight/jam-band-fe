@@ -6,7 +6,7 @@ export interface KeyboardShortcut {
 
 export interface KeyboardShortcuts {
   // Mode controls
-  toggleMelodyChord: KeyboardShortcut;
+  toggleMode: KeyboardShortcut;
   
   // Chord modifiers
   dominant7: KeyboardShortcut;
@@ -29,7 +29,7 @@ export interface KeyboardShortcuts {
 }
 
 export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
-  toggleMelodyChord: {
+  toggleMode: {
     key: 'shift',
     description: 'Toggle between melody and chord modes',
     category: 'mode'

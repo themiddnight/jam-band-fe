@@ -25,10 +25,10 @@ const KeyButton = memo(({
   isBlack?: boolean;
   position?: number;
 }) => {
-  const keyTouchHandlers = useTouchEvents(
-    () => onKeyPress(keyData),
-    () => onKeyRelease(keyData)
-  );
+  const keyTouchHandlers = useTouchEvents({
+    onPress: () => onKeyPress(keyData),
+    onRelease: () => onKeyRelease(keyData)
+  });
 
   if (isBlack) {
     return (
@@ -36,7 +36,7 @@ const KeyButton = memo(({
         onMouseDown={() => onKeyPress(keyData)}
         onMouseUp={() => onKeyRelease(keyData)}
         onMouseLeave={() => onKeyRelease(keyData)}
-        {...keyTouchHandlers}
+        ref={keyTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
         className={`
         absolute w-8 h-24 bg-black hover:bg-gray-800 border border-gray-600
         transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1
@@ -70,7 +70,7 @@ const KeyButton = memo(({
       onMouseDown={() => onKeyPress(keyData)}
       onMouseUp={() => onKeyRelease(keyData)}
       onMouseLeave={() => onKeyRelease(keyData)}
-      {...keyTouchHandlers}
+      ref={keyTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
       className={`
       w-12 h-40 border-2 border-gray-300 bg-white hover:bg-gray-100 
       transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1

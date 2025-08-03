@@ -1,5 +1,4 @@
-export type MainMode = "simple" | "advanced";
-export type SimpleMode = "melody" | "chord";
+export type KeyboardMode = "simple-melody" | "simple-chord" | "basic";
 
 export interface KeyboardKey {
   note: string;

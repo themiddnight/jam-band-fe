@@ -1,4 +1,5 @@
 import type { Scale } from "../hooks/useScaleState";
+import type { KeyboardMode } from "../components/Keyboard/types/keyboard";
 
 export interface ScaleState {
   rootNote: string;
@@ -11,8 +12,7 @@ export interface ScaleState {
 }
 
 export interface KeyboardState {
-  mainMode: "simple" | "advanced";
-  simpleMode: "melody" | "chord";
+  mode: KeyboardMode;
   currentOctave: number;
   velocity: number;
   sustain: boolean;
@@ -22,7 +22,7 @@ export interface KeyboardState {
   setSustain: (sustain: boolean) => void;
   setSustainToggle: (sustainToggle: boolean) => void;
   setHeldKeys: React.Dispatch<React.SetStateAction<Set<string>>>;
-  setSimpleMode: (mode: "melody" | "chord") => void;
+  setMode: (mode: KeyboardMode) => void;
   setCurrentOctave: (octave: number) => void;
   setVelocity: (velocity: number) => void;
   playNote: (note: string, velocity: number, isKeyHeld: boolean) => void;
@@ -31,6 +31,8 @@ export interface KeyboardState {
 }
 
 export interface VirtualKeyboardState {
+  mode: KeyboardMode;
+  setMode: (mode: KeyboardMode) => void;
   chordVoicing: number;
   setChordVoicing: (voicing: number) => void;
   chordModifiers: Set<string>;

@@ -63,13 +63,11 @@ export const useGuitarKeysController = ({
       }
 
       // Mode controls
-      if (key === shortcuts.toggleNoteChord.key) {
-        if (guitarState.mode.type === 'basic') {
-          guitarControls.setMode('melody');
-        } else if (guitarState.mode.type === 'melody') {
+      if (key === shortcuts.toggleMode.key) {
+        if (guitarState.mode.type === 'melody') {
           guitarControls.setMode('chord');
-        } else {
-          guitarControls.setMode('basic');
+        } else if (guitarState.mode.type === 'chord') {
+          guitarControls.setMode('melody');
         }
         return;
       }
@@ -214,7 +212,7 @@ export const useGuitarKeysController = ({
         // Strum speed controls
         if (key === shortcuts.strumSpeedDown.key) {
           const currentSpeed = guitarState.strumConfig.speed;
-          const newSpeed = Math.max(5, currentSpeed -150);
+          const newSpeed = Math.max(5, currentSpeed - 10);
           guitarControls.setStrumSpeed(newSpeed);
           return;
         }
@@ -238,31 +236,31 @@ export const useGuitarKeysController = ({
         // Chord modifiers
         if (key === shortcuts.dominant7.key) {
           const newModifiers = new Set(guitarState.chordModifiers);
-          newModifiers.add('dominant7');
+          newModifiers.add(shortcuts.dominant7.key);
           guitarControls.setChordModifiers(newModifiers);
           return;
         }
         if (key === shortcuts.major7.key) {
           const newModifiers = new Set(guitarState.chordModifiers);
-          newModifiers.add('major7');
+          newModifiers.add(shortcuts.major7.key);
           guitarControls.setChordModifiers(newModifiers);
           return;
         }
         if (key === shortcuts.sus2.key) {
           const newModifiers = new Set(guitarState.chordModifiers);
-          newModifiers.add('sus2');
+          newModifiers.add(shortcuts.sus2.key);
           guitarControls.setChordModifiers(newModifiers);
           return;
         }
         if (key === shortcuts.sus4.key) {
           const newModifiers = new Set(guitarState.chordModifiers);
-          newModifiers.add('sus4');
+          newModifiers.add(shortcuts.sus4.key);
           guitarControls.setChordModifiers(newModifiers);
           return;
         }
         if (key === shortcuts.majMinToggle.key) {
           const newModifiers = new Set(guitarState.chordModifiers);
-          newModifiers.add('majMinToggle');
+          newModifiers.add(shortcuts.majMinToggle.key);
           guitarControls.setChordModifiers(newModifiers);
           return;
         }
@@ -360,31 +358,31 @@ export const useGuitarKeysController = ({
         // Chord modifiers
         if (key === shortcuts.dominant7.key) {
           const newModifiers = new Set(guitarState.chordModifiers);
-          newModifiers.delete('dominant7');
+          newModifiers.delete(shortcuts.dominant7.key);
           guitarControls.setChordModifiers(newModifiers);
           return;
         }
         if (key === shortcuts.major7.key) {
           const newModifiers = new Set(guitarState.chordModifiers);
-          newModifiers.delete('major7');
+          newModifiers.delete(shortcuts.major7.key);
           guitarControls.setChordModifiers(newModifiers);
           return;
         }
         if (key === shortcuts.sus2.key) {
           const newModifiers = new Set(guitarState.chordModifiers);
-          newModifiers.delete('sus2');
+          newModifiers.delete(shortcuts.sus2.key);
           guitarControls.setChordModifiers(newModifiers);
           return;
         }
         if (key === shortcuts.sus4.key) {
           const newModifiers = new Set(guitarState.chordModifiers);
-          newModifiers.delete('sus4');
+          newModifiers.delete(shortcuts.sus4.key);
           guitarControls.setChordModifiers(newModifiers);
           return;
         }
         if (key === shortcuts.majMinToggle.key) {
           const newModifiers = new Set(guitarState.chordModifiers);
-          newModifiers.delete('majMinToggle');
+          newModifiers.delete(shortcuts.majMinToggle.key);
           guitarControls.setChordModifiers(newModifiers);
           return;
         }

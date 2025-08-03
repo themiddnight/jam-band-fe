@@ -1,6 +1,6 @@
 import { memo } from "react";
 import type { KeyboardKey } from "../types/keyboard";
-import { VirtualKeyButton } from "../../shared/VirtualKeyButton";
+import { SharedNoteKeys, type NoteKey } from "../../shared/NoteKeys";
 
 interface MelodyKeysProps {
   virtualKeys: KeyboardKey[];
@@ -15,44 +15,31 @@ export const MelodyKeys = memo<MelodyKeysProps>(({
   onKeyPress,
   onKeyRelease,
 }) => {
-  // Separate keys by position for better organization
-  const lowerRowKeys = virtualKeys.filter(key => key.position < 100);
-  const upperRowKeys = virtualKeys.filter(key => key.position >= 100);
+  // Convert KeyboardKey to NoteKey format
+  const noteKeys: NoteKey[] = virtualKeys.map(key => ({
+    note: key.note,
+    keyboardKey: key.keyboardKey || '',
+    isPressed: pressedKeys.has(key.note),
+    position: key.position,
+  }));
 
   return (
-    <div className="flex flex-col gap-4 w-fit mx-auto">
-      {/* Upper row */}
-      {upperRowKeys.length > 0 && (
-        <div className="flex justify-center gap-1">
-          {upperRowKeys.map((key) => (
-            <VirtualKeyButton
-              key={`${key.note}-${key.keyboardKey}-${key.position}`}
-              keyboardKey={key.keyboardKey}
-              note={key.note}
-              isPressed={pressedKeys.has(key.note)}
-              onPress={() => onKeyPress(key)}
-              onRelease={() => onKeyRelease(key)}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Lower row */}
-      {lowerRowKeys.length > 0 && (
-        <div className="flex justify-center gap-1">
-          {lowerRowKeys.map((key) => (
-            <VirtualKeyButton
-              key={`${key.note}-${key.keyboardKey}-${key.position}`}
-              keyboardKey={key.keyboardKey}
-              note={key.note}
-              isPressed={pressedKeys.has(key.note)}
-              onPress={() => onKeyPress(key)}
-              onRelease={() => onKeyRelease(key)}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+    <SharedNoteKeys
+      noteKeys={noteKeys}
+      onKeyPress={(noteKey) => {
+        const originalKey = virtualKeys.find(k => k.note === noteKey.note && k.keyboardKey === noteKey.keyboardKey);
+        if (originalKey) {
+          onKeyPress(originalKey);
+        }
+      }}
+      onKeyRelease={(noteKey) => {
+        const originalKey = virtualKeys.find(k => k.note === noteKey.note && k.keyboardKey === noteKey.keyboardKey);
+        if (originalKey) {
+          onKeyRelease(originalKey);
+        }
+      }}
+      variant="keyboard"
+    />
   );
 });
 

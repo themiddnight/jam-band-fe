@@ -23,13 +23,11 @@ export const useVirtualKeyboard = (
 ) => {
   const shortcuts = DEFAULT_KEYBOARD_SHORTCUTS;
   const {
-    mainMode,
-    simpleMode,
+    mode,
     currentOctave,
     velocity,
     chordVoicing,
-    setMainMode,
-    setSimpleMode,
+    setMode,
     setCurrentOctave,
     setVelocity,
     setChordVoicing,
@@ -96,50 +94,48 @@ export const useVirtualKeyboard = (
   const generateVirtualKeys = useMemo((): KeyboardKey[] => {
     const keys: KeyboardKey[] = [];
 
-    if (mainMode === "simple") {
-      if (simpleMode === "melody") {
-        // Lower row keys (current octave) - use memoized scale notes
-        const lowerRowNotes = [...currentScaleNotes, ...nextOctaveScaleNotes];
+    if (mode === "simple-melody") {
+      // Lower row keys (current octave) - use memoized scale notes
+      const lowerRowNotes = [...currentScaleNotes, ...nextOctaveScaleNotes];
 
-        melodySimpleKeys.forEach((key, index) => {
-          if (index < lowerRowNotes.length) {
-            keys.push({
-              note: lowerRowNotes[index],
-              isBlack: false,
-              position: index,
-              keyboardKey: key,
-            });
-          }
-        });
+      melodySimpleKeys.forEach((key, index) => {
+        if (index < lowerRowNotes.length) {
+          keys.push({
+            note: lowerRowNotes[index],
+            isBlack: false,
+            position: index,
+            keyboardKey: key,
+          });
+        }
+      });
 
-        // Upper row keys (one octave higher) - use memoized scale notes
-        const upperRowNotes = [...nextOctaveScaleNotes, ...upperOctaveScaleNotes];
+      // Upper row keys (one octave higher) - use memoized scale notes
+      const upperRowNotes = [...nextOctaveScaleNotes, ...upperOctaveScaleNotes];
 
-        melodySimpleKeysUpper.forEach((key, index) => {
-          if (index < upperRowNotes.length) {
-            keys.push({
-              note: upperRowNotes[index],
-              isBlack: false,
-              position: index + 100,
-              keyboardKey: key,
-            });
-          }
-        });
-      } else {
-        // Use currentOctave for chord root notes (baseline) - use memoized scale notes
-        chordRootKeys.forEach((key, index) => {
-          if (index < currentScaleNotes.length) {
-            keys.push({
-              note: currentScaleNotes[index],
-              isBlack: false,
-              position: index,
-              keyboardKey: key,
-            });
-          }
-        });
-      }
+      melodySimpleKeysUpper.forEach((key, index) => {
+        if (index < upperRowNotes.length) {
+          keys.push({
+            note: upperRowNotes[index],
+            isBlack: false,
+            position: index + 100,
+            keyboardKey: key,
+          });
+        }
+      });
+    } else if (mode === "simple-chord") {
+      // Use currentOctave for chord root notes (baseline) - use memoized scale notes
+      chordRootKeys.forEach((key, index) => {
+        if (index < currentScaleNotes.length) {
+          keys.push({
+            note: currentScaleNotes[index],
+            isBlack: false,
+            position: index,
+            keyboardKey: key,
+          });
+        }
+      });
     } else {
-      // Advanced mode - generate piano keys
+      // Basic mode - generate piano keys
       for (let i = 0; i < 2; i++) {
         whiteNotes.forEach((note, index) => {
           const octave = currentOctave + i;
@@ -177,8 +173,7 @@ export const useVirtualKeyboard = (
 
     return keys;
   }, [
-    mainMode,
-    simpleMode,
+    mode,
     currentOctave,
     currentScaleNotes,
     nextOctaveScaleNotes,
@@ -190,8 +185,7 @@ export const useVirtualKeyboard = (
   const handleVirtualKeyPress = useCallback(
     async (key: KeyboardKey) => {
       if (
-        mainMode === "simple" &&
-        simpleMode === "chord" &&
+        mode === "simple-chord" &&
         chordTriadKeys.some((k) => k === key.keyboardKey)
       ) {
         const keyIndex = chordTriadKeys.indexOf(key.keyboardKey!);
@@ -202,8 +196,7 @@ export const useVirtualKeyboard = (
       }
     },
     [
-      mainMode,
-      simpleMode,
+      mode,
       rootNote,
       scale,
       getChord,
@@ -217,8 +210,7 @@ export const useVirtualKeyboard = (
   const handleVirtualKeyRelease = useCallback(
     (key: KeyboardKey) => {
       if (
-        mainMode === "simple" &&
-        simpleMode === "chord" &&
+        mode === "simple-chord" &&
         chordTriadKeys.some((k) => k === key.keyboardKey)
       ) {
         const keyIndex = chordTriadKeys.indexOf(key.keyboardKey!);
@@ -246,7 +238,7 @@ export const useVirtualKeyboard = (
         onReleaseKeyHeldNote(key.note);
       }
     },
-    [mainMode, simpleMode, activeTriadChords, onReleaseKeyHeldNote]
+    [mode, activeTriadChords, onReleaseKeyHeldNote]
   );
 
   const handleModifierPress = useCallback((modifier: string) => {
@@ -332,10 +324,8 @@ export const useVirtualKeyboard = (
   );
 
   return {
-    mainMode,
-    setMainMode,
-    simpleMode,
-    setSimpleMode,
+    mode,
+    setMode,
     currentOctave,
     setCurrentOctave,
     velocity,
