@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { useUnifiedInstrumentManager } from "./useUnifiedInstrumentManager";
+import { useInstrumentManager } from "./useInstrumentManager";
 import type { SynthState } from "../utils/InstrumentEngine";
 import {
   SOUNDFONT_INSTRUMENTS,
@@ -12,13 +12,13 @@ import { getCachedDrumMachines } from "../utils/drumMachineUtils";
 import { useInstrumentPreferencesStore } from "../stores/instrumentPreferencesStore";
 import { isSafari } from "../utils/webkitCompat";
 
-export interface UseUnifiedInstrumentOptions {
+export interface UseInstrumentOptions {
   initialInstrument?: string;
   initialCategory?: InstrumentCategory;
   onSynthParamsChange?: (params: Partial<SynthState>) => void;
 }
 
-export interface UseUnifiedInstrumentReturn {
+export interface UseInstrumentReturn {
   // Current instrument state
   currentInstrument: string;
   currentCategory: InstrumentCategory;
@@ -106,9 +106,9 @@ export interface UseUnifiedInstrumentReturn {
   ) => Promise<void>;
 }
 
-export const useUnifiedInstrument = (
-  options: UseUnifiedInstrumentOptions = {}
-): UseUnifiedInstrumentReturn => {
+export const useInstrument = (
+  options: UseInstrumentOptions = {}
+): UseInstrumentReturn => {
   const {
     initialInstrument,
     initialCategory = InstrumentCategory.Melodic,
@@ -120,7 +120,7 @@ export const useUnifiedInstrument = (
     useInstrumentPreferencesStore();
 
   // Unified instrument manager
-  const instrumentManager = useUnifiedInstrumentManager();
+  const instrumentManager = useInstrumentManager();
 
   // Local state
   const [isLoadingInstrument, setIsLoadingInstrument] =

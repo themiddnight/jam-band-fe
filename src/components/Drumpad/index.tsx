@@ -5,6 +5,7 @@ import { PresetManager } from "./components/PresetManager";
 import { SoundSelectionModal } from "./components/SoundSelectionModal";
 import { DRUMPAD_SHORTCUTS } from "../../constants/defaultPresets";
 import type { DrumpadProps } from "./types/drumpad";
+import { useKeyboardHandler } from "../../hooks/useKeyboardHandler";
 
 export default function Drumpad({
   onPlayNotes,
@@ -114,6 +115,33 @@ export default function Drumpad({
   const handlePadVolumeChange = (padId: string, volume: number) => {
     setPadVolume(padId, volume);
   };
+
+  // Use unified keyboard handler for drumpad shortcuts
+  useKeyboardHandler({
+    shortcuts: Object.fromEntries(
+      Object.entries(DRUMPAD_SHORTCUTS).map(([padId, key]) => [padId, { key }])
+    ),
+    onKeyDown: (key: string) => {
+      if (isEditMode) return;
+      
+      const padEntry = Object.entries(DRUMPAD_SHORTCUTS).find(([, shortcutKey]) => shortcutKey === key);
+      if (padEntry) {
+        const [padId] = padEntry;
+        handlePadPress(padId, drumpadState.padAssignments[padId]);
+      }
+    },
+    onKeyUp: (key: string) => {
+      if (isEditMode) return;
+      
+      const padEntry = Object.entries(DRUMPAD_SHORTCUTS).find(([, shortcutKey]) => shortcutKey === key);
+      if (padEntry) {
+        const [padId] = padEntry;
+        handlePadRelease(padId);
+      }
+    },
+    isEnabled: !isEditMode,
+    preventDefault: true,
+  });
 
   return (
     <div className="card bg-base-100 shadow-xl w-full max-w-6xl">

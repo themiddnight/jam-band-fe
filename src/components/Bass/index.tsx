@@ -19,17 +19,25 @@ export interface BassProps {
 export default function Bass({
   scaleState,
   onPlayNotes,
+  onStopNotes,
   onReleaseKeyHeldNote,
   onSustainChange,
 }: BassProps) {
   const {
     velocity,
     sustain,
-    pressedFrets,
-    handleVelocityChange,
-    handleFretPress,
-    handleFretRelease,
-  } = useInstrumentState();
+    pressedKeys,
+    setVelocity,
+    setSustain,
+    playNote,
+    stopNote,
+  } = useInstrumentState({
+    onPlayNotes,
+    onStopNotes,
+    onStopSustainedNotes: () => {}, // Bass doesn't use sustained notes
+    onReleaseKeyHeldNote,
+    onSustainChange,
+  });
 
   const [octaveMode, setOctaveMode] = useState<boolean>(false);
 
@@ -51,6 +59,17 @@ export default function Bass({
     [scaleState.rootNote, scaleState.scale]
   );
 
+  // Convert pressedKeys to pressedFrets format for FretboardBase
+  const pressedFrets = useMemo(() => {
+    const fretSet = new Set<string>();
+    pressedKeys.forEach(key => {
+      // Convert note to fret format if needed
+      // For now, we'll use the key as-is since FretboardBase expects string-fret format
+      fretSet.add(key);
+    });
+    return fretSet;
+  }, [pressedKeys]);
+
   // Generate fret positions using pure utility function
   const positions = useMemo(() => 
     generateFretPositions(
@@ -63,33 +82,35 @@ export default function Bass({
     [config.strings, config.openNotes, config.frets, pressedFrets, scaleNotes]
   );
 
-  const handleFretPressWithNote = useCallback(async (stringIndex: number, fret: number, note: string) => {
-    handleFretPress(stringIndex, fret);
-    
+  const handleFretPressWithNote = useCallback(async (_stringIndex: number, _fret: number, note: string) => {
     if (octaveMode) {
       // Play octave (root + octave above)
       const octaveNote = note.slice(0, -1) + (parseInt(note.slice(-1)) + 1);
-      await onPlayNotes([note, octaveNote], velocity, true);
+      await playNote(note, velocity, true);
+      await playNote(octaveNote, velocity, true);
     } else {
-      await onPlayNotes([note], velocity, true);
+      await playNote(note, velocity, true);
     }
-  }, [octaveMode, velocity, onPlayNotes, handleFretPress]);
+  }, [octaveMode, velocity, playNote]);
 
-  const handleFretReleaseWithNote = useCallback((stringIndex: number, fret: number, note: string) => {
-    handleFretRelease(stringIndex, fret);
+  const handleFretReleaseWithNote = useCallback((_stringIndex: number, _fret: number, note: string) => {
+    stopNote(note);
     onReleaseKeyHeldNote(note);
     
     if (octaveMode) {
       const octaveNote = note.slice(0, -1) + (parseInt(note.slice(-1)) + 1);
+      stopNote(octaveNote);
       onReleaseKeyHeldNote(octaveNote);
     }
-  }, [octaveMode, onReleaseKeyHeldNote, handleFretRelease]);
+  }, [octaveMode, onReleaseKeyHeldNote, stopNote]);
 
   const handleSustainChange = useCallback((newSustain: boolean) => {
-    // This state is now managed by useInstrumentState
-    // setSustain(newSustain); 
-    onSustainChange(newSustain);
-  }, [onSustainChange]);
+    setSustain(newSustain);
+  }, [setSustain]);
+
+  const handleVelocityChange = useCallback((newVelocity: number) => {
+    setVelocity(newVelocity);
+  }, [setVelocity]);
 
   return (
     <div className="card bg-base-100 shadow-xl w-full max-w-6xl">

@@ -4,7 +4,7 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useUserStore } from "../stores/userStore";
 import { useRoomStore } from "../stores/roomStore";
 import { useSocket } from "./useSocket";
-import { useUnifiedInstrument } from "./useUnifiedInstrument";
+import { useInstrument } from "./useInstrument";
 import { useScaleState } from "./useScaleState";
 import { useMidiController } from "./useMidiController";
 import { useRoomQuery } from "../services/useRooms";
@@ -92,7 +92,7 @@ export const useRoom = () => {
     updateRemoteUserSynthParams,
     cleanupRemoteUser,
     preloadRoomInstruments,
-  } = useUnifiedInstrument({
+  } = useInstrument({
     onSynthParamsChange: socketUpdateSynthParams,
   });
 

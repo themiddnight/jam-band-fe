@@ -1,12 +1,12 @@
 import { useVirtualKeyboard } from "./hooks/useVirtualKeyboard";
 import { useKeyboardKeysController } from "./hooks/useKeyboardKeysController";
-import { useKeyboardState } from "./hooks/useKeyboardState";
 import { MelodyKeys } from "./components/MelodyKeys";
 import { ChordKeys } from "./components/ChordKeys";
 import { AdvancedKeys } from "./components/AdvancedKeys";
 import { getKeyDisplayName, DEFAULT_KEYBOARD_SHORTCUTS } from "../../constants/keyboardShortcuts";
 import type { Scale } from "../../hooks/useScaleState";
 import BaseInstrument from "../shared/BaseInstrument";
+import { useInstrumentState } from "../../hooks/useInstrumentState";
 
 export interface Props {
   // Scale state - the core functionality
@@ -36,9 +36,8 @@ export default function Keyboard({
 }: Props) {
   const shortcuts = DEFAULT_KEYBOARD_SHORTCUTS;
 
-  // Use the new keyboard state hook
-  const keyboardStateData = useKeyboardState({
-    scaleState,
+  // Use the unified instrument state hook
+  const unifiedState = useInstrumentState({
     onPlayNotes,
     onStopNotes,
     onStopSustainedNotes,
@@ -53,7 +52,7 @@ export default function Keyboard({
     scaleState.scale,
     onPlayNotes,
     onReleaseKeyHeldNote,
-    keyboardStateData // Pass keyboardState to respect sustain settings
+    unifiedState // Pass unified state to respect sustain settings
   );
 
   const {
@@ -84,19 +83,19 @@ export default function Keyboard({
     mode,
     currentOctave,
     velocity,
-    sustain: keyboardStateData.sustain,
-    sustainToggle: keyboardStateData.sustainToggle,
-    hasSustainedNotes: keyboardStateData.hasSustainedNotes,
-    heldKeys: keyboardStateData.heldKeys,
-    setSustain: keyboardStateData.setSustain,
-    setSustainToggle: keyboardStateData.setSustainToggle,
-    setHeldKeys: keyboardStateData.setHeldKeys,
+    sustain: unifiedState.sustain,
+    sustainToggle: unifiedState.sustainToggle,
+    hasSustainedNotes: unifiedState.hasSustainedNotes,
+    heldKeys: unifiedState.heldKeys,
+    setSustain: unifiedState.setSustain,
+    setSustainToggle: unifiedState.setSustainToggle,
+    setHeldKeys: unifiedState.setHeldKeys,
     setMode,
     setCurrentOctave,
     setVelocity,
-    playNote: keyboardStateData.playNote,
-    releaseKeyHeldNote: keyboardStateData.releaseKeyHeldNote,
-    stopSustainedNotes: keyboardStateData.stopSustainedNotes,
+    playNote: unifiedState.playNote,
+    releaseKeyHeldNote: unifiedState.releaseKeyHeldNote,
+    stopSustainedNotes: unifiedState.stopSustainedNotes,
   };
 
   const { handleKeyDown, handleKeyUp } = useKeyboardKeysController(
@@ -122,7 +121,7 @@ export default function Keyboard({
       return (
         <ChordKeys
           virtualKeys={virtualKeys}
-          pressedKeys={keyboardStateData.pressedKeys}
+          pressedKeys={unifiedState.pressedKeys}
           pressedTriads={pressedTriads}
           chordModifiers={chordModifiers}
           scale={scaleState.scale}
@@ -139,7 +138,7 @@ export default function Keyboard({
       return (
         <MelodyKeys
           virtualKeys={virtualKeys}
-          pressedKeys={keyboardStateData.pressedKeys}
+          pressedKeys={unifiedState.pressedKeys}
           onKeyPress={handleVirtualKeyPress}
           onKeyRelease={handleVirtualKeyRelease}
         />
@@ -148,7 +147,7 @@ export default function Keyboard({
       return (
         <AdvancedKeys
           virtualKeys={virtualKeys}
-          pressedKeys={keyboardStateData.pressedKeys}
+          pressedKeys={unifiedState.pressedKeys}
           onKeyPress={handleVirtualKeyPress}
           onKeyRelease={handleVirtualKeyRelease}
         />
@@ -221,12 +220,12 @@ export default function Keyboard({
       setVelocity={setVelocity}
       currentOctave={currentOctave}
       setCurrentOctave={setCurrentOctave}
-      sustain={keyboardStateData.sustain}
-      setSustain={keyboardStateData.setSustain}
-      sustainToggle={keyboardStateData.sustainToggle}
-      setSustainToggle={keyboardStateData.setSustainToggle}
+      sustain={unifiedState.sustain}
+      setSustain={unifiedState.setSustain}
+      sustainToggle={unifiedState.sustainToggle}
+      setSustainToggle={unifiedState.setSustainToggle}
       onStopSustainedNotes={onStopSustainedNotes}
-      hasSustainedNotes={keyboardStateData.hasSustainedNotes}
+      hasSustainedNotes={unifiedState.hasSustainedNotes}
       chordVoicing={chordVoicing}
       setChordVoicing={setChordVoicing}
       handleKeyDown={handleKeyDown}

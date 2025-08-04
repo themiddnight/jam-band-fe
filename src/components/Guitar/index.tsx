@@ -1,6 +1,4 @@
-import { useGuitarState } from "./hooks/useGuitarState";
 import { useGuitarKeysController } from "./hooks/useGuitarKeysController";
-import { useInstrumentState } from "../../hooks/useInstrumentState";
 import { BasicFretboard } from "./components/BasicFretboard";
 import { SimpleNoteKeys } from "./components/SimpleNoteKeys";
 import { SimpleChordKeys } from "./components/SimpleChordKeys";
@@ -10,6 +8,9 @@ import BaseInstrument from "../shared/BaseInstrument";
 import { DEFAULT_GUITAR_SHORTCUTS } from "../../constants/guitarShortcuts";
 import { getKeyDisplayName } from "../../constants/guitarShortcuts";
 import { useGuitarStore } from "../../stores/guitarStore";
+import { useInstrumentState } from "../../hooks/useInstrumentState";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import type { GuitarString, HammerOnState, StrumConfig } from "./types/guitar";
 
 export interface GuitarProps {
   scaleState: {
@@ -35,9 +36,8 @@ export default function Guitar({
   onSustainToggleChange,
 }: GuitarProps) {
 
-  // Use the guitar state hook
-  const guitarStateData = useGuitarState({
-    scaleState,
+  // Use the unified instrument state hook
+  const unifiedState = useInstrumentState({
     onPlayNotes,
     onStopNotes,
     onStopSustainedNotes,
@@ -65,43 +65,293 @@ export default function Guitar({
     setBrushingSpeed(speed as any);
   };
 
-  const {
-    sustain,
-    setSustain,
-    sustainToggle,
-    setSustainToggle,
-    chordModifiers,
-    setChordModifiers,
-    powerChordMode,
-    setPowerChordMode,
-    pressedNotes,
-    setPressedNotes,
-    pressedChords,
-    setPressedChords,
-    strumConfig,
-    setStrumSpeed,
-    setStrumDirection,
-    releaseKeyHeldNote,
-    stopSustainedNotes,
-    // New string-based functions
-    handleNotePress,
-    handleNoteRelease,
-    handlePlayButtonPress,
-    handleHammerOnPress,
-  } = guitarStateData;
+  // Local state for guitar-specific functionality
+  const [chordModifiers, setChordModifiers] = useState<Set<string>>(new Set());
+  const [powerChordMode, setPowerChordMode] = useState(false);
+  const [pressedNotes, setPressedNotes] = useState<Set<string>>(new Set());
+  const [pressedChords, setPressedChords] = useState<Set<number>>(new Set());
+  const [strumConfig, setStrumConfig] = useState<StrumConfig>({
+    speed: brushingSpeed,
+    direction: 'down',
+    isActive: false,
+  });
 
-  // Use instrument state for fretboard functionality
-  const {
-    pressedFrets,
-    handleFretPress,
-    handleFretRelease,
-  } = useInstrumentState();
+  // Update strumConfig when brushingSpeed changes
+  useEffect(() => {
+    setStrumConfig(prev => ({ ...prev, speed: brushingSpeed }));
+  }, [brushingSpeed]);
 
-  // Get shortcuts
-  const shortcuts = DEFAULT_GUITAR_SHORTCUTS;
+  // New state for string behavior
+  const [strings, setStrings] = useState<{
+    lower: GuitarString;
+    higher: GuitarString;
+  }>({
+    lower: {
+      id: 'lower',
+      pressedNotes: new Set<string>(),
+      activeNote: null,
+      lastPlayedNote: null,
+      lastPlayTime: 0,
+      isHammerOnEnabled: false,
+    },
+    higher: {
+      id: 'higher',
+      pressedNotes: new Set<string>(),
+      activeNote: null,
+      lastPlayedNote: null,
+      lastPlayTime: 0,
+      isHammerOnEnabled: false,
+    },
+  });
 
-  // Check if there are sustained notes
-  const hasSustainedNotes = false; // Guitar doesn't use sustained notes in the same way as keyboard
+  const [hammerOnState] = useState<HammerOnState>({
+    isEnabled: false,
+    lastPlayTime: 0,
+    lastPlayedNote: null,
+    windowMs: 200,
+  });
+
+  // Ref to track current state for stable callbacks
+  const stateRef = useRef({ strings, hammerOnState, velocity });
+  stateRef.current = { strings, hammerOnState, velocity };
+
+  // Helper function to get the highest note from a set of notes
+  const getHighestNote = useCallback((notes: Set<string>): string | null => {
+    if (notes.size === 0) return null;
+    
+    // Sort notes by pitch (higher note = higher pitch)
+    const sortedNotes = Array.from(notes).sort((a, b) => {
+      const noteA = a.replace(/\d/g, '');
+      const noteB = b.replace(/\d/g, '');
+      const octaveA = parseInt(a.replace(/\D/g, '') || '0');
+      const octaveB = parseInt(b.replace(/\D/g, '') || '0');
+      
+      if (octaveA !== octaveB) return octaveB - octaveA; // Higher octave first
+      
+      // Note order: C, C#, D, D#, E, F, F#, G, G#, A, A#, B
+      const noteOrder = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+      const indexA = noteOrder.indexOf(noteA);
+      const indexB = noteOrder.indexOf(noteB);
+      
+      return indexB - indexA; // Higher note first
+    });
+    
+    return sortedNotes[0];
+  }, []);
+
+  // Helper function to check if hammer-on is valid
+  const isHammerOnValid = useCallback((stringId: 'lower' | 'higher', note: string): boolean => {
+    const currentTime = Date.now();
+    const string = stateRef.current.strings[stringId];
+    
+    // Check if hammer-on window is still open (based on last play time)
+    if (currentTime - string.lastPlayTime > stateRef.current.hammerOnState.windowMs) {
+      return false;
+    }
+    
+    // Must be enabled first by normal play or previous hammer-on
+    if (!string.isHammerOnEnabled) {
+      return false;
+    }
+    
+    // Check if the note is different from the last played note
+    if (string.lastPlayedNote === note) {
+      return false;
+    }
+    
+    // Allow hammer-on to any note (not just higher) for more flexibility
+    // Hammer-on is valid as long as we're within the time window and it's a different note
+    return true;
+  }, []);
+
+  const playNote = useCallback(async (note: string, customVelocity?: number, isHammerOn: boolean = false) => {
+    const noteVelocity = customVelocity !== undefined ? customVelocity : velocity;
+    const finalVelocity = isHammerOn ? noteVelocity * 0.7 : noteVelocity;
+    await onPlayNotes([note], finalVelocity, true);
+  }, [onPlayNotes, velocity]);
+
+  const stopNote = useCallback((note: string) => {
+    onStopNotes([note]);
+  }, [onStopNotes]);
+
+  const releaseKeyHeldNote = useCallback((note: string) => {
+    onReleaseKeyHeldNote(note);
+  }, [onReleaseKeyHeldNote]);
+
+  const stopSustainedNotes = useCallback(() => {
+    onStopSustainedNotes();
+  }, [onStopSustainedNotes]);
+
+  // New function to handle note press with string behavior
+  const handleNotePress = useCallback((stringId: 'lower' | 'higher', note: string) => {
+    setStrings(prevStrings => {
+      const newStrings = { ...prevStrings };
+      const string = { ...newStrings[stringId] };
+      
+      // Add note to pressed notes
+      string.pressedNotes.add(note);
+      
+      // Get the highest note from pressed notes
+      const highestNote = getHighestNote(string.pressedNotes);
+      
+      // If changing to a different highest note, stop the previous active note
+      if (highestNote && highestNote !== string.activeNote) {
+        if (string.activeNote) {
+          stopNote(string.activeNote);
+        }
+        string.activeNote = highestNote;
+      }
+      
+      newStrings[stringId] = string;
+      return newStrings;
+    });
+  }, [getHighestNote, stopNote]);
+
+  // New function to handle note release with string behavior
+  const handleNoteRelease = useCallback((stringId: 'lower' | 'higher', note: string) => {
+    const currentTime = Date.now();
+    
+    setStrings(prevStrings => {
+      const newStrings = { ...prevStrings };
+      const string = { ...newStrings[stringId] };
+      
+      // Remove note from pressed notes
+      string.pressedNotes.delete(note);
+      
+      // Get the highest remaining note
+      const highestNote = getHighestNote(string.pressedNotes);
+      
+      // Check if this is a pull-off: 
+      // - Hammer-on enabled
+      // - Within time window
+      // - The released note was the currently active note (higher note being lifted)
+      // - There's a lower note still pressed
+      const isPullOff = string.isHammerOnEnabled && 
+                       currentTime - string.lastPlayTime <= hammerOnState.windowMs &&
+                       string.activeNote === note && // The released note was the active note
+                       highestNote && // There's still a note pressed
+                       highestNote !== note; // And it's different from the released note
+      
+      if (isPullOff) {
+        // Pull-off: stop current note and play the lower remaining note with 70% velocity
+        if (string.activeNote) {
+          stopNote(string.activeNote);
+        }
+        playNote(highestNote, velocity * 0.7, true);
+        string.activeNote = highestNote;
+        string.lastPlayedNote = highestNote;
+        string.lastPlayTime = currentTime; // Reset timer for chaining
+        string.isHammerOnEnabled = true; // Keep hammer-on enabled for chaining
+      } else if (string.activeNote === note) {
+        // The released note was the active note - stop it
+        stopNote(string.activeNote);
+        if (highestNote) {
+          // There's still a note pressed, make it active but don't play it
+          string.activeNote = highestNote;
+        } else {
+          // No notes pressed, clear active state
+          string.activeNote = null;
+          string.isHammerOnEnabled = false;
+        }
+      } else if (highestNote && highestNote !== string.activeNote) {
+        // Normal note change: update active note but don't play it
+        string.activeNote = highestNote;
+      } else if (!highestNote) {
+        // No notes pressed, stop current note and clear state
+        if (string.activeNote) {
+          stopNote(string.activeNote);
+          string.activeNote = null;
+        }
+        string.isHammerOnEnabled = false;
+      }
+      
+      newStrings[stringId] = string;
+      return newStrings;
+    });
+  }, [getHighestNote, playNote, stopNote, velocity, hammerOnState.windowMs]);
+
+  // New function to handle play button press
+  const handlePlayButtonPress = useCallback((stringId: 'lower' | 'higher', customVelocity?: number) => {
+    const currentTime = Date.now();
+    
+    // Get current state to check what needs to be stopped
+    const currentStrings = stateRef.current.strings;
+    const currentString = currentStrings[stringId];
+    const currentActiveNote = currentString?.activeNote;
+    
+    // Stop the current active note first (outside state update)
+    if (currentActiveNote) {
+      stopNote(currentActiveNote);
+    }
+    
+    setStrings(prevStrings => {
+      const newStrings = { ...prevStrings };
+      const string = { ...newStrings[stringId] };
+      
+      const highestNote = getHighestNote(string.pressedNotes);
+      
+      if (highestNote) {
+        // Always play the highest note when play button is pressed (this is normal play)
+        // Only prevent if it's exactly the same note played within a very short time (to prevent rapid clicking)
+        const timeSinceLastPlay = currentTime - string.lastPlayTime;
+        const shouldPlay = string.lastPlayedNote !== highestNote || timeSinceLastPlay > 50; // 50ms debounce
+        
+        if (shouldPlay) {
+          const finalVelocity = customVelocity !== undefined ? customVelocity : velocity;
+          // Play the note after state update
+          setTimeout(() => {
+            playNote(highestNote, finalVelocity, false);
+          }, 0);
+        }
+        
+        string.activeNote = highestNote;
+        string.lastPlayedNote = highestNote;
+        string.lastPlayTime = currentTime;
+        string.isHammerOnEnabled = true; // Enable hammer-on after normal play
+      }
+      
+      newStrings[stringId] = string;
+      return newStrings;
+    });
+  }, [getHighestNote, playNote, stopNote, velocity]);
+
+  // New function to handle hammer-on note press (called after normal play)
+  const handleHammerOnPress = useCallback((stringId: 'lower' | 'higher', note: string) => {
+    const currentTime = Date.now();
+    
+    setStrings(prevStrings => {
+      const newStrings = { ...prevStrings };
+      const string = { ...newStrings[stringId] };
+      
+      // Check if hammer-on is valid based on timing, not on key being held
+      const isHammerOn = isHammerOnValid(stringId, note);
+      
+      if (isHammerOn) {
+        // Hammer-on: stop previous note and play new note with 70% velocity
+        if (string.activeNote && string.activeNote !== note) {
+          stopNote(string.activeNote);
+        }
+        playNote(note, velocity * 0.7, true);
+        string.activeNote = note;
+        string.lastPlayedNote = note;
+        string.lastPlayTime = currentTime; // Reset timer for chaining
+        string.isHammerOnEnabled = true; // Keep enabled for chaining
+        
+        // Also add to pressed notes if not already there
+        string.pressedNotes.add(note);
+      } else {
+        // Not a valid hammer-on, just update pressed notes
+        string.pressedNotes.add(note);
+        const highestNote = getHighestNote(string.pressedNotes);
+        if (highestNote && highestNote !== string.activeNote) {
+          string.activeNote = highestNote;
+        }
+      }
+      
+      newStrings[stringId] = string;
+      return newStrings;
+    });
+  }, [isHammerOnValid, playNote, stopNote, velocity, getHighestNote]);
 
   // Convert shortcut keys to modifier names for chord generation
   const convertChordModifiers = (modifiers: Set<string>): Set<string> => {
@@ -196,12 +446,12 @@ export default function Guitar({
   };
 
   // Handle fret press/release for basic mode
-  const handleBasicFretPress = async (stringIndex: number, fret: number) => {
-    handleFretPress(stringIndex, fret);
+  const handleBasicFretPress = async () => {
+    // This is now handled by useUnifiedInstrumentState
   };
 
-  const handleBasicFretRelease = (stringIndex: number, fret: number) => {
-    handleFretRelease(stringIndex, fret);
+  const handleBasicFretRelease = () => {
+    // This is now handled by useUnifiedInstrumentState
   };
 
   const handleBasicPlayNote = async (note: string, customVelocity?: number) => {
@@ -269,8 +519,8 @@ export default function Guitar({
   const guitarState = {
     mode: { type: mode, description: mode },
     velocity,
-    sustain,
-    sustainToggle,
+    sustain: unifiedState.sustain,
+    sustainToggle: unifiedState.sustainToggle,
     currentOctave,
     chordVoicing,
     chordModifiers,
@@ -279,8 +529,8 @@ export default function Guitar({
     pressedChords,
     strumConfig,
     // Include the new string state
-    strings: guitarStateData.guitarState.strings,
-    hammerOnState: guitarStateData.guitarState.hammerOnState,
+    strings,
+    hammerOnState,
   };
 
   // Create guitar controls object
@@ -289,10 +539,10 @@ export default function Guitar({
     setMode,
     velocity,
     setVelocity,
-    sustain,
-    setSustain,
-    sustainToggle,
-    setSustainToggle,
+    sustain: unifiedState.sustain,
+    setSustain: unifiedState.setSustain,
+    sustainToggle: unifiedState.sustainToggle,
+    setSustainToggle: unifiedState.setSustainToggle,
     currentOctave,
     setCurrentOctave,
     chordVoicing,
@@ -306,8 +556,8 @@ export default function Guitar({
     pressedChords,
     setPressedChords,
     strumConfig,
-    setStrumSpeed,
-    setStrumDirection,
+    setStrumSpeed: handleBrushingSpeedChange,
+    setStrumDirection: (direction: 'up' | 'down') => setStrumConfig(prev => ({ ...prev, direction })),
     playNote: handleBasicPlayNote,
     stopNote: handleBasicReleaseNote,
     releaseKeyHeldNote,
@@ -327,7 +577,22 @@ export default function Guitar({
     guitarControls,
   });
 
+  // Get shortcuts
+  const shortcuts = DEFAULT_GUITAR_SHORTCUTS;
 
+  // Check if there are sustained notes
+  const hasSustainedNotes = false; // Guitar doesn't use sustained notes in the same way as keyboard
+
+  // Convert pressedKeys to pressedFrets format for BasicFretboard
+  const pressedFrets = useMemo(() => {
+    const fretSet = new Set<string>();
+    unifiedState.pressedKeys.forEach(key => {
+      // Convert note to fret format if needed
+      // For now, we'll use the key as-is since BasicFretboard expects string-fret format
+      fretSet.add(key);
+    });
+    return fretSet;
+  }, [unifiedState.pressedKeys]);
 
   const renderGuitarMode = () => {
     switch (mode) {
@@ -336,8 +601,8 @@ export default function Guitar({
           <BasicFretboard
             scaleState={scaleState}
             velocity={velocity}
-            sustain={sustain}
-            sustainToggle={sustainToggle}
+            sustain={unifiedState.sustain}
+            sustainToggle={unifiedState.sustainToggle}
             pressedFrets={pressedFrets}
             onFretPress={handleBasicFretPress}
             onFretRelease={handleBasicFretRelease}
@@ -357,7 +622,21 @@ export default function Guitar({
             handleNoteRelease={handleNoteRelease}
             handlePlayButtonPress={handlePlayButtonPress}
             handleHammerOnPress={handleHammerOnPress}
-            guitarState={guitarStateData.guitarState}
+            guitarState={{
+              mode: { type: mode, description: mode },
+              velocity,
+              sustain: unifiedState.sustain,
+              sustainToggle: unifiedState.sustainToggle,
+              currentOctave,
+              chordVoicing,
+              chordModifiers,
+              powerChordMode,
+              pressedNotes,
+              pressedChords,
+              strumConfig,
+              strings,
+              hammerOnState,
+            }}
           />
         );
       case 'chord':
@@ -444,10 +723,10 @@ export default function Guitar({
       setVelocity={setVelocity}
       currentOctave={currentOctave}
       setCurrentOctave={setCurrentOctave}
-      sustain={sustain}
-      setSustain={setSustain}
-      sustainToggle={sustainToggle}
-      setSustainToggle={setSustainToggle}
+      sustain={unifiedState.sustain}
+      setSustain={unifiedState.setSustain}
+      sustainToggle={unifiedState.sustainToggle}
+      setSustainToggle={unifiedState.setSustainToggle}
       onStopSustainedNotes={stopSustainedNotes}
       hasSustainedNotes={hasSustainedNotes}
       chordVoicing={chordVoicing}

@@ -4,7 +4,7 @@ import type { SynthState, InstrumentEngineConfig } from '../utils/InstrumentEngi
 import { InstrumentCategory } from '../constants/instruments';
 import { createWebKitCompatibleAudioContext } from '../utils/webkitCompat';
 
-export interface UseUnifiedInstrumentManagerReturn {
+export interface UseInstrumentManagerReturn {
   // Local instrument management
   getLocalEngine: () => InstrumentEngine | null;
   initializeLocalEngine: (config: Omit<InstrumentEngineConfig, 'isLocalUser'>) => Promise<InstrumentEngine>;
@@ -43,7 +43,7 @@ export interface UseUnifiedInstrumentManagerReturn {
   preloadInstruments: (instruments: Array<{ userId: string; username: string; instrumentName: string; category: string; }>) => Promise<void>;
 }
 
-export const useUnifiedInstrumentManager = (): UseUnifiedInstrumentManagerReturn => {
+export const useInstrumentManager = (): UseInstrumentManagerReturn => {
   const audioContext = useRef<AudioContext | null>(null);
   const localEngine = useRef<InstrumentEngine | null>(null);
   const remoteEngines = useRef<Map<string, InstrumentEngine>>(new Map());
