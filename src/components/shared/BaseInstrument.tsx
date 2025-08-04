@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import type { ReactNode } from "react";
 import { getKeyDisplayName } from "../../constants/keyboardShortcuts";
+import { BRUSHING_TIME_STEPS, BRUSHING_TIME_LABELS } from "../../constants/guitarShortcuts";
 
 interface ControlConfig {
   velocity?: boolean;
@@ -282,25 +283,33 @@ export default function BaseInstrument({
             <div className="flex items-center gap-2">
               <label className="label py-1">
                 <span className="label-text text-sm">
-                  Brushing: {brushingSpeed}ms
+                  Brushing: {BRUSHING_TIME_LABELS[brushingSpeed as keyof typeof BRUSHING_TIME_LABELS]} ({brushingSpeed}ms)
                 </span>
               </label>
               <div className="join">
                 <button
-                  onClick={() =>
-                    setBrushingSpeed(Math.max(5, brushingSpeed - 10))
-                  }
+                  onClick={() => {
+                    const currentStep = BRUSHING_TIME_STEPS.indexOf(brushingSpeed as any);
+                    if (currentStep > 0) {
+                      const newSpeed = BRUSHING_TIME_STEPS[currentStep - 1];
+                      setBrushingSpeed(newSpeed);
+                    }
+                  }}
                   className="btn btn-sm btn-outline join-item touch-manipulation"
                 >
-                  - <kbd className="kbd kbd-xs">N</kbd>
+                  - <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.brushingSpeedDown?.key || 'N')}</kbd>
                 </button>
                 <button
-                  onClick={() =>
-                    setBrushingSpeed(Math.min(100, brushingSpeed + 10))
-                  }
+                  onClick={() => {
+                    const currentStep = BRUSHING_TIME_STEPS.indexOf(brushingSpeed as any);
+                    if (currentStep < BRUSHING_TIME_STEPS.length - 1) {
+                      const newSpeed = BRUSHING_TIME_STEPS[currentStep + 1];
+                      setBrushingSpeed(newSpeed);
+                    }
+                  }}
                   className="btn btn-sm btn-outline join-item touch-manipulation"
                 >
-                  + <kbd className="kbd kbd-xs">M</kbd>
+                  + <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.brushingSpeedUp?.key || 'M')}</kbd>
                 </button>
               </div>
             </div>

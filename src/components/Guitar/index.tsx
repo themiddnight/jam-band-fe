@@ -9,6 +9,7 @@ import type { Scale } from "../../hooks/useScaleState";
 import BaseInstrument from "../shared/BaseInstrument";
 import { DEFAULT_GUITAR_SHORTCUTS } from "../../constants/guitarShortcuts";
 import { getKeyDisplayName } from "../../constants/guitarShortcuts";
+import { useGuitarStore } from "../../stores/guitarStore";
 
 export interface GuitarProps {
   scaleState: {
@@ -45,21 +46,34 @@ export default function Guitar({
     onSustainToggleChange,
   });
 
+  // Use Zustand store for the specified states
   const {
     mode,
     setMode,
     velocity,
     setVelocity,
-    sustain,
-    setSustain,
-    sustainToggle,
-    setSustainToggle,
     currentOctave,
     setCurrentOctave,
     chordVoicing,
     setChordVoicing,
+    brushingSpeed,
+    setBrushingSpeed,
+  } = useGuitarStore();
+
+  // Wrapper function to handle type conversion for brushing speed
+  const handleBrushingSpeedChange = (speed: number) => {
+    setBrushingSpeed(speed as any);
+  };
+
+  const {
+    sustain,
+    setSustain,
+    sustainToggle,
+    setSustainToggle,
     chordModifiers,
     setChordModifiers,
+    powerChordMode,
+    setPowerChordMode,
     pressedNotes,
     setPressedNotes,
     pressedChords,
@@ -108,13 +122,16 @@ export default function Guitar({
     if (modifiers.has('t')) {
       convertedModifiers.add("majMinToggle");
     }
+    if (powerChordMode) {
+      convertedModifiers.add("powerChordToggle");
+    }
     
     return convertedModifiers;
   };
 
   // Handle strum chord for simple chord mode with proper timing
   const handleStrumChord = async (chordIndex: number, direction: 'up' | 'down') => {
-    // Generate 5-note chord: root note starting from E2 + 4 chord notes
+    // Generate chord notes
     let chordNotes = getChordFromDegree(
       scaleState.rootNote,
       scaleState.scale,
@@ -123,25 +140,31 @@ export default function Guitar({
       convertChordModifiers(chordModifiers)
     );
     
-    // Ensure we have exactly 5 notes by adding additional chord tones if needed
-    if (chordNotes.length < 5) {
-      // Add octave variations of existing chord tones
-      const baseChordNotes = [...chordNotes];
-      for (let i = 0; i < baseChordNotes.length && chordNotes.length < 5; i++) {
-        const note = baseChordNotes[i];
-        const noteName = note.slice(0, -1);
-        const octave = parseInt(note.slice(-1));
-        const higherOctaveNote = `${noteName}${octave + 1}`;
-        
-        // Only add if not already in the chord
-        if (!chordNotes.includes(higherOctaveNote)) {
-          chordNotes.push(higherOctaveNote);
+    // For power chords, use exactly 2 notes. For normal chords, ensure 5 notes
+    if (powerChordMode) {
+      // Power chords: use exactly 2 notes
+      chordNotes = chordNotes.slice(0, 2);
+    } else {
+      // Normal chords: ensure we have exactly 5 notes by adding additional chord tones if needed
+      if (chordNotes.length < 5) {
+        // Add octave variations of existing chord tones
+        const baseChordNotes = [...chordNotes];
+        for (let i = 0; i < baseChordNotes.length && chordNotes.length < 5; i++) {
+          const note = baseChordNotes[i];
+          const noteName = note.slice(0, -1);
+          const octave = parseInt(note.slice(-1));
+          const higherOctaveNote = `${noteName}${octave + 1}`;
+          
+          // Only add if not already in the chord
+          if (!chordNotes.includes(higherOctaveNote)) {
+            chordNotes.push(higherOctaveNote);
+          }
         }
       }
+      
+      // Take only the first 5 notes
+      chordNotes = chordNotes.slice(0, 5);
     }
-    
-    // Take only the first 5 notes
-    chordNotes = chordNotes.slice(0, 5);
     
     // Sort notes by pitch (low to high) for proper strumming
     chordNotes.sort((a, b) => {
@@ -202,7 +225,7 @@ export default function Guitar({
     newPressedChords.delete(chordIndex);
     setPressedChords(newPressedChords);
     
-    // Stop chord notes when releasing chord button - same 5-note logic as strum
+    // Stop chord notes when releasing chord button
     let chordNotes = getChordFromDegree(
       scaleState.rootNote,
       scaleState.scale,
@@ -211,25 +234,31 @@ export default function Guitar({
       convertChordModifiers(chordModifiers)
     );
     
-    // Ensure we have exactly 5 notes by adding additional chord tones if needed
-    if (chordNotes.length < 5) {
-      // Add octave variations of existing chord tones
-      const baseChordNotes = [...chordNotes];
-      for (let i = 0; i < baseChordNotes.length && chordNotes.length < 5; i++) {
-        const note = baseChordNotes[i];
-        const noteName = note.slice(0, -1);
-        const octave = parseInt(note.slice(-1));
-        const higherOctaveNote = `${noteName}${octave + 1}`;
-        
-        // Only add if not already in the chord
-        if (!chordNotes.includes(higherOctaveNote)) {
-          chordNotes.push(higherOctaveNote);
+    // For power chords, use exactly 2 notes. For normal chords, ensure 5 notes
+    if (powerChordMode) {
+      // Power chords: use exactly 2 notes
+      chordNotes = chordNotes.slice(0, 2);
+    } else {
+      // Normal chords: ensure we have exactly 5 notes by adding additional chord tones if needed
+      if (chordNotes.length < 5) {
+        // Add octave variations of existing chord tones
+        const baseChordNotes = [...chordNotes];
+        for (let i = 0; i < baseChordNotes.length && chordNotes.length < 5; i++) {
+          const note = baseChordNotes[i];
+          const noteName = note.slice(0, -1);
+          const octave = parseInt(note.slice(-1));
+          const higherOctaveNote = `${noteName}${octave + 1}`;
+          
+          // Only add if not already in the chord
+          if (!chordNotes.includes(higherOctaveNote)) {
+            chordNotes.push(higherOctaveNote);
+          }
         }
       }
+      
+      // Take only the first 5 notes
+      chordNotes = chordNotes.slice(0, 5);
     }
-    
-    // Take only the first 5 notes
-    chordNotes = chordNotes.slice(0, 5);
     
     for (const note of chordNotes) {
       onReleaseKeyHeldNote(note);
@@ -245,6 +274,7 @@ export default function Guitar({
     currentOctave,
     chordVoicing,
     chordModifiers,
+    powerChordMode,
     pressedNotes,
     pressedChords,
     strumConfig,
@@ -256,9 +286,7 @@ export default function Guitar({
   // Create guitar controls object
   const guitarControls = {
     mode: guitarState.mode.type,
-    setMode: (mode: 'basic' | 'melody' | 'chord') => {
-      setMode(mode);
-    },
+    setMode,
     velocity,
     setVelocity,
     sustain,
@@ -271,6 +299,8 @@ export default function Guitar({
     setChordVoicing,
     chordModifiers,
     setChordModifiers,
+    powerChordMode,
+    setPowerChordMode,
     pressedNotes,
     setPressedNotes,
     pressedChords,
@@ -337,10 +367,12 @@ export default function Guitar({
             chordVoicing={chordVoicing}
             pressedChords={pressedChords}
             chordModifiers={chordModifiers}
+            powerChordMode={powerChordMode}
             onChordPress={handleChordPress}
             onChordRelease={handleChordRelease}
             onStrumChord={handleStrumChord}
             onChordModifierChange={setChordModifiers}
+            onPowerChordModeChange={setPowerChordMode}
           />
         );
       default:
@@ -420,8 +452,8 @@ export default function Guitar({
       hasSustainedNotes={hasSustainedNotes}
       chordVoicing={chordVoicing}
       setChordVoicing={setChordVoicing}
-      brushingSpeed={strumConfig.speed}
-      setBrushingSpeed={setStrumSpeed}
+      brushingSpeed={brushingSpeed}
+      setBrushingSpeed={handleBrushingSpeedChange}
       handleKeyDown={handleKeyDown}
       handleKeyUp={handleKeyUp}
     >

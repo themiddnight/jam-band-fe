@@ -15,10 +15,12 @@ interface SimpleChordKeysProps {
   chordVoicing: number;
   pressedChords: Set<number>;
   chordModifiers: Set<string>;
+  powerChordMode: boolean;
   onChordPress: (chordIndex: number) => void;
   onChordRelease: (chordIndex: number) => void;
   onStrumChord: (chordIndex: number, direction: 'up' | 'down') => void;
   onChordModifierChange: (modifiers: Set<string>) => void;
+  onPowerChordModeChange: (powerChordMode: boolean) => void;
 }
 
 // Memoized chord button component - moved outside main component
@@ -27,6 +29,7 @@ const ChordButton = memo(({
   chordModifiers,
   shortcuts,
   scaleState,
+  powerChordMode,
   onChordPress,
   onChordRelease
 }: {
@@ -37,21 +40,28 @@ const ChordButton = memo(({
     rootNote: string;
     scale: Scale;
   };
+  powerChordMode: boolean;
   onChordPress: (chordIndex: number) => void;
   onChordRelease: (chordIndex: number) => void;
 }) => {
   // Generate chord name based on current modifiers (like Keyboard)
   let chordSuffix = "";
-  if (chordModifiers.has(shortcuts.sus2.key)) chordSuffix += "sus2";
-  else if (chordModifiers.has(shortcuts.sus4.key)) chordSuffix += "sus4";
-  if (chordModifiers.has(shortcuts.dominant7.key))
-    chordSuffix += chordSuffix ? "+7" : "7";
-  else if (chordModifiers.has(shortcuts.major7.key))
-    chordSuffix += chordSuffix ? "+M7" : "M7";
-  if (chordModifiers.has(shortcuts.majMinToggle.key))
-    chordSuffix = chordSuffix.includes("sus")
-      ? chordSuffix
-      : chordSuffix + (scaleState.scale === "major" ? "m" : "M");
+  
+  // For power chords, show just the root note name without any suffix
+  if (powerChordMode) {
+    chordSuffix = "";
+  } else {
+    if (chordModifiers.has(shortcuts.sus2.key)) chordSuffix += "sus2";
+    else if (chordModifiers.has(shortcuts.sus4.key)) chordSuffix += "sus4";
+    if (chordModifiers.has(shortcuts.dominant7.key))
+      chordSuffix += chordSuffix ? "+7" : "7";
+    else if (chordModifiers.has(shortcuts.major7.key))
+      chordSuffix += chordSuffix ? "+M7" : "M7";
+    if (chordModifiers.has(shortcuts.majMinToggle.key))
+      chordSuffix = chordSuffix.includes("sus")
+        ? chordSuffix
+        : chordSuffix + (scaleState.scale === "major" ? "m" : "M");
+  }
 
   return (
     <InstrumentButton
@@ -74,10 +84,12 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
   chordVoicing,
   pressedChords,
   chordModifiers,
+  powerChordMode,
   onChordPress,
   onChordRelease,
   onStrumChord,
   onChordModifierChange,
+  onPowerChordModeChange,
 }) => {
   const shortcuts = DEFAULT_GUITAR_SHORTCUTS;
 
@@ -123,6 +135,9 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
     if (modifiers.has('t')) {
       convertedModifiers.add("majMinToggle");
     }
+    if (powerChordMode) {
+      convertedModifiers.add("powerChordToggle");
+    }
 
     return convertedModifiers;
   };
@@ -153,7 +168,8 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
     }
 
     return keys;
-  }, [scaleState, chordVoicing, chordModifiers, pressedChords, shortcuts]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scaleState, chordVoicing, chordModifiers, pressedChords, shortcuts, powerChordMode]);
 
   // Create touch handlers for modifiers (exactly like Keyboard)
   const dominant7TouchHandlers = useTouchEvents({
@@ -251,6 +267,15 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
             >
               maj/min <kbd className="kbd kbd-sm">{getKeyDisplayName(shortcuts.majMinToggle.key)}</kbd>
             </button>
+            <button
+              onClick={() => onPowerChordModeChange(!powerChordMode)}
+              className={`px-2 py-1 rounded text-xs touch-manipulation ${powerChordMode
+                ? "bg-purple-500 text-black"
+                : "bg-gray-600 text-gray-300"
+                }`}
+            >
+              Power <kbd className="kbd kbd-sm">{getKeyDisplayName(shortcuts.powerChordToggle.key)}</kbd>
+            </button>
           </div>
         </div>
 
@@ -258,7 +283,7 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
         <div className="flex flex-col gap-4">
           {/* Triads */}
           <div className="text-center">
-            <p className="text-white text-sm mb-2">Triads</p>
+            <p className="text-white text-sm mb-2">{powerChordMode ? "Power Chords" : "Triads"}</p>
             <div className="flex justify-center gap-1">
               {chordKeys.map((chordKey, index) => (
                 <ChordButton
@@ -267,6 +292,7 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
                   chordModifiers={chordModifiers}
                   shortcuts={shortcuts}
                   scaleState={scaleState}
+                  powerChordMode={powerChordMode}
                   onChordPress={onChordPress}
                   onChordRelease={onChordRelease}
                 />

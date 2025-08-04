@@ -1,6 +1,7 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import type { Scale } from "../../../hooks/useScaleState";
 import type { GuitarState, StrumConfig, GuitarString, HammerOnState } from "../types/guitar";
+import { useGuitarStore } from "../../../stores/guitarStore";
 
 interface UseGuitarStateProps {
   scaleState: {
@@ -24,20 +25,42 @@ export const useGuitarState = ({
   onSustainChange,
   onSustainToggleChange,
 }: UseGuitarStateProps) => {
-  const [mode, setMode] = useState<'basic' | 'melody' | 'chord'>('basic');
-  const [velocity, setVelocity] = useState(0.5);
+  // Use Zustand store for the specified states
+  const {
+    mode,
+    setMode,
+    velocity,
+    setVelocity,
+    currentOctave,
+    setCurrentOctave,
+    chordVoicing,
+    setChordVoicing,
+    brushingSpeed,
+    setBrushingSpeed,
+  } = useGuitarStore();
+
+  // Keep React state for states not moved to Zustand
   const [sustain, setSustain] = useState(false);
   const [sustainToggle, setSustainToggle] = useState(false);
-  const [currentOctave, setCurrentOctave] = useState(3);
-  const [chordVoicing, setChordVoicing] = useState(0);
   const [chordModifiers, setChordModifiers] = useState<Set<string>>(new Set());
+  const [powerChordMode, setPowerChordMode] = useState(false);
   const [pressedNotes, setPressedNotes] = useState<Set<string>>(new Set());
   const [pressedChords, setPressedChords] = useState<Set<number>>(new Set());
   const [strumConfig, setStrumConfig] = useState<StrumConfig>({
-    speed: 5, // 5ms default
+    speed: brushingSpeed, // Use brushing speed from store
     direction: 'down',
     isActive: false,
   });
+
+  // Update strumConfig when brushingSpeed changes
+  const updateStrumConfig = useCallback(() => {
+    setStrumConfig(prev => ({ ...prev, speed: brushingSpeed }));
+  }, [brushingSpeed]);
+
+  // Effect to update strumConfig when brushingSpeed changes
+  useEffect(() => {
+    updateStrumConfig();
+  }, [updateStrumConfig]);
 
   // New state for string behavior
   const [strings, setStrings] = useState<{
@@ -323,19 +346,20 @@ export const useGuitarState = ({
 
   const handleVelocityChange = useCallback((newVelocity: number) => {
     setVelocity(newVelocity);
-  }, []);
+  }, [setVelocity]);
 
   const handleOctaveChange = useCallback((newOctave: number) => {
     setCurrentOctave(newOctave);
-  }, []);
+  }, [setCurrentOctave]);
 
   const handleChordVoicingChange = useCallback((newVoicing: number) => {
     setChordVoicing(newVoicing);
-  }, []);
+  }, [setChordVoicing]);
 
   const handleStrumSpeedChange = useCallback((newSpeed: number) => {
+    setBrushingSpeed(newSpeed as any); // Type assertion since we know the speed values match
     setStrumConfig(prev => ({ ...prev, speed: newSpeed }));
-  }, []);
+  }, [setBrushingSpeed]);
 
   const handleStrumDirectionChange = useCallback((direction: 'up' | 'down') => {
     setStrumConfig(prev => ({ ...prev, direction }));
@@ -349,6 +373,7 @@ export const useGuitarState = ({
     currentOctave,
     chordVoicing,
     chordModifiers,
+    powerChordMode,
     pressedNotes,
     pressedChords,
     strumConfig,
@@ -372,6 +397,8 @@ export const useGuitarState = ({
     setChordVoicing: handleChordVoicingChange,
     chordModifiers,
     setChordModifiers,
+    powerChordMode,
+    setPowerChordMode,
     pressedNotes,
     setPressedNotes,
     pressedChords,

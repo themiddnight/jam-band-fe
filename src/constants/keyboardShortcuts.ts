@@ -31,7 +31,7 @@ export interface KeyboardShortcuts {
 export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
   toggleMode: {
     key: 'shift',
-    description: 'Toggle between melody and chord modes',
+    description: 'Switch from basic to melody mode, or toggle between melody and chord modes',
     category: 'mode'
   },
   

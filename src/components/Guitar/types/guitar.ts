@@ -56,6 +56,7 @@ export interface GuitarState {
   currentOctave: number;
   chordVoicing: number;
   chordModifiers: Set<string>;
+  powerChordMode: boolean;
   pressedNotes: Set<string>;
   pressedChords: Set<number>;
   strumConfig: StrumConfig;

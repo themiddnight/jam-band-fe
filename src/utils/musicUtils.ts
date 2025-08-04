@@ -82,7 +82,11 @@ export const getChordFromDegree = (
   
   let chordIntervals: number[] = [];
   
-  if (modifiers.has("sus2")) {
+  // Check for power chord modifier first
+  if (modifiers.has("powerChordToggle")) {
+    // Power chord: root and fifth only (no third) - ensure both notes are in same octave
+    chordIntervals = [0, 7];
+  } else if (modifiers.has("sus2")) {
     chordIntervals = [0, 2, 7];
   } else if (modifiers.has("sus4")) {
     chordIntervals = [0, 5, 7];
@@ -109,6 +113,28 @@ export const getChordFromDegree = (
 
   // Add seventh notes if modifiers are present
   let finalChordNotes = [...chordNotes];
+  
+  // Special handling for power chords - ensure only 2 notes in same octave
+  if (modifiers.has("powerChordToggle")) {
+    // For power chords, we want exactly 2 notes: root and fifth in the same octave
+    const rootNote = chordNotes[0];
+    const rootNoteIndex = getNoteIndex(rootNote);
+    const fifthNoteIndex = rootNoteIndex + 7;
+    const fifthNote = getNoteFromIndex(fifthNoteIndex);
+    
+    // Ensure both notes are in the same octave as the root
+    const rootOctave = Math.floor(rootNoteIndex / 12);
+    const fifthOctave = Math.floor(fifthNoteIndex / 12);
+    
+    let adjustedFifthNote = fifthNote;
+    if (fifthOctave > rootOctave) {
+      // Fifth is in higher octave, bring it down
+      adjustedFifthNote = getNoteFromIndex(fifthNoteIndex - 12);
+    }
+    
+    // Return power chord immediately - no additional notes or octave adjustments
+    return [rootNote, adjustedFifthNote];
+  }
   
   if (modifiers.has("dominant7")) {
     const rootNoteIndex = getNoteIndex(rootNoteOfChord);

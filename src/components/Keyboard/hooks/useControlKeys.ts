@@ -73,9 +73,14 @@ export const useControlKeys = (
 
   const handleToggleMode = useCallback((key: string) => {
     if (key === shortcuts.toggleMode.key) {
-      if (virtualKeyboard.mode === "simple-melody") {
+      if (virtualKeyboard.mode === "basic") {
+        // When in basic mode, shift switches to melody mode
+        virtualKeyboard.setMode("simple-melody");
+      } else if (virtualKeyboard.mode === "simple-melody") {
+        // When in melody mode, shift switches to chord mode
         virtualKeyboard.setMode("simple-chord");
       } else if (virtualKeyboard.mode === "simple-chord") {
+        // When in chord mode, shift switches back to melody mode
         virtualKeyboard.setMode("simple-melody");
       }
       return true;

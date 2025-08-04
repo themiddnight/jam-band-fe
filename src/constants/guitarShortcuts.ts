@@ -1,7 +1,7 @@
 export interface GuitarShortcut {
   key: string;
   description: string;
-  category: 'mode' | 'chord' | 'control' | 'octave' | 'velocity' | 'strum';
+  category: 'mode' | 'chord' | 'control' | 'octave' | 'velocity' | 'strum' | 'brushing';
 }
 
 export interface GuitarShortcuts {
@@ -30,6 +30,7 @@ export interface GuitarShortcuts {
   sus2: GuitarShortcut;
   sus4: GuitarShortcut;
   majMinToggle: GuitarShortcut;
+  powerChordToggle: GuitarShortcut;
   
   // Control keys
   sustain: GuitarShortcut;
@@ -45,12 +46,45 @@ export interface GuitarShortcuts {
   velocity7: GuitarShortcut;
   velocity8: GuitarShortcut;
   velocity9: GuitarShortcut;
+  
+  // Brushing controls
+  brushingSpeedDown: GuitarShortcut;
+  brushingSpeedUp: GuitarShortcut;
 }
+
+// Brushing time constants
+export const BRUSHING_TIMES = {
+  FASTEST: 0,
+  FAST: 5,
+  NORMAL: 30,
+  SLOW: 60,
+  SLOWEST: 120,
+} as const;
+
+export type BrushingTime = typeof BRUSHING_TIMES[keyof typeof BRUSHING_TIMES];
+
+export const BRUSHING_TIME_LABELS: Record<BrushingTime, string> = {
+  [BRUSHING_TIMES.FASTEST]: 'Fastest',
+  [BRUSHING_TIMES.FAST]: 'Fast',
+  [BRUSHING_TIMES.NORMAL]: 'Normal',
+  [BRUSHING_TIMES.SLOW]: 'Slow',
+  [BRUSHING_TIMES.SLOWEST]: 'Slowest',
+};
+
+export const DEFAULT_BRUSHING_TIME: BrushingTime = BRUSHING_TIMES.FAST;
+
+export const BRUSHING_TIME_STEPS: BrushingTime[] = [
+  BRUSHING_TIMES.FASTEST,
+  BRUSHING_TIMES.FAST,
+  BRUSHING_TIMES.NORMAL,
+  BRUSHING_TIMES.SLOW,
+  BRUSHING_TIMES.SLOWEST,
+];
 
 export const DEFAULT_GUITAR_SHORTCUTS: GuitarShortcuts = {
   toggleMode: {
     key: 'shift',
-    description: 'Toggle between melody and chord modes',
+    description: 'Switch from basic to melody mode, or toggle between melody and chord modes',
     category: 'mode'
   },
   
@@ -159,6 +193,12 @@ export const DEFAULT_GUITAR_SHORTCUTS: GuitarShortcuts = {
     category: 'chord'
   },
   
+  powerChordToggle: {
+    key: '\\',
+    description: 'Toggle between normal chords and power chords',
+    category: 'chord'
+  },
+  
   // Control keys
   sustain: {
     key: ' ',
@@ -182,6 +222,19 @@ export const DEFAULT_GUITAR_SHORTCUTS: GuitarShortcuts = {
   velocity7: { key: '7', description: 'Velocity 7', category: 'velocity' },
   velocity8: { key: '8', description: 'Velocity 8', category: 'velocity' },
   velocity9: { key: '9', description: 'Velocity 9', category: 'velocity' },
+  
+  // Brushing controls
+  brushingSpeedDown: {
+    key: 'n',
+    description: 'Decrease brushing speed',
+    category: 'brushing'
+  },
+  
+  brushingSpeedUp: {
+    key: 'm',
+    description: 'Increase brushing speed',
+    category: 'brushing'
+  },
 };
 
 export const getShortcutsByCategory = (shortcuts: GuitarShortcuts, category: GuitarShortcut['category']) => {
@@ -195,6 +248,7 @@ export const getChordModifierKeys = (shortcuts: GuitarShortcuts): string[] => {
     shortcuts.sus2.key,
     shortcuts.sus4.key,
     shortcuts.majMinToggle.key,
+    shortcuts.powerChordToggle.key,
   ];
 };
 

@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { DEFAULT_GUITAR_SHORTCUTS } from "../../../constants/guitarShortcuts";
+import { DEFAULT_GUITAR_SHORTCUTS, BRUSHING_TIME_STEPS } from "../../../constants/guitarShortcuts";
 import type { Scale } from "../../../hooks/useScaleState";
 import type { GuitarState } from "../types/guitar";
 
@@ -25,6 +25,8 @@ interface UseGuitarKeysControllerProps {
     setChordVoicing: (voicing: number) => void;
     chordModifiers: Set<string>;
     setChordModifiers: (modifiers: Set<string>) => void;
+    powerChordMode: boolean;
+    setPowerChordMode: (powerChordMode: boolean) => void;
     pressedNotes: Set<string>;
     setPressedNotes: (notes: Set<string>) => void;
     pressedChords: Set<number>;
@@ -64,9 +66,14 @@ export const useGuitarKeysController = ({
 
       // Mode controls
       if (key === shortcuts.toggleMode.key) {
-        if (guitarState.mode.type === 'melody') {
+        if (guitarState.mode.type === 'basic') {
+          // When in basic mode, shift switches to melody mode
+          guitarControls.setMode('melody');
+        } else if (guitarState.mode.type === 'melody') {
+          // When in melody mode, shift switches to chord mode
           guitarControls.setMode('chord');
         } else if (guitarState.mode.type === 'chord') {
+          // When in chord mode, shift switches back to melody mode
           guitarControls.setMode('melody');
         }
         return;
@@ -212,14 +219,20 @@ export const useGuitarKeysController = ({
         // Strum speed controls
         if (key === shortcuts.strumSpeedDown.key) {
           const currentSpeed = guitarState.strumConfig.speed;
-          const newSpeed = Math.max(5, currentSpeed - 10);
-          guitarControls.setStrumSpeed(newSpeed);
+          const currentStep = BRUSHING_TIME_STEPS.indexOf(currentSpeed as any);
+          if (currentStep > 0) {
+            const newSpeed = BRUSHING_TIME_STEPS[currentStep - 1];
+            guitarControls.setStrumSpeed(newSpeed);
+          }
           return;
         }
         if (key === shortcuts.strumSpeedUp.key) {
           const currentSpeed = guitarState.strumConfig.speed;
-          const newSpeed = Math.min(100, currentSpeed + 10);
-          guitarControls.setStrumSpeed(newSpeed);
+          const currentStep = BRUSHING_TIME_STEPS.indexOf(currentSpeed as any);
+          if (currentStep < BRUSHING_TIME_STEPS.length - 1) {
+            const newSpeed = BRUSHING_TIME_STEPS[currentStep + 1];
+            guitarControls.setStrumSpeed(newSpeed);
+          }
           return;
         }
 
@@ -262,6 +275,15 @@ export const useGuitarKeysController = ({
           const newModifiers = new Set(guitarState.chordModifiers);
           newModifiers.add(shortcuts.majMinToggle.key);
           guitarControls.setChordModifiers(newModifiers);
+          return;
+        }
+        if (key === shortcuts.powerChordToggle.key) {
+          // Toggle power chord mode
+          const newPowerChordMode = !guitarState.powerChordMode;
+          // Update the power chord mode through the guitar controls
+          if (guitarControls.setPowerChordMode) {
+            guitarControls.setPowerChordMode(newPowerChordMode);
+          }
           return;
         }
 
