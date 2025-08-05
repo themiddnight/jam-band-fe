@@ -1,5 +1,5 @@
-import { memo } from "react";
 import { useTouchEvents } from "../../hooks/useTouchEvents";
+import { memo } from "react";
 
 interface VirtualKeyButtonProps {
   keyboardKey?: string;
@@ -27,26 +27,20 @@ const getPressedOctaveBackgroundColor = (octave: number): string => {
   return octave % 2 === 0 ? "bg-gray-200" : "bg-blue-200";
 };
 
-export const VirtualKeyButton = memo<VirtualKeyButtonProps>(({
-  keyboardKey,
-  note,
-  isPressed,
-  onPress,
-  onRelease,
-  className = "",
-}) => {
-  const touchHandlers = useTouchEvents({ onPress, onRelease });
-  const octave = getOctaveFromNote(note);
-  const baseBgColor = getOctaveBackgroundColor(octave);
-  const pressedBgColor = getPressedOctaveBackgroundColor(octave);
+export const VirtualKeyButton = memo<VirtualKeyButtonProps>(
+  ({ keyboardKey, note, isPressed, onPress, onRelease, className = "" }) => {
+    const touchHandlers = useTouchEvents({ onPress, onRelease });
+    const octave = getOctaveFromNote(note);
+    const baseBgColor = getOctaveBackgroundColor(octave);
+    const pressedBgColor = getPressedOctaveBackgroundColor(octave);
 
-  return (
-    <button
-      ref={touchHandlers.ref as React.RefObject<HTMLButtonElement>}
-      onMouseDown={onPress}
-      onMouseUp={onRelease}
-      onMouseLeave={onRelease}
-      className={`
+    return (
+      <button
+        ref={touchHandlers.ref as React.RefObject<HTMLButtonElement>}
+        onMouseDown={onPress}
+        onMouseUp={onRelease}
+        onMouseLeave={onRelease}
+        className={`
         w-12 h-24 border-2 border-gray-300 hover:bg-gray-100 
         transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1
         touch-manipulation
@@ -54,20 +48,21 @@ export const VirtualKeyButton = memo<VirtualKeyButtonProps>(({
         ${isPressed ? `${pressedBgColor} transform scale-95` : ""}
         ${className}
       `}
-      style={{
-        WebkitTapHighlightColor: 'transparent',
-        WebkitTouchCallout: 'none',
-        WebkitUserSelect: 'none',
-        touchAction: 'manipulation'
-      }}
-    >
-      <div className="w-full h-full" />
-      <span className="text-xs text-gray-600 font-bold">
-        <kbd className="kbd kbd-sm">{keyboardKey?.toUpperCase()}</kbd>
-      </span>
-      <span className="text-xs text-gray-600">{note}</span>
-    </button>
-  );
-});
+        style={{
+          WebkitTapHighlightColor: "transparent",
+          WebkitTouchCallout: "none",
+          WebkitUserSelect: "none",
+          touchAction: "manipulation",
+        }}
+      >
+        <div className="w-full h-full" />
+        <span className="text-xs text-gray-600 font-bold">
+          <kbd className="kbd kbd-sm">{keyboardKey?.toUpperCase()}</kbd>
+        </span>
+        <span className="text-xs text-gray-600">{note}</span>
+      </button>
+    );
+  },
+);
 
-VirtualKeyButton.displayName = 'VirtualKeyButton'; 
+VirtualKeyButton.displayName = "VirtualKeyButton";

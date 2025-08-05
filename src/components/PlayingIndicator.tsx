@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 
 interface PlayingIndicatorProps {
   velocity: number;
@@ -19,8 +19,8 @@ export const PlayingIndicator = ({ velocity }: PlayingIndicatorProps) => {
   }, [velocity]);
 
   return (
-    <div className='relative w-2 h-2 rounded-full overflow-hidden'>
-      <div className='absolute w-full h-full bg-neutral-500/50' />
+    <div className="relative w-2 h-2 rounded-full overflow-hidden">
+      <div className="absolute w-full h-full bg-neutral-500/50" />
       <div
         className={`absolute w-full h-full ${trigger ? "user-on" : "user-off"}`}
         style={{
@@ -31,4 +31,4 @@ export const PlayingIndicator = ({ velocity }: PlayingIndicatorProps) => {
   );
 };
 
-export default PlayingIndicator; 
+export default PlayingIndicator;

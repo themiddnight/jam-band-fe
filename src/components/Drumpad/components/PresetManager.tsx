@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { Modal } from '../../shared/Modal';
-import { useDrumpadPresetsStore } from '../../../stores/drumpadPresetsStore';
-import type { PresetManagerProps } from '../types/drumpad';
+import { useDrumpadPresetsStore } from "../../../stores/drumpadPresetsStore";
+import { Modal } from "../../shared/Modal";
+import type { PresetManagerProps } from "../types/drumpad";
+import React, { useState } from "react";
 
 export const PresetManager: React.FC<PresetManagerProps> = ({
   currentPreset,
@@ -9,23 +9,23 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
   onSavePreset,
   onDeletePreset,
   onExportPreset,
-  onImportPreset
+  onImportPreset,
 }) => {
   const [showSaveModal, setShowSaveModal] = useState(false);
-  const [presetName, setPresetName] = useState('');
-  const [presetDescription, setPresetDescription] = useState('');
+  const [presetName, setPresetName] = useState("");
+  const [presetDescription, setPresetDescription] = useState("");
   const [showImportExport, setShowImportExport] = useState(false);
-  const [importData, setImportData] = useState('');
+  const [importData, setImportData] = useState("");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  
+
   const { getPresetsForCurrentInstrument } = useDrumpadPresetsStore();
   const availablePresets = getPresetsForCurrentInstrument();
 
   const handleSavePreset = () => {
     if (presetName.trim()) {
       onSavePreset(presetName.trim(), presetDescription.trim());
-      setPresetName('');
-      setPresetDescription('');
+      setPresetName("");
+      setPresetDescription("");
       setShowSaveModal(false);
     }
   };
@@ -41,10 +41,10 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
       try {
         const presetData = JSON.parse(importData.trim());
         onImportPreset(presetData);
-        setImportData('');
+        setImportData("");
         setShowImportExport(false);
       } catch (error) {
-        console.error('Failed to import preset:', error);
+        console.error("Failed to import preset:", error);
       }
     }
   };
@@ -59,7 +59,7 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
         >
           Save Preset
         </button>
-        
+
         {currentPreset && (
           <button
             onClick={() => setShowDeleteModal(true)}
@@ -69,20 +69,20 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
             Delete
           </button>
         )}
-        
+
         <button
           onClick={() => setShowImportExport(true)}
           className="btn btn-secondary btn-xs"
         >
           Import/Export
         </button>
-        
+
         {availablePresets.length > 0 && (
           <select
-            value={currentPreset?.id || ''}
+            value={currentPreset?.id || ""}
             onChange={(e) => {
               const selectedPreset = availablePresets.find(
-                (p) => p.id === e.target.value
+                (p) => p.id === e.target.value,
               );
               if (selectedPreset) {
                 onLoadPreset(selectedPreset);
@@ -108,8 +108,8 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
         onOk={handleSavePreset}
         onCancel={() => {
           setShowSaveModal(false);
-          setPresetName('');
-          setPresetDescription('');
+          setPresetName("");
+          setPresetDescription("");
         }}
         okText="Save"
         cancelText="Cancel"
@@ -126,7 +126,7 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
               onChange={(e) => setPresetName(e.target.value)}
               placeholder="Enter preset name"
               className="input input-bordered w-full"
-              onKeyDown={(e) => e.key === 'Enter' && handleSavePreset()}
+              onKeyDown={(e) => e.key === "Enter" && handleSavePreset()}
               autoFocus
             />
           </div>
@@ -152,7 +152,7 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
         title="Import/Export Presets"
         onCancel={() => {
           setShowImportExport(false);
-          setImportData('');
+          setImportData("");
         }}
         showOkButton={false}
         size="lg"
@@ -204,9 +204,10 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
         cancelText="Cancel"
       >
         <p className="py-4">
-          Are you sure you want to delete "{currentPreset?.name}"? This action cannot be undone.
+          Are you sure you want to delete "{currentPreset?.name}"? This action
+          cannot be undone.
         </p>
       </Modal>
     </>
   );
-}; 
+};

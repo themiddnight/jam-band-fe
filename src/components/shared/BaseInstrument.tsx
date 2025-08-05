@@ -1,7 +1,10 @@
+import {
+  BRUSHING_TIME_STEPS,
+  BRUSHING_TIME_LABELS,
+} from "../../constants/guitarShortcuts";
+import { getKeyDisplayName } from "../../constants/utils/displayUtils";
 import { useEffect } from "react";
 import type { ReactNode } from "react";
-import { getKeyDisplayName } from "../../constants/keyboardShortcuts";
-import { BRUSHING_TIME_STEPS, BRUSHING_TIME_LABELS } from "../../constants/guitarShortcuts";
 
 interface ControlConfig {
   velocity?: boolean;
@@ -15,16 +18,16 @@ export interface BaseInstrumentProps {
   // Common props for both instruments
   title: string;
   shortcuts: Record<string, { key: string }> | any;
-  
+
   // Mode controls
   modeControls?: ReactNode;
-  
+
   // Main content
   children: ReactNode;
-  
+
   // Control configuration
   controlConfig: ControlConfig;
-  
+
   // Control values and setters
   velocity?: number;
   setVelocity?: (velocity: number) => void;
@@ -40,10 +43,10 @@ export interface BaseInstrumentProps {
   setChordVoicing?: (voicing: number) => void;
   brushingSpeed?: number;
   setBrushingSpeed?: (speed: number) => void;
-  
+
   // Additional controls
   additionalControls?: ReactNode;
-  
+
   // Keyboard event handlers
   handleKeyDown?: (event: KeyboardEvent) => void;
   handleKeyUp?: (event: KeyboardEvent) => void;
@@ -94,9 +97,7 @@ export default function BaseInstrument({
             <h3 className="card-title text-base">{title}</h3>
           </div>
 
-          <div className="flex gap-3 flex-wrap justify-end">
-            {modeControls}
-          </div>
+          <div className="flex gap-3 flex-wrap justify-end">{modeControls}</div>
         </div>
 
         <div className="bg-neutral p-4 rounded-lg shadow-2xl overflow-auto">
@@ -168,34 +169,37 @@ export default function BaseInstrument({
                 onContextMenu={(e) => {
                   e.preventDefault();
                 }}
-                className={`btn btn-sm join-item touch-manipulation select-none ${(sustain &&
-                  !sustainToggle) ||
-                  (sustainToggle &&
-                    hasSustainedNotes)
-                  ? "btn-warning"
-                  : "btn-outline"
-                  }`}
+                className={`btn btn-sm join-item touch-manipulation select-none ${
+                  (sustain && !sustainToggle) ||
+                  (sustainToggle && hasSustainedNotes)
+                    ? "btn-warning"
+                    : "btn-outline"
+                }`}
                 style={{
-                  WebkitTapHighlightColor: 'transparent',
-                  WebkitTouchCallout: 'none',
-                  WebkitUserSelect: 'none',
-                  touchAction: 'manipulation'
+                  WebkitTapHighlightColor: "transparent",
+                  WebkitTouchCallout: "none",
+                  WebkitUserSelect: "none",
+                  touchAction: "manipulation",
                 }}
               >
-                Sustain <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.sustain?.key || '')}</kbd>
+                Sustain{" "}
+                <kbd className="kbd kbd-xs">
+                  {getKeyDisplayName(shortcuts.sustain?.key || "")}
+                </kbd>
               </button>
               {setSustainToggle && (
                 <button
                   onClick={() => {
                     setSustainToggle(!sustainToggle);
                   }}
-                  className={`btn btn-sm join-item touch-manipulation ${sustainToggle
-                    ? "btn-success"
-                    : "btn-outline"
-                    }`}
+                  className={`btn btn-sm join-item touch-manipulation ${
+                    sustainToggle ? "btn-success" : "btn-outline"
+                  }`}
                 >
                   {sustainToggle ? "🔒" : "🔓"}
-                  <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.sustainToggle?.key || '')}</kbd>
+                  <kbd className="kbd kbd-xs">
+                    {getKeyDisplayName(shortcuts.sustainToggle?.key || "")}
+                  </kbd>
                 </button>
               )}
             </div>
@@ -221,99 +225,135 @@ export default function BaseInstrument({
           )}
 
           {/* Octave Control */}
-          {controlConfig.octave && currentOctave !== undefined && setCurrentOctave && (
-            <div className="flex items-center gap-2">
-              <label className="label py-1">
-                <span className="label-text text-sm">
-                  Octave: {currentOctave}
-                </span>
-              </label>
-              <div className="join">
-                <button
-                  onClick={() =>
-                    setCurrentOctave(Math.max(0, currentOctave - 1))
-                  }
-                  className="btn btn-sm btn-outline join-item touch-manipulation"
-                >
-                  - <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.octaveDown?.key || '')}</kbd>
-                </button>
-                <button
-                  onClick={() =>
-                    setCurrentOctave(Math.min(8, currentOctave + 1))
-                  }
-                  className="btn btn-sm btn-outline join-item touch-manipulation"
-                >
-                  + <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.octaveUp?.key || '')}</kbd>
-                </button>
+          {controlConfig.octave &&
+            currentOctave !== undefined &&
+            setCurrentOctave && (
+              <div className="flex items-center gap-2">
+                <label className="label py-1">
+                  <span className="label-text text-sm">
+                    Octave: {currentOctave}
+                  </span>
+                </label>
+                <div className="join">
+                  <button
+                    onClick={() =>
+                      setCurrentOctave(Math.max(0, currentOctave - 1))
+                    }
+                    className="btn btn-sm btn-outline join-item touch-manipulation"
+                  >
+                    -{" "}
+                    <kbd className="kbd kbd-xs">
+                      {getKeyDisplayName(shortcuts.octaveDown?.key || "")}
+                    </kbd>
+                  </button>
+                  <button
+                    onClick={() =>
+                      setCurrentOctave(Math.min(8, currentOctave + 1))
+                    }
+                    className="btn btn-sm btn-outline join-item touch-manipulation"
+                  >
+                    +{" "}
+                    <kbd className="kbd kbd-xs">
+                      {getKeyDisplayName(shortcuts.octaveUp?.key || "")}
+                    </kbd>
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* Chord Voicing Control */}
-          {controlConfig.chordVoicing && chordVoicing !== undefined && setChordVoicing && (
-            <div className="flex items-center gap-2">
-              <label className="label py-1">
-                <span className="label-text text-sm">
-                  Voicing: {chordVoicing}
-                </span>
-              </label>
-              <div className="join">
-                <button
-                  onClick={() =>
-                    setChordVoicing(Math.max(-2, chordVoicing - 1))
-                  }
-                  className="btn btn-sm btn-outline join-item touch-manipulation"
-                >
-                  - <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.voicingDown?.key || '')}</kbd>
-                </button>
-                <button
-                  onClick={() =>
-                    setChordVoicing(Math.min(4, chordVoicing + 1))
-                  }
-                  className="btn btn-sm btn-outline join-item touch-manipulation"
-                >
-                  + <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.voicingUp?.key || '')}</kbd>
-                </button>
+          {controlConfig.chordVoicing &&
+            chordVoicing !== undefined &&
+            setChordVoicing && (
+              <div className="flex items-center gap-2">
+                <label className="label py-1">
+                  <span className="label-text text-sm">
+                    Voicing: {chordVoicing}
+                  </span>
+                </label>
+                <div className="join">
+                  <button
+                    onClick={() =>
+                      setChordVoicing(Math.max(-2, chordVoicing - 1))
+                    }
+                    className="btn btn-sm btn-outline join-item touch-manipulation"
+                  >
+                    -{" "}
+                    <kbd className="kbd kbd-xs">
+                      {getKeyDisplayName(shortcuts.voicingDown?.key || "")}
+                    </kbd>
+                  </button>
+                  <button
+                    onClick={() =>
+                      setChordVoicing(Math.min(4, chordVoicing + 1))
+                    }
+                    className="btn btn-sm btn-outline join-item touch-manipulation"
+                  >
+                    +{" "}
+                    <kbd className="kbd kbd-xs">
+                      {getKeyDisplayName(shortcuts.voicingUp?.key || "")}
+                    </kbd>
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* Brushing Speed Control */}
-          {controlConfig.brushingSpeed && brushingSpeed !== undefined && setBrushingSpeed && (
-            <div className="flex items-center gap-2">
-              <label className="label py-1">
-                <span className="label-text text-sm">
-                  Brushing: {BRUSHING_TIME_LABELS[brushingSpeed as keyof typeof BRUSHING_TIME_LABELS]} ({brushingSpeed}ms)
-                </span>
-              </label>
-              <div className="join">
-                <button
-                  onClick={() => {
-                    const currentStep = BRUSHING_TIME_STEPS.indexOf(brushingSpeed as any);
-                    if (currentStep > 0) {
-                      const newSpeed = BRUSHING_TIME_STEPS[currentStep - 1];
-                      setBrushingSpeed(newSpeed);
-                    }
-                  }}
-                  className="btn btn-sm btn-outline join-item touch-manipulation"
-                >
-                  - <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.brushingSpeedDown?.key || 'N')}</kbd>
-                </button>
-                <button
-                  onClick={() => {
-                    const currentStep = BRUSHING_TIME_STEPS.indexOf(brushingSpeed as any);
-                    if (currentStep < BRUSHING_TIME_STEPS.length - 1) {
-                      const newSpeed = BRUSHING_TIME_STEPS[currentStep + 1];
-                      setBrushingSpeed(newSpeed);
-                    }
-                  }}
-                  className="btn btn-sm btn-outline join-item touch-manipulation"
-                >
-                  + <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.brushingSpeedUp?.key || 'M')}</kbd>
-                </button>
+          {controlConfig.brushingSpeed &&
+            brushingSpeed !== undefined &&
+            setBrushingSpeed && (
+              <div className="flex items-center gap-2">
+                <label className="label py-1">
+                  <span className="label-text text-sm">
+                    Brushing:{" "}
+                    {
+                      BRUSHING_TIME_LABELS[
+                        brushingSpeed as keyof typeof BRUSHING_TIME_LABELS
+                      ]
+                    }{" "}
+                    ({brushingSpeed}ms)
+                  </span>
+                </label>
+                <div className="join">
+                  <button
+                    onClick={() => {
+                      const currentStep = BRUSHING_TIME_STEPS.indexOf(
+                        brushingSpeed as any,
+                      );
+                      if (currentStep > 0) {
+                        const newSpeed = BRUSHING_TIME_STEPS[currentStep - 1];
+                        setBrushingSpeed(newSpeed);
+                      }
+                    }}
+                    className="btn btn-sm btn-outline join-item touch-manipulation"
+                  >
+                    -{" "}
+                    <kbd className="kbd kbd-xs">
+                      {getKeyDisplayName(
+                        shortcuts.brushingSpeedDown?.key || "N",
+                      )}
+                    </kbd>
+                  </button>
+                  <button
+                    onClick={() => {
+                      const currentStep = BRUSHING_TIME_STEPS.indexOf(
+                        brushingSpeed as any,
+                      );
+                      if (currentStep < BRUSHING_TIME_STEPS.length - 1) {
+                        const newSpeed = BRUSHING_TIME_STEPS[currentStep + 1];
+                        setBrushingSpeed(newSpeed);
+                      }
+                    }}
+                    className="btn btn-sm btn-outline join-item touch-manipulation"
+                  >
+                    +{" "}
+                    <kbd className="kbd kbd-xs">
+                      {getKeyDisplayName(shortcuts.brushingSpeedUp?.key || "M")}
+                    </kbd>
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* Additional Controls */}
           {additionalControls}
@@ -321,4 +361,4 @@ export default function BaseInstrument({
       </div>
     </div>
   );
-} 
+}

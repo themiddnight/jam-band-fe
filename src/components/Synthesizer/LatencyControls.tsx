@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { Modal } from "../shared/Modal";
 import { AUDIO_CONFIG } from "../../constants/audioConfig";
+import { Modal } from "../shared/Modal";
+import React, { useState, useEffect } from "react";
 
 interface LatencyControlsProps {
   onConfigChange?: (config: typeof AUDIO_CONFIG) => void;
@@ -21,7 +21,7 @@ export const LatencyControls: React.FC<LatencyControlsProps> = ({
   const updateConfig = (
     section: keyof typeof AUDIO_CONFIG,
     key: string,
-    value: any
+    value: any,
   ) => {
     setConfig((prev) => ({
       ...prev,
@@ -54,15 +54,11 @@ export const LatencyControls: React.FC<LatencyControlsProps> = ({
         <div className="space-y-6">
           {/* Tone.js Context Settings */}
           <div className="space-y-3">
-            <h4 className="font-medium text-base-content">
-              Tone.js Context
-            </h4>
+            <h4 className="font-medium text-base-content">Tone.js Context</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="label">
-                  <span className="label-text text-sm">
-                    Look Ahead (ms)
-                  </span>
+                  <span className="label-text text-sm">Look Ahead (ms)</span>
                   <span className="label-text-alt text-xs">
                     Lower = less latency
                   </span>
@@ -78,7 +74,7 @@ export const LatencyControls: React.FC<LatencyControlsProps> = ({
                       updateConfig(
                         "TONE_CONTEXT",
                         "lookAhead",
-                        parseInt(e.target.value) / 1000
+                        parseInt(e.target.value) / 1000,
                       )
                     }
                     className="range range-sm range-primary flex-1"
@@ -109,7 +105,7 @@ export const LatencyControls: React.FC<LatencyControlsProps> = ({
                       updateConfig(
                         "TONE_CONTEXT",
                         "updateInterval",
-                        parseInt(e.target.value) / 1000
+                        parseInt(e.target.value) / 1000,
                       )
                     }
                     className="range range-sm range-primary flex-1"
@@ -136,7 +132,7 @@ export const LatencyControls: React.FC<LatencyControlsProps> = ({
                   updateConfig(
                     "AUDIO_CONTEXT",
                     "latencyHint",
-                    e.target.value as AudioContextLatencyCategory
+                    e.target.value as AudioContextLatencyCategory,
                   )
                 }
                 className="select select-bordered select-sm w-full"
@@ -174,7 +170,7 @@ export const LatencyControls: React.FC<LatencyControlsProps> = ({
                       updateConfig(
                         "SYNTHESIZER",
                         "noteRetriggerDelay",
-                        parseFloat(e.target.value)
+                        parseFloat(e.target.value),
                       )
                     }
                     className="range range-sm range-primary flex-1"
@@ -205,15 +201,13 @@ export const LatencyControls: React.FC<LatencyControlsProps> = ({
                       updateConfig(
                         "SYNTHESIZER",
                         "envelopeAttackMin",
-                        parseFloat(e.target.value) / 1000
+                        parseFloat(e.target.value) / 1000,
                       )
                     }
                     className="range range-sm range-primary flex-1"
                   />
                   <span className="label-text-alt text-xs min-w-[3rem]">
-                    {(config.SYNTHESIZER.envelopeAttackMin * 1000).toFixed(
-                      1
-                    )}
+                    {(config.SYNTHESIZER.envelopeAttackMin * 1000).toFixed(1)}
                     ms
                   </span>
                 </div>
@@ -265,9 +259,9 @@ export const LatencyControls: React.FC<LatencyControlsProps> = ({
             <div>
               <div className="font-bold">Note:</div>
               <div className="text-sm">
-                Lower latency settings may increase CPU usage and cause
-                audio glitches on slower devices. Restart the synthesizer
-                after changing settings for full effect.
+                Lower latency settings may increase CPU usage and cause audio
+                glitches on slower devices. Restart the synthesizer after
+                changing settings for full effect.
               </div>
             </div>
           </div>

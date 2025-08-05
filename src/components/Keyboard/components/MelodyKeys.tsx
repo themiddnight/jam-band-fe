@@ -1,6 +1,6 @@
-import { memo } from "react";
-import type { KeyboardKey } from "../types/keyboard";
 import { SharedNoteKeys, type NoteKey } from "../../shared/NoteKeys";
+import type { KeyboardKey } from "../types/keyboard";
+import { memo } from "react";
 
 interface MelodyKeysProps {
   virtualKeys: KeyboardKey[];
@@ -9,38 +9,41 @@ interface MelodyKeysProps {
   onKeyRelease: (key: KeyboardKey) => void;
 }
 
-export const MelodyKeys = memo<MelodyKeysProps>(({
-  virtualKeys,
-  pressedKeys,
-  onKeyPress,
-  onKeyRelease,
-}) => {
-  // Convert KeyboardKey to NoteKey format
-  const noteKeys: NoteKey[] = virtualKeys.map(key => ({
-    note: key.note,
-    keyboardKey: key.keyboardKey || '',
-    isPressed: pressedKeys.has(key.note),
-    position: key.position,
-  }));
+export const MelodyKeys = memo<MelodyKeysProps>(
+  ({ virtualKeys, pressedKeys, onKeyPress, onKeyRelease }) => {
+    // Convert KeyboardKey to NoteKey format
+    const noteKeys: NoteKey[] = virtualKeys.map((key) => ({
+      note: key.note,
+      keyboardKey: key.keyboardKey || "",
+      isPressed: pressedKeys.has(key.note),
+      position: key.position,
+    }));
 
-  return (
-    <SharedNoteKeys
-      noteKeys={noteKeys}
-      onKeyPress={(noteKey) => {
-        const originalKey = virtualKeys.find(k => k.note === noteKey.note && k.keyboardKey === noteKey.keyboardKey);
-        if (originalKey) {
-          onKeyPress(originalKey);
-        }
-      }}
-      onKeyRelease={(noteKey) => {
-        const originalKey = virtualKeys.find(k => k.note === noteKey.note && k.keyboardKey === noteKey.keyboardKey);
-        if (originalKey) {
-          onKeyRelease(originalKey);
-        }
-      }}
-      variant="keyboard"
-    />
-  );
-});
+    return (
+      <SharedNoteKeys
+        noteKeys={noteKeys}
+        onKeyPress={(noteKey) => {
+          const originalKey = virtualKeys.find(
+            (k) =>
+              k.note === noteKey.note && k.keyboardKey === noteKey.keyboardKey,
+          );
+          if (originalKey) {
+            onKeyPress(originalKey);
+          }
+        }}
+        onKeyRelease={(noteKey) => {
+          const originalKey = virtualKeys.find(
+            (k) =>
+              k.note === noteKey.note && k.keyboardKey === noteKey.keyboardKey,
+          );
+          if (originalKey) {
+            onKeyRelease(originalKey);
+          }
+        }}
+        variant="keyboard"
+      />
+    );
+  },
+);
 
-MelodyKeys.displayName = 'MelodyKeys';
+MelodyKeys.displayName = "MelodyKeys";

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect } from "react";
 
 export interface KeyboardHandlerConfig {
   shortcuts: Record<string, { key: string }>;
@@ -11,21 +11,21 @@ export interface KeyboardHandlerConfig {
 export const useKeyboardHandler = (config: KeyboardHandlerConfig) => {
   const processingKeys = useRef<Set<string>>(new Set());
   const handlersRef = useRef(config);
-  
+
   // Update handlers ref when config changes
   handlersRef.current = config;
 
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if (!handlersRef.current.isEnabled || event.repeat) return;
-    
+
     const key = event.key.toLowerCase();
-    
+
     // Check if the target is an input element
     const target = event.target as HTMLElement;
     if (
-      target.tagName === 'INPUT' ||
-      target.tagName === 'TEXTAREA' ||
-      target.contentEditable === 'true' ||
+      target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.contentEditable === "true" ||
       target.closest('input, textarea, [contenteditable="true"]')
     ) {
       return;
@@ -38,17 +38,17 @@ export const useKeyboardHandler = (config: KeyboardHandlerConfig) => {
 
     // Check if key matches any shortcut
     const shortcutEntry = Object.entries(handlersRef.current.shortcuts).find(
-      ([, shortcut]) => shortcut.key === key
+      ([, shortcut]) => shortcut.key === key,
     );
 
     if (shortcutEntry) {
       if (handlersRef.current.preventDefault) {
         event.preventDefault();
       }
-      
+
       // Mark key as being processed
       processingKeys.current.add(key);
-      
+
       // Call the handler
       handlersRef.current.onKeyDown?.(key, event);
     }
@@ -56,15 +56,15 @@ export const useKeyboardHandler = (config: KeyboardHandlerConfig) => {
 
   const handleKeyUp = useCallback((event: KeyboardEvent) => {
     if (!handlersRef.current.isEnabled) return;
-    
+
     const key = event.key.toLowerCase();
-    
+
     // Remove from processing keys
     processingKeys.current.delete(key);
-    
+
     // Check if key matches any shortcut
     const shortcutEntry = Object.entries(handlersRef.current.shortcuts).find(
-      ([, shortcut]) => shortcut.key === key
+      ([, shortcut]) => shortcut.key === key,
     );
 
     if (shortcutEntry) {
@@ -75,13 +75,13 @@ export const useKeyboardHandler = (config: KeyboardHandlerConfig) => {
 
   useEffect(() => {
     const currentProcessingKeys = processingKeys.current;
-    
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
 
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
       // Clear processing keys on cleanup using captured reference
       currentProcessingKeys.clear();
     };
@@ -91,4 +91,4 @@ export const useKeyboardHandler = (config: KeyboardHandlerConfig) => {
     handleKeyDown,
     handleKeyUp,
   };
-}; 
+};

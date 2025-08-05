@@ -35,9 +35,9 @@ declare namespace WebMidi {
     state: MIDIPortDeviceState;
   }
 
-  type MIDIPortDeviceState = 'connected' | 'disconnected';
+  type MIDIPortDeviceState = "connected" | "disconnected";
 }
 
 interface Navigator {
   requestMIDIAccess(): Promise<WebMidi.MIDIAccess>;
-} 
+}

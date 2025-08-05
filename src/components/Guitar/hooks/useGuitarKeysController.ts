@@ -1,7 +1,10 @@
-import { useCallback } from "react";
-import { DEFAULT_GUITAR_SHORTCUTS, BRUSHING_TIME_STEPS } from "../../../constants/guitarShortcuts";
+import {
+  DEFAULT_GUITAR_SHORTCUTS,
+  BRUSHING_TIME_STEPS,
+} from "../../../constants/guitarShortcuts";
 import type { Scale } from "../../../hooks/useScaleState";
 import type { GuitarState } from "../types/guitar";
+import { useCallback } from "react";
 
 interface UseGuitarKeysControllerProps {
   guitarState: GuitarState;
@@ -12,7 +15,7 @@ interface UseGuitarKeysControllerProps {
   };
   guitarControls: {
     mode: string;
-    setMode: (mode: 'basic' | 'melody' | 'chord') => void;
+    setMode: (mode: "basic" | "melody" | "chord") => void;
     velocity: number;
     setVelocity: (velocity: number) => void;
     sustain: boolean;
@@ -31,20 +34,27 @@ interface UseGuitarKeysControllerProps {
     setPressedNotes: (notes: Set<string>) => void;
     pressedChords: Set<number>;
     setPressedChords: (chords: Set<number>) => void;
-    strumConfig: { speed: number; direction: 'up' | 'down'; isActive: boolean };
+    strumConfig: { speed: number; direction: "up" | "down"; isActive: boolean };
     setStrumSpeed: (speed: number) => void;
-    setStrumDirection: (direction: 'up' | 'down') => void;
+    setStrumDirection: (direction: "up" | "down") => void;
     playNote: (note: string, velocity?: number) => Promise<void>;
     stopNote: (note: string) => void;
     releaseKeyHeldNote: (note: string) => void;
     stopSustainedNotes: () => void;
-    handleStrumChord: (chordIndex: number, direction: 'up' | 'down') => Promise<void>;
+    handleStrumChord: (
+      chordIndex: number,
+      direction: "up" | "down",
+    ) => Promise<void>;
+    handleChordPress: (chordIndex: number) => void;
     handleChordRelease: (chordIndex: number) => void;
     // New functions for string behavior
-    handleNotePress: (stringId: 'lower' | 'higher', note: string) => void;
-    handleNoteRelease: (stringId: 'lower' | 'higher', note: string) => void;
-    handlePlayButtonPress: (stringId: 'lower' | 'higher', customVelocity?: number) => void;
-    handleHammerOnPress: (stringId: 'lower' | 'higher', note: string) => void;
+    handleNotePress: (stringId: "lower" | "higher", note: string) => void;
+    handleNoteRelease: (stringId: "lower" | "higher", note: string) => void;
+    handlePlayButtonPress: (
+      stringId: "lower" | "higher",
+      customVelocity?: number,
+    ) => void;
+    handleHammerOnPress: (stringId: "lower" | "higher", note: string) => void;
   };
 }
 
@@ -58,37 +68,39 @@ export const useGuitarKeysController = ({
   const handleKeyDown = useCallback(
     async (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
-      
+
       // Prevent default for all guitar shortcuts
-      if (Object.values(shortcuts).some(shortcut => shortcut.key.includes(key))) {
+      if (
+        Object.values(shortcuts).some((shortcut) => shortcut.key.includes(key))
+      ) {
         event.preventDefault();
       }
 
       // Mode controls
       if (key === shortcuts.toggleMode.key) {
-        if (guitarState.mode.type === 'basic') {
+        if (guitarState.mode.type === "basic") {
           // When in basic mode, shift switches to melody mode
-          guitarControls.setMode('melody');
-        } else if (guitarState.mode.type === 'melody') {
+          guitarControls.setMode("melody");
+        } else if (guitarState.mode.type === "melody") {
           // When in melody mode, shift switches to chord mode
-          guitarControls.setMode('chord');
-        } else if (guitarState.mode.type === 'chord') {
+          guitarControls.setMode("chord");
+        } else if (guitarState.mode.type === "chord") {
           // When in chord mode, shift switches back to melody mode
-          guitarControls.setMode('melody');
+          guitarControls.setMode("melody");
         }
         return;
       }
 
       // Basic mode - sustain and velocity shortcuts only
-      if (guitarState.mode.type === 'basic') {
+      if (guitarState.mode.type === "basic") {
         // Velocity controls
-        const velocityKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+        const velocityKeys = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
         if (velocityKeys.includes(key)) {
           const velocity = parseInt(key) / 9;
           guitarControls.setVelocity(velocity);
           return;
         }
-        
+
         // Sustain controls
         if (key === shortcuts.sustain.key) {
           guitarControls.setSustain(true);
@@ -98,91 +110,134 @@ export const useGuitarKeysController = ({
           guitarControls.setSustainToggle(!guitarState.sustainToggle);
           return;
         }
-        
+
         return;
       }
 
       // Simple - Note mode
-      if (guitarState.mode.type === 'melody') {
+      if (guitarState.mode.type === "melody") {
         // Octave controls
         if (key === shortcuts.octaveDown.key) {
-          guitarControls.setCurrentOctave(Math.max(0, guitarState.currentOctave - 1));
+          guitarControls.setCurrentOctave(
+            Math.max(0, guitarState.currentOctave - 1),
+          );
           return;
         }
         if (key === shortcuts.octaveUp.key) {
-          guitarControls.setCurrentOctave(Math.min(8, guitarState.currentOctave + 1));
+          guitarControls.setCurrentOctave(
+            Math.min(8, guitarState.currentOctave + 1),
+          );
           return;
         }
 
         // Note keys (base octave - ASDFGHJKL;')
-        const lowerOctaveKeys = shortcuts.lowerOctaveNotes.key.split('');
+        const lowerOctaveKeys = shortcuts.lowerOctaveNotes.key.split("");
         if (lowerOctaveKeys.includes(key)) {
           const keyIndex = lowerOctaveKeys.indexOf(key);
-          
+
           // Get scale notes for current and next octaves
-          const currentScaleNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, guitarState.currentOctave);
-          const nextOctaveScaleNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, guitarState.currentOctave + 1);
-          
+          const currentScaleNotes = scaleState.getScaleNotes(
+            scaleState.rootNote,
+            scaleState.scale,
+            guitarState.currentOctave,
+          );
+          const nextOctaveScaleNotes = scaleState.getScaleNotes(
+            scaleState.rootNote,
+            scaleState.scale,
+            guitarState.currentOctave + 1,
+          );
+
           // Combine notes from both octaves: [...currentScaleNotes, ...nextOctaveScaleNotes]
-          const baseOctaveNotes = [...currentScaleNotes, ...nextOctaveScaleNotes];
-          
+          const baseOctaveNotes = [
+            ...currentScaleNotes,
+            ...nextOctaveScaleNotes,
+          ];
+
           if (baseOctaveNotes[keyIndex]) {
             // Check if hammer-on is enabled for this string
             const string = guitarState.strings.lower;
             const currentTime = Date.now();
-            const isHammerOnWindow = currentTime - string.lastPlayTime <= guitarState.hammerOnState.windowMs;
-            
+            const isHammerOnWindow =
+              currentTime - string.lastPlayTime <=
+              guitarState.hammerOnState.windowMs;
+
             if (string.isHammerOnEnabled && isHammerOnWindow) {
               // Try hammer-on
-              guitarControls.handleHammerOnPress('lower', baseOctaveNotes[keyIndex]);
+              guitarControls.handleHammerOnPress(
+                "lower",
+                baseOctaveNotes[keyIndex],
+              );
             } else {
               // Normal note press
-              guitarControls.handleNotePress('lower', baseOctaveNotes[keyIndex]);
+              guitarControls.handleNotePress(
+                "lower",
+                baseOctaveNotes[keyIndex],
+              );
             }
           }
           return;
         }
 
         // Note keys (higher octave - QWERTYUIOP[])
-        const higherOctaveKeys = shortcuts.higherOctaveNotes.key.split('');
+        const higherOctaveKeys = shortcuts.higherOctaveNotes.key.split("");
         if (higherOctaveKeys.includes(key)) {
           const keyIndex = higherOctaveKeys.indexOf(key);
-          
+
           // Get scale notes for next and upper octaves
-          const nextOctaveScaleNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, guitarState.currentOctave + 1);
-          const upperOctaveScaleNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, guitarState.currentOctave + 2);
-          
+          const nextOctaveScaleNotes = scaleState.getScaleNotes(
+            scaleState.rootNote,
+            scaleState.scale,
+            guitarState.currentOctave + 1,
+          );
+          const upperOctaveScaleNotes = scaleState.getScaleNotes(
+            scaleState.rootNote,
+            scaleState.scale,
+            guitarState.currentOctave + 2,
+          );
+
           // Combine notes from both octaves: [...nextOctaveScaleNotes, ...upperOctaveScaleNotes]
-          const higherOctaveNotes = [...nextOctaveScaleNotes, ...upperOctaveScaleNotes];
-          
+          const higherOctaveNotes = [
+            ...nextOctaveScaleNotes,
+            ...upperOctaveScaleNotes,
+          ];
+
           if (higherOctaveNotes[keyIndex]) {
             // Check if hammer-on is enabled for this string
             const string = guitarState.strings.higher;
             const currentTime = Date.now();
-            const isHammerOnWindow = currentTime - string.lastPlayTime <= guitarState.hammerOnState.windowMs;
-            
+            const isHammerOnWindow =
+              currentTime - string.lastPlayTime <=
+              guitarState.hammerOnState.windowMs;
+
             if (string.isHammerOnEnabled && isHammerOnWindow) {
               // Try hammer-on
-              guitarControls.handleHammerOnPress('higher', higherOctaveNotes[keyIndex]);
+              guitarControls.handleHammerOnPress(
+                "higher",
+                higherOctaveNotes[keyIndex],
+              );
             } else {
               // Normal note press
-              guitarControls.handleNotePress('higher', higherOctaveNotes[keyIndex]);
+              guitarControls.handleNotePress(
+                "higher",
+                higherOctaveNotes[keyIndex],
+              );
             }
           }
           return;
         }
 
         // Play note buttons
-        if (key === ',' || key === '.') {
+        if (key === "," || key === ".") {
           // Play notes for both strings with velocity adjustment for ',' key
-          const velocity = key === ',' ? guitarState.velocity * 0.7 : guitarState.velocity;
-          guitarControls.handlePlayButtonPress('lower', velocity);
-          guitarControls.handlePlayButtonPress('higher', velocity);
+          const velocity =
+            key === "," ? guitarState.velocity * 0.7 : guitarState.velocity;
+          guitarControls.handlePlayButtonPress("lower", velocity);
+          guitarControls.handlePlayButtonPress("higher", velocity);
           return;
         }
 
         // Velocity controls
-        const velocityKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+        const velocityKeys = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
         if (velocityKeys.includes(key)) {
           const velocity = parseInt(key) / 9;
           guitarControls.setVelocity(velocity);
@@ -191,20 +246,25 @@ export const useGuitarKeysController = ({
       }
 
       // Simple - Chord mode
-      if (guitarState.mode.type === 'chord') {
+      if (guitarState.mode.type === "chord") {
         // Chord keys
-        const chordKeys = shortcuts.chordNotes.key.split('');
+        const chordKeys = shortcuts.chordNotes.key.split("");
         if (chordKeys.includes(key)) {
           const keyIndex = chordKeys.indexOf(key);
           const newPressedChords = new Set(guitarState.pressedChords);
           newPressedChords.add(keyIndex);
           guitarControls.setPressedChords(newPressedChords);
+
+          // Also call the chord press handler to play the chord
+          if (guitarControls.handleChordPress) {
+            guitarControls.handleChordPress(keyIndex);
+          }
           return;
         }
 
         // Strum controls
-        if (key === ',' || key === '.') {
-          const direction = key === ',' ? 'up' : 'down';
+        if (key === "," || key === ".") {
+          const direction = key === "," ? "up" : "down";
           guitarControls.setStrumDirection(direction);
           // Play all pressed chords with strum effect
           for (const chordIndex of guitarState.pressedChords) {
@@ -238,11 +298,15 @@ export const useGuitarKeysController = ({
 
         // Voicing controls
         if (key === shortcuts.voicingDown.key) {
-          guitarControls.setChordVoicing(Math.max(-2, guitarState.chordVoicing - 1));
+          guitarControls.setChordVoicing(
+            Math.max(-2, guitarState.chordVoicing - 1),
+          );
           return;
         }
         if (key === shortcuts.voicingUp.key) {
-          guitarControls.setChordVoicing(Math.min(4, guitarState.chordVoicing + 1));
+          guitarControls.setChordVoicing(
+            Math.min(4, guitarState.chordVoicing + 1),
+          );
           return;
         }
 
@@ -288,7 +352,7 @@ export const useGuitarKeysController = ({
         }
 
         // Velocity controls
-        const velocityKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+        const velocityKeys = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
         if (velocityKeys.includes(key)) {
           const velocity = parseInt(key) / 9;
           guitarControls.setVelocity(velocity);
@@ -306,7 +370,7 @@ export const useGuitarKeysController = ({
         return;
       }
     },
-    [guitarState, scaleState, guitarControls, shortcuts]
+    [guitarState, scaleState, guitarControls, shortcuts],
   );
 
   const handleKeyUp = useCallback(
@@ -314,7 +378,7 @@ export const useGuitarKeysController = ({
       const key = event.key.toLowerCase();
 
       // Basic mode - sustain release
-      if (guitarState.mode.type === 'basic') {
+      if (guitarState.mode.type === "basic") {
         if (key === shortcuts.sustain.key) {
           guitarControls.setSustain(false);
           return;
@@ -322,54 +386,82 @@ export const useGuitarKeysController = ({
       }
 
       // Simple - Note mode
-      if (guitarState.mode.type === 'melody') {
+      if (guitarState.mode.type === "melody") {
         // Note keys (base octave - ASDFGHJKL;')
-        const lowerOctaveKeys = shortcuts.lowerOctaveNotes.key.split('');
+        const lowerOctaveKeys = shortcuts.lowerOctaveNotes.key.split("");
         if (lowerOctaveKeys.includes(key)) {
           const keyIndex = lowerOctaveKeys.indexOf(key);
-          
+
           // Get scale notes for current and next octaves
-          const currentScaleNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, guitarState.currentOctave);
-          const nextOctaveScaleNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, guitarState.currentOctave + 1);
-          
+          const currentScaleNotes = scaleState.getScaleNotes(
+            scaleState.rootNote,
+            scaleState.scale,
+            guitarState.currentOctave,
+          );
+          const nextOctaveScaleNotes = scaleState.getScaleNotes(
+            scaleState.rootNote,
+            scaleState.scale,
+            guitarState.currentOctave + 1,
+          );
+
           // Combine notes from both octaves: [...currentScaleNotes, ...nextOctaveScaleNotes]
-          const baseOctaveNotes = [...currentScaleNotes, ...nextOctaveScaleNotes];
-          
+          const baseOctaveNotes = [
+            ...currentScaleNotes,
+            ...nextOctaveScaleNotes,
+          ];
+
           if (baseOctaveNotes[keyIndex]) {
-            guitarControls.handleNoteRelease('lower', baseOctaveNotes[keyIndex]);
+            guitarControls.handleNoteRelease(
+              "lower",
+              baseOctaveNotes[keyIndex],
+            );
           }
           return;
         }
 
         // Note keys (higher octave - QWERTYUIOP[])
-        const higherOctaveKeys = shortcuts.higherOctaveNotes.key.split('');
+        const higherOctaveKeys = shortcuts.higherOctaveNotes.key.split("");
         if (higherOctaveKeys.includes(key)) {
           const keyIndex = higherOctaveKeys.indexOf(key);
-          
+
           // Get scale notes for next and upper octaves
-          const nextOctaveScaleNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, guitarState.currentOctave + 1);
-          const upperOctaveScaleNotes = scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, guitarState.currentOctave + 2);
-          
+          const nextOctaveScaleNotes = scaleState.getScaleNotes(
+            scaleState.rootNote,
+            scaleState.scale,
+            guitarState.currentOctave + 1,
+          );
+          const upperOctaveScaleNotes = scaleState.getScaleNotes(
+            scaleState.rootNote,
+            scaleState.scale,
+            guitarState.currentOctave + 2,
+          );
+
           // Combine notes from both octaves: [...nextOctaveScaleNotes, ...upperOctaveScaleNotes]
-          const higherOctaveNotes = [...nextOctaveScaleNotes, ...upperOctaveScaleNotes];
-          
+          const higherOctaveNotes = [
+            ...nextOctaveScaleNotes,
+            ...upperOctaveScaleNotes,
+          ];
+
           if (higherOctaveNotes[keyIndex]) {
-            guitarControls.handleNoteRelease('higher', higherOctaveNotes[keyIndex]);
+            guitarControls.handleNoteRelease(
+              "higher",
+              higherOctaveNotes[keyIndex],
+            );
           }
           return;
         }
       }
 
       // Simple - Chord mode
-      if (guitarState.mode.type === 'chord') {
+      if (guitarState.mode.type === "chord") {
         // Chord keys
-        const chordKeys = shortcuts.chordNotes.key.split('');
+        const chordKeys = shortcuts.chordNotes.key.split("");
         if (chordKeys.includes(key)) {
           const keyIndex = chordKeys.indexOf(key);
           const newPressedChords = new Set(guitarState.pressedChords);
           newPressedChords.delete(keyIndex);
           guitarControls.setPressedChords(newPressedChords);
-          
+
           // Stop chord notes when key is released
           if (guitarControls.handleChordRelease) {
             guitarControls.handleChordRelease(keyIndex);
@@ -417,8 +509,8 @@ export const useGuitarKeysController = ({
         return;
       }
     },
-    [guitarState, scaleState, guitarControls, shortcuts]
+    [guitarState, scaleState, guitarControls, shortcuts],
   );
 
   return { handleKeyDown, handleKeyUp };
-}; 
+};

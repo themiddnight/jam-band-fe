@@ -1,12 +1,13 @@
-import { useVirtualKeyboard } from "./hooks/useVirtualKeyboard";
-import { useKeyboardKeysController } from "./hooks/useKeyboardKeysController";
-import { MelodyKeys } from "./components/MelodyKeys";
-import { ChordKeys } from "./components/ChordKeys";
-import { AdvancedKeys } from "./components/AdvancedKeys";
-import { getKeyDisplayName, DEFAULT_KEYBOARD_SHORTCUTS } from "../../constants/keyboardShortcuts";
+import { DEFAULT_KEYBOARD_SHORTCUTS } from "../../constants/keyboardShortcuts";
+import { getKeyDisplayName } from "../../constants/utils/displayUtils";
+import { useInstrumentState } from "../../hooks/useInstrumentState";
 import type { Scale } from "../../hooks/useScaleState";
 import BaseInstrument from "../shared/BaseInstrument";
-import { useInstrumentState } from "../../hooks/useInstrumentState";
+import { AdvancedKeys } from "./components/AdvancedKeys";
+import { ChordKeys } from "./components/ChordKeys";
+import { MelodyKeys } from "./components/MelodyKeys";
+import { useKeyboardKeysController } from "./hooks/useKeyboardKeysController";
+import { useVirtualKeyboard } from "./hooks/useVirtualKeyboard";
 
 export interface Props {
   // Scale state - the core functionality
@@ -52,7 +53,7 @@ export default function Keyboard({
     scaleState.scale,
     onPlayNotes,
     onReleaseKeyHeldNote,
-    unifiedState // Pass unified state to respect sustain settings
+    unifiedState, // Pass unified state to respect sustain settings
   );
 
   const {
@@ -111,7 +112,7 @@ export default function Keyboard({
       setPressedTriads,
       activeTriadChords,
       setActiveTriadChords,
-    }
+    },
   );
 
   const virtualKeys = virtualKeyboard.generateVirtualKeys;

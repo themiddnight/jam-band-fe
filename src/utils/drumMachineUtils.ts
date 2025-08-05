@@ -1,5 +1,5 @@
-import { getDrumMachineNames } from "smplr";
 import { ControlType } from "../types";
+import { getDrumMachineNames } from "smplr";
 
 export interface DrumMachineInfo {
   value: string;
@@ -11,27 +11,47 @@ export interface DrumMachineInfo {
 export const getAvailableDrumMachines = (): DrumMachineInfo[] => {
   try {
     const drumMachineNames = getDrumMachineNames();
-    
+
     return drumMachineNames.map((name: string) => {
       // All available drum machines are electronic, so use drumpad interface for all
       const controlType = ControlType.Drumpad;
-      
+
       return {
         value: name,
         label: name,
-        controlType
+        controlType,
       };
     });
   } catch (error) {
     console.error("Error getting drum machine names:", error);
-    
+
     // Fallback to known working machines
     return [
-      { value: "TR-808", label: "Roland TR-808", controlType: ControlType.Drumpad },
-      { value: "LM-2", label: "LinnDrum LM-2", controlType: ControlType.Drumpad },
-      { value: "Casio-RZ1", label: "Casio RZ-1", controlType: ControlType.Drumpad },
-      { value: "MFB-512", label: "Fricke MFB-512", controlType: ControlType.Drumpad },
-      { value: "Roland CR-8000", label: "Roland CR-8000", controlType: ControlType.Drumpad },
+      {
+        value: "TR-808",
+        label: "Roland TR-808",
+        controlType: ControlType.Drumpad,
+      },
+      {
+        value: "LM-2",
+        label: "LinnDrum LM-2",
+        controlType: ControlType.Drumpad,
+      },
+      {
+        value: "Casio-RZ1",
+        label: "Casio RZ-1",
+        controlType: ControlType.Drumpad,
+      },
+      {
+        value: "MFB-512",
+        label: "Fricke MFB-512",
+        controlType: ControlType.Drumpad,
+      },
+      {
+        value: "Roland CR-8000",
+        label: "Roland CR-8000",
+        controlType: ControlType.Drumpad,
+      },
     ];
   }
 };
@@ -44,4 +64,4 @@ export const getCachedDrumMachines = (): DrumMachineInfo[] => {
     cachedDrumMachines = getAvailableDrumMachines();
   }
   return cachedDrumMachines;
-}; 
+};

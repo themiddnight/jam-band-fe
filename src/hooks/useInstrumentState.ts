@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useMemo, useRef } from "react";
 
 export interface InstrumentStateProps {
   onPlayNotes: (notes: string[], velocity: number, isKeyHeld: boolean) => void;
@@ -17,25 +17,31 @@ export interface InstrumentState {
   hasSustainedNotes: boolean;
   pressedKeys: Set<string>;
   heldKeys: Set<string>;
-  
+
   // Common actions
   setVelocity: (velocity: number) => void;
   setSustain: (sustain: boolean) => void;
   setSustainToggle: (sustainToggle: boolean) => void;
   setPressedKeys: (keys: Set<string>) => void;
   setHeldKeys: React.Dispatch<React.SetStateAction<Set<string>>>;
-  
+
   // Note actions
-  playNote: (note: string, velocity?: number, isKeyHeld?: boolean) => Promise<void>;
+  playNote: (
+    note: string,
+    velocity?: number,
+    isKeyHeld?: boolean,
+  ) => Promise<void>;
   stopNote: (note: string) => void;
   releaseKeyHeldNote: (note: string) => void;
   stopSustainedNotes: () => void;
-  
+
   // Utility
   forceResetSustain: () => void;
 }
 
-export const useInstrumentState = (props: InstrumentStateProps): InstrumentState => {
+export const useInstrumentState = (
+  props: InstrumentStateProps,
+): InstrumentState => {
   const [velocity, setVelocity] = useState<number>(0.7);
   const [sustain, setSustain] = useState<boolean>(false);
   const [sustainToggle, setSustainToggle] = useState<boolean>(false);
@@ -48,91 +54,114 @@ export const useInstrumentState = (props: InstrumentStateProps): InstrumentState
   stateRef.current = { sustain, sustainToggle, pressedKeys, velocity };
 
   // Optimized set operations for pressed keys
-  const updatePressedKeys = useCallback((note: string, action: 'add' | 'delete') => {
-    setPressedKeys(prev => {
-      const hasNote = prev.has(note);
-      if (action === 'add' && hasNote) return prev;
-      if (action === 'delete' && !hasNote) return prev;
-      
-      const newSet = new Set(prev);
-      if (action === 'add') {
-        newSet.add(note);
-      } else {
-        newSet.delete(note);
-      }
-      return newSet;
-    });
-  }, []);
+  const updatePressedKeys = useCallback(
+    (note: string, action: "add" | "delete") => {
+      setPressedKeys((prev) => {
+        const hasNote = prev.has(note);
+        if (action === "add" && hasNote) return prev;
+        if (action === "delete" && !hasNote) return prev;
+
+        const newSet = new Set(prev);
+        if (action === "add") {
+          newSet.add(note);
+        } else {
+          newSet.delete(note);
+        }
+        return newSet;
+      });
+    },
+    [],
+  );
 
   // Improved setSustain with better state consistency
-  const setSustainWithCallback = useCallback((newSustain: boolean) => {
-    setSustain(newSustain);
-    props.onSustainChange(newSustain);
-    
-    // If turning off sustain and not in toggle mode, ensure sustained notes stop
-    if (!newSustain && !stateRef.current.sustainToggle) {
-      setHasSustainedNotes(false);
-      props.onStopSustainedNotes();
-    }
-  }, [props]);
+  const setSustainWithCallback = useCallback(
+    (newSustain: boolean) => {
+      setSustain(newSustain);
+      props.onSustainChange(newSustain);
 
-  const setSustainToggleWithCallback = useCallback((newSustainToggle: boolean) => {
-    setSustainToggle(newSustainToggle);
-    if (newSustainToggle) {
-      setSustain(true);
-      props.onSustainChange(true);
-    } else {
-      setSustain(false);
-      props.onSustainChange(false);
-      props.onStopSustainedNotes();
-    }
-    // Notify parent component of sustain toggle state change
-    if (props.onSustainToggleChange) {
-      props.onSustainToggleChange(newSustainToggle);
-    }
-  }, [props]);
+      // If turning off sustain and not in toggle mode, ensure sustained notes stop
+      if (!newSustain && !stateRef.current.sustainToggle) {
+        setHasSustainedNotes(false);
+        props.onStopSustainedNotes();
+      }
+    },
+    [props],
+  );
 
-  const playNote = useCallback(async (note: string, customVelocity?: number, isKeyHeld: boolean = false) => {
-    const noteVelocity = customVelocity !== undefined ? customVelocity : velocity;
-    await props.onPlayNotes([note], noteVelocity, isKeyHeld);
-    
-    if (isKeyHeld) {
-      updatePressedKeys(note, 'add');
-    }
-    
-    // When toggle is active and we play a note, it will be sustained
-    if (stateRef.current.sustainToggle && !isKeyHeld) {
-      setHasSustainedNotes(true);
-    }
-  }, [props, velocity, updatePressedKeys]);
+  const setSustainToggleWithCallback = useCallback(
+    (newSustainToggle: boolean) => {
+      setSustainToggle(newSustainToggle);
+      if (newSustainToggle) {
+        setSustain(true);
+        props.onSustainChange(true);
+      } else {
+        setSustain(false);
+        props.onSustainChange(false);
+        props.onStopSustainedNotes();
+      }
+      // Notify parent component of sustain toggle state change
+      if (props.onSustainToggleChange) {
+        props.onSustainToggleChange(newSustainToggle);
+      }
+    },
+    [props],
+  );
 
-  const stopNote = useCallback((note: string) => {
-    props.onStopNotes([note]);
-    updatePressedKeys(note, 'delete');
-  }, [props, updatePressedKeys]);
+  const playNote = useCallback(
+    async (
+      note: string,
+      customVelocity?: number,
+      isKeyHeld: boolean = false,
+    ) => {
+      const noteVelocity =
+        customVelocity !== undefined ? customVelocity : velocity;
+      await props.onPlayNotes([note], noteVelocity, isKeyHeld);
 
-  const releaseKeyHeldNote = useCallback((note: string) => {
-    props.onReleaseKeyHeldNote(note);
-    updatePressedKeys(note, 'delete');
-    
-    // When toggle is active and we release a key, check if we should turn off sustained notes
-    if (stateRef.current.sustainToggle) {
-      // Use setTimeout to ensure state is updated before checking
-      setTimeout(() => {
-        setPressedKeys(current => {
-          if (current.size === 0) {
-            setHasSustainedNotes(false);
-          }
-          return current;
-        });
-      }, 10); // Reduced timeout for better responsiveness
-    }
-  }, [props, updatePressedKeys]);
+      if (isKeyHeld) {
+        updatePressedKeys(note, "add");
+      }
+
+      // When toggle is active and we play a note, it will be sustained
+      if (stateRef.current.sustainToggle && !isKeyHeld) {
+        setHasSustainedNotes(true);
+      }
+    },
+    [props, velocity, updatePressedKeys],
+  );
+
+  const stopNote = useCallback(
+    (note: string) => {
+      props.onStopNotes([note]);
+      updatePressedKeys(note, "delete");
+    },
+    [props, updatePressedKeys],
+  );
+
+  const releaseKeyHeldNote = useCallback(
+    (note: string) => {
+      props.onReleaseKeyHeldNote(note);
+      updatePressedKeys(note, "delete");
+
+      // When toggle is active and we release a key, check if we should turn off sustained notes
+      if (stateRef.current.sustainToggle) {
+        // Use setTimeout to ensure state is updated before checking
+        setTimeout(() => {
+          setPressedKeys((current) => {
+            if (current.size === 0) {
+              setHasSustainedNotes(false);
+            }
+            return current;
+          });
+        }, 10); // Reduced timeout for better responsiveness
+      }
+    },
+    [props, updatePressedKeys],
+  );
 
   const stopSustainedNotes = useCallback(() => {
     props.onStopSustainedNotes();
     setHasSustainedNotes(false);
-    
+
     // Also ensure sustain state is properly reset if not in toggle mode
     if (!stateRef.current.sustainToggle) {
       setSustain(false);
@@ -150,36 +179,39 @@ export const useInstrumentState = (props: InstrumentStateProps): InstrumentState
   }, [props]);
 
   // Memoize the return object to prevent unnecessary re-renders
-  return useMemo(() => ({
-    velocity,
-    sustain,
-    sustainToggle,
-    hasSustainedNotes,
-    pressedKeys,
-    heldKeys,
-    setVelocity,
-    setSustain: setSustainWithCallback,
-    setSustainToggle: setSustainToggleWithCallback,
-    setPressedKeys,
-    setHeldKeys, // This is already the correct React dispatch type
-    playNote,
-    stopNote,
-    releaseKeyHeldNote,
-    stopSustainedNotes,
-    forceResetSustain,
-  }), [
-    velocity,
-    sustain,
-    sustainToggle,
-    hasSustainedNotes,
-    pressedKeys,
-    heldKeys,
-    setSustainWithCallback,
-    setSustainToggleWithCallback,
-    playNote,
-    stopNote,
-    releaseKeyHeldNote,
-    stopSustainedNotes,
-    forceResetSustain,
-  ]);
-}; 
+  return useMemo(
+    () => ({
+      velocity,
+      sustain,
+      sustainToggle,
+      hasSustainedNotes,
+      pressedKeys,
+      heldKeys,
+      setVelocity,
+      setSustain: setSustainWithCallback,
+      setSustainToggle: setSustainToggleWithCallback,
+      setPressedKeys,
+      setHeldKeys, // This is already the correct React dispatch type
+      playNote,
+      stopNote,
+      releaseKeyHeldNote,
+      stopSustainedNotes,
+      forceResetSustain,
+    }),
+    [
+      velocity,
+      sustain,
+      sustainToggle,
+      hasSustainedNotes,
+      pressedKeys,
+      heldKeys,
+      setSustainWithCallback,
+      setSustainToggleWithCallback,
+      playNote,
+      stopNote,
+      releaseKeyHeldNote,
+      stopSustainedNotes,
+      forceResetSustain,
+    ],
+  );
+};

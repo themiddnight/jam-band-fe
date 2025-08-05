@@ -1,3 +1,4 @@
+import { throttle } from "../../utils/performanceUtils";
 import React, {
   useRef,
   useState,
@@ -5,7 +6,6 @@ import React, {
   useEffect,
   useMemo,
 } from "react";
-import { throttle } from "../../utils/performanceUtils";
 
 export interface KnobProps {
   value: number;
@@ -56,7 +56,7 @@ export const Knob: React.FC<KnobProps> = ({
   // Create throttled onChange to prevent excessive updates
   const throttledOnChange = useMemo(
     () => throttle(onChange, 16), // ~60fps
-    [onChange]
+    [onChange],
   );
 
   // Convert value to percentage (0-1)
@@ -70,7 +70,7 @@ export const Knob: React.FC<KnobProps> = ({
       }
       return (val - min) / (max - min);
     },
-    [min, max, curve]
+    [min, max, curve],
   );
 
   // Convert percentage to value
@@ -84,7 +84,7 @@ export const Knob: React.FC<KnobProps> = ({
       }
       return min + percentage * (max - min);
     },
-    [min, max, curve]
+    [min, max, curve],
   );
 
   // Calculate current rotation angle
@@ -106,7 +106,7 @@ export const Knob: React.FC<KnobProps> = ({
         setShowTooltipState(true);
       }
     },
-    [disabled, orientation, value, showTooltip]
+    [disabled, orientation, value, showTooltip],
   );
 
   const handleMouseMove = useCallback(
@@ -121,7 +121,7 @@ export const Knob: React.FC<KnobProps> = ({
 
       const newPercentage = Math.max(
         0,
-        Math.min(1, valueToPercentage(startValue) + deltaPercentage)
+        Math.min(1, valueToPercentage(startValue) + deltaPercentage),
       );
       const newValue = percentageToValue(newPercentage);
 
@@ -143,7 +143,7 @@ export const Knob: React.FC<KnobProps> = ({
       step,
       min,
       max,
-    ]
+    ],
   );
 
   const handleMouseUp = useCallback((e?: MouseEvent) => {
@@ -183,7 +183,7 @@ export const Knob: React.FC<KnobProps> = ({
         setShowTooltipState(true);
       }
     },
-    [disabled, orientation, value, showTooltip]
+    [disabled, orientation, value, showTooltip],
   );
 
   const handleTouchMove = useCallback(
@@ -201,7 +201,7 @@ export const Knob: React.FC<KnobProps> = ({
 
       const newPercentage = Math.max(
         0,
-        Math.min(1, valueToPercentage(startValue) + deltaPercentage)
+        Math.min(1, valueToPercentage(startValue) + deltaPercentage),
       );
       const newValue = percentageToValue(newPercentage);
 
@@ -223,7 +223,7 @@ export const Knob: React.FC<KnobProps> = ({
       step,
       min,
       max,
-    ]
+    ],
   );
 
   const handleTouchEnd = useCallback((e: TouchEvent) => {
@@ -319,7 +319,7 @@ export const Knob: React.FC<KnobProps> = ({
       <div
         ref={knobRef}
         className={`absolute inset-0 rounded-full border-2 ${getColorClasses(
-          "border"
+          "border",
         )} bg-base-200 cursor-pointer transition-transform duration-100 ${
           disabled ? "opacity-50 cursor-not-allowed" : ""
         }`}
@@ -328,7 +328,7 @@ export const Knob: React.FC<KnobProps> = ({
         {/* Knob indicator */}
         <div
           className={`absolute top-1 left-1/2 w-1 h-3 ${getColorClasses(
-            "bg"
+            "bg",
           )} rounded-full transform -translate-x-1/2`}
         />
       </div>
@@ -336,7 +336,7 @@ export const Knob: React.FC<KnobProps> = ({
       {/* Knob center dot */}
       <div
         className={`absolute top-1/2 left-1/2 w-2 h-2 ${getColorClasses(
-          "bg"
+          "bg",
         )} rounded-full transform -translate-x-1/2 -translate-y-1/2`}
       />
 

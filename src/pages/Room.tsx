@@ -1,7 +1,4 @@
-import React from "react";
-import { useRoom } from "../hooks/useRoom";
-import { InstrumentCategory } from "../constants/instruments";
-import { ControlType } from "../types";
+import InstrumentCategorySelector from "../components/InstrumentCategorySelector";
 import {
   LazyKeyboardWrapper as Keyboard,
   LazyGuitarWrapper as Guitar,
@@ -10,16 +7,18 @@ import {
   LazyDrumsetWrapper as Drumset,
   LazySynthControlsWrapper as SynthControls,
 } from "../components/LazyComponents";
-import ScaleSelector from "../components/ScaleSelector";
-import InstrumentCategorySelector from "../components/InstrumentCategorySelector";
 import MidiStatus from "../components/MidiStatus";
 import PlayingIndicator from "../components/PlayingIndicator";
+import ScaleSelector from "../components/ScaleSelector";
 import { Modal } from "../components/shared/Modal";
+import { InstrumentCategory } from "../constants/instruments";
+import { useRoom } from "../hooks/useRoom";
+import { ControlType } from "../types";
 import { preloadCriticalComponents } from "../utils/componentPreloader";
 import { getSafariUserMessage } from "../utils/webkitCompat";
+import React from "react";
 
 const Room = React.memo(() => {
-
   const {
     // Room state
     currentRoom,
@@ -76,32 +75,36 @@ const Room = React.memo(() => {
 
     // Audio management
     stopSustainedNotes,
+    playNotes,
   } = useRoom();
 
   // Memoize commonProps to prevent child component re-renders
-  const commonProps = React.useMemo(() => ({
-    scaleState: {
-      rootNote: scaleState.rootNote,
-      scale: scaleState.scale,
-      getScaleNotes: scaleState.getScaleNotes,
-    },
-    onPlayNotes: handlePlayNote,
-    onStopNotes: handleStopNote,
-    onStopSustainedNotes: stopSustainedNotes,
-    onReleaseKeyHeldNote: handleReleaseKeyHeldNote,
-    onSustainChange: handleSustainChange,
-    onSustainToggleChange: handleSustainToggleChange,
-  }), [
-    scaleState.rootNote,
-    scaleState.scale,
-    scaleState.getScaleNotes,
-    handlePlayNote,
-    handleStopNote,
-    stopSustainedNotes,
-    handleReleaseKeyHeldNote,
-    handleSustainChange,
-    handleSustainToggleChange,
-  ]);
+  const commonProps = React.useMemo(
+    () => ({
+      scaleState: {
+        rootNote: scaleState.rootNote,
+        scale: scaleState.scale,
+        getScaleNotes: scaleState.getScaleNotes,
+      },
+      onPlayNotes: handlePlayNote,
+      onStopNotes: handleStopNote,
+      onStopSustainedNotes: stopSustainedNotes,
+      onReleaseKeyHeldNote: handleReleaseKeyHeldNote,
+      onSustainChange: handleSustainChange,
+      onSustainToggleChange: handleSustainToggleChange,
+    }),
+    [
+      scaleState.rootNote,
+      scaleState.scale,
+      scaleState.getScaleNotes,
+      handlePlayNote,
+      handleStopNote,
+      stopSustainedNotes,
+      handleReleaseKeyHeldNote,
+      handleSustainChange,
+      handleSustainToggleChange,
+    ],
+  );
 
   // Preload critical components when component mounts
   React.useEffect(() => {
@@ -115,32 +118,37 @@ const Room = React.memo(() => {
       await navigator.clipboard.writeText(roomUrl);
 
       // Show a temporary success message
-      const button = document.getElementById('copy-room-url');
+      const button = document.getElementById("copy-room-url");
       if (button) {
         const originalText = button.textContent;
-        button.textContent = 'Copied!';
-        button.classList.add('btn-success');
+        button.textContent = "Copied!";
+        button.classList.add("btn-success");
 
         setTimeout(() => {
           button.textContent = originalText;
-          button.classList.remove('btn-success');
+          button.classList.remove("btn-success");
         }, 2000);
       }
     } catch (error) {
-      console.error('Failed to copy room URL:', error);
+      console.error("Failed to copy room URL:", error);
       // Fallback for older browsers
       const roomUrl = `${window.location.origin}/room/${currentRoom?.id}`;
-      const textArea = document.createElement('textarea');
+      const textArea = document.createElement("textarea");
       textArea.value = roomUrl;
       document.body.appendChild(textArea);
       textArea.select();
-      document.execCommand('copy');
+      document.execCommand("copy");
       document.body.removeChild(textArea);
     }
   };
 
   // Render pending approval modal
-  if (pendingApproval || (currentRoom && currentUser && currentRoom.pendingMembers.some(member => member.id === currentUser.id))) {
+  if (
+    pendingApproval ||
+    (currentRoom &&
+      currentUser &&
+      currentRoom.pendingMembers.some((member) => member.id === currentUser.id))
+  ) {
     return (
       <div className="min-h-dvh bg-base-200 flex items-center justify-center p-4">
         <div className="card bg-base-100 shadow-xl w-full max-w-md">
@@ -249,12 +257,13 @@ const Room = React.memo(() => {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <div
-                  className={`w-3 h-3 rounded-full ${isConnected
-                    ? "bg-success"
-                    : isConnecting
-                      ? "bg-warning"
-                      : "bg-error"
-                    }`}
+                  className={`w-3 h-3 rounded-full ${
+                    isConnected
+                      ? "bg-success"
+                      : isConnecting
+                        ? "bg-warning"
+                        : "bg-error"
+                  }`}
                 ></div>
               </div>
               <button
@@ -268,9 +277,7 @@ const Room = React.memo(() => {
 
           {/* User Name and Role */}
           <div>
-            <span className="mr-2">
-              {currentUser?.username}
-            </span>
+            <span className="mr-2">{currentUser?.username}</span>
             <span className="text-sm text-base-content/70">
               {currentUser?.role === "room_owner"
                 ? "Room Owner"
@@ -298,48 +305,63 @@ const Room = React.memo(() => {
                     return (roleOrder[a.role] ?? 3) - (roleOrder[b.role] ?? 3);
                   })
                   .map((user) => {
-                    const playingIndicator = playingIndicators.get(user.username);
+                    const playingIndicator = playingIndicators.get(
+                      user.username,
+                    );
 
                     return (
-                      <div key={user.id} className="flex items-center gap-2 p-2 bg-base-200 rounded-lg min-w-fit">
-                        {user.role !== 'audience' && <PlayingIndicator velocity={playingIndicator?.velocity || 0} />}
-                        <span className="font-medium text-sm whitespace-nowrap">{user.username}</span>
-                        {user.role !== 'audience' && user.currentInstrument ? (
+                      <div
+                        key={user.id}
+                        className="flex items-center gap-2 p-2 bg-base-200 rounded-lg min-w-fit"
+                      >
+                        {user.role !== "audience" && (
+                          <PlayingIndicator
+                            velocity={playingIndicator?.velocity || 0}
+                          />
+                        )}
+                        <span className="font-medium text-sm whitespace-nowrap">
+                          {user.username}
+                        </span>
+                        {user.role !== "audience" && user.currentInstrument ? (
                           <span className="text-xs text-base-content/60 bg-base-300 px-2 py-1 rounded whitespace-nowrap">
                             {user.currentInstrument.replace(/_/g, " ")}
                           </span>
                         ) : null}
                         <span className="text-xs whitespace-nowrap">
-                          {user.role === "room_owner" ? "👑" :
-                            user.role === "band_member" ? "🎹" : "🦻🏼"}
+                          {user.role === "room_owner"
+                            ? "👑"
+                            : user.role === "band_member"
+                              ? "🎹"
+                              : "🦻🏼"}
                         </span>
                       </div>
                     );
                   })}
 
                 {/* Pending Members - Compact */}
-                {currentRoom?.pendingMembers && currentRoom.pendingMembers.map((user) => (
-                  <div
-                    key={user.id}
-                    className="flex justify-between items-center gap-2 p-2 bg-warning/30 rounded-lg"
-                  >
-                    <span className="text-sm">{user.username}</span>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => handleApproveMember(user.id)}
-                        className="btn btn-xs btn-success"
-                      >
-                        ✓
-                      </button>
-                      <button
-                        onClick={() => handleRejectMember(user.id)}
-                        className="btn btn-xs btn-error"
-                      >
-                        ✕
-                      </button>
+                {currentRoom?.pendingMembers &&
+                  currentRoom.pendingMembers.map((user) => (
+                    <div
+                      key={user.id}
+                      className="flex justify-between items-center gap-2 p-2 bg-warning/30 rounded-lg"
+                    >
+                      <span className="text-sm">{user.username}</span>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => handleApproveMember(user.id)}
+                          className="btn btn-xs btn-success"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          onClick={() => handleRejectMember(user.id)}
+                          className="btn btn-xs btn-error"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </div>
           </div>
@@ -348,49 +370,49 @@ const Room = React.memo(() => {
         {/* Instrument Controls */}
         {(currentUser?.role === "room_owner" ||
           currentUser?.role === "band_member") && (
-            <>
-              <div className="flex gap-2 flex-wrap w-full max-w-6xl mb-3">
-                <MidiStatus
-                  isConnected={midiController.isConnected}
-                  getMidiInputs={midiController.getMidiInputs}
-                  onRequestAccess={midiController.requestMidiAccess}
-                  connectionError={midiController.connectionError}
-                  isRequesting={midiController.isRequesting}
-                  refreshMidiDevices={midiController.refreshMidiDevices}
-                />
-                <ScaleSelector
-                  rootNote={scaleState.rootNote}
-                  scale={scaleState.scale}
-                  onRootNoteChange={scaleState.setRootNote}
-                  onScaleChange={scaleState.setScale}
-                />
-                <InstrumentCategorySelector
-                  currentCategory={currentCategory}
-                  currentInstrument={currentInstrument}
-                  onCategoryChange={handleCategoryChange}
-                  onInstrumentChange={handleInstrumentChange}
-                  isLoading={isLoadingInstrument}
-                  dynamicDrumMachines={dynamicDrumMachines}
-                />
-              </div>
+          <>
+            <div className="flex gap-2 flex-wrap w-full max-w-6xl mb-3">
+              <MidiStatus
+                isConnected={midiController.isConnected}
+                getMidiInputs={midiController.getMidiInputs}
+                onRequestAccess={midiController.requestMidiAccess}
+                connectionError={midiController.connectionError}
+                isRequesting={midiController.isRequesting}
+                refreshMidiDevices={midiController.refreshMidiDevices}
+              />
+              <ScaleSelector
+                rootNote={scaleState.rootNote}
+                scale={scaleState.scale}
+                onRootNoteChange={scaleState.setRootNote}
+                onScaleChange={scaleState.setScale}
+              />
+              <InstrumentCategorySelector
+                currentCategory={currentCategory}
+                currentInstrument={currentInstrument}
+                onCategoryChange={handleCategoryChange}
+                onInstrumentChange={handleInstrumentChange}
+                isLoading={isLoadingInstrument}
+                dynamicDrumMachines={dynamicDrumMachines}
+              />
+            </div>
 
-              {/* Synthesizer Controls */}
-              {currentCategory === InstrumentCategory.Synthesizer &&
-                synthState && (
-                  <div className="w-full max-w-6xl mb-3">
-                    <SynthControls
-                      currentInstrument={currentInstrument}
-                      synthState={synthState}
-                      onParamChange={updateSynthParams}
-                      onLoadPreset={loadPresetParams}
-                    />
-                  </div>
-                )}
+            {/* Synthesizer Controls */}
+            {currentCategory === InstrumentCategory.Synthesizer &&
+              synthState && (
+                <div className="w-full max-w-6xl mb-3">
+                  <SynthControls
+                    currentInstrument={currentInstrument}
+                    synthState={synthState}
+                    onParamChange={updateSynthParams}
+                    onLoadPreset={loadPresetParams}
+                  />
+                </div>
+              )}
 
-              {/* Instrument Interface */}
-              {renderInstrumentControl()}
-            </>
-          )}
+            {/* Instrument Interface */}
+            {renderInstrumentControl()}
+          </>
+        )}
 
         {/* Audience View */}
         {currentUser?.role === "audience" && (
@@ -506,6 +528,7 @@ const Room = React.memo(() => {
             {...commonProps}
             availableSamples={availableSamples}
             currentInstrument={currentInstrument}
+            onPlayNotesLocal={playNotes}
           />
         );
       case ControlType.Drumset:
@@ -517,6 +540,6 @@ const Room = React.memo(() => {
   }
 });
 
-Room.displayName = 'Room';
+Room.displayName = "Room";
 
 export default Room;

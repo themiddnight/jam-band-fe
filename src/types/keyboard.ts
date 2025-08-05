@@ -1,14 +1,10 @@
-import type { Scale } from "../hooks/useScaleState";
 import type { KeyboardMode } from "../components/Keyboard/types/keyboard";
+import type { Scale } from "../hooks/useScaleState";
 
 export interface ScaleState {
   rootNote: string;
   scale: Scale;
-  getScaleNotes: (
-    root: string,
-    scaleType: Scale,
-    octave: number
-  ) => string[];
+  getScaleNotes: (root: string, scaleType: Scale, octave: number) => string[];
 }
 
 export interface KeyboardState {
@@ -48,7 +44,7 @@ export interface VirtualKeyboardState {
     scaleType: Scale,
     degree: number,
     voicing?: number,
-    modifiers?: Set<string>
+    modifiers?: Set<string>,
   ) => string[];
   generateVirtualKeys: any[];
-} 
+}

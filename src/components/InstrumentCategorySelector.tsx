@@ -1,4 +1,9 @@
-import { InstrumentCategory, SOUNDFONT_INSTRUMENTS, DRUM_MACHINES, SYNTHESIZER_INSTRUMENTS } from "../constants/instruments";
+import {
+  InstrumentCategory,
+  SOUNDFONT_INSTRUMENTS,
+  DRUM_MACHINES,
+  SYNTHESIZER_INSTRUMENTS,
+} from "../constants/instruments";
 
 export interface InstrumentCategorySelectorProps {
   currentCategory: InstrumentCategory;
@@ -6,7 +11,11 @@ export interface InstrumentCategorySelectorProps {
   onCategoryChange: (category: InstrumentCategory) => void;
   onInstrumentChange: (instrument: string) => void;
   isLoading?: boolean;
-  dynamicDrumMachines?: Array<{ value: string; label: string; controlType: any }>;
+  dynamicDrumMachines?: Array<{
+    value: string;
+    label: string;
+    controlType: any;
+  }>;
 }
 
 export default function InstrumentCategorySelector({
@@ -49,7 +58,9 @@ export default function InstrumentCategorySelector({
             </label>
             <select
               value={currentCategory}
-              onChange={(e) => onCategoryChange(e.target.value as InstrumentCategory)}
+              onChange={(e) =>
+                onCategoryChange(e.target.value as InstrumentCategory)
+              }
               disabled={isLoading}
               className="select select-bordered select-sm w-full max-w-xs"
             >
@@ -83,4 +94,4 @@ export default function InstrumentCategorySelector({
       </div>
     </div>
   );
-} 
+}

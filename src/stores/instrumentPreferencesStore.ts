@@ -1,6 +1,6 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import { InstrumentCategory } from '../constants/instruments';
+import { InstrumentCategory } from "../constants/instruments";
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 
 interface InstrumentPreferences {
   instrument: string;
@@ -14,28 +14,29 @@ interface InstrumentPreferencesState {
 }
 
 const defaultPreferences: InstrumentPreferences = {
-  instrument: 'acoustic_grand_piano',
+  instrument: "acoustic_grand_piano",
   category: InstrumentCategory.Melodic,
 };
 
-export const useInstrumentPreferencesStore = create<InstrumentPreferencesState>()(
-  persist(
-    (set) => ({
-      preferences: defaultPreferences,
-      
-      setPreferences: (instrument: string, category: InstrumentCategory) => {
-        set({
-          preferences: { instrument, category }
-        });
+export const useInstrumentPreferencesStore =
+  create<InstrumentPreferencesState>()(
+    persist(
+      (set) => ({
+        preferences: defaultPreferences,
+
+        setPreferences: (instrument: string, category: InstrumentCategory) => {
+          set({
+            preferences: { instrument, category },
+          });
+        },
+
+        clearPreferences: () => {
+          set({ preferences: defaultPreferences });
+        },
+      }),
+      {
+        name: "instrument-preferences",
+        storage: createJSONStorage(() => localStorage),
       },
-      
-      clearPreferences: () => {
-        set({ preferences: defaultPreferences });
-      },
-    }),
-    {
-      name: 'instrument-preferences',
-      storage: createJSONStorage(() => localStorage),
-    }
-  )
-); 
+    ),
+  );

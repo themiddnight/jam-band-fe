@@ -1,7 +1,11 @@
-import { useCallback, useMemo, useState } from "react";
-import { FretboardBase, type FretboardConfig } from "../shared/FretboardBase";
-import { generateFretPositions, getScaleNotes, type Scale } from "../../utils/musicUtils";
 import { useInstrumentState } from "../../hooks/useInstrumentState";
+import {
+  generateFretPositions,
+  getScaleNotes,
+  type Scale,
+} from "../../utils/musicUtils";
+import { FretboardBase, type FretboardConfig } from "../shared/FretboardBase";
+import { useCallback, useMemo, useState } from "react";
 
 export interface BassProps {
   scaleState: {
@@ -46,23 +50,25 @@ export default function Bass({
     strings: ["E", "A", "D", "G"],
     frets: 12,
     openNotes: ["E1", "A1", "D2", "G2"],
-    mode: octaveMode ? 'octave' : 'melody',
+    mode: octaveMode ? "octave" : "melody",
     showNoteNames: true,
     showFretNumbers: true,
     highlightScaleNotes: true,
   };
 
   // Generate scale notes for highlighting (bass typically uses lower octaves)
-  const scaleNotes = useMemo(() => 
-    getScaleNotes(scaleState.rootNote, scaleState.scale, 2)
-      .map(note => note.slice(0, -1)), // Remove octave for highlighting
-    [scaleState.rootNote, scaleState.scale]
+  const scaleNotes = useMemo(
+    () =>
+      getScaleNotes(scaleState.rootNote, scaleState.scale, 2).map((note) =>
+        note.slice(0, -1),
+      ), // Remove octave for highlighting
+    [scaleState.rootNote, scaleState.scale],
   );
 
   // Convert pressedKeys to pressedFrets format for FretboardBase
   const pressedFrets = useMemo(() => {
     const fretSet = new Set<string>();
-    pressedKeys.forEach(key => {
+    pressedKeys.forEach((key) => {
       // Convert note to fret format if needed
       // For now, we'll use the key as-is since FretboardBase expects string-fret format
       fretSet.add(key);
@@ -71,61 +77,72 @@ export default function Bass({
   }, [pressedKeys]);
 
   // Generate fret positions using pure utility function
-  const positions = useMemo(() => 
-    generateFretPositions(
-      config.strings,
-      config.openNotes,
-      config.frets,
-      pressedFrets,
-      scaleNotes
-    ),
-    [config.strings, config.openNotes, config.frets, pressedFrets, scaleNotes]
+  const positions = useMemo(
+    () =>
+      generateFretPositions(
+        config.strings,
+        config.openNotes,
+        config.frets,
+        pressedFrets,
+        scaleNotes,
+      ),
+    [config.strings, config.openNotes, config.frets, pressedFrets, scaleNotes],
   );
 
-  const handleFretPressWithNote = useCallback(async (_stringIndex: number, _fret: number, note: string) => {
-    if (octaveMode) {
-      // Play octave (root + octave above)
-      const octaveNote = note.slice(0, -1) + (parseInt(note.slice(-1)) + 1);
-      await playNote(note, velocity, true);
-      await playNote(octaveNote, velocity, true);
-    } else {
-      await playNote(note, velocity, true);
-    }
-  }, [octaveMode, velocity, playNote]);
+  const handleFretPressWithNote = useCallback(
+    async (_stringIndex: number, _fret: number, note: string) => {
+      if (octaveMode) {
+        // Play octave (root + octave above)
+        const octaveNote = note.slice(0, -1) + (parseInt(note.slice(-1)) + 1);
+        await playNote(note, velocity, true);
+        await playNote(octaveNote, velocity, true);
+      } else {
+        await playNote(note, velocity, true);
+      }
+    },
+    [octaveMode, velocity, playNote],
+  );
 
-  const handleFretReleaseWithNote = useCallback((_stringIndex: number, _fret: number, note: string) => {
-    stopNote(note);
-    onReleaseKeyHeldNote(note);
-    
-    if (octaveMode) {
-      const octaveNote = note.slice(0, -1) + (parseInt(note.slice(-1)) + 1);
-      stopNote(octaveNote);
-      onReleaseKeyHeldNote(octaveNote);
-    }
-  }, [octaveMode, onReleaseKeyHeldNote, stopNote]);
+  const handleFretReleaseWithNote = useCallback(
+    (_stringIndex: number, _fret: number, note: string) => {
+      stopNote(note);
+      onReleaseKeyHeldNote(note);
 
-  const handleSustainChange = useCallback((newSustain: boolean) => {
-    setSustain(newSustain);
-  }, [setSustain]);
+      if (octaveMode) {
+        const octaveNote = note.slice(0, -1) + (parseInt(note.slice(-1)) + 1);
+        stopNote(octaveNote);
+        onReleaseKeyHeldNote(octaveNote);
+      }
+    },
+    [octaveMode, onReleaseKeyHeldNote, stopNote],
+  );
 
-  const handleVelocityChange = useCallback((newVelocity: number) => {
-    setVelocity(newVelocity);
-  }, [setVelocity]);
+  const handleSustainChange = useCallback(
+    (newSustain: boolean) => {
+      setSustain(newSustain);
+    },
+    [setSustain],
+  );
+
+  const handleVelocityChange = useCallback(
+    (newVelocity: number) => {
+      setVelocity(newVelocity);
+    },
+    [setVelocity],
+  );
 
   return (
     <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
       <div className="card-body">
         <h3 className="card-title text-xl mb-4">Bass</h3>
-        
+
         {/* Bass-specific Controls */}
         <div className="flex items-center gap-4 mb-4">
           <div className="join">
             <button
               onClick={() => setOctaveMode(false)}
               className={`btn btn-sm ${
-                !octaveMode
-                  ? 'btn-success'
-                  : 'btn-outline'
+                !octaveMode ? "btn-success" : "btn-outline"
               }`}
             >
               Single Note
@@ -133,15 +150,13 @@ export default function Bass({
             <button
               onClick={() => setOctaveMode(true)}
               className={`btn btn-sm ${
-                octaveMode
-                  ? 'btn-success'
-                  : 'btn-outline'
+                octaveMode ? "btn-success" : "btn-outline"
               }`}
             >
               Octave Mode
             </button>
           </div>
-          
+
           {/* Sustain Toggle */}
           <div className="flex items-center gap-2">
             <label className="label cursor-pointer">
@@ -155,11 +170,13 @@ export default function Bass({
             </label>
           </div>
         </div>
-        
+
         {/* Velocity Control */}
         <div className="flex items-center gap-2 mb-4">
           <label className="label">
-            <span className="label-text">Velocity: {Math.round(velocity * 9)}</span>
+            <span className="label-text">
+              Velocity: {Math.round(velocity * 9)}
+            </span>
           </label>
           <input
             type="range"
@@ -181,4 +198,4 @@ export default function Bass({
       </div>
     </div>
   );
-} 
+}

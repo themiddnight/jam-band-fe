@@ -1,6 +1,6 @@
-import { useState } from "react";
 import type { Scale } from "../../hooks/useScaleState";
 import { useTouchEvents } from "../../hooks/useTouchEvents";
+import { useState } from "react";
 
 export interface DrumsetProps {
   scaleState: {
@@ -51,26 +51,31 @@ export default function Drumset({
   // Map available samples to drum positions
   const mapSamplesToDrums = () => {
     const sampleMap: { [key: string]: string } = {};
-    
-    availableSamples.forEach(sample => {
+
+    availableSamples.forEach((sample) => {
       const lowerSample = sample.toLowerCase();
-      if (lowerSample.includes('kick') || lowerSample.includes('bd')) {
+      if (lowerSample.includes("kick") || lowerSample.includes("bd")) {
         sampleMap.kick = sample;
-      } else if (lowerSample.includes('snare') || lowerSample.includes('sd')) {
+      } else if (lowerSample.includes("snare") || lowerSample.includes("sd")) {
         sampleMap.snare = sample;
-      } else if (lowerSample.includes('hihat') || lowerSample.includes('hh')) {
+      } else if (lowerSample.includes("hihat") || lowerSample.includes("hh")) {
         sampleMap.hihat = sample;
-      } else if (lowerSample.includes('crash') || lowerSample.includes('cr')) {
+      } else if (lowerSample.includes("crash") || lowerSample.includes("cr")) {
         sampleMap.crash = sample;
-      } else if (lowerSample.includes('ride') || lowerSample.includes('rd')) {
+      } else if (lowerSample.includes("ride") || lowerSample.includes("rd")) {
         sampleMap.ride = sample;
-      } else if (lowerSample.includes('tom') || lowerSample.includes('mt') || lowerSample.includes('ht') || lowerSample.includes('lt')) {
+      } else if (
+        lowerSample.includes("tom") ||
+        lowerSample.includes("mt") ||
+        lowerSample.includes("ht") ||
+        lowerSample.includes("lt")
+      ) {
         if (!sampleMap.tom1) sampleMap.tom1 = sample;
         else if (!sampleMap.tom2) sampleMap.tom2 = sample;
         else if (!sampleMap.tom3) sampleMap.tom3 = sample;
       }
     });
-    
+
     return sampleMap;
   };
 
@@ -104,7 +109,9 @@ export default function Drumset({
             <h3 className="card-title">Drum Kit Controls</h3>
             <div className="flex items-center gap-2">
               <label className="label">
-                <span className="label-text">Velocity: {Math.round(velocity * 9)}</span>
+                <span className="label-text">
+                  Velocity: {Math.round(velocity * 9)}
+                </span>
               </label>
               <input
                 type="range"
@@ -124,33 +131,33 @@ export default function Drumset({
             <DrumButton
               label="Crash"
               className={`btn btn-circle w-16 h-16 ${
-                !drumMapping.crash 
-                  ? "btn-disabled" 
-                  : pressedDrums.has("crash") 
-                  ? "btn-warning scale-95" 
-                  : "btn-warning hover:scale-105"
+                !drumMapping.crash
+                  ? "btn-disabled"
+                  : pressedDrums.has("crash")
+                    ? "btn-warning scale-95"
+                    : "btn-warning hover:scale-105"
               }`}
               disabled={!drumMapping.crash}
               onPress={() => handleDrumPress("crash")}
               onRelease={() => handleDrumRelease("crash")}
             />
-            
+
             <DrumButton
               label="Ride"
               className={`btn btn-circle w-20 h-20 ${
-                pressedDrums.has("ride") 
-                  ? "btn-primary scale-95" 
+                pressedDrums.has("ride")
+                  ? "btn-primary scale-95"
                   : "btn-primary hover:scale-105"
               }`}
               onPress={() => handleDrumPress("ride")}
               onRelease={() => handleDrumRelease("ride")}
             />
-            
+
             <DrumButton
               label="Splash"
               className={`btn btn-circle w-12 h-12 ${
-                pressedDrums.has("splash") 
-                  ? "btn-accent scale-95" 
+                pressedDrums.has("splash")
+                  ? "btn-accent scale-95"
                   : "btn-accent hover:scale-105"
               }`}
               onPress={() => handleDrumPress("splash")}
@@ -163,30 +170,30 @@ export default function Drumset({
             <DrumButton
               label="Tom 1"
               className={`btn btn-circle w-14 h-14 ${
-                pressedDrums.has("tom1") 
-                  ? "btn-success scale-95" 
+                pressedDrums.has("tom1")
+                  ? "btn-success scale-95"
                   : "btn-success hover:scale-105"
               }`}
               onPress={() => handleDrumPress("tom1")}
               onRelease={() => handleDrumRelease("tom1")}
             />
-            
+
             <DrumButton
               label="Tom 2"
               className={`btn btn-circle w-14 h-14 ${
-                pressedDrums.has("tom2") 
-                  ? "btn-secondary scale-95" 
+                pressedDrums.has("tom2")
+                  ? "btn-secondary scale-95"
                   : "btn-secondary hover:scale-105"
               }`}
               onPress={() => handleDrumPress("tom2")}
               onRelease={() => handleDrumRelease("tom2")}
             />
-            
+
             <DrumButton
               label="Tom 3"
               className={`btn btn-circle w-14 h-14 ${
-                pressedDrums.has("tom3") 
-                  ? "btn-info scale-95" 
+                pressedDrums.has("tom3")
+                  ? "btn-info scale-95"
                   : "btn-info hover:scale-105"
               }`}
               onPress={() => handleDrumPress("tom3")}
@@ -200,8 +207,8 @@ export default function Drumset({
             <DrumButton
               label="Hi-Hat"
               className={`btn btn-circle w-12 h-12 ${
-                pressedDrums.has("hihat") 
-                  ? "btn-neutral scale-95" 
+                pressedDrums.has("hihat")
+                  ? "btn-neutral scale-95"
                   : "btn-neutral hover:scale-105"
               }`}
               onPress={() => handleDrumPress("hihat")}
@@ -212,8 +219,8 @@ export default function Drumset({
             <DrumButton
               label="Snare"
               className={`btn btn-circle w-20 h-20 ${
-                pressedDrums.has("snare") 
-                  ? "btn-error scale-95" 
+                pressedDrums.has("snare")
+                  ? "btn-error scale-95"
                   : "btn-error hover:scale-105"
               }`}
               onPress={() => handleDrumPress("snare")}
@@ -224,8 +231,8 @@ export default function Drumset({
             <DrumButton
               label="Kick"
               className={`btn btn-circle w-24 h-24 ${
-                pressedDrums.has("kick") 
-                  ? "btn-neutral scale-95" 
+                pressedDrums.has("kick")
+                  ? "btn-neutral scale-95"
                   : "btn-neutral hover:scale-105"
               }`}
               onPress={() => handleDrumPress("kick")}
@@ -236,4 +243,4 @@ export default function Drumset({
       </div>
     </div>
   );
-} 
+}

@@ -1,126 +1,123 @@
+import { ChordModifierType } from "../../../constants/chordModifierConfig";
 import { DEFAULT_KEYBOARD_SHORTCUTS } from "../../../constants/keyboardShortcuts";
-import { getKeyDisplayName } from "../../../constants/keyboardShortcuts";
-import type { Scale } from "../../../hooks/useScaleState";
 import { chordTriadKeys } from "../../../constants/virtualKeyboardKeys";
-import type { KeyboardKey } from "../types/keyboard";
+import type { Scale } from "../../../hooks/useScaleState";
 import { useTouchEvents } from "../../../hooks/useTouchEvents";
-import { memo } from "react";
 import { getChordName } from "../../../utils/musicUtils";
+import { ChordModifierButton } from "../../shared/ChordModifierButton";
+import type { KeyboardKey } from "../types/keyboard";
+import { memo } from "react";
 
 // Memoized triad button component
-const TriadButton = memo(({
-  keyName,
-  index,
-  isPressed,
-  chordSuffix,
-  rootNote,
-  scale,
-  onTriadPress,
-  onTriadRelease,
-}: {
-  keyName: string;
-  index: number;
-  isPressed: boolean;
-  chordSuffix: string;
-  rootNote: string;
-  scale: Scale;
-  onTriadPress: (index: number) => void;
-  onTriadRelease: (index: number) => void;
-}) => {
-  const triadTouchHandlers = useTouchEvents({
-    onPress: () => onTriadPress(index),
-    onRelease: () => onTriadRelease(index)
-  });
+const TriadButton = memo(
+  ({
+    keyName,
+    index,
+    isPressed,
+    chordSuffix,
+    rootNote,
+    scale,
+    onTriadPress,
+    onTriadRelease,
+  }: {
+    keyName: string;
+    index: number;
+    isPressed: boolean;
+    chordSuffix: string;
+    rootNote: string;
+    scale: Scale;
+    onTriadPress: (index: number) => void;
+    onTriadRelease: (index: number) => void;
+  }) => {
+    const triadTouchHandlers = useTouchEvents({
+      onPress: () => onTriadPress(index),
+      onRelease: () => onTriadRelease(index),
+    });
 
-  return (
-    <button
-      onMouseDown={() => onTriadPress(index)}
-      onMouseUp={() => onTriadRelease(index)}
-      onMouseLeave={() => onTriadRelease(index)}
-      ref={triadTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
-      className={`w-12 h-20 border-2 border-gray-300 bg-purple-100 hover:bg-purple-200 
+    return (
+      <button
+        onMouseDown={() => onTriadPress(index)}
+        onMouseUp={() => onTriadRelease(index)}
+        onMouseLeave={() => onTriadRelease(index)}
+        ref={triadTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
+        className={`w-12 h-20 border-2 border-gray-300 bg-purple-100 hover:bg-purple-200 
               transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1
               touch-manipulation
-              ${
-                isPressed
-                  ? "bg-purple-300 transform scale-95"
-                  : ""
-              }`}
-      style={{
-        WebkitTapHighlightColor: 'transparent',
-        WebkitTouchCallout: 'none',
-        WebkitUserSelect: 'none',
-        touchAction: 'manipulation'
-      }}
-    >
-      <span className="text-xs text-purple-800 font-bold">
-        <kbd className="kbd kbd-sm">{keyName.toUpperCase()}</kbd>
-      </span>
-      <div className="text-center">
-        <div className="text-xs text-purple-800">
-          {getChordName(rootNote, scale, index)}
-        </div>
-        {chordSuffix && (
-          <div className="text-xs text-purple-600 font-bold">
-            {chordSuffix}
+              ${isPressed ? "bg-purple-300 transform scale-95" : ""}`}
+        style={{
+          WebkitTapHighlightColor: "transparent",
+          WebkitTouchCallout: "none",
+          WebkitUserSelect: "none",
+          touchAction: "manipulation",
+        }}
+      >
+        <span className="text-xs text-purple-800 font-bold">
+          <kbd className="kbd kbd-sm">{keyName.toUpperCase()}</kbd>
+        </span>
+        <div className="text-center">
+          <div className="text-xs text-purple-800">
+            {getChordName(rootNote, scale, index)}
           </div>
-        )}
-      </div>
-    </button>
-  );
-});
+          {chordSuffix && (
+            <div className="text-xs text-purple-600 font-bold">
+              {chordSuffix}
+            </div>
+          )}
+        </div>
+      </button>
+    );
+  },
+);
 
-TriadButton.displayName = 'TriadButton';
+TriadButton.displayName = "TriadButton";
 
 // Memoized root note button component
-const RootNoteButton = memo(({ 
-  keyData, 
-  isPressed, 
-  onKeyPress, 
-  onKeyRelease 
-}: {
-  keyData: KeyboardKey;
-  isPressed: boolean;
-  onKeyPress: (key: KeyboardKey) => void;
-  onKeyRelease: (key: KeyboardKey) => void;
-}) => {
-  const keyTouchHandlers = useTouchEvents({
-    onPress: () => onKeyPress(keyData),
-    onRelease: () => onKeyRelease(keyData)
-  });
+const RootNoteButton = memo(
+  ({
+    keyData,
+    isPressed,
+    onKeyPress,
+    onKeyRelease,
+  }: {
+    keyData: KeyboardKey;
+    isPressed: boolean;
+    onKeyPress: (key: KeyboardKey) => void;
+    onKeyRelease: (key: KeyboardKey) => void;
+  }) => {
+    const keyTouchHandlers = useTouchEvents({
+      onPress: () => onKeyPress(keyData),
+      onRelease: () => onKeyRelease(keyData),
+    });
 
-  return (
-    <button
-      onMouseDown={() => onKeyPress(keyData)}
-      onMouseUp={() => onKeyRelease(keyData)}
-      onMouseLeave={() => onKeyRelease(keyData)}
-      ref={keyTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
-      className={`
+    return (
+      <button
+        onMouseDown={() => onKeyPress(keyData)}
+        onMouseUp={() => onKeyRelease(keyData)}
+        onMouseLeave={() => onKeyRelease(keyData)}
+        ref={keyTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
+        className={`
         w-12 h-20 border-2 border-gray-300 bg-white hover:bg-gray-100 
         transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1
         touch-manipulation
-        ${
-          isPressed
-            ? "bg-gray-200 transform scale-95"
-            : ""
-        }
+        ${isPressed ? "bg-gray-200 transform scale-95" : ""}
       `}
-      style={{
-        WebkitTapHighlightColor: 'transparent',
-        WebkitTouchCallout: 'none',
-        WebkitUserSelect: 'none',
-        touchAction: 'manipulation'
-      }}
-    >
-      <span className="text-xs text-gray-600 font-bold">
-        <kbd className="kbd kbd-sm">{keyData.keyboardKey?.toUpperCase()}</kbd>
-      </span>
-      <span className="text-xs text-gray-600">{keyData.note}</span>
-    </button>
-  );
-});
+        style={{
+          WebkitTapHighlightColor: "transparent",
+          WebkitTouchCallout: "none",
+          WebkitUserSelect: "none",
+          touchAction: "manipulation",
+        }}
+      >
+        <span className="text-xs text-gray-600 font-bold">
+          <kbd className="kbd kbd-sm">{keyData.keyboardKey?.toUpperCase()}</kbd>
+        </span>
+        <span className="text-xs text-gray-600">{keyData.note}</span>
+      </button>
+    );
+  },
+);
 
-RootNoteButton.displayName = 'RootNoteButton';
+RootNoteButton.displayName = "RootNoteButton";
 
 interface ChordKeysProps {
   virtualKeys: KeyboardKey[];
@@ -152,113 +149,56 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
   onModifierRelease,
 }) => {
   const shortcuts = DEFAULT_KEYBOARD_SHORTCUTS;
-  
-  // Create touch handlers for modifiers
-  const dominant7TouchHandlers = useTouchEvents({
-    onPress: () => onModifierPress(shortcuts.dominant7.key),
-    onRelease: () => onModifierRelease(shortcuts.dominant7.key)
-  });
-  
-  const major7TouchHandlers = useTouchEvents({
-    onPress: () => onModifierPress(shortcuts.major7.key),
-    onRelease: () => onModifierRelease(shortcuts.major7.key)
-  });
-  
-  const sus2TouchHandlers = useTouchEvents({
-    onPress: () => onModifierPress(shortcuts.sus2.key),
-    onRelease: () => onModifierRelease(shortcuts.sus2.key)
-  });
-  
-  const sus4TouchHandlers = useTouchEvents({
-    onPress: () => onModifierPress(shortcuts.sus4.key),
-    onRelease: () => onModifierRelease(shortcuts.sus4.key)
-  });
-  
-  const majMinToggleTouchHandlers = useTouchEvents({
-    onPress: () => onModifierPress(shortcuts.majMinToggle.key),
-    onRelease: () => onModifierRelease(shortcuts.majMinToggle.key)
-  });
-  
+
   return (
     <div className="flex justify-center gap-10 flex-col-reverse flex-wrap sm:flex-row sm:flex-nowrap w-fit mx-auto">
-
       {/* Chord Modifiers Display */}
       <div className="text-center">
         <p className="text-white text-sm mb-2">
           Chord Modifiers (hold while playing triads)
         </p>
         <div className="flex gap-2 mb-4">
-          <button
-            onMouseDown={() => onModifierPress(shortcuts.dominant7.key)}
-            onMouseUp={() => onModifierRelease(shortcuts.dominant7.key)}
-            onMouseLeave={() => onModifierRelease(shortcuts.dominant7.key)}
-            ref={dominant7TouchHandlers.ref as React.RefObject<HTMLButtonElement>}
-            className={`px-2 py-1 rounded text-xs touch-manipulation ${
-              chordModifiers.has(shortcuts.dominant7.key)
-                ? "bg-yellow-500 text-black"
-                : "bg-gray-600 text-gray-300"
-            }`}
-          >
-            dom7 <kbd className="kbd kbd-sm">{getKeyDisplayName(shortcuts.dominant7.key)}</kbd>
-          </button>
-          <button
-            onMouseDown={() => onModifierPress(shortcuts.major7.key)}
-            onMouseUp={() => onModifierRelease(shortcuts.major7.key)}
-            onMouseLeave={() => onModifierRelease(shortcuts.major7.key)}
-            ref={major7TouchHandlers.ref as React.RefObject<HTMLButtonElement>}
-            className={`px-2 py-1 rounded text-xs touch-manipulation ${
-              chordModifiers.has(shortcuts.major7.key)
-                ? "bg-yellow-500 text-black"
-                : "bg-gray-600 text-gray-300"
-            }`}
-          >
-            maj7 <kbd className="kbd kbd-sm">{getKeyDisplayName(shortcuts.major7.key)}</kbd>
-          </button>
+          <ChordModifierButton
+            modifier={ChordModifierType.DOMINANT_7}
+            shortcutKey={shortcuts.dominant7.key}
+            isActive={chordModifiers.has(shortcuts.dominant7.key)}
+            onPress={() => onModifierPress(shortcuts.dominant7.key)}
+            onRelease={() => onModifierRelease(shortcuts.dominant7.key)}
+          />
+          <ChordModifierButton
+            modifier={ChordModifierType.MAJOR_7}
+            shortcutKey={shortcuts.major7.key}
+            isActive={chordModifiers.has(shortcuts.major7.key)}
+            onPress={() => onModifierPress(shortcuts.major7.key)}
+            onRelease={() => onModifierRelease(shortcuts.major7.key)}
+          />
         </div>
 
         <div className="flex gap-2 mb-4">
-          <button
-            onMouseDown={() => onModifierPress(shortcuts.sus2.key)}
-            onMouseUp={() => onModifierRelease(shortcuts.sus2.key)}
-            onMouseLeave={() => onModifierRelease(shortcuts.sus2.key)}
-            ref={sus2TouchHandlers.ref as React.RefObject<HTMLButtonElement>}
-            className={`px-2 py-1 rounded text-xs touch-manipulation ${
-              chordModifiers.has(shortcuts.sus2.key)
-                ? "bg-green-500 text-black"
-                : "bg-gray-600 text-gray-300"
-            }`}
-          >
-            sus2 <kbd className="kbd kbd-sm">{getKeyDisplayName(shortcuts.sus2.key)}</kbd>
-          </button>
-          <button
-            onMouseDown={() => onModifierPress(shortcuts.sus4.key)}
-            onMouseUp={() => onModifierRelease(shortcuts.sus4.key)}
-            onMouseLeave={() => onModifierRelease(shortcuts.sus4.key)}
-            ref={sus4TouchHandlers.ref as React.RefObject<HTMLButtonElement>}
-            className={`px-2 py-1 rounded text-xs touch-manipulation ${
-              chordModifiers.has(shortcuts.sus4.key)
-                ? "bg-green-500 text-black"
-                : "bg-gray-600 text-gray-300"
-            }`}
-          >
-            sus4 <kbd className="kbd kbd-sm">{getKeyDisplayName(shortcuts.sus4.key)}</kbd>
-          </button>
-          <button
-            onMouseDown={() => onModifierPress(shortcuts.majMinToggle.key)}
-            onMouseUp={() => onModifierRelease(shortcuts.majMinToggle.key)}
-            onMouseLeave={() => onModifierRelease(shortcuts.majMinToggle.key)}
-            ref={majMinToggleTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
-            className={`px-2 py-1 rounded text-xs touch-manipulation ${
-              chordModifiers.has(shortcuts.majMinToggle.key)
-                ? "bg-blue-500 text-black"
-                : "bg-gray-600 text-gray-300"
-            }`}
-          >
-            maj/min <kbd className="kbd kbd-sm">{getKeyDisplayName(shortcuts.majMinToggle.key)}</kbd>
-          </button>
+          <ChordModifierButton
+            modifier={ChordModifierType.SUS2}
+            shortcutKey={shortcuts.sus2.key}
+            isActive={chordModifiers.has(shortcuts.sus2.key)}
+            onPress={() => onModifierPress(shortcuts.sus2.key)}
+            onRelease={() => onModifierRelease(shortcuts.sus2.key)}
+          />
+          <ChordModifierButton
+            modifier={ChordModifierType.SUS4}
+            shortcutKey={shortcuts.sus4.key}
+            isActive={chordModifiers.has(shortcuts.sus4.key)}
+            onPress={() => onModifierPress(shortcuts.sus4.key)}
+            onRelease={() => onModifierRelease(shortcuts.sus4.key)}
+          />
+          <ChordModifierButton
+            modifier={ChordModifierType.MAJ_MIN_TOGGLE}
+            shortcutKey={shortcuts.majMinToggle.key}
+            isActive={chordModifiers.has(shortcuts.majMinToggle.key)}
+            onPress={() => onModifierPress(shortcuts.majMinToggle.key)}
+            onRelease={() => onModifierRelease(shortcuts.majMinToggle.key)}
+          />
         </div>
       </div>
-      
+
       {/* Keys */}
       <div className="flex flex-col gap-4">
         {/* Triads */}
@@ -271,7 +211,8 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
               // Generate chord name based on current modifiers
               let chordSuffix = "";
               if (chordModifiers.has(shortcuts.sus2.key)) chordSuffix += "sus2";
-              else if (chordModifiers.has(shortcuts.sus4.key)) chordSuffix += "sus4";
+              else if (chordModifiers.has(shortcuts.sus4.key))
+                chordSuffix += "sus4";
               if (chordModifiers.has(shortcuts.dominant7.key))
                 chordSuffix += chordSuffix ? "+7" : "7";
               else if (chordModifiers.has(shortcuts.major7.key))
@@ -300,9 +241,7 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
 
         {/* Root Notes */}
         <div className="text-center">
-          <p className="text-white text-sm mb-2">
-            Root Notes
-          </p>
+          <p className="text-white text-sm mb-2">Root Notes</p>
           <div className="flex justify-center gap-1">
             {virtualKeys.map((key) => (
               <RootNoteButton
@@ -316,7 +255,6 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
           </div>
         </div>
       </div>
-      
     </div>
   );
 };

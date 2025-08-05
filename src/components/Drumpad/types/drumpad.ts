@@ -1,4 +1,4 @@
-import type { DrumPreset } from '../../../constants/defaultPresets';
+import type { DrumPreset } from "../../../constants/presets/drumPresets";
 
 export interface DrumPad {
   id: string;
@@ -7,7 +7,7 @@ export interface DrumPad {
   sound?: string;
   isPressed: boolean;
   keyboardShortcut: string;
-  group: 'A' | 'B';
+  group: "A" | "B";
   volume?: number; // Individual pad volume multiplier
 }
 
@@ -37,13 +37,18 @@ export interface DrumpadActions {
   toggleEditMode: () => void;
   cancelAssignment: () => void;
   loadPreset: (preset: DrumPreset) => void;
-  
+
   // Store actions
-  savePreset: (name: string, description: string, padAssignments: Record<string, string>, padVolumes: Record<string, number>) => void;
+  savePreset: (
+    name: string,
+    description: string,
+    padAssignments: Record<string, string>,
+    padVolumes: Record<string, number>,
+  ) => void;
   deletePreset: (presetId: string) => void;
   exportPreset: (preset: DrumPreset) => void;
   importPreset: (presetData: DrumPreset) => void;
-  
+
   // Additional state
   pads: DrumPad[];
   currentPreset: DrumPreset | null;
@@ -56,6 +61,11 @@ export interface DrumpadProps {
     getScaleNotes: (root: string, scaleType: any, octave: number) => string[];
   };
   onPlayNotes: (notes: string[], velocity: number, isKeyHeld: boolean) => void;
+  onPlayNotesLocal?: (
+    notes: string[],
+    velocity: number,
+    isKeyHeld: boolean,
+  ) => void;
   onStopNotes: (notes: string[]) => void;
   onStopSustainedNotes: () => void;
   onReleaseKeyHeldNote: (note: string) => void;
@@ -91,4 +101,4 @@ export interface SoundSelectionModalProps {
   availableSamples: string[];
   selectedPad: string | null;
   padShortcut: string | null;
-} 
+}

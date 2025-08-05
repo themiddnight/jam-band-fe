@@ -1,16 +1,14 @@
 /* eslint-disable react-hooks/exhaustive-deps */
+import { InstrumentCategory } from "../constants/instruments";
+import { useRoomQuery } from "../services/useRooms";
+import { useRoomStore } from "../stores/roomStore";
+import { useUserStore } from "../stores/userStore";
+import { useInstrument } from "./useInstrument";
+import { useMidiController } from "./useMidiController";
+import { useScaleState } from "./useScaleState";
+import { useSocket } from "./useSocket";
 import { useEffect, useCallback, useRef, useState, useMemo } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { useUserStore } from "../stores/userStore";
-import { useRoomStore } from "../stores/roomStore";
-import { useSocket } from "./useSocket";
-import { useInstrument } from "./useInstrument";
-import { useScaleState } from "./useScaleState";
-import { useMidiController } from "./useMidiController";
-import { useRoomQuery } from "../services/useRooms";
-import { InstrumentCategory } from "../constants/instruments";
-
-
 
 export const useRoom = () => {
   const { roomId } = useParams<{ roomId: string }>();
@@ -23,12 +21,14 @@ export const useRoom = () => {
     useRoomStore();
 
   // State to track playing indicators for each user
-  const [playingIndicators, setPlayingIndicators] = useState<Map<string, { velocity: number; timestamp: number }>>(new Map());
+  const [playingIndicators, setPlayingIndicators] = useState<
+    Map<string, { velocity: number; timestamp: number }>
+  >(new Map());
 
   // State to track instrument fallback notifications
   const [fallbackNotification, setFallbackNotification] = useState<{
     message: string;
-    type: 'local' | 'remote';
+    type: "local" | "remote";
     username?: string;
   } | null>(null);
 
@@ -36,7 +36,8 @@ export const useRoom = () => {
   const [sustainToggleState, setSustainToggleState] = useState<boolean>(false);
 
   // State for leave room confirmation modal
-  const [showLeaveConfirmModal, setShowLeaveConfirmModal] = useState<boolean>(false);
+  const [showLeaveConfirmModal, setShowLeaveConfirmModal] =
+    useState<boolean>(false);
   const [hasLeftRoom, setHasLeftRoom] = useState<boolean>(false);
 
   const {
@@ -134,11 +135,16 @@ export const useRoom = () => {
 
   // Request synth parameters when joining a room with synthesizer users
   useEffect(() => {
-    if (currentRoom && currentUser && currentCategory === InstrumentCategory.Synthesizer) {
+    if (
+      currentRoom &&
+      currentUser &&
+      currentCategory === InstrumentCategory.Synthesizer
+    ) {
       // Check if there are other users with synthesizers and request their parameters
-      const otherSynthUsers = currentRoom.users.filter(user =>
-        user.id !== currentUser.id &&
-        user.currentCategory === InstrumentCategory.Synthesizer
+      const otherSynthUsers = currentRoom.users.filter(
+        (user) =>
+          user.id !== currentUser.id &&
+          user.currentCategory === InstrumentCategory.Synthesizer,
       );
 
       if (otherSynthUsers.length > 0) {
@@ -156,12 +162,15 @@ export const useRoom = () => {
       if (error.includes("Room not found")) {
         // If room not found, redirect back to lobby
         navigate("/");
-      } else if (error.includes("rejected") || error.includes("Your request was rejected")) {
+      } else if (
+        error.includes("rejected") ||
+        error.includes("Your request was rejected")
+      ) {
         // If user was rejected, redirect to lobby immediately with rejection message
-        navigate("/", { 
-          state: { 
-            rejectionMessage: error 
-          } 
+        navigate("/", {
+          state: {
+            rejectionMessage: error,
+          },
         });
       }
     }
@@ -179,17 +188,18 @@ export const useRoom = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
-      setPlayingIndicators(prev => {
+      setPlayingIndicators((prev) => {
         let hasChanges = false;
         const newMap = new Map(prev);
-        
+
         for (const [username, indicator] of newMap.entries()) {
-          if (now - indicator.timestamp > 200) { // Remove after 200ms
+          if (now - indicator.timestamp > 200) {
+            // Remove after 200ms
             newMap.delete(username);
             hasChanges = true;
           }
         }
-        
+
         // Only return new Map if there were actual changes
         return hasChanges ? newMap : prev;
       });
@@ -213,7 +223,7 @@ export const useRoom = () => {
       const message = `Safari compatibility: Switched from ${currentInstrument} to ${lastFallbackInstrument}`;
       setFallbackNotification({
         message,
-        type: 'local'
+        type: "local",
       });
 
       // Clear the notification after 5 seconds
@@ -230,7 +240,9 @@ export const useRoom = () => {
     const cleanup = onInstrumentChanged(async (data) => {
       // Skip if this is the current user's own instrument change
       if (currentUser && data.userId === currentUser.id) {
-        console.log(`⏭️ Skipping own instrument change for user ${data.username}`);
+        console.log(
+          `⏭️ Skipping own instrument change for user ${data.username}`,
+        );
         return;
       }
 
@@ -239,7 +251,7 @@ export const useRoom = () => {
           data.userId,
           data.username,
           data.instrument,
-          data.category as InstrumentCategory
+          data.category as InstrumentCategory,
         );
         // If the user changed to a synthesizer, request their current parameters
         if (data.category === InstrumentCategory.Synthesizer) {
@@ -252,20 +264,27 @@ export const useRoom = () => {
         console.error(
           "❌ Failed to update instrument for user:",
           data.username,
-          error
+          error,
         );
       }
     });
 
     return cleanup;
-  }, [onInstrumentChanged, updateRemoteUserInstrument, requestSynthParams, currentUser]);
+  }, [
+    onInstrumentChanged,
+    updateRemoteUserInstrument,
+    requestSynthParams,
+    currentUser,
+  ]);
 
   // Handle synthesizer parameter changes from remote users
   useEffect(() => {
     const cleanup = onSynthParamsChanged(async (data) => {
       // Skip if this is the current user's own synth params change
       if (currentUser && data.userId === currentUser.id) {
-        console.log(`⏭️ Skipping own synth params change for user ${data.username}`);
+        console.log(
+          `⏭️ Skipping own synth params change for user ${data.username}`,
+        );
         return;
       }
 
@@ -275,13 +294,13 @@ export const useRoom = () => {
           data.username,
           data.instrument,
           data.category as InstrumentCategory,
-          data.params
+          data.params,
         );
       } catch (error) {
         console.error(
           "❌ Failed to update synth parameters for user:",
           data.username,
-          error
+          error,
         );
       }
     });
@@ -291,11 +310,18 @@ export const useRoom = () => {
 
   // Sync synth parameters when joining a room with existing synthesizer users
   useEffect(() => {
-    if (currentRoom && currentUser && currentCategory === InstrumentCategory.Synthesizer && synthState && isSynthesizerLoaded) {
+    if (
+      currentRoom &&
+      currentUser &&
+      currentCategory === InstrumentCategory.Synthesizer &&
+      synthState &&
+      isSynthesizerLoaded
+    ) {
       // Check if there are other users with synthesizers and sync our parameters
-      const otherSynthUsers = currentRoom.users.filter(user =>
-        user.id !== currentUser.id &&
-        user.currentCategory === InstrumentCategory.Synthesizer
+      const otherSynthUsers = currentRoom.users.filter(
+        (user) =>
+          user.id !== currentUser.id &&
+          user.currentCategory === InstrumentCategory.Synthesizer,
       );
 
       if (otherSynthUsers.length > 0) {
@@ -305,7 +331,13 @@ export const useRoom = () => {
         }, 500);
       }
     }
-  }, [currentRoom, currentUser, currentCategory, socketUpdateSynthParams, isSynthesizerLoaded]);
+  }, [
+    currentRoom,
+    currentUser,
+    currentCategory,
+    socketUpdateSynthParams,
+    isSynthesizerLoaded,
+  ]);
 
   // Handle requests for synth parameters from new users
   useEffect(() => {
@@ -329,26 +361,29 @@ export const useRoom = () => {
   // Memoize room users to prevent effect from running too frequently
   const roomUsers = useMemo(() => {
     if (!currentRoom?.users) return [];
-    
+
     // Create a stable reference by serializing user data that matters for preloading
-    return currentRoom.users.map(user => ({
+    return currentRoom.users.map((user) => ({
       id: user.id,
       username: user.username,
       currentInstrument: user.currentInstrument,
-      currentCategory: user.currentCategory
+      currentCategory: user.currentCategory,
     }));
   }, [currentRoom?.users]);
 
   // Create a more stable dependency for preloading - only track instrument changes
   const instrumentChanges = useMemo(() => {
-    if (!currentRoom?.users) return '';
-    
+    if (!currentRoom?.users) return "";
+
     // Create a hash of all user instruments to detect changes
     return currentRoom.users
-      .filter(user => user.currentInstrument && user.currentCategory)
-      .map(user => `${user.id}:${user.currentInstrument}:${user.currentCategory}`)
+      .filter((user) => user.currentInstrument && user.currentCategory)
+      .map(
+        (user) =>
+          `${user.id}:${user.currentInstrument}:${user.currentCategory}`,
+      )
       .sort()
-      .join('|');
+      .join("|");
   }, [currentRoom?.users]);
 
   // Preload all room instruments when instrument changes occur
@@ -361,8 +396,8 @@ export const useRoom = () => {
     }
 
     // Check if there are any users with instruments that need preloading
-    const usersWithInstruments = roomUsers.filter(user =>
-      user.currentInstrument && user.currentCategory
+    const usersWithInstruments = roomUsers.filter(
+      (user) => user.currentInstrument && user.currentCategory,
     );
 
     // If no users have instruments set, don't run at all
@@ -371,23 +406,30 @@ export const useRoom = () => {
     }
 
     // Debounce check
-    if ((now - lastPreloadTime.current) <= PRELOAD_DEBOUNCE_MS) {
+    if (now - lastPreloadTime.current <= PRELOAD_DEBOUNCE_MS) {
       return;
     }
 
     lastPreloadTime.current = now;
 
     const instrumentsToPreload = usersWithInstruments
-      .filter((user): user is typeof user & { currentInstrument: string; currentCategory: string } => {
-        const instrumentKey = `${user.id}-${user.currentInstrument}-${user.currentCategory}`;
-        // Only preload if we haven't already preloaded this exact instrument for this user
-        if (preloadedInstruments.current.has(instrumentKey)) {
-          return false;
-        }
+      .filter(
+        (
+          user,
+        ): user is typeof user & {
+          currentInstrument: string;
+          currentCategory: string;
+        } => {
+          const instrumentKey = `${user.id}-${user.currentInstrument}-${user.currentCategory}`;
+          // Only preload if we haven't already preloaded this exact instrument for this user
+          if (preloadedInstruments.current.has(instrumentKey)) {
+            return false;
+          }
 
-        return true;
-      })
-      .map(user => {
+          return true;
+        },
+      )
+      .map((user) => {
         // Add to preloaded set here, after filtering
         const instrumentKey = `${user.id}-${user.currentInstrument}-${user.currentCategory}`;
         preloadedInstruments.current.add(instrumentKey);
@@ -396,12 +438,14 @@ export const useRoom = () => {
           userId: user.id,
           username: user.username,
           instrumentName: user.currentInstrument,
-          category: user.currentCategory
+          category: user.currentCategory,
         };
       });
 
     if (instrumentsToPreload.length > 0) {
-      console.log(`🎵 Preloading ${instrumentsToPreload.length} new instruments for room users`);
+      console.log(
+        `🎵 Preloading ${instrumentsToPreload.length} new instruments for room users`,
+      );
       preloadRoomInstruments(instrumentsToPreload);
     }
   }, [instrumentChanges, isAudioContextReady, preloadRoomInstruments]);
@@ -411,25 +455,31 @@ export const useRoom = () => {
   const NOTE_RECEIVE_DEDUPE_WINDOW = 50; // 50ms window to prevent duplicate processing
 
   // Handle playing indicators for all users (including self) - optimized
-  const handleNotePlayed = useCallback((data: { username: string; velocity: number }) => {
-    setPlayingIndicators(prev => {
-      const existing = prev.get(data.username);
-      const newIndicator = {
-        velocity: data.velocity,
-        timestamp: Date.now()
-      };
-      
-      // Only update if the data has actually changed
-      if (!existing || existing.velocity !== newIndicator.velocity || 
-          Math.abs(existing.timestamp - newIndicator.timestamp) > 10) {
-        const newMap = new Map(prev);
-        newMap.set(data.username, newIndicator);
-        return newMap;
-      }
-      
-      return prev;
-    });
-  }, []);
+  const handleNotePlayed = useCallback(
+    (data: { username: string; velocity: number }) => {
+      setPlayingIndicators((prev) => {
+        const existing = prev.get(data.username);
+        const newIndicator = {
+          velocity: data.velocity,
+          timestamp: Date.now(),
+        };
+
+        // Only update if the data has actually changed
+        if (
+          !existing ||
+          existing.velocity !== newIndicator.velocity ||
+          Math.abs(existing.timestamp - newIndicator.timestamp) > 10
+        ) {
+          const newMap = new Map(prev);
+          newMap.set(data.username, newIndicator);
+          return newMap;
+        }
+
+        return prev;
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
     const cleanup = onNoteReceived(async (data) => {
@@ -437,10 +487,11 @@ export const useRoom = () => {
       handleNotePlayed({ username: data.username, velocity: data.velocity });
 
       // For mono synths, be more careful with deduplication to preserve key tracking
-      const isMonoSynth = data.instrument === "analog_mono" || data.instrument === "fm_mono";
+      const isMonoSynth =
+        data.instrument === "analog_mono" || data.instrument === "fm_mono";
 
       // Create a unique key for this received note event
-      const eventKey = `${data.userId}-${data.eventType}-${data.notes.join(',')}-${data.instrument}-${data.velocity}`;
+      const eventKey = `${data.userId}-${data.eventType}-${data.notes.join(",")}-${data.instrument}-${data.velocity}`;
       const now = Date.now();
 
       // Only apply deduplication to note_on events for mono synths, or all events for other instruments
@@ -449,7 +500,7 @@ export const useRoom = () => {
       if (shouldCheckDuplicate) {
         // Check if we recently processed the same event
         const lastProcessed = recentReceivedNotes.current.get(eventKey);
-        if (lastProcessed && (now - lastProcessed) < NOTE_RECEIVE_DEDUPE_WINDOW) {
+        if (lastProcessed && now - lastProcessed < NOTE_RECEIVE_DEDUPE_WINDOW) {
           return;
         }
       }
@@ -479,13 +530,13 @@ export const useRoom = () => {
               data.velocity,
               data.instrument,
               data.category as InstrumentCategory,
-              data.isKeyHeld || false
+              data.isKeyHeld || false,
             );
           } catch (error) {
             console.error(
               "❌ Failed to play notes for user:",
               data.username,
-              error
+              error,
             );
           }
           break;
@@ -495,13 +546,13 @@ export const useRoom = () => {
               data.userId,
               data.notes,
               data.instrument,
-              data.category as InstrumentCategory
+              data.category as InstrumentCategory,
             );
           } catch (error) {
             console.error(
               "❌ Failed to stop notes for user:",
               data.username,
-              error
+              error,
             );
           }
           break;
@@ -511,13 +562,13 @@ export const useRoom = () => {
               data.userId,
               true,
               data.instrument,
-              data.category as InstrumentCategory
+              data.category as InstrumentCategory,
             );
           } catch (error) {
             console.error(
               "❌ Failed to set sustain on for user:",
               data.username,
-              error
+              error,
             );
           }
           break;
@@ -527,13 +578,13 @@ export const useRoom = () => {
               data.userId,
               false,
               data.instrument,
-              data.category as InstrumentCategory
+              data.category as InstrumentCategory,
             );
           } catch (error) {
             console.error(
               "❌ Failed to set sustain off for user:",
               data.username,
-              error
+              error,
             );
           }
           break;
@@ -541,12 +592,20 @@ export const useRoom = () => {
     });
 
     return cleanup;
-  }, [onNoteReceived, playRemoteUserNote, stopRemoteUserNote, setRemoteUserSustain, handleNotePlayed]);
+  }, [
+    onNoteReceived,
+    playRemoteUserNote,
+    stopRemoteUserNote,
+    setRemoteUserSustain,
+    handleNotePlayed,
+  ]);
 
   // Handle instrument changes
   useEffect(() => {
     if (currentInstrument && currentCategory) {
-      console.log(`🎵 Sending instrument change to backend: ${currentInstrument} (${currentCategory})`);
+      console.log(
+        `🎵 Sending instrument change to backend: ${currentInstrument} (${currentCategory})`,
+      );
       changeInstrument(currentInstrument, currentCategory);
     }
   }, [currentInstrument, currentCategory, changeInstrument]);
@@ -563,7 +622,13 @@ export const useRoom = () => {
       };
       initAudio();
     }
-  }, [isConnected, roomId, username, isAudioContextReady, initializeAudioContext]);
+  }, [
+    isConnected,
+    roomId,
+    username,
+    isAudioContextReady,
+    initializeAudioContext,
+  ]);
 
   // Handle note playing with socket emission
   const handlePlayNote = useCallback(
@@ -588,7 +653,14 @@ export const useRoom = () => {
         });
       }
     },
-    [playNotes, playNote, currentInstrument, currentCategory, username, handleNotePlayed]
+    [
+      playNotes,
+      playNote,
+      currentInstrument,
+      currentCategory,
+      username,
+      handleNotePlayed,
+    ],
   );
 
   const handleStopNote = useCallback(
@@ -607,7 +679,7 @@ export const useRoom = () => {
         });
       }
     },
-    [stopNotes, playNote, currentInstrument, currentCategory]
+    [stopNotes, playNote, currentInstrument, currentCategory],
   );
 
   const handleReleaseKeyHeldNote = useCallback(
@@ -626,7 +698,7 @@ export const useRoom = () => {
         });
       }
     },
-    [releaseKeyHeldNote, playNote, currentInstrument, currentCategory]
+    [releaseKeyHeldNote, playNote, currentInstrument, currentCategory],
   );
 
   const handleSustainChange = useCallback(
@@ -656,16 +728,13 @@ export const useRoom = () => {
       playNote,
       currentInstrument,
       currentCategory,
-    ]
+    ],
   );
 
-  const handleSustainToggleChange = useCallback(
-    (sustainToggle: boolean) => {
-      // Update the sustain toggle state for MIDI controller access
-      setSustainToggleState(sustainToggle);
-    },
-    []
-  );
+  const handleSustainToggleChange = useCallback((sustainToggle: boolean) => {
+    // Update the sustain toggle state for MIDI controller access
+    setSustainToggleState(sustainToggle);
+  }, []);
 
   // MIDI Controller integration
   const midiController = useMidiController({
@@ -760,7 +829,7 @@ export const useRoom = () => {
     (userId: string) => {
       approveMember(userId);
     },
-    [approveMember]
+    [approveMember],
   );
 
   // Handle reject member
@@ -768,7 +837,7 @@ export const useRoom = () => {
     (userId: string) => {
       rejectMember(userId);
     },
-    [rejectMember]
+    [rejectMember],
   );
 
   // Leave room (for canceling pending approval)
@@ -785,26 +854,26 @@ export const useRoom = () => {
   // Handle leave room confirmation
   const handleLeaveRoomConfirm = useCallback(async () => {
     setShowLeaveConfirmModal(false);
-    
+
     if (!roomId || !userId) {
       console.error("Missing roomId or userId for leave room");
       navigate("/");
       return;
     }
-    
+
     try {
       // Set flag to prevent rejoining the room
       setHasLeftRoom(true);
-      
+
       // Use HTTP-based leave room
       const result = await roomLeaveMutate.mutateAsync({ roomId, userId });
-      
+
       if (result.success) {
         console.log("Successfully left room via HTTP:", result.message);
-        
+
         // Disconnect socket to prevent automatic reconnection
         disconnect();
-        
+
         // Immediately redirect to lobby
         navigate("/");
       } else {
@@ -840,17 +909,17 @@ export const useRoom = () => {
     error,
     role,
     username,
-    
+
     // Connection state
     isConnected,
     isConnecting,
-    
+
     // UI state
     playingIndicators,
     fallbackNotification,
     showLeaveConfirmModal,
     setShowLeaveConfirmModal,
-    
+
     // Instrument state
     currentInstrument,
     currentCategory,
@@ -861,13 +930,13 @@ export const useRoom = () => {
     audioContextError,
     synthState,
     isSynthesizerLoaded,
-    
+
     // Scale state
     scaleState,
-    
+
     // MIDI controller
     midiController,
-    
+
     // Handlers
     handlePlayNote,
     handleStopNote,
@@ -880,15 +949,16 @@ export const useRoom = () => {
     handleLeaveRoomClick,
     handleLeaveRoomConfirm,
     clearFallbackNotification,
-    
+
     // Instrument management
     handleInstrumentChange,
     handleCategoryChange,
     getCurrentInstrumentControlType,
     updateSynthParams,
     loadPresetParams,
-    
+
     // Audio management
     stopSustainedNotes,
+    playNotes,
   };
-}; 
+};

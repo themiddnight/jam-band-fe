@@ -1,9 +1,9 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
 export interface RoomUser {
   id: string;
   username: string;
-  role: 'room_owner' | 'band_member' | 'audience';
+  role: "room_owner" | "band_member" | "audience";
   currentInstrument?: string;
   currentCategory?: string;
   isReady: boolean;
@@ -30,7 +30,11 @@ interface RoomState {
   setIsConnected: (connected: boolean) => void;
   setPendingApproval: (pending: boolean) => void;
   setError: (error: string | null) => void;
-  updateUserInstrument: (userId: string, instrument: string, category: string) => void;
+  updateUserInstrument: (
+    userId: string,
+    instrument: string,
+    category: string,
+  ) => void;
   addUser: (user: RoomUser) => void;
   removeUser: (userId: string) => void;
   addPendingMember: (user: RoomUser) => void;
@@ -54,7 +58,6 @@ export const useRoomStore = create<RoomState>((set, get) => ({
         ...room,
         users: room.users || [],
         pendingMembers: room.pendingMembers || [],
-    
       };
       set({ currentRoom: normalizedRoom });
     } else {
@@ -70,14 +73,14 @@ export const useRoomStore = create<RoomState>((set, get) => ({
     const { currentRoom } = get();
     if (!currentRoom) return;
 
-    const updatedUsers = currentRoom.users.map(user =>
-      user.id === userId 
+    const updatedUsers = currentRoom.users.map((user) =>
+      user.id === userId
         ? { ...user, currentInstrument: instrument, currentCategory: category }
-        : user
+        : user,
     );
 
     set({
-      currentRoom: { ...currentRoom, users: updatedUsers }
+      currentRoom: { ...currentRoom, users: updatedUsers },
     });
   },
 
@@ -86,21 +89,25 @@ export const useRoomStore = create<RoomState>((set, get) => ({
     if (!currentRoom) return;
 
     // Check if user already exists to prevent duplicates
-    const userExists = currentRoom.users.some(existingUser => existingUser.id === user.id);
+    const userExists = currentRoom.users.some(
+      (existingUser) => existingUser.id === user.id,
+    );
     if (userExists) {
-      console.log('User already exists in room, skipping add:', user.id);
+      console.log("User already exists in room, skipping add:", user.id);
       return;
     }
 
     // Remove user from pending members if they exist there
-    const updatedPendingMembers = currentRoom.pendingMembers.filter(pendingUser => pendingUser.id !== user.id);
+    const updatedPendingMembers = currentRoom.pendingMembers.filter(
+      (pendingUser) => pendingUser.id !== user.id,
+    );
 
     set({
       currentRoom: {
         ...currentRoom,
         users: [...currentRoom.users, user],
-        pendingMembers: updatedPendingMembers
-      }
+        pendingMembers: updatedPendingMembers,
+      },
     });
   },
 
@@ -111,8 +118,8 @@ export const useRoomStore = create<RoomState>((set, get) => ({
     set({
       currentRoom: {
         ...currentRoom,
-        users: currentRoom.users.filter(user => user.id !== userId)
-      }
+        users: currentRoom.users.filter((user) => user.id !== userId),
+      },
     });
   },
 
@@ -123,8 +130,8 @@ export const useRoomStore = create<RoomState>((set, get) => ({
     set({
       currentRoom: {
         ...currentRoom,
-        pendingMembers: [...currentRoom.pendingMembers, user]
-      }
+        pendingMembers: [...currentRoom.pendingMembers, user],
+      },
     });
   },
 
@@ -135,22 +142,22 @@ export const useRoomStore = create<RoomState>((set, get) => ({
     set({
       currentRoom: {
         ...currentRoom,
-        pendingMembers: currentRoom.pendingMembers.filter(user => user.id !== userId)
-      }
+        pendingMembers: currentRoom.pendingMembers.filter(
+          (user) => user.id !== userId,
+        ),
+      },
     });
   },
-
-
 
   transferOwnership: (newOwnerId) => {
     const { currentRoom, currentUser } = get();
     if (!currentRoom) return;
 
-    const updatedUsers = currentRoom.users.map(user => {
+    const updatedUsers = currentRoom.users.map((user) => {
       if (user.id === newOwnerId) {
-        return { ...user, role: 'room_owner' as const };
+        return { ...user, role: "room_owner" as const };
       } else if (user.id === currentRoom.owner) {
-        return { ...user, role: 'band_member' as const };
+        return { ...user, role: "band_member" as const };
       }
       return user;
     });
@@ -158,26 +165,27 @@ export const useRoomStore = create<RoomState>((set, get) => ({
     // Update current user if they are the new owner
     let updatedCurrentUser = currentUser;
     if (currentUser && currentUser.id === newOwnerId) {
-      updatedCurrentUser = { ...currentUser, role: 'room_owner' as const };
+      updatedCurrentUser = { ...currentUser, role: "room_owner" as const };
     } else if (currentUser && currentUser.id === currentRoom.owner) {
-      updatedCurrentUser = { ...currentUser, role: 'band_member' as const };
+      updatedCurrentUser = { ...currentUser, role: "band_member" as const };
     }
 
     set({
       currentRoom: {
         ...currentRoom,
         owner: newOwnerId,
-        users: updatedUsers
+        users: updatedUsers,
       },
-      currentUser: updatedCurrentUser
+      currentUser: updatedCurrentUser,
     });
   },
 
-  clearRoom: () => set({
-    currentRoom: null,
-    currentUser: null,
-    isConnected: false,
-    pendingApproval: false,
-    error: null
-  })
-})); 
+  clearRoom: () =>
+    set({
+      currentRoom: null,
+      currentUser: null,
+      isConnected: false,
+      pendingApproval: false,
+      error: null,
+    }),
+}));

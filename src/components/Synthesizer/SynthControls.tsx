@@ -1,12 +1,12 @@
-import React, { useState } from "react";
 import { SYNTHESIZER_INSTRUMENTS } from "../../constants/instruments";
+import { DEFAULT_SYNTH_PRESETS } from "../../constants/presets/synthPresets";
 import { usePresetManager } from "../../hooks/usePresetManager";
-import { DEFAULT_PRESETS } from "../../constants/defaultPresets";
-import type { SynthState } from "../../utils/InstrumentEngine";
 import type { SynthPreset } from "../../types/presets";
-import { LatencyControls } from "./LatencyControls";
+import type { SynthState } from "../../utils/InstrumentEngine";
 import { Knob } from "../shared/Knob";
-import { Modal } from '../shared/Modal';
+import { Modal } from "../shared/Modal";
+import { LatencyControls } from "./LatencyControls";
+import React, { useState } from "react";
 
 interface SynthControlsProps {
   currentInstrument: string;
@@ -22,7 +22,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
   onLoadPreset,
 }) => {
   const currentSynthData = SYNTHESIZER_INSTRUMENTS.find(
-    (synth) => synth.value === currentInstrument
+    (synth) => synth.value === currentInstrument,
   );
 
   const presetManager = usePresetManager();
@@ -31,7 +31,9 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
   const [showImportExport, setShowImportExport] = useState(false);
   const [importData, setImportData] = useState("");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [presetToDelete, setPresetToDelete] = useState<SynthPreset | null>(null);
+  const [presetToDelete, setPresetToDelete] = useState<SynthPreset | null>(
+    null,
+  );
 
   if (!currentSynthData) return null;
 
@@ -40,14 +42,14 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
 
   // Get relevant presets for current synthesizer type
   const availablePresets = [
-    ...DEFAULT_PRESETS.filter(
-      (preset) =>
+    ...DEFAULT_SYNTH_PRESETS.filter(
+      (preset: any) =>
         preset.synthType === currentSynthData.type &&
-        preset.polyphony === currentSynthData.polyphony
+        preset.polyphony === currentSynthData.polyphony,
     ),
     ...presetManager.getPresetsForSynth(
       currentSynthData.type as "analog" | "fm",
-      currentSynthData.polyphony as "mono" | "poly"
+      currentSynthData.polyphony as "mono" | "poly",
     ),
   ];
 
@@ -57,7 +59,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
         presetName.trim(),
         currentSynthData.type as "analog" | "fm",
         currentSynthData.polyphony as "mono" | "poly",
-        synthState
+        synthState,
       );
       setPresetName("");
       setShowPresetModal(false);
@@ -72,9 +74,12 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
       onParamChange(preset.parameters);
     }
     presetManager.loadPreset(preset);
-    
+
     // Ensure all preset parameters are synchronized to remote users
-    console.log("🎛️ Syncing all preset parameters to remote users:", preset.parameters);
+    console.log(
+      "🎛️ Syncing all preset parameters to remote users:",
+      preset.parameters,
+    );
     // The onParamChange will trigger the sync through the callback mechanism
   };
 
@@ -144,7 +149,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                 value={presetManager.currentPreset?.id || ""}
                 onChange={(e) => {
                   const selectedPreset = availablePresets.find(
-                    (p) => p.id === e.target.value
+                    (p) => p.id === e.target.value,
                   );
                   if (selectedPreset) {
                     handleLoadPreset(selectedPreset);
@@ -233,7 +238,9 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
 
             <div className="flex items-center gap-2">
               <label className="label">
-                <span className="label-text text-base-content">Import Presets (JSON)</span>
+                <span className="label-text text-base-content">
+                  Import Presets (JSON)
+                </span>
               </label>
               <textarea
                 value={importData}
@@ -272,7 +279,8 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
           cancelText="Cancel"
         >
           <p className="py-4">
-            Are you sure you want to delete "{presetToDelete?.name}"? This action cannot be undone.
+            Are you sure you want to delete "{presetToDelete?.name}"? This
+            action cannot be undone.
           </p>
         </Modal>
 

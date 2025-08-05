@@ -1,5 +1,5 @@
-import axiosInstance from '../utils/axiosInstance';
-import { endpoints } from '../utils/endpoints';
+import axiosInstance from "../utils/axiosInstance";
+import { endpoints } from "../utils/endpoints";
 
 // Types for API responses
 export interface Room {
@@ -15,7 +15,7 @@ export interface Room {
 export interface User {
   id: string;
   username: string;
-  role: 'room_owner' | 'band_member' | 'audience';
+  role: "room_owner" | "band_member" | "audience";
   isReady: boolean;
   currentInstrument?: string;
   currentCategory?: string;
@@ -48,7 +48,12 @@ export async function getRoomList(): Promise<RoomListResponse> {
 }
 
 // Leave room endpoint
-export async function leaveRoom(roomId: string, userId: string): Promise<LeaveRoomResponse> {
-  const response = await axiosInstance.post(endpoints.leaveRoom(roomId), { userId });
+export async function leaveRoom(
+  roomId: string,
+  userId: string,
+): Promise<LeaveRoomResponse> {
+  const response = await axiosInstance.post(endpoints.leaveRoom(roomId), {
+    userId,
+  });
   return response.data;
 }

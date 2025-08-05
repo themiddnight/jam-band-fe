@@ -1,17 +1,22 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useUserStore } from '../stores/userStore';
-import { useRoomStore } from '../stores/roomStore';
-import { useSocket } from './useSocket';
-import { useRoomQuery } from '../services/useRooms';
-
-
+import { useRoomQuery } from "../services/useRooms";
+import { useRoomStore } from "../stores/roomStore";
+import { useUserStore } from "../stores/userStore";
+import { useSocket } from "./useSocket";
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 
 export function useLobby() {
   const navigate = useNavigate();
   const location = useLocation();
   const { username, userId, setUsername } = useUserStore();
-  const { connect, createRoom, isConnected, isConnecting, onRoomCreated, onRoomClosed } = useSocket();
+  const {
+    connect,
+    createRoom,
+    isConnected,
+    isConnecting,
+    onRoomCreated,
+    onRoomClosed,
+  } = useSocket();
   const { currentRoom } = useRoomStore();
 
   // Use TanStack Query for room fetching
@@ -19,13 +24,13 @@ export function useLobby() {
   const { data: rooms, isLoading: loading, refetch: fetchRooms } = roomsQuery;
 
   const [showUsernameModal, setShowUsernameModal] = useState(false);
-  const [tempUsername, setTempUsername] = useState('');
+  const [tempUsername, setTempUsername] = useState("");
   const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
-  const [newRoomName, setNewRoomName] = useState('');
+  const [newRoomName, setNewRoomName] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
   const [showRejectionModal, setShowRejectionModal] = useState(false);
-  const [rejectionMessage, setRejectionMessage] = useState<string>('');
+  const [rejectionMessage, setRejectionMessage] = useState<string>("");
 
   // Check if username is set
   useEffect(() => {
@@ -78,13 +83,11 @@ export function useLobby() {
     }
   }, [currentRoom, navigate]);
 
-
-
   const handleUsernameSubmit = () => {
     if (tempUsername.trim()) {
       setUsername(tempUsername.trim());
       setShowUsernameModal(false);
-      setTempUsername('');
+      setTempUsername("");
     }
   };
 
@@ -93,38 +96,38 @@ export function useLobby() {
     if (newRoomName.trim() && username && userId) {
       createRoom(newRoomName.trim(), username, userId, isPrivate, isHidden);
       setShowCreateRoomModal(false);
-      setNewRoomName('');
+      setNewRoomName("");
       setIsPrivate(false);
       setIsHidden(false);
     }
   };
 
-  const handleJoinRoom = (roomId: string, role: 'band_member' | 'audience') => {
+  const handleJoinRoom = (roomId: string, role: "band_member" | "audience") => {
     if (username && userId) {
       navigate(`/room/${roomId}`, { state: { role } });
     }
   };
 
   const handleUsernameClick = () => {
-    setTempUsername(username || '');
+    setTempUsername(username || "");
     setShowUsernameModal(true);
   };
 
   const handleCreateRoomModalClose = () => {
     setShowCreateRoomModal(false);
-    setNewRoomName('');
+    setNewRoomName("");
     setIsPrivate(false);
     setIsHidden(false);
   };
 
   const handleUsernameModalClose = () => {
     setShowUsernameModal(false);
-    setTempUsername('');
+    setTempUsername("");
   };
 
   const handleRejectionModalClose = () => {
     setShowRejectionModal(false);
-    setRejectionMessage('');
+    setRejectionMessage("");
   };
 
   const handleCreateRoomSubmit = () => {
@@ -152,7 +155,7 @@ export function useLobby() {
     rejectionMessage,
     isConnected,
     isConnecting,
-    
+
     // Actions
     fetchRooms,
     handleUsernameSubmit,
@@ -164,7 +167,7 @@ export function useLobby() {
     handleRejectionModalClose,
     handleCreateRoomSubmit,
     handleCreateRoomButtonClick,
-    
+
     // Setters
     setShowUsernameModal,
     setTempUsername,
@@ -174,4 +177,4 @@ export function useLobby() {
     setIsHidden,
     setShowRejectionModal,
   };
-} 
+}

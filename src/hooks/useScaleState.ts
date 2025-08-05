@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
 import { NOTE_NAMES, SCALES, type Scale } from "../utils/musicUtils";
+import { useState, useCallback } from "react";
 
 // Re-export Scale type for backward compatibility
 export type { Scale };
@@ -17,7 +17,7 @@ export const useScaleState = () => {
         return `${NOTE_NAMES[noteIndex]}${noteOctave}`;
       });
     },
-    []
+    [],
   );
 
   return {

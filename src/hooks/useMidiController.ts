@@ -25,7 +25,7 @@ export const useMidiController = ({
   const midiAccess = useRef<WebMidi.MIDIAccess | null>(null);
   const inputs = useRef<WebMidi.MIDIInput[]>([]);
   const isInitialized = useRef<boolean>(false);
-  
+
   // Use ref to store stable handler references
   const handlersRef = useRef({
     onNoteOn,
@@ -34,7 +34,7 @@ export const useMidiController = ({
     onPitchBend,
     onSustainChange,
   });
-  
+
   // React state for proper reactivity
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -52,8 +52,8 @@ export const useMidiController = ({
   // Memoize MIDI message handler to prevent recreation
   const handleMidiMessage = useCallback((event: WebMidi.MIDIMessageEvent) => {
     const [status, data1, data2] = event.data;
-    const channel = status & 0x0F;
-    const messageType = status & 0xF0;
+    const channel = status & 0x0f;
+    const messageType = status & 0xf0;
 
     const handlers = handlersRef.current;
 
@@ -72,16 +72,17 @@ export const useMidiController = ({
         handlers.onNoteOff(data1);
         break;
 
-      case 0xB0: // Control Change
+      case 0xb0: // Control Change
         handlers.onControlChange(data1);
-        
+
         // Handle sustain pedal (CC 64)
         if (data1 === 64) {
           handlers.onSustainChange(data2 >= 64);
         }
         break;
 
-      case 0xE0: { // Pitch Bend
+      case 0xe0: {
+        // Pitch Bend
         const pitchValue = ((data2 << 7) | data1) / 16384; // 14-bit value normalized to 0-1
         handlers.onPitchBend(pitchValue, channel);
         break;
@@ -90,7 +91,7 @@ export const useMidiController = ({
   }, []); // Empty dependency array since we use ref
 
   const cleanupInputs = useCallback(() => {
-    inputs.current.forEach(input => {
+    inputs.current.forEach((input) => {
       input.onmidimessage = null;
     });
     inputs.current = [];
@@ -100,21 +101,23 @@ export const useMidiController = ({
     if (midiAccess.current) {
       // Clean up old listeners first
       cleanupInputs();
-      
+
       const newInputs = Array.from(midiAccess.current.inputs.values());
       inputs.current = newInputs;
-      
+
       // Set up event listeners for all inputs
-      newInputs.forEach(input => {
+      newInputs.forEach((input) => {
         input.onmidimessage = handleMidiMessage;
       });
-      
+
       // Update connection state
       const hasActiveDevices = newInputs.length > 0;
       setIsConnected(hasActiveDevices);
-      
-      console.log(`MIDI devices refreshed: ${newInputs.length} device(s) found`);
-      
+
+      console.log(
+        `MIDI devices refreshed: ${newInputs.length} device(s) found`,
+      );
+
       return hasActiveDevices;
     }
     return false;
@@ -126,30 +129,31 @@ export const useMidiController = ({
 
   const requestMidiAccess = useCallback(async (): Promise<boolean> => {
     if (isRequesting) return false;
-    
+
     setIsRequesting(true);
     setConnectionError(null);
-    
+
     try {
       if (!navigator.requestMIDIAccess) {
-        throw new Error('Web MIDI API not supported');
+        throw new Error("Web MIDI API not supported");
       }
-      
+
       const access = await navigator.requestMIDIAccess();
       midiAccess.current = access;
       isInitialized.current = true;
-      
+
       // Set up state change listener
       access.onstatechange = handleStateChange;
-      
+
       // Initial device refresh
       const hasDevices = refreshMidiDevices();
-      
+
       return hasDevices;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to access MIDI';
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to access MIDI";
       setConnectionError(errorMessage);
-      console.error('MIDI access error:', errorMessage);
+      console.error("MIDI access error:", errorMessage);
       isInitialized.current = false;
       return false;
     } finally {
@@ -158,7 +162,7 @@ export const useMidiController = ({
   }, [isRequesting, handleStateChange, refreshMidiDevices]);
 
   const getMidiInputs = useCallback((): MidiDevice[] => {
-    return inputs.current.map(input => ({
+    return inputs.current.map((input) => ({
       id: input.id,
       name: input.name || `MIDI Input ${input.id}`,
       manufacturer: input.manufacturer,
@@ -171,15 +175,17 @@ export const useMidiController = ({
     if (isInitialized.current && midiAccess.current) {
       // Only refresh if we detect a state change in MIDI devices
       const currentInputs = Array.from(midiAccess.current.inputs.values());
-      const hasStateChange = currentInputs.length !== inputs.current.length || 
-        currentInputs.some((input, index) => 
-          !inputs.current[index] || 
-          input.id !== inputs.current[index].id || 
-          input.state !== inputs.current[index].state
+      const hasStateChange =
+        currentInputs.length !== inputs.current.length ||
+        currentInputs.some(
+          (input, index) =>
+            !inputs.current[index] ||
+            input.id !== inputs.current[index].id ||
+            input.state !== inputs.current[index].state,
         );
-      
+
       if (hasStateChange) {
-        console.log('Window focused - refreshing MIDI devices');
+        console.log("Window focused - refreshing MIDI devices");
         refreshMidiDevices();
       }
     }
@@ -189,15 +195,17 @@ export const useMidiController = ({
     if (!document.hidden && isInitialized.current && midiAccess.current) {
       // Only refresh if we detect a state change in MIDI devices
       const currentInputs = Array.from(midiAccess.current.inputs.values());
-      const hasStateChange = currentInputs.length !== inputs.current.length || 
-        currentInputs.some((input, index) => 
-          !inputs.current[index] || 
-          input.id !== inputs.current[index].id || 
-          input.state !== inputs.current[index].state
+      const hasStateChange =
+        currentInputs.length !== inputs.current.length ||
+        currentInputs.some(
+          (input, index) =>
+            !inputs.current[index] ||
+            input.id !== inputs.current[index].id ||
+            input.state !== inputs.current[index].state,
         );
-      
+
       if (hasStateChange) {
-        console.log('Tab became visible - refreshing MIDI devices');
+        console.log("Tab became visible - refreshing MIDI devices");
         refreshMidiDevices();
       }
     }
@@ -205,12 +213,12 @@ export const useMidiController = ({
 
   // Set up window focus and visibility listeners
   useEffect(() => {
-    window.addEventListener('focus', handleWindowFocus);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
-      window.removeEventListener('focus', handleWindowFocus);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [handleWindowFocus, handleVisibilityChange]);
 
@@ -234,4 +242,4 @@ export const useMidiController = ({
     getMidiInputs,
     refreshMidiDevices, // Expose for manual refresh if needed
   };
-}; 
+};

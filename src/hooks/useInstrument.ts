@@ -1,16 +1,16 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { useInstrumentManager } from "./useInstrumentManager";
-import type { SynthState } from "../utils/InstrumentEngine";
 import {
   SOUNDFONT_INSTRUMENTS,
   DRUM_MACHINES,
   SYNTHESIZER_INSTRUMENTS,
   InstrumentCategory,
 } from "../constants/instruments";
-import { ControlType } from "../types";
-import { getCachedDrumMachines } from "../utils/drumMachineUtils";
 import { useInstrumentPreferencesStore } from "../stores/instrumentPreferencesStore";
+import { ControlType } from "../types";
+import type { SynthState } from "../utils/InstrumentEngine";
+import { getCachedDrumMachines } from "../utils/drumMachineUtils";
 import { isSafari } from "../utils/webkitCompat";
+import { useInstrumentManager } from "./useInstrumentManager";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 
 export interface UseInstrumentOptions {
   initialInstrument?: string;
@@ -31,7 +31,7 @@ export interface UseInstrumentReturn {
   // Synthesizer state (for current local instrument)
   synthState: SynthState | null;
   isSynthesizerLoaded: boolean;
-  
+
   // Instrument fallback state
   lastFallbackInstrument: string | null;
   lastFallbackCategory: InstrumentCategory | null;
@@ -46,7 +46,7 @@ export interface UseInstrumentReturn {
   playNote: (
     notes: string[],
     velocity: number,
-    isKeyHeld?: boolean
+    isKeyHeld?: boolean,
   ) => Promise<void>;
   stopNotes: (notes: string[]) => Promise<void>;
   stopSustainedNotes: () => void;
@@ -68,32 +68,32 @@ export interface UseInstrumentReturn {
     velocity: number,
     instrumentName: string,
     category: InstrumentCategory,
-    isKeyHeld?: boolean
+    isKeyHeld?: boolean,
   ) => Promise<void>;
   stopRemoteUserNote: (
     userId: string,
     notes: string[],
     instrumentName: string,
-    category: InstrumentCategory
+    category: InstrumentCategory,
   ) => Promise<void>;
   setRemoteUserSustain: (
     userId: string,
     sustain: boolean,
     instrumentName: string,
-    category: InstrumentCategory
+    category: InstrumentCategory,
   ) => void;
   updateRemoteUserInstrument: (
     userId: string,
     username: string,
     instrumentName: string,
-    category: InstrumentCategory
+    category: InstrumentCategory,
   ) => Promise<void>;
   updateRemoteUserSynthParams: (
     userId: string,
     username: string,
     instrumentName: string,
     category: InstrumentCategory,
-    params: Partial<SynthState>
+    params: Partial<SynthState>,
   ) => Promise<void>;
   cleanupRemoteUser: (userId: string) => void;
   preloadRoomInstruments: (
@@ -102,12 +102,12 @@ export interface UseInstrumentReturn {
       username: string;
       instrumentName: string;
       category: string;
-    }>
+    }>,
   ) => Promise<void>;
 }
 
 export const useInstrument = (
-  options: UseInstrumentOptions = {}
+  options: UseInstrumentOptions = {},
 ): UseInstrumentReturn => {
   const {
     initialInstrument,
@@ -128,7 +128,7 @@ export const useInstrument = (
   const [isAudioContextReady, setIsAudioContextReady] =
     useState<boolean>(false);
   const [audioContextError, setAudioContextError] = useState<string | null>(
-    null
+    null,
   );
   const [availableSamples, setAvailableSamples] = useState<string[]>([]);
   const [dynamicDrumMachines, setDynamicDrumMachines] = useState(DRUM_MACHINES);
@@ -136,11 +136,14 @@ export const useInstrument = (
   // Add a state trigger to force synthState updates
   const [synthStateUpdateTrigger, setSynthStateUpdateTrigger] =
     useState<number>(0);
-  
+
   // Instrument fallback state
-  const [lastFallbackInstrument, setLastFallbackInstrument] = useState<string | null>(null);
-  const [lastFallbackCategory, setLastFallbackCategory] = useState<InstrumentCategory | null>(null);
-    
+  const [lastFallbackInstrument, setLastFallbackInstrument] = useState<
+    string | null
+  >(null);
+  const [lastFallbackCategory, setLastFallbackCategory] =
+    useState<InstrumentCategory | null>(null);
+
   // Track loading state to prevent concurrent requests
   const isCurrentlyLoading = useRef<boolean>(false);
 
@@ -196,11 +199,10 @@ export const useInstrument = (
   };
 
   const [currentInstrument, setCurrentInstrument] = useState<string>(
-    getInitialInstrument()
+    getInitialInstrument(),
   );
-  const [currentCategory, setCurrentCategory] = useState<InstrumentCategory>(
-    getInitialCategory()
-  );
+  const [currentCategory, setCurrentCategory] =
+    useState<InstrumentCategory>(getInitialCategory());
 
   // Effect to refresh samples when local engine is ready (handles initial load for drum machines)
   useEffect(() => {
@@ -321,14 +323,14 @@ export const useInstrument = (
         } else {
           // If instrument doesn't exist in any category, default to a safe option
           console.warn(
-            `Unknown instrument: ${currentInstrument}, defaulting to acoustic_grand_piano`
+            `Unknown instrument: ${currentInstrument}, defaulting to acoustic_grand_piano`,
           );
           validatedInstrument = "acoustic_grand_piano";
           validatedCategory = InstrumentCategory.Melodic;
         }
 
         console.log(
-          `Initializing audio with: ${validatedInstrument} (${validatedCategory})`
+          `Initializing audio with: ${validatedInstrument} (${validatedCategory})`,
         );
 
         // Update state if validation changed anything
@@ -348,8 +350,14 @@ export const useInstrument = (
           instrumentName: validatedInstrument,
           category: validatedCategory,
           onSynthParamsChange,
-          onInstrumentFallback: (originalInstrument: string, fallbackInstrument: string, category: InstrumentCategory) => {
-            console.log(`🔄 Local instrument fallback: ${originalInstrument} → ${fallbackInstrument} (${category})`);
+          onInstrumentFallback: (
+            originalInstrument: string,
+            fallbackInstrument: string,
+            category: InstrumentCategory,
+          ) => {
+            console.log(
+              `🔄 Local instrument fallback: ${originalInstrument} → ${fallbackInstrument} (${category})`,
+            );
             setLastFallbackInstrument(fallbackInstrument);
             setLastFallbackCategory(category);
             setCurrentInstrument(fallbackInstrument);
@@ -365,7 +373,7 @@ export const useInstrument = (
       setAudioContextError(
         error instanceof Error
           ? error.message
-          : "AudioContext initialization failed"
+          : "AudioContext initialization failed",
       );
       throw error;
     }
@@ -397,10 +405,12 @@ export const useInstrument = (
     async (instrumentName: string, category: InstrumentCategory) => {
       // Prevent concurrent loading requests
       if (isCurrentlyLoading.current) {
-        console.log(`⏳ Already loading an instrument, skipping duplicate request for ${instrumentName}`);
+        console.log(
+          `⏳ Already loading an instrument, skipping duplicate request for ${instrumentName}`,
+        );
         return;
       }
-      
+
       const drumMachines = DRUM_MACHINES.map((dm) => dm.value);
       const synthesizers = SYNTHESIZER_INSTRUMENTS.map((s) => s.value);
       const soundfonts = SOUNDFONT_INSTRUMENTS.map((s) => s.value);
@@ -426,8 +436,14 @@ export const useInstrument = (
             instrumentName,
             category: validatedCategory,
             onSynthParamsChange,
-            onInstrumentFallback: (originalInstrument: string, fallbackInstrument: string, category: InstrumentCategory) => {
-              console.log(`🔄 Local instrument fallback: ${originalInstrument} → ${fallbackInstrument} (${category})`);
+            onInstrumentFallback: (
+              originalInstrument: string,
+              fallbackInstrument: string,
+              category: InstrumentCategory,
+            ) => {
+              console.log(
+                `🔄 Local instrument fallback: ${originalInstrument} → ${fallbackInstrument} (${category})`,
+              );
               setLastFallbackInstrument(fallbackInstrument);
               setLastFallbackCategory(category);
               setCurrentInstrument(fallbackInstrument);
@@ -438,7 +454,7 @@ export const useInstrument = (
         } else {
           await instrumentManager.updateLocalInstrument(
             instrumentName,
-            validatedCategory
+            validatedCategory,
           );
         }
 
@@ -454,23 +470,25 @@ export const useInstrument = (
           if (localEngine && localEngine.isReady()) {
             // Try to get samples immediately
             let actualSamples = instrumentManager.getLocalAvailableSamples();
-            
+
             if (actualSamples.length === 0) {
               // If no samples available immediately, wait for them
               try {
-                console.log('Waiting for drum machine samples to load...');
+                console.log("Waiting for drum machine samples to load...");
                 actualSamples = await localEngine.waitForSamples(3000); // Wait up to 3 seconds
-                console.log('Drum machine samples loaded:', actualSamples);
+                console.log("Drum machine samples loaded:", actualSamples);
               } catch (error) {
-                console.warn('Error waiting for drum machine samples:', error);
+                console.warn("Error waiting for drum machine samples:", error);
               }
             }
-            
+
             if (actualSamples.length > 0) {
               setAvailableSamples(actualSamples);
             } else {
               // Fallback to default samples if still no samples available
-              console.warn('No samples available from drum machine, using fallback samples');
+              console.warn(
+                "No samples available from drum machine, using fallback samples",
+              );
               setAvailableSamples([
                 "kick",
                 "snare",
@@ -490,7 +508,7 @@ export const useInstrument = (
         } else {
           setAvailableSamples([]);
         }
-        
+
         // For synthesizers, ensure parameters are synchronized after instrument change
         if (validatedCategory === InstrumentCategory.Synthesizer) {
           // Get the current synth state after instrument change
@@ -499,7 +517,10 @@ export const useInstrument = (
             const currentSynthState = localEngine.getSynthState();
             if (currentSynthState && onSynthParamsChange) {
               // Synchronize all parameters to remote users
-              console.log("🎛️ Syncing synth parameters after instrument change:", currentSynthState);
+              console.log(
+                "🎛️ Syncing synth parameters after instrument change:",
+                currentSynthState,
+              );
               setTimeout(() => {
                 onSynthParamsChange(currentSynthState);
               }, 100);
@@ -509,7 +530,7 @@ export const useInstrument = (
       } catch (error) {
         console.error(`Failed to load instrument ${instrumentName}:`, error);
         setAudioContextError(
-          error instanceof Error ? error.message : "Failed to load instrument"
+          error instanceof Error ? error.message : "Failed to load instrument",
         );
         throw error;
       } finally {
@@ -517,11 +538,7 @@ export const useInstrument = (
         setIsLoadingInstrument(false);
       }
     },
-    [
-      instrumentManager,
-      onSynthParamsChange,
-      setPreferences,
-    ]
+    [instrumentManager, onSynthParamsChange, setPreferences],
   );
 
   // Handle instrument change
@@ -529,7 +546,7 @@ export const useInstrument = (
     async (instrumentName: string) => {
       await loadInstrument(instrumentName, currentCategory);
     },
-    [loadInstrument, currentCategory]
+    [loadInstrument, currentCategory],
   );
 
   // Handle category change
@@ -554,7 +571,7 @@ export const useInstrument = (
 
       await loadInstrument(firstInstrument, category);
     },
-    [loadInstrument, dynamicDrumMachines]
+    [loadInstrument, dynamicDrumMachines],
   );
 
   // Get control type
@@ -567,7 +584,7 @@ export const useInstrument = (
       default: {
         // For soundfont instruments, check the specific control type
         const instrument = SOUNDFONT_INSTRUMENTS.find(
-          (inst) => inst.value === currentInstrument
+          (inst) => inst.value === currentInstrument,
         );
         return instrument?.controlType || ControlType.Keyboard;
       }
@@ -583,7 +600,7 @@ export const useInstrument = (
         console.error("Failed to play local notes:", error);
       }
     },
-    [instrumentManager]
+    [instrumentManager],
   );
 
   const stopNotes = useCallback(
@@ -594,21 +611,21 @@ export const useInstrument = (
         console.error("Failed to stop local notes:", error);
       }
     },
-    [instrumentManager]
+    [instrumentManager],
   );
 
   const releaseKeyHeldNote = useCallback(
     async (note: string) => {
       await stopNotes([note]);
     },
-    [stopNotes]
+    [stopNotes],
   );
 
   const setSustainState = useCallback(
     (sustain: boolean) => {
       instrumentManager.setLocalSustain(sustain);
     },
-    [instrumentManager]
+    [instrumentManager],
   );
 
   const stopSustainedNotes = useCallback(() => {
@@ -626,14 +643,14 @@ export const useInstrument = (
         console.error("Failed to update synth parameters:", error);
       }
     },
-    [instrumentManager]
+    [instrumentManager],
   );
 
   const loadPresetParams = useCallback(
     async (params: SynthState) => {
       await updateSynthParams(params);
     },
-    [updateSynthParams]
+    [updateSynthParams],
   );
 
   // Remote user methods
@@ -645,7 +662,7 @@ export const useInstrument = (
       velocity: number,
       instrumentName: string,
       category: InstrumentCategory,
-      isKeyHeld: boolean = false
+      isKeyHeld: boolean = false,
     ) => {
       try {
         await instrumentManager.playRemoteNotes(
@@ -655,16 +672,16 @@ export const useInstrument = (
           velocity,
           instrumentName,
           category,
-          isKeyHeld
+          isKeyHeld,
         );
       } catch (error) {
         console.error(
           `Failed to play remote notes for user ${username}:`,
-          error
+          error,
         );
       }
     },
-    [instrumentManager]
+    [instrumentManager],
   );
 
   const stopRemoteUserNote = useCallback(
@@ -672,20 +689,20 @@ export const useInstrument = (
       userId: string,
       notes: string[],
       instrumentName: string,
-      category: InstrumentCategory
+      category: InstrumentCategory,
     ) => {
       try {
         await instrumentManager.stopRemoteNotes(
           userId,
           notes,
           instrumentName,
-          category
+          category,
         );
       } catch (error) {
         console.error(`Failed to stop remote notes for user ${userId}:`, error);
       }
     },
-    [instrumentManager]
+    [instrumentManager],
   );
 
   const setRemoteUserSustain = useCallback(
@@ -693,16 +710,16 @@ export const useInstrument = (
       userId: string,
       sustain: boolean,
       instrumentName: string,
-      category: InstrumentCategory
+      category: InstrumentCategory,
     ) => {
       instrumentManager.setRemoteSustain(
         userId,
         sustain,
         instrumentName,
-        category
+        category,
       );
     },
-    [instrumentManager]
+    [instrumentManager],
   );
 
   const updateRemoteUserInstrument = useCallback(
@@ -710,27 +727,27 @@ export const useInstrument = (
       userId: string,
       username: string,
       instrumentName: string,
-      category: InstrumentCategory
+      category: InstrumentCategory,
     ) => {
       try {
         await instrumentManager.updateRemoteInstrument(
           userId,
           username,
           instrumentName,
-          category
+          category,
         );
       } catch (error) {
         console.error(
           `Failed to update remote instrument for user ${username}:`,
-          error
+          error,
         );
-        
+
         // For remote users, we don't automatically try fallbacks
         // The fallback will be handled by the remote user's own device
         // We just log the error and continue
       }
     },
-    [instrumentManager]
+    [instrumentManager],
   );
 
   const updateRemoteUserSynthParams = useCallback(
@@ -739,7 +756,7 @@ export const useInstrument = (
       username: string,
       instrumentName: string,
       category: InstrumentCategory,
-      params: Partial<SynthState>
+      params: Partial<SynthState>,
     ) => {
       try {
         await instrumentManager.updateRemoteSynthParams(
@@ -747,23 +764,23 @@ export const useInstrument = (
           username,
           instrumentName,
           category,
-          params
+          params,
         );
       } catch (error) {
         console.error(
           `Failed to update remote synth params for user ${username}:`,
-          error
+          error,
         );
       }
     },
-    [instrumentManager]
+    [instrumentManager],
   );
 
   const cleanupRemoteUser = useCallback(
     (userId: string) => {
       instrumentManager.removeRemoteEngine(userId);
     },
-    [instrumentManager]
+    [instrumentManager],
   );
 
   const preloadRoomInstruments = useCallback(
@@ -773,7 +790,7 @@ export const useInstrument = (
         username: string;
         instrumentName: string;
         category: string;
-      }>
+      }>,
     ) => {
       try {
         await instrumentManager.preloadInstruments(instruments);
@@ -781,7 +798,7 @@ export const useInstrument = (
         console.error("Failed to preload room instruments:", error);
       }
     },
-    [instrumentManager]
+    [instrumentManager],
   );
 
   // Initialize on mount

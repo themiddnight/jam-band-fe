@@ -9,7 +9,7 @@ export enum ControlType {
 export interface RoomUser {
   id: string;
   username: string;
-  role: 'room_owner' | 'band_member' | 'audience';
+  role: "room_owner" | "band_member" | "audience";
   currentInstrument?: string;
   currentCategory?: string;
   isReady: boolean;
