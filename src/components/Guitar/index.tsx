@@ -3,11 +3,11 @@ import { getKeyDisplayName } from "../../constants/utils/displayUtils";
 import type { Scale } from "../../hooks/useScaleState";
 import BaseInstrument from "../shared/BaseInstrument";
 import { BasicFretboard } from "./components/BasicFretboard";
-import { SimpleChordKeys } from "./components/SimpleChordKeys";
-import { SimpleNoteKeys } from "./components/SimpleNoteKeys";
+import { SimpleChordKeys } from "./components/ChordGuitar";
+import { MelodyGuitar } from "./components/MelodyGuitar";
 import { useGuitarKeysController } from "./hooks/useGuitarKeysController";
 import { useGuitarState } from "./hooks/useGuitarState";
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 
 export interface GuitarProps {
   scaleState: {
@@ -50,6 +50,10 @@ export default function Guitar({
     setChordVoicing,
     brushingSpeed,
     setBrushingSpeed,
+    sustain,
+    setSustain,
+    sustainToggle,
+    setSustainToggle,
   } = useGuitarState(
     scaleState,
     onPlayNotes,
@@ -59,6 +63,19 @@ export default function Guitar({
     onSustainChange,
     onSustainToggleChange,
   );
+
+  // Synchronize unified state TO guitar store (BaseInstrument controls modify unified state)
+  useEffect(() => {
+    if (unifiedState.sustain !== sustain) {
+      setSustain(unifiedState.sustain);
+    }
+  }, [unifiedState.sustain, sustain, setSustain]);
+
+  useEffect(() => {
+    if (unifiedState.sustainToggle !== sustainToggle) {
+      setSustainToggle(unifiedState.sustainToggle);
+    }
+  }, [unifiedState.sustainToggle, sustainToggle, setSustainToggle]);
 
   const { handleKeyDown, handleKeyUp } = useGuitarKeysController({
     guitarState,
@@ -90,19 +107,20 @@ export default function Guitar({
           <BasicFretboard
             scaleState={scaleState}
             velocity={velocity}
-            sustain={unifiedState.sustain}
-            sustainToggle={unifiedState.sustainToggle}
             pressedFrets={pressedFrets}
-            onFretPress={basicMode.handleBasicFretPress}
-            onFretRelease={basicMode.handleBasicFretRelease}
+            onFretPress={(stringIndex: number, fret: number) => 
+              basicMode.handleBasicFretPress(stringIndex, fret)
+            }
+            onFretRelease={(stringIndex: number, fret: number) => 
+              basicMode.handleBasicFretRelease(stringIndex, fret)
+            }
             onVelocityChange={setVelocity}
-            onPlayNote={basicMode.handleBasicPlayNote}
-            onReleaseNote={basicMode.handleBasicReleaseNote}
+            unifiedState={unifiedState}
           />
         );
       case "melody":
         return (
-          <SimpleNoteKeys
+          <MelodyGuitar
             scaleState={scaleState}
             currentOctave={currentOctave}
             velocity={velocity}
@@ -114,8 +132,8 @@ export default function Guitar({
             guitarState={{
               mode: { type: mode, description: mode },
               velocity,
-              sustain: unifiedState.sustain,
-              sustainToggle: unifiedState.sustainToggle,
+              sustain,
+              sustainToggle,
               currentOctave,
               chordVoicing,
               chordModifiers: chordLogic.chordModifiers,
@@ -141,6 +159,8 @@ export default function Guitar({
             onStrumChord={chordLogic.handleStrumChord}
             onChordModifierChange={chordLogic.setChordModifiers}
             onPowerChordModeChange={chordLogic.setPowerChordMode}
+            sustain={sustain}
+            sustainToggle={sustainToggle}
           />
         );
       default:
@@ -212,10 +232,10 @@ export default function Guitar({
       setVelocity={setVelocity}
       currentOctave={currentOctave}
       setCurrentOctave={setCurrentOctave}
-      sustain={unifiedState.sustain}
-      setSustain={unifiedState.setSustain}
-      sustainToggle={unifiedState.sustainToggle}
-      setSustainToggle={unifiedState.setSustainToggle}
+      sustain={sustain}
+      setSustain={setSustain}
+      sustainToggle={sustainToggle}
+      setSustainToggle={setSustainToggle}
       onStopSustainedNotes={onStopSustainedNotes}
       hasSustainedNotes={hasSustainedNotes}
       chordVoicing={chordVoicing}

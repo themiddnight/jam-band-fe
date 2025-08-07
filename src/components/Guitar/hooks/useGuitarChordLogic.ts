@@ -1,11 +1,12 @@
 import type { Scale } from "../../../hooks/useScaleState";
 import { getChordFromDegree } from "../../../utils/musicUtils";
+import { GUITAR_STRUM } from "../../../constants/guitarShortcuts";
 import type { StrumConfig } from "../types/guitar";
 import { useState, useCallback } from "react";
 
 export const useGuitarChordLogic = (
   onPlayNotes: (notes: string[], velocity: number, isKeyHeld: boolean) => void,
-  onReleaseKeyHeldNote: (note: string) => void,
+  onStopNotes: (notes: string[]) => void,
   scaleState: {
     rootNote: string;
     scale: Scale;
@@ -18,6 +19,10 @@ export const useGuitarChordLogic = (
   const [chordModifiers, setChordModifiers] = useState<Set<string>>(new Set());
   const [powerChordMode, setPowerChordMode] = useState(false);
   const [pressedChords, setPressedChords] = useState<Set<number>>(new Set());
+  // Track the actual notes that were played for each chord with their modifiers
+  const [playedChordNotes, setPlayedChordNotes] = useState<Map<number, string[]>>(new Map());
+  // Track scheduled timeouts for strumming to cancel them if needed
+  const [scheduledTimeouts, setScheduledTimeouts] = useState<Map<number, NodeJS.Timeout[]>>(new Map());
   const [strumConfig, setStrumConfig] = useState<StrumConfig>({
     speed: brushingSpeed,
     direction: "down",
@@ -111,17 +116,43 @@ export const useGuitarChordLogic = (
         return noteOrder.indexOf(noteA) - noteOrder.indexOf(noteB);
       });
 
-      // Play notes with strum timing - up strum plays high to low (like real guitar)
+      // Play notes with strum timing - down strum plays low to high, up strum plays high to low
       const noteOrder =
-        direction === "up" ? [...chordNotes].reverse() : chordNotes;
+        direction === "down" ? chordNotes : [...chordNotes].reverse();
 
-      // Use 70% velocity for strum up (,) button
-      const strumVelocity = direction === "up" ? velocity * 0.7 : velocity;
+      // Use strum velocity for strum up (,) button
+      const strumVelocity = direction === "up" ? velocity * GUITAR_STRUM.UP_VELOCITY_MULTIPLIER : velocity;
 
-      for (let i = 0; i < noteOrder.length; i++) {
-        setTimeout(async () => {
-          await onPlayNotes([noteOrder[i]], strumVelocity, true);
-        }, i * strumConfig.speed);
+      // Track the notes that are actually played for this chord
+      setPlayedChordNotes(prev => {
+        const newMap = new Map(prev);
+        newMap.set(chordIndex, [...chordNotes]); // Store all chord notes regardless of strum order
+        return newMap;
+      });
+
+      // If brush time is 0ms, play all notes simultaneously
+      if (strumConfig.speed === 0) {
+        // Play all notes at once without any delays
+        for (const note of noteOrder) {
+          onPlayNotes([note], strumVelocity, true);
+        }
+      } else {
+        // Use strum timing with delays when brush time is greater than 0ms
+        const timeouts: NodeJS.Timeout[] = [];
+        for (let i = 0; i < noteOrder.length; i++) {
+          const timeout = setTimeout(async () => {
+            await onPlayNotes([noteOrder[i]], strumVelocity, true);
+          }, i * strumConfig.speed);
+          timeouts.push(timeout);
+        }
+        
+        // Track timeouts so they can be cancelled if chord is released
+        setScheduledTimeouts(prev => {
+          const newMap = new Map(prev);
+          const existingTimeouts = newMap.get(chordIndex) || [];
+          newMap.set(chordIndex, [...existingTimeouts, ...timeouts]);
+          return newMap;
+        });
       }
     },
     [
@@ -143,17 +174,8 @@ export const useGuitarChordLogic = (
       const newPressedChords = new Set(pressedChords);
       newPressedChords.add(chordIndex);
       setPressedChords(newPressedChords);
-    },
-    [pressedChords],
-  );
 
-  const handleChordRelease = useCallback(
-    (chordIndex: number) => {
-      const newPressedChords = new Set(pressedChords);
-      newPressedChords.delete(chordIndex);
-      setPressedChords(newPressedChords);
-
-      // Stop chord notes when releasing chord button
+      // Generate and store the chord notes when pressed to ensure we can stop them later
       let chordNotes = getChordFromDegree(
         scaleState.rootNote,
         scaleState.scale,
@@ -164,12 +186,9 @@ export const useGuitarChordLogic = (
 
       // For power chords, use exactly 2 notes. For normal chords, ensure 5 notes
       if (powerChordMode) {
-        // Power chords: use exactly 2 notes
         chordNotes = chordNotes.slice(0, 2);
       } else {
-        // Normal chords: ensure we have exactly 5 notes by adding additional chord tones if needed
         if (chordNotes.length < 5) {
-          // Add octave variations of existing chord tones
           const baseChordNotes = [...chordNotes];
           for (
             let i = 0;
@@ -181,20 +200,20 @@ export const useGuitarChordLogic = (
             const octave = parseInt(note.slice(-1));
             const higherOctaveNote = `${noteName}${octave + 1}`;
 
-            // Only add if not already in the chord
             if (!chordNotes.includes(higherOctaveNote)) {
               chordNotes.push(higherOctaveNote);
             }
           }
         }
-
-        // Take only the first 5 notes
         chordNotes = chordNotes.slice(0, 5);
       }
 
-      for (const note of chordNotes) {
-        onReleaseKeyHeldNote(note);
-      }
+      // Store the notes that should be played for this chord
+      setPlayedChordNotes(prev => {
+        const newMap = new Map(prev);
+        newMap.set(chordIndex, chordNotes);
+        return newMap;
+      });
     },
     [
       pressedChords,
@@ -204,7 +223,87 @@ export const useGuitarChordLogic = (
       convertChordModifiers,
       chordModifiers,
       powerChordMode,
-      onReleaseKeyHeldNote,
+    ],
+  );
+
+  const handleChordRelease = useCallback(
+    (chordIndex: number) => {
+      const newPressedChords = new Set(pressedChords);
+      newPressedChords.delete(chordIndex);
+      setPressedChords(newPressedChords);
+
+      // Cancel any scheduled strum timeouts for this chord
+      const timeouts = scheduledTimeouts.get(chordIndex);
+      if (timeouts) {
+        timeouts.forEach(timeout => clearTimeout(timeout));
+        setScheduledTimeouts(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(chordIndex);
+          return newMap;
+        });
+      }
+
+      // Stop the notes that were actually played for this chord
+      const actualPlayedNotes = playedChordNotes.get(chordIndex);
+      if (actualPlayedNotes) {
+        // Stop all the notes that were played for this chord immediately
+        onStopNotes(actualPlayedNotes);
+        
+        // Remove the chord from played notes
+        setPlayedChordNotes(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(chordIndex);
+          return newMap;
+        });
+      } else {
+        // Fallback: calculate current chord notes and stop them
+        let chordNotes = getChordFromDegree(
+          scaleState.rootNote,
+          scaleState.scale,
+          chordIndex,
+          chordVoicing,
+          convertChordModifiers(chordModifiers),
+        );
+
+        // For power chords, use exactly 2 notes. For normal chords, ensure 5 notes
+        if (powerChordMode) {
+          chordNotes = chordNotes.slice(0, 2);
+        } else {
+          if (chordNotes.length < 5) {
+            const baseChordNotes = [...chordNotes];
+            for (
+              let i = 0;
+              i < baseChordNotes.length && chordNotes.length < 5;
+              i++
+            ) {
+              const note = baseChordNotes[i];
+              const noteName = note.slice(0, -1);
+              const octave = parseInt(note.slice(-1));
+              const higherOctaveNote = `${noteName}${octave + 1}`;
+
+              if (!chordNotes.includes(higherOctaveNote)) {
+                chordNotes.push(higherOctaveNote);
+              }
+            }
+          }
+          chordNotes = chordNotes.slice(0, 5);
+        }
+
+        // Stop all notes immediately
+        onStopNotes(chordNotes);
+      }
+    },
+    [
+      pressedChords,
+      scheduledTimeouts,
+      playedChordNotes,
+      scaleState.rootNote,
+      scaleState.scale,
+      chordVoicing,
+      convertChordModifiers,
+      chordModifiers,
+      powerChordMode,
+      onStopNotes,
     ],
   );
 

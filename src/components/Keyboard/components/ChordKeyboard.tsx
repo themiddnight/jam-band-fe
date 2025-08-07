@@ -19,6 +19,8 @@ const TriadButton = memo(
     scale,
     onTriadPress,
     onTriadRelease,
+    sustain = false,
+    sustainToggle = false,
   }: {
     keyName: string;
     index: number;
@@ -28,17 +30,26 @@ const TriadButton = memo(
     scale: Scale;
     onTriadPress: (index: number) => void;
     onTriadRelease: (index: number) => void;
+    sustain?: boolean;
+    sustainToggle?: boolean;
   }) => {
     const triadTouchHandlers = useTouchEvents({
       onPress: () => onTriadPress(index),
       onRelease: () => onTriadRelease(index),
     });
 
+    // Only call onTriadRelease on mouse leave if sustain is not active
+    const handleMouseLeave = () => {
+      if (!sustain && !sustainToggle) {
+        onTriadRelease(index);
+      }
+    };
+
     return (
       <button
         onMouseDown={() => onTriadPress(index)}
         onMouseUp={() => onTriadRelease(index)}
-        onMouseLeave={() => onTriadRelease(index)}
+        onMouseLeave={handleMouseLeave}
         ref={triadTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
         className={`w-12 h-20 border-2 border-gray-300 bg-purple-100 hover:bg-purple-200 
               transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1
@@ -78,22 +89,33 @@ const RootNoteButton = memo(
     isPressed,
     onKeyPress,
     onKeyRelease,
+    sustain = false,
+    sustainToggle = false,
   }: {
     keyData: KeyboardKey;
     isPressed: boolean;
     onKeyPress: (key: KeyboardKey) => void;
     onKeyRelease: (key: KeyboardKey) => void;
+    sustain?: boolean;
+    sustainToggle?: boolean;
   }) => {
     const keyTouchHandlers = useTouchEvents({
       onPress: () => onKeyPress(keyData),
       onRelease: () => onKeyRelease(keyData),
     });
 
+    // Only call onKeyRelease on mouse leave if sustain is not active
+    const handleMouseLeave = () => {
+      if (!sustain && !sustainToggle) {
+        onKeyRelease(keyData);
+      }
+    };
+
     return (
       <button
         onMouseDown={() => onKeyPress(keyData)}
         onMouseUp={() => onKeyRelease(keyData)}
-        onMouseLeave={() => onKeyRelease(keyData)}
+        onMouseLeave={handleMouseLeave}
         ref={keyTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
         className={`
         w-12 h-20 border-2 border-gray-300 bg-white hover:bg-gray-100 
@@ -119,7 +141,7 @@ const RootNoteButton = memo(
 
 RootNoteButton.displayName = "RootNoteButton";
 
-interface ChordKeysProps {
+interface ChordKeyboardProps {
   virtualKeys: KeyboardKey[];
   pressedKeys: Set<string>;
   pressedTriads: Set<number>;
@@ -132,9 +154,12 @@ interface ChordKeysProps {
   onTriadRelease: (index: number) => void;
   onModifierPress: (modifier: string) => void;
   onModifierRelease: (modifier: string) => void;
+  // Add sustain state to prevent mouse leave issues
+  sustain?: boolean;
+  sustainToggle?: boolean;
 }
 
-export const ChordKeys: React.FC<ChordKeysProps> = ({
+export const ChordKeyboard: React.FC<ChordKeyboardProps> = ({
   virtualKeys,
   pressedKeys,
   pressedTriads,
@@ -147,6 +172,8 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
   onTriadRelease,
   onModifierPress,
   onModifierRelease,
+  sustain = false,
+  sustainToggle = false,
 }) => {
   const shortcuts = DEFAULT_KEYBOARD_SHORTCUTS;
 
@@ -233,6 +260,8 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
                   scale={scale}
                   onTriadPress={onTriadPress}
                   onTriadRelease={onTriadRelease}
+                  sustain={sustain}
+                  sustainToggle={sustainToggle}
                 />
               );
             })}
@@ -250,6 +279,8 @@ export const ChordKeys: React.FC<ChordKeysProps> = ({
                 isPressed={pressedKeys.has(key.note)}
                 onKeyPress={onKeyPress}
                 onKeyRelease={onKeyRelease}
+                sustain={sustain}
+                sustainToggle={sustainToggle}
               />
             ))}
           </div>

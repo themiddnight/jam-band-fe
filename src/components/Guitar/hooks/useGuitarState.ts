@@ -28,7 +28,7 @@ export const useGuitarState = (
     onSustainToggleChange,
   });
 
-  // Use Zustand store for the specified states
+  // Use Zustand store for the specified states (except sustain which uses unified state)
   const {
     mode,
     setMode,
@@ -56,7 +56,7 @@ export const useGuitarState = (
 
   const chordLogic = useGuitarChordLogic(
     onPlayNotes,
-    onReleaseKeyHeldNote,
+    onStopNotes,
     scaleState,
     velocity,
     chordVoicing,
@@ -99,9 +99,9 @@ export const useGuitarState = (
     velocity,
     setVelocity,
     sustain: unifiedState.sustain,
-    setSustain: unifiedState.setSustain,
+    setSustain: unifiedState.setSustain, // Use unified state setter for keyboard shortcuts
     sustainToggle: unifiedState.sustainToggle,
-    setSustainToggle: unifiedState.setSustainToggle,
+    setSustainToggle: unifiedState.setSustainToggle, // Use unified state setter for keyboard shortcuts
     currentOctave,
     setCurrentOctave,
     chordVoicing,
@@ -149,5 +149,10 @@ export const useGuitarState = (
     setChordVoicing,
     brushingSpeed,
     setBrushingSpeed: handleBrushingSpeedChange,
+    // Use unified state for sustain to avoid conflicts
+    sustain: unifiedState.sustain,
+    setSustain: unifiedState.setSustain,
+    sustainToggle: unifiedState.sustainToggle,
+    setSustainToggle: unifiedState.setSustainToggle,
   };
 };

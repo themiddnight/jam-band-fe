@@ -1,4 +1,5 @@
 import type { GuitarString, HammerOnState } from "../types/guitar";
+import { HAMMER_ON_PULL_OFF } from "../../../constants/guitarShortcuts";
 import { useState, useCallback, useRef } from "react";
 
 export const useGuitarStringBehavior = (
@@ -33,7 +34,7 @@ export const useGuitarStringBehavior = (
     isEnabled: false,
     lastPlayTime: 0,
     lastPlayedNote: null,
-    windowMs: 200,
+    windowMs: HAMMER_ON_PULL_OFF.WINDOW_MS,
   });
 
   // Ref to track current state for stable callbacks
@@ -116,7 +117,7 @@ export const useGuitarStringBehavior = (
     ) => {
       const noteVelocity =
         customVelocity !== undefined ? customVelocity : velocity;
-      const finalVelocity = isHammerOn ? noteVelocity * 0.7 : noteVelocity;
+      const finalVelocity = isHammerOn ? noteVelocity * HAMMER_ON_PULL_OFF.VELOCITY_MULTIPLIER : noteVelocity;
       await onPlayNotes([note], finalVelocity, true);
     },
     [onPlayNotes, velocity],
@@ -189,7 +190,10 @@ export const useGuitarStringBehavior = (
           if (string.activeNote) {
             stopNote(string.activeNote);
           }
-          playNote(highestNote, velocity * 0.7, true);
+          // Schedule playNote to run after state update to avoid setState during render
+          setTimeout(() => {
+            playNote(highestNote, velocity * HAMMER_ON_PULL_OFF.VELOCITY_MULTIPLIER, true);
+          }, 0);
           string.activeNote = highestNote;
           string.lastPlayedNote = highestNote;
           string.lastPlayTime = currentTime; // Reset timer for chaining
@@ -291,7 +295,10 @@ export const useGuitarStringBehavior = (
           if (string.activeNote && string.activeNote !== note) {
             stopNote(string.activeNote);
           }
-          playNote(note, velocity * 0.7, true);
+          // Schedule playNote to run after state update to avoid setState during render
+          setTimeout(() => {
+            playNote(note, velocity * HAMMER_ON_PULL_OFF.VELOCITY_MULTIPLIER, true);
+          }, 0);
           string.activeNote = note;
           string.lastPlayedNote = note;
           string.lastPlayTime = currentTime; // Reset timer for chaining

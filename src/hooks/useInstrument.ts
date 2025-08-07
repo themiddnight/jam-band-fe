@@ -116,8 +116,15 @@ export const useInstrument = (
   } = options;
 
   // Instrument preferences
-  const { preferences, setPreferences, clearPreferences } =
+  const { setPreferences, getPreferences, clearPreferences } =
     useInstrumentPreferencesStore();
+
+  // Current user info (mock - in real app this would come from user context)
+  const currentUserId = useRef<string>("local-user");
+  const currentUsername = useRef<string>("Local User");
+
+  // Get preferences for current user
+  const preferences = getPreferences(currentUserId.current);
 
   // Unified instrument manager
   const instrumentManager = useInstrumentManager();
@@ -280,10 +287,6 @@ export const useInstrument = (
     instrumentManager,
   ]);
 
-  // Current user info (mock - in real app this would come from user context)
-  const currentUserId = useRef<string>("local-user");
-  const currentUsername = useRef<string>("Local User");
-
   // Synthesizer state tracking - now includes the update trigger as a dependency
   const synthState = useMemo(() => {
     const localEngine = instrumentManager.getLocalEngine();
@@ -340,7 +343,7 @@ export const useInstrument = (
         ) {
           setCurrentInstrument(validatedInstrument);
           setCurrentCategory(validatedCategory);
-          setPreferences(validatedInstrument, validatedCategory);
+          setPreferences(currentUserId.current, validatedInstrument, validatedCategory);
         }
 
         // This will initialize the audio context in the manager
@@ -362,7 +365,7 @@ export const useInstrument = (
             setLastFallbackCategory(category);
             setCurrentInstrument(fallbackInstrument);
             setCurrentCategory(category);
-            setPreferences(fallbackInstrument, category);
+            setPreferences(currentUserId.current, fallbackInstrument, category);
           },
         });
       }
@@ -448,7 +451,7 @@ export const useInstrument = (
               setLastFallbackCategory(category);
               setCurrentInstrument(fallbackInstrument);
               setCurrentCategory(category);
-              setPreferences(fallbackInstrument, category);
+              setPreferences(currentUserId.current, fallbackInstrument, category);
             },
           });
         } else {
@@ -462,7 +465,7 @@ export const useInstrument = (
         setCurrentCategory(validatedCategory);
 
         // Save preferences when instrument changes
-        setPreferences(instrumentName, validatedCategory);
+        setPreferences(currentUserId.current, instrumentName, validatedCategory);
 
         // Update available samples for drum machines
         if (validatedCategory === InstrumentCategory.DrumBeat) {

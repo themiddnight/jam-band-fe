@@ -1,4 +1,4 @@
-import { DEFAULT_GUITAR_SHORTCUTS } from "../../../constants/guitarShortcuts";
+import { DEFAULT_GUITAR_SHORTCUTS, GUITAR_PLAY_BUTTONS } from "../../../constants/guitarShortcuts";
 import { getKeyDisplayName } from "../../../constants/utils/displayUtils";
 import type { Scale } from "../../../hooks/useScaleState";
 import { useTouchEvents } from "../../../hooks/useTouchEvents";
@@ -6,7 +6,7 @@ import { SharedNoteKeys } from "../../shared/NoteKeys";
 import type { GuitarNote, GuitarState } from "../types/guitar";
 import { useMemo } from "react";
 
-interface SimpleNoteKeysProps {
+interface MelodyGuitarProps {
   scaleState: {
     rootNote: string;
     scale: Scale;
@@ -25,7 +25,7 @@ interface SimpleNoteKeysProps {
   guitarState: GuitarState;
 }
 
-export const SimpleNoteKeys: React.FC<SimpleNoteKeysProps> = ({
+export const MelodyGuitar: React.FC<MelodyGuitarProps> = ({
   scaleState,
   currentOctave,
   velocity,
@@ -40,9 +40,9 @@ export const SimpleNoteKeys: React.FC<SimpleNoteKeysProps> = ({
   // Create touch handlers for play buttons
   const playNotes70TouchHandlers = useTouchEvents({
     onPress: () => {
-      // Play notes for both strings with 70% velocity
-      handlePlayButtonPress("lower", velocity * 0.7);
-      handlePlayButtonPress("higher", velocity * 0.7);
+      // Play notes for both strings with pick-up velocity
+      handlePlayButtonPress("lower", velocity * GUITAR_PLAY_BUTTONS.PICK_UP_VELOCITY_MULTIPLIER);
+      handlePlayButtonPress("higher", velocity * GUITAR_PLAY_BUTTONS.PICK_UP_VELOCITY_MULTIPLIER);
     },
     onRelease: () => {},
     isPlayButton: true,
@@ -168,6 +168,8 @@ export const SimpleNoteKeys: React.FC<SimpleNoteKeysProps> = ({
             }
             variant="guitar"
             size="md"
+            sustain={guitarState.sustain}
+            sustainToggle={guitarState.sustainToggle}
           />
         )}
 
@@ -202,6 +204,8 @@ export const SimpleNoteKeys: React.FC<SimpleNoteKeysProps> = ({
             onKeyRelease={(noteKey) => handleNoteRelease("lower", noteKey.note)}
             variant="guitar"
             size="md"
+            sustain={guitarState.sustain}
+            sustainToggle={guitarState.sustainToggle}
           />
         )}
       </div>
@@ -210,9 +214,9 @@ export const SimpleNoteKeys: React.FC<SimpleNoteKeysProps> = ({
       <div className="flex flex-row md:flex-col justify-center gap-4">
         <button
           onMouseDown={() => {
-            // Play notes for both strings with 70% velocity
-            handlePlayButtonPress("lower", velocity * 0.7);
-            handlePlayButtonPress("higher", velocity * 0.7);
+            // Play notes for both strings with pick-up velocity
+            handlePlayButtonPress("lower", velocity * GUITAR_PLAY_BUTTONS.PICK_UP_VELOCITY_MULTIPLIER);
+            handlePlayButtonPress("higher", velocity * GUITAR_PLAY_BUTTONS.PICK_UP_VELOCITY_MULTIPLIER);
           }}
           ref={
             playNotes70TouchHandlers.ref as React.RefObject<HTMLButtonElement>

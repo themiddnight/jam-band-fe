@@ -26,6 +26,9 @@ export interface FretboardBaseProps {
   onFretPress: (stringIndex: number, fret: number, note: string) => void;
   onFretRelease: (stringIndex: number, fret: number, note: string) => void;
   className?: string;
+  // Add sustain state to prevent mouse leave issues
+  sustain?: boolean;
+  sustainToggle?: boolean;
 }
 
 // Separate component for fret button to use hooks properly
@@ -36,6 +39,8 @@ const FretButton: React.FC<{
   onPress: () => void;
   onRelease: () => void;
   showNoteNames?: boolean;
+  sustain?: boolean;
+  sustainToggle?: boolean;
 }> = ({
   stringIndex,
   fret,
@@ -43,12 +48,21 @@ const FretButton: React.FC<{
   onPress,
   onRelease,
   showNoteNames = true,
+  sustain = false,
+  sustainToggle = false,
 }) => {
   const touchHandlers = useTouchEvents({ onPress, onRelease });
 
   const isPressed = position.isPressed;
   const isHighlighted = position.isHighlighted;
   const isScaleNote = position.isScaleNote;
+
+  // Only call onRelease on mouse leave if sustain is not active
+  const handleMouseLeave = () => {
+    if (!sustain && !sustainToggle) {
+      onRelease();
+    }
+  };
 
   return (
     <button
@@ -64,7 +78,7 @@ const FretButton: React.FC<{
       `}
       onMouseDown={onPress}
       onMouseUp={onRelease}
-      onMouseLeave={onRelease}
+      onMouseLeave={handleMouseLeave}
     >
       {showNoteNames && (
         <span
@@ -83,6 +97,8 @@ export const FretboardBase: React.FC<FretboardBaseProps> = ({
   onFretPress,
   onFretRelease,
   className = "",
+  sustain = false,
+  sustainToggle = false,
 }) => {
   const {
     strings,
@@ -113,6 +129,8 @@ export const FretboardBase: React.FC<FretboardBaseProps> = ({
         onPress={() => onFretPress(stringIndex, fret, position.note)}
         onRelease={() => onFretRelease(stringIndex, fret, position.note)}
         showNoteNames={showNoteNames}
+        sustain={sustain}
+        sustainToggle={sustainToggle}
       />
     );
   };

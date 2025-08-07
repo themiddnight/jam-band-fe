@@ -4,6 +4,8 @@ import {
   melodyAdvancedKeys,
   chordRootKeys,
   chordTriadKeys,
+  chromaticWhiteKeyMapping,
+  chromaticBlackKeyMapping,
 } from "../../../constants/virtualKeyboardKeys";
 import type {
   KeyboardState,
@@ -111,15 +113,15 @@ export const useNotePlaying = (
           return; // Don't continue to the single note handling
         }
       } else if (keyboardState.mode === "basic") {
-        // Handle advanced mode keys
-        if (melodyAdvancedKeys.includes(key)) {
-          const keyIndex = melodyAdvancedKeys.indexOf(key);
-          const allNotes = [
-            ...currentScaleNotes,
-            ...nextOctaveScaleNotes,
-            ...upperOctaveScaleNotes,
-          ];
-          note = allNotes[keyIndex];
+        // Handle basic mode keys - chromatic mapping
+        const chromaticKeys = [...chromaticWhiteKeyMapping, ...chromaticBlackKeyMapping].filter(k => k !== "");
+        if (chromaticKeys.includes(key)) {
+          // Find the virtual key that matches this keyboard key
+          const virtualKeys = virtualKeyboard.generateVirtualKeys;
+          const matchingKey = virtualKeys.find(vk => vk.keyboardKey === key);
+          if (matchingKey) {
+            note = matchingKey.note;
+          }
         }
       }
 

@@ -1,18 +1,29 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 
 export const useGuitarBasicMode = (
   onPlayNotes: (notes: string[], velocity: number, isKeyHeld: boolean) => void,
   onReleaseKeyHeldNote: (note: string) => void,
   velocity: number,
 ) => {
-  // Handle fret press/release for basic mode
-  const handleBasicFretPress = useCallback(async () => {
-    // This is now handled by useUnifiedInstrumentState
-  }, []);
+  // Track pressed frets in the format "stringIndex-fret"
+  const pressedFrets = useRef<Set<string>>(new Set());
 
-  const handleBasicFretRelease = useCallback(() => {
-    // This is now handled by useUnifiedInstrumentState
-  }, []);
+  // Handle fret press for basic mode
+  const handleBasicFretPress = useCallback(
+    async (stringIndex: number, fret: number) => {
+      const fretKey = `${stringIndex}-${fret}`;
+      pressedFrets.current.add(fretKey);
+    },
+    [],
+  );
+
+  const handleBasicFretRelease = useCallback(
+    (stringIndex: number, fret: number) => {
+      const fretKey = `${stringIndex}-${fret}`;
+      pressedFrets.current.delete(fretKey);
+    },
+    [],
+  );
 
   const handleBasicPlayNote = useCallback(
     async (note: string, customVelocity?: number) => {

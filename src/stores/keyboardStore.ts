@@ -2,18 +2,22 @@ import type { KeyboardMode } from "../components/Keyboard/types/keyboard";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
-interface VirtualKeyboardState {
+interface KeyboardState {
   // Main states
   mode: KeyboardMode;
   currentOctave: number;
   velocity: number;
   chordVoicing: number;
+  sustain: boolean;
+  sustainToggle: boolean;
 
   // Actions
   setMode: (mode: KeyboardMode) => void;
   setCurrentOctave: (octave: number) => void;
   setVelocity: (velocity: number) => void;
   setChordVoicing: (voicing: number) => void;
+  setSustain: (sustain: boolean) => void;
+  setSustainToggle: (sustainToggle: boolean) => void;
 
   // Utility actions
   toggleMode: () => void;
@@ -23,9 +27,11 @@ interface VirtualKeyboardState {
   decrementVelocity: () => void;
   incrementChordVoicing: () => void;
   decrementChordVoicing: () => void;
+  toggleSustain: () => void;
+  toggleSustainToggle: () => void;
 }
 
-export const useVirtualKeyboardStore = create<VirtualKeyboardState>()(
+export const useKeyboardStore = create<KeyboardState>()(
   persist(
     (set) => ({
       // Initial state
@@ -33,6 +39,8 @@ export const useVirtualKeyboardStore = create<VirtualKeyboardState>()(
       currentOctave: 2,
       velocity: 0.7,
       chordVoicing: 0,
+      sustain: false,
+      sustainToggle: false,
 
       // Basic setters
       setMode: (mode) => set({ mode }),
@@ -42,6 +50,8 @@ export const useVirtualKeyboardStore = create<VirtualKeyboardState>()(
         set({ velocity: Math.max(0, Math.min(1, velocity)) }),
       setChordVoicing: (voicing) =>
         set({ chordVoicing: Math.max(-2, Math.min(2, voicing)) }),
+      setSustain: (sustain) => set({ sustain }),
+      setSustainToggle: (sustainToggle) => set({ sustainToggle }),
 
       // Toggle actions
       toggleMode: () =>
@@ -49,6 +59,9 @@ export const useVirtualKeyboardStore = create<VirtualKeyboardState>()(
           mode:
             state.mode === "simple-melody" ? "simple-chord" : "simple-melody",
         })),
+      toggleSustain: () => set((state) => ({ sustain: !state.sustain })),
+      toggleSustainToggle: () =>
+        set((state) => ({ sustainToggle: !state.sustainToggle })),
 
       // Increment/Decrement actions
       incrementOctave: () =>
@@ -77,7 +90,7 @@ export const useVirtualKeyboardStore = create<VirtualKeyboardState>()(
         })),
     }),
     {
-      name: "virtual-keyboard-state",
+      name: "keyboard-state",
       storage: createJSONStorage(() => localStorage),
     },
   ),

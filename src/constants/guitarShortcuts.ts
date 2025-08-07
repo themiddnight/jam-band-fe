@@ -68,9 +68,9 @@ export interface GuitarShortcuts {
 export const BRUSHING_TIMES = {
   FASTEST: 0,
   FAST: 5,
-  NORMAL: 30,
-  SLOW: 60,
-  SLOWEST: 120,
+  NORMAL: 20,
+  SLOW: 50,
+  SLOWEST: 100,
 } as const;
 
 export type BrushingTime = (typeof BRUSHING_TIMES)[keyof typeof BRUSHING_TIMES];
@@ -92,6 +92,22 @@ export const BRUSHING_TIME_STEPS: BrushingTime[] = [
   BRUSHING_TIMES.SLOW,
   BRUSHING_TIMES.SLOWEST,
 ];
+
+// Hammer-on/Pull-off constants
+export const HAMMER_ON_PULL_OFF = {
+  WINDOW_MS: 200,
+  VELOCITY_MULTIPLIER: 0.7,
+} as const;
+
+// Guitar play button constants
+export const GUITAR_PLAY_BUTTONS = {
+  PICK_UP_VELOCITY_MULTIPLIER: 0.7,
+} as const;
+
+// Guitar strum constants
+export const GUITAR_STRUM = {
+  UP_VELOCITY_MULTIPLIER: 0.7,
+} as const;
 
 export const DEFAULT_GUITAR_SHORTCUTS: GuitarShortcuts = {
   toggleMode: {

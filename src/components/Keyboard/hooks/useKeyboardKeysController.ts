@@ -5,6 +5,8 @@ import {
   melodyAdvancedKeys,
   chordRootKeys,
   chordTriadKeys,
+  chromaticWhiteKeyMapping,
+  chromaticBlackKeyMapping,
 } from "../../../constants/virtualKeyboardKeys";
 import type {
   KeyboardState,
@@ -47,6 +49,8 @@ export const useKeyboardKeysController = (
       ...melodyAdvancedKeys,
       ...chordRootKeys,
       ...chordTriadKeys,
+      ...chromaticWhiteKeyMapping.filter(k => k !== ""),
+      ...chromaticBlackKeyMapping.filter(k => k !== ""),
     ],
     [],
   );

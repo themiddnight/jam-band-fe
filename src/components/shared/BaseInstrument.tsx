@@ -112,26 +112,31 @@ export default function BaseInstrument({
                 onMouseDown={(e) => {
                   e.preventDefault();
                   if (sustainToggle) {
-                    onStopSustainedNotes?.();
+                    // In toggle mode: pressing stops sustaining and stops sounds
                     setSustain(false);
-                    setTimeout(() => {
-                      setSustain(true);
-                    }, 10);
+                    onStopSustainedNotes?.();
                   } else {
+                    // Normal mode: pressing starts sustaining
                     setSustain(true);
                   }
                 }}
                 onMouseUp={(e) => {
                   e.preventDefault();
                   if (sustainToggle) {
+                    // In toggle mode: releasing resumes sustaining
                     setSustain(true);
                   } else {
+                    // Normal mode: releasing stops sustaining
                     setSustain(false);
                     onStopSustainedNotes?.();
                   }
                 }}
                 onMouseLeave={() => {
-                  if (!sustainToggle) {
+                  if (sustainToggle) {
+                    // In toggle mode: mouse leave resumes sustaining
+                    setSustain(true);
+                  } else {
+                    // Normal mode: mouse leave stops sustaining
                     setSustain(false);
                     onStopSustainedNotes?.();
                   }
@@ -139,20 +144,21 @@ export default function BaseInstrument({
                 onTouchStart={(e) => {
                   e.preventDefault();
                   if (sustainToggle) {
-                    onStopSustainedNotes?.();
+                    // In toggle mode: touch start stops sustaining and stops sounds
                     setSustain(false);
-                    setTimeout(() => {
-                      setSustain(true);
-                    }, 10);
+                    onStopSustainedNotes?.();
                   } else {
+                    // Normal mode: touch start starts sustaining
                     setSustain(true);
                   }
                 }}
                 onTouchEnd={(e) => {
                   e.preventDefault();
                   if (sustainToggle) {
+                    // In toggle mode: touch end resumes sustaining
                     setSustain(true);
                   } else {
+                    // Normal mode: touch end stops sustaining
                     setSustain(false);
                     onStopSustainedNotes?.();
                   }
@@ -160,8 +166,10 @@ export default function BaseInstrument({
                 onTouchCancel={(e) => {
                   e.preventDefault();
                   if (sustainToggle) {
+                    // In toggle mode: touch cancel resumes sustaining
                     setSustain(true);
                   } else {
+                    // Normal mode: touch cancel stops sustaining
                     setSustain(false);
                     onStopSustainedNotes?.();
                   }

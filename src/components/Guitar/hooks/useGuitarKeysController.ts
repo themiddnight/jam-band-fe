@@ -1,6 +1,7 @@
 import {
   DEFAULT_GUITAR_SHORTCUTS,
   BRUSHING_TIME_STEPS,
+  GUITAR_PLAY_BUTTONS,
 } from "../../../constants/guitarShortcuts";
 import type { Scale } from "../../../hooks/useScaleState";
 import type { GuitarState } from "../types/guitar";
@@ -103,7 +104,20 @@ export const useGuitarKeysController = ({
 
         // Sustain controls
         if (key === shortcuts.sustain.key) {
-          guitarControls.setSustain(true);
+          if (guitarState.sustainToggle) {
+            // If toggle mode is active, sustain key stops current sustained notes
+            // but keeps sustain active (like keyboard behavior)
+            guitarControls.stopSustainedNotes();
+            // Temporarily turn off sustain to communicate state change
+            // then immediately turn it back on to maintain the toggle state
+            guitarControls.setSustain(false);
+            setTimeout(() => {
+              guitarControls.setSustain(true);
+            }, 10);
+          } else {
+            // Normal momentary sustain behavior
+            guitarControls.setSustain(true);
+          }
           return;
         }
         if (key === shortcuts.sustainToggle.key) {
@@ -230,7 +244,7 @@ export const useGuitarKeysController = ({
         if (key === "," || key === ".") {
           // Play notes for both strings with velocity adjustment for ',' key
           const velocity =
-            key === "," ? guitarState.velocity * 0.7 : guitarState.velocity;
+            key === "," ? guitarState.velocity * GUITAR_PLAY_BUTTONS.PICK_UP_VELOCITY_MULTIPLIER : guitarState.velocity;
           guitarControls.handlePlayButtonPress("lower", velocity);
           guitarControls.handlePlayButtonPress("higher", velocity);
           return;
@@ -362,7 +376,20 @@ export const useGuitarKeysController = ({
 
       // Sustain controls (available in all modes)
       if (key === shortcuts.sustain.key) {
-        guitarControls.setSustain(true);
+        if (guitarState.sustainToggle) {
+          // If toggle mode is active, sustain key stops current sustained notes
+          // but keeps sustain active (like keyboard behavior)
+          guitarControls.stopSustainedNotes();
+          // Temporarily turn off sustain to communicate state change
+          // then immediately turn it back on to maintain the toggle state
+          guitarControls.setSustain(false);
+          setTimeout(() => {
+            guitarControls.setSustain(true);
+          }, 10);
+        } else {
+          // Normal momentary sustain behavior
+          guitarControls.setSustain(true);
+        }
         return;
       }
       if (key === shortcuts.sustainToggle.key) {
@@ -380,7 +407,14 @@ export const useGuitarKeysController = ({
       // Basic mode - sustain release
       if (guitarState.mode.type === "basic") {
         if (key === shortcuts.sustain.key) {
-          guitarControls.setSustain(false);
+          if (guitarState.sustainToggle) {
+            // If toggle mode is active, releasing sustain should resume sustain mode
+            // This creates the "inverse" behavior where lifting sustain resumes sustain
+            guitarControls.setSustain(true);
+          } else {
+            // Normal momentary sustain behavior - turn off sustain
+            guitarControls.setSustain(false);
+          }
           return;
         }
       }
@@ -504,8 +538,15 @@ export const useGuitarKeysController = ({
 
       // Sustain controls
       if (key === shortcuts.sustain.key) {
-        guitarControls.setSustain(false);
-        guitarControls.stopSustainedNotes();
+        if (guitarState.sustainToggle) {
+          // If toggle mode is active, releasing sustain should resume sustain mode
+          // This creates the "inverse" behavior where lifting sustain resumes sustain
+          guitarControls.setSustain(true);
+        } else {
+          // Normal momentary sustain behavior - turn off sustain
+          guitarControls.setSustain(false);
+          guitarControls.stopSustainedNotes();
+        }
         return;
       }
     },

@@ -20,6 +20,10 @@ export interface InstrumentButtonProps {
   className?: string;
   variant?: "note" | "chord" | "modifier";
   size?: "sm" | "md" | "lg";
+  
+  // Sustain state to prevent mouse leave issues
+  sustain?: boolean;
+  sustainToggle?: boolean;
 }
 
 // Helper function to extract octave from note string
@@ -139,6 +143,8 @@ export const InstrumentButton = memo<InstrumentButtonProps>(
     className = "",
     variant = "note",
     size = "md",
+    sustain = false,
+    sustainToggle = false,
   }) => {
     const touchHandlers = useTouchEvents({ onPress, onRelease });
     const baseBgColor = getBackgroundColor(note, variant, modifierType);
@@ -150,12 +156,19 @@ export const InstrumentButton = memo<InstrumentButtonProps>(
     const textColor = getTextColor(variant, modifierType);
     const sizeClasses = getSizeClasses(size);
 
+    // Only call onRelease on mouse leave if sustain is not active
+    const handleMouseLeave = () => {
+      if (!sustain && !sustainToggle) {
+        onRelease();
+      }
+    };
+
     return (
       <button
         ref={touchHandlers.ref as React.RefObject<HTMLButtonElement>}
         onMouseDown={onPress}
         onMouseUp={onRelease}
-        onMouseLeave={onRelease}
+        onMouseLeave={handleMouseLeave}
         className={`
         ${sizeClasses} border-2 border-gray-300 hover:bg-gray-100 
         transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1

@@ -24,6 +24,9 @@ interface SimpleChordKeysProps {
   onStrumChord: (chordIndex: number, direction: "up" | "down") => void;
   onChordModifierChange: (modifiers: Set<string>) => void;
   onPowerChordModeChange: (powerChordMode: boolean) => void;
+  // Add sustain state to prevent mouse leave issues
+  sustain?: boolean;
+  sustainToggle?: boolean;
 }
 
 // Memoized chord button component - moved outside main component
@@ -36,6 +39,8 @@ const ChordButton = memo(
     powerChordMode,
     onChordPress,
     onChordRelease,
+    sustain = false,
+    sustainToggle = false,
   }: {
     chordKey: GuitarChord;
     chordModifiers: Set<string>;
@@ -47,6 +52,8 @@ const ChordButton = memo(
     powerChordMode: boolean;
     onChordPress: (chordIndex: number) => void;
     onChordRelease: (chordIndex: number) => void;
+    sustain?: boolean;
+    sustainToggle?: boolean;
   }) => {
     // Generate chord name based on current modifiers (like Keyboard)
     let chordSuffix = "";
@@ -81,6 +88,8 @@ const ChordButton = memo(
         onRelease={() => onChordRelease(chordKey.degree)}
         variant="chord"
         size="md"
+        sustain={sustain}
+        sustainToggle={sustainToggle}
       />
     );
   },
@@ -99,6 +108,8 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
   onStrumChord,
   onChordModifierChange,
   onPowerChordModeChange,
+  sustain = false,
+  sustainToggle = false,
 }) => {
   const shortcuts = DEFAULT_GUITAR_SHORTCUTS;
 
@@ -106,9 +117,10 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
   const strumUpTouchHandlers = useTouchEvents({
     onPress: () => {
       // Strum all pressed chords up (,) - uses 70% velocity
-      for (const chordIndex of pressedChords) {
+      // Call onStrumChord for all pressed chords simultaneously
+      pressedChords.forEach((chordIndex) => {
         onStrumChord(chordIndex, "up");
-      }
+      });
     },
     onRelease: () => {},
     isPlayButton: true,
@@ -117,9 +129,10 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
   const strumDownTouchHandlers = useTouchEvents({
     onPress: () => {
       // Strum all pressed chords down (.)
-      for (const chordIndex of pressedChords) {
+      // Call onStrumChord for all pressed chords simultaneously
+      pressedChords.forEach((chordIndex) => {
         onStrumChord(chordIndex, "down");
-      }
+      });
     },
     onRelease: () => {},
     isPlayButton: true,
@@ -321,6 +334,8 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
                   powerChordMode={powerChordMode}
                   onChordPress={onChordPress}
                   onChordRelease={onChordRelease}
+                  sustain={sustain}
+                  sustainToggle={sustainToggle}
                 />
               ))}
             </div>
@@ -334,9 +349,9 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
           <button
             onMouseDown={() => {
               // Strum all pressed chords up (,) - uses 70% velocity
-              for (const chordIndex of pressedChords) {
+              pressedChords.forEach((chordIndex) => {
                 onStrumChord(chordIndex, "up");
-              }
+              });
             }}
             ref={strumUpTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
             className="btn btn-primary btn-lg lg:btn-sm touch-manipulation"
@@ -352,9 +367,9 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
           <button
             onMouseDown={() => {
               // Strum all pressed chords down (.)
-              for (const chordIndex of pressedChords) {
+              pressedChords.forEach((chordIndex) => {
                 onStrumChord(chordIndex, "down");
-              }
+              });
             }}
             ref={
               strumDownTouchHandlers.ref as React.RefObject<HTMLButtonElement>

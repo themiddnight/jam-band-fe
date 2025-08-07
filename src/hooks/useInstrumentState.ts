@@ -79,8 +79,8 @@ export const useInstrumentState = (
       setSustain(newSustain);
       props.onSustainChange(newSustain);
 
-      // If turning off sustain and not in toggle mode, ensure sustained notes stop
-      if (!newSustain && !stateRef.current.sustainToggle) {
+      // If turning off sustain, stop sustained notes
+      if (!newSustain) {
         setHasSustainedNotes(false);
         props.onStopSustainedNotes();
       }
@@ -92,9 +92,11 @@ export const useInstrumentState = (
     (newSustainToggle: boolean) => {
       setSustainToggle(newSustainToggle);
       if (newSustainToggle) {
+        // When toggle is enabled, always activate sustain (like always pressing sustain pedal)
         setSustain(true);
         props.onSustainChange(true);
       } else {
+        // When toggle is disabled, return to normal sustain behavior
         setSustain(false);
         props.onSustainChange(false);
         props.onStopSustainedNotes();
@@ -122,7 +124,8 @@ export const useInstrumentState = (
       }
 
       // When toggle is active and we play a note, it will be sustained
-      if (stateRef.current.sustainToggle && !isKeyHeld) {
+      // When sustain is active (either through toggle or manual press), mark as sustained
+      if ((stateRef.current.sustainToggle || stateRef.current.sustain) && !isKeyHeld) {
         setHasSustainedNotes(true);
       }
     },
@@ -162,11 +165,8 @@ export const useInstrumentState = (
     props.onStopSustainedNotes();
     setHasSustainedNotes(false);
 
-    // Also ensure sustain state is properly reset if not in toggle mode
-    if (!stateRef.current.sustainToggle) {
-      setSustain(false);
-      props.onSustainChange(false);
-    }
+    // Don't automatically reset sustain state - let the UI controls handle it
+    // This allows the sustain button behavior to work correctly in both modes
   }, [props]);
 
   // Add force reset mechanism for stuck states

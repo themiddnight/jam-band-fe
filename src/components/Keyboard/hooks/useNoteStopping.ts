@@ -4,6 +4,8 @@ import {
   melodyAdvancedKeys,
   chordRootKeys,
   chordTriadKeys,
+  chromaticWhiteKeyMapping,
+  chromaticBlackKeyMapping,
 } from "../../../constants/virtualKeyboardKeys";
 import type {
   KeyboardState,
@@ -20,12 +22,14 @@ export const useNoteStopping = (
   const handleNoteStopping = useCallback(
     (key: string) => {
       // Check if the key is a note key
+      const chromaticKeys = [...chromaticWhiteKeyMapping, ...chromaticBlackKeyMapping].filter(k => k !== "");
       const isNoteKey =
         melodySimpleKeys.includes(key) ||
         melodySimpleKeysUpper.includes(key) ||
         melodyAdvancedKeys.includes(key) ||
         chordRootKeys.includes(key) ||
-        chordTriadKeys.includes(key);
+        chordTriadKeys.includes(key) ||
+        chromaticKeys.includes(key);
 
       if (!isNoteKey) {
         return;
@@ -96,15 +100,14 @@ export const useNoteStopping = (
           return;
         }
       } else if (keyboardState.mode === "basic") {
-        // Handle advanced mode keys
-        if (melodyAdvancedKeys.includes(key)) {
-          const keyIndex = melodyAdvancedKeys.indexOf(key);
-          const allNotes = [
-            ...currentScaleNotes,
-            ...nextOctaveScaleNotes,
-            ...upperOctaveScaleNotes,
-          ];
-          note = allNotes[keyIndex];
+        // Handle basic mode keys - chromatic mapping
+        if (chromaticKeys.includes(key)) {
+          // Find the virtual key that matches this keyboard key
+          const virtualKeys = virtualKeyboard.generateVirtualKeys;
+          const matchingKey = virtualKeys.find(vk => vk.keyboardKey === key);
+          if (matchingKey) {
+            note = matchingKey.note;
+          }
         }
       }
 

@@ -1,11 +1,12 @@
 import { useInstrumentState } from "../../hooks/useInstrumentState";
+import { useBassStore } from "../../stores/bassStore";
 import {
   generateFretPositions,
   getScaleNotes,
   type Scale,
 } from "../../utils/musicUtils";
 import { FretboardBase, type FretboardConfig } from "../shared/FretboardBase";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useEffect } from "react";
 
 export interface BassProps {
   scaleState: {
@@ -27,15 +28,8 @@ export default function Bass({
   onReleaseKeyHeldNote,
   onSustainChange,
 }: BassProps) {
-  const {
-    velocity,
-    sustain,
-    pressedKeys,
-    setVelocity,
-    setSustain,
-    playNote,
-    stopNote,
-  } = useInstrumentState({
+  // Use the unified instrument state hook for held keys and pressed keys
+  const { pressedKeys, playNote, stopNote } = useInstrumentState({
     onPlayNotes,
     onStopNotes,
     onStopSustainedNotes: () => {}, // Bass doesn't use sustained notes
@@ -43,14 +37,31 @@ export default function Bass({
     onSustainChange,
   });
 
-  const [octaveMode, setOctaveMode] = useState<boolean>(false);
+  // Use bass store for persistent state
+  const {
+    mode,
+    setMode,
+    velocity,
+    setVelocity,
+    currentOctave,
+    sustain,
+    setSustain,
+    palmMute,
+    setPalmMute,
+  } = useBassStore();
+
+  // Synchronize bass store sustain state with unified state
+  useEffect(() => {
+    // Since bass doesn't use sustained notes in the same way, we'll just sync the sustain state
+    // but not worry about sustained notes functionality
+  }, [sustain]);
 
   // Bass configuration
   const config: FretboardConfig = {
     strings: ["E", "A", "D", "G"],
     frets: 12,
     openNotes: ["E1", "A1", "D2", "G2"],
-    mode: octaveMode ? "octave" : "melody",
+    mode: mode === "finger" ? "melody" : "octave",
     showNoteNames: true,
     showFretNumbers: true,
     highlightScaleNotes: true,
@@ -59,10 +70,10 @@ export default function Bass({
   // Generate scale notes for highlighting (bass typically uses lower octaves)
   const scaleNotes = useMemo(
     () =>
-      getScaleNotes(scaleState.rootNote, scaleState.scale, 2).map((note) =>
-        note.slice(0, -1),
+      getScaleNotes(scaleState.rootNote, scaleState.scale, currentOctave).map(
+        (note) => note.slice(0, -1),
       ), // Remove octave for highlighting
-    [scaleState.rootNote, scaleState.scale],
+    [scaleState.rootNote, scaleState.scale, currentOctave],
   );
 
   // Convert pressedKeys to pressedFrets format for FretboardBase
@@ -91,7 +102,7 @@ export default function Bass({
 
   const handleFretPressWithNote = useCallback(
     async (_stringIndex: number, _fret: number, note: string) => {
-      if (octaveMode) {
+      if (mode === "slap") {
         // Play octave (root + octave above)
         const octaveNote = note.slice(0, -1) + (parseInt(note.slice(-1)) + 1);
         await playNote(note, velocity, true);
@@ -100,7 +111,7 @@ export default function Bass({
         await playNote(note, velocity, true);
       }
     },
-    [octaveMode, velocity, playNote],
+    [mode, velocity, playNote],
   );
 
   const handleFretReleaseWithNote = useCallback(
@@ -108,13 +119,13 @@ export default function Bass({
       stopNote(note);
       onReleaseKeyHeldNote(note);
 
-      if (octaveMode) {
+      if (mode === "slap") {
         const octaveNote = note.slice(0, -1) + (parseInt(note.slice(-1)) + 1);
         stopNote(octaveNote);
         onReleaseKeyHeldNote(octaveNote);
       }
     },
-    [octaveMode, onReleaseKeyHeldNote, stopNote],
+    [mode, onReleaseKeyHeldNote, stopNote],
   );
 
   const handleSustainChange = useCallback(
@@ -140,20 +151,28 @@ export default function Bass({
         <div className="flex items-center gap-4 mb-4">
           <div className="join">
             <button
-              onClick={() => setOctaveMode(false)}
+              onClick={() => setMode("finger")}
               className={`btn btn-sm ${
-                !octaveMode ? "btn-success" : "btn-outline"
+                mode === "finger" ? "btn-success" : "btn-outline"
               }`}
             >
-              Single Note
+              Finger
             </button>
             <button
-              onClick={() => setOctaveMode(true)}
+              onClick={() => setMode("pick")}
               className={`btn btn-sm ${
-                octaveMode ? "btn-success" : "btn-outline"
+                mode === "pick" ? "btn-success" : "btn-outline"
               }`}
             >
-              Octave Mode
+              Pick
+            </button>
+            <button
+              onClick={() => setMode("slap")}
+              className={`btn btn-sm ${
+                mode === "slap" ? "btn-success" : "btn-outline"
+              }`}
+            >
+              Slap
             </button>
           </div>
 
@@ -167,6 +186,19 @@ export default function Bass({
                 className="checkbox checkbox-sm"
               />
               <span className="label-text ml-2">Sustain</span>
+            </label>
+          </div>
+
+          {/* Palm Mute Toggle */}
+          <div className="flex items-center gap-2">
+            <label className="label cursor-pointer">
+              <input
+                type="checkbox"
+                checked={palmMute}
+                onChange={(e) => setPalmMute(e.target.checked)}
+                className="checkbox checkbox-sm"
+              />
+              <span className="label-text ml-2">Palm Mute</span>
             </label>
           </div>
         </div>

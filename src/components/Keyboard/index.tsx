@@ -2,12 +2,14 @@ import { DEFAULT_KEYBOARD_SHORTCUTS } from "../../constants/keyboardShortcuts";
 import { getKeyDisplayName } from "../../constants/utils/displayUtils";
 import { useInstrumentState } from "../../hooks/useInstrumentState";
 import type { Scale } from "../../hooks/useScaleState";
+import { useKeyboardStore } from "../../stores/keyboardStore";
 import BaseInstrument from "../shared/BaseInstrument";
-import { AdvancedKeys } from "./components/AdvancedKeys";
-import { ChordKeys } from "./components/ChordKeys";
-import { MelodyKeys } from "./components/MelodyKeys";
+import { BasicKeyboard } from "./components/BasicKeyboard";
+import { ChordKeyboard } from "./components/ChordKeyboard";
+import { MelodyKeyboard } from "./components/MelodyKeyboard";
 import { useKeyboardKeysController } from "./hooks/useKeyboardKeysController";
 import { useVirtualKeyboard } from "./hooks/useVirtualKeyboard";
+import { useEffect } from "react";
 
 export interface Props {
   // Scale state - the core functionality
@@ -37,7 +39,23 @@ export default function Keyboard({
 }: Props) {
   const shortcuts = DEFAULT_KEYBOARD_SHORTCUTS;
 
-  // Use the unified instrument state hook
+  // Use keyboard store for persistent state
+  const {
+    mode,
+    setMode,
+    currentOctave,
+    setCurrentOctave,
+    velocity,
+    setVelocity,
+    chordVoicing,
+    setChordVoicing,
+    sustain,
+    setSustain,
+    sustainToggle,
+    setSustainToggle,
+  } = useKeyboardStore();
+
+  // Use the unified instrument state hook for held keys and pressed keys
   const unifiedState = useInstrumentState({
     onPlayNotes,
     onStopNotes,
@@ -46,6 +64,19 @@ export default function Keyboard({
     onSustainChange,
     onSustainToggleChange,
   });
+
+  // Synchronize keyboard store state with unified state
+  useEffect(() => {
+    if (unifiedState.sustainToggle !== sustainToggle) {
+      setSustainToggle(unifiedState.sustainToggle);
+    }
+  }, [unifiedState.sustainToggle, sustainToggle, setSustainToggle]);
+
+  useEffect(() => {
+    if (unifiedState.sustain !== sustain) {
+      setSustain(unifiedState.sustain);
+    }
+  }, [unifiedState.sustain, sustain, setSustain]);
 
   const virtualKeyboard = useVirtualKeyboard(
     scaleState.getScaleNotes,
@@ -57,14 +88,6 @@ export default function Keyboard({
   );
 
   const {
-    mode,
-    setMode,
-    currentOctave,
-    setCurrentOctave,
-    velocity,
-    setVelocity,
-    chordVoicing,
-    setChordVoicing,
     chordModifiers,
     setChordModifiers,
     pressedTriads,
@@ -84,8 +107,8 @@ export default function Keyboard({
     mode,
     currentOctave,
     velocity,
-    sustain: unifiedState.sustain,
-    sustainToggle: unifiedState.sustainToggle,
+    sustain,
+    sustainToggle,
     hasSustainedNotes: unifiedState.hasSustainedNotes,
     heldKeys: unifiedState.heldKeys,
     setSustain: unifiedState.setSustain,
@@ -120,7 +143,7 @@ export default function Keyboard({
   const renderVirtualKeyboard = () => {
     if (mode === "simple-chord") {
       return (
-        <ChordKeys
+        <ChordKeyboard
           virtualKeys={virtualKeys}
           pressedKeys={unifiedState.pressedKeys}
           pressedTriads={pressedTriads}
@@ -133,24 +156,30 @@ export default function Keyboard({
           onTriadRelease={handleTriadRelease}
           onModifierPress={handleModifierPress}
           onModifierRelease={handleModifierRelease}
+          sustain={sustain}
+          sustainToggle={sustainToggle}
         />
       );
     } else if (mode === "simple-melody") {
       return (
-        <MelodyKeys
+        <MelodyKeyboard
           virtualKeys={virtualKeys}
           pressedKeys={unifiedState.pressedKeys}
           onKeyPress={handleVirtualKeyPress}
           onKeyRelease={handleVirtualKeyRelease}
+          sustain={sustain}
+          sustainToggle={sustainToggle}
         />
       );
     } else {
       return (
-        <AdvancedKeys
+        <BasicKeyboard
           virtualKeys={virtualKeys}
           pressedKeys={unifiedState.pressedKeys}
           onKeyPress={handleVirtualKeyPress}
           onKeyRelease={handleVirtualKeyRelease}
+          sustain={sustain}
+          sustainToggle={sustainToggle}
         />
       );
     }
@@ -221,9 +250,9 @@ export default function Keyboard({
       setVelocity={setVelocity}
       currentOctave={currentOctave}
       setCurrentOctave={setCurrentOctave}
-      sustain={unifiedState.sustain}
+      sustain={sustain}
       setSustain={unifiedState.setSustain}
-      sustainToggle={unifiedState.sustainToggle}
+      sustainToggle={sustainToggle}
       setSustainToggle={unifiedState.setSustainToggle}
       onStopSustainedNotes={onStopSustainedNotes}
       hasSustainedNotes={unifiedState.hasSustainedNotes}

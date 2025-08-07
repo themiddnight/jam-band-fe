@@ -2,15 +2,18 @@ import { SharedNoteKeys, type NoteKey } from "../../shared/NoteKeys";
 import type { KeyboardKey } from "../types/keyboard";
 import { memo } from "react";
 
-interface MelodyKeysProps {
+interface MelodyKeyboardProps {
   virtualKeys: KeyboardKey[];
   pressedKeys: Set<string>;
   onKeyPress: (key: KeyboardKey) => void;
   onKeyRelease: (key: KeyboardKey) => void;
+  // Add sustain state to prevent mouse leave issues
+  sustain?: boolean;
+  sustainToggle?: boolean;
 }
 
-export const MelodyKeys = memo<MelodyKeysProps>(
-  ({ virtualKeys, pressedKeys, onKeyPress, onKeyRelease }) => {
+export const MelodyKeyboard = memo<MelodyKeyboardProps>(
+  ({ virtualKeys, pressedKeys, onKeyPress, onKeyRelease, sustain = false, sustainToggle = false }) => {
     // Convert KeyboardKey to NoteKey format
     const noteKeys: NoteKey[] = virtualKeys.map((key) => ({
       note: key.note,
@@ -41,9 +44,11 @@ export const MelodyKeys = memo<MelodyKeysProps>(
           }
         }}
         variant="keyboard"
+        sustain={sustain}
+        sustainToggle={sustainToggle}
       />
     );
   },
 );
 
-MelodyKeys.displayName = "MelodyKeys";
+MelodyKeyboard.displayName = "MelodyKeys";

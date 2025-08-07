@@ -1,14 +1,14 @@
 import { DEFAULT_KEYBOARD_SHORTCUTS } from "../../../constants/keyboardShortcuts";
 import {
-  blackKeyMapping,
   chordRootKeys,
   chordTriadKeys,
+  chromaticBlackKeyMapping,
+  chromaticWhiteKeyMapping,
   melodySimpleKeys,
   melodySimpleKeysUpper,
-  whiteKeyMapping,
 } from "../../../constants/virtualKeyboardKeys";
 import type { Scale } from "../../../hooks/useScaleState";
-import { useVirtualKeyboardStore } from "../../../stores/virtualKeyboardStore";
+import { useKeyboardStore } from "../../../stores/keyboardStore";
 import { getChordFromDegree } from "../../../utils/musicUtils";
 import type { KeyboardKey } from "../types/keyboard";
 import { useState, useCallback, useMemo } from "react";
@@ -27,11 +27,15 @@ export const useVirtualKeyboard = (
     currentOctave,
     velocity,
     chordVoicing,
+    sustain,
+    sustainToggle,
     setMode,
     setCurrentOctave,
     setVelocity,
     setChordVoicing,
-  } = useVirtualKeyboardStore();
+    setSustain,
+    setSustainToggle,
+  } = useKeyboardStore();
   const [chordModifiers, setChordModifiers] = useState<Set<string>>(new Set());
   const [pressedTriads, setPressedTriads] = useState<Set<number>>(new Set());
   const [activeTriadChords, setActiveTriadChords] = useState<
@@ -141,35 +145,42 @@ export const useVirtualKeyboard = (
         }
       });
     } else {
-      // Basic mode - generate piano keys
-      for (let i = 0; i < 2; i++) {
+      // Basic mode - generate chromatic piano keys (full 2 octaves + next C)
+      // Generate white keys for 2 full octaves + next C (15 white keys total)
+      for (let i = 0; i < 3; i++) { // 3 iterations to cover 2 full octaves + next C
         whiteNotes.forEach((note, index) => {
           const octave = currentOctave + i;
           const keyIndex = i * 7 + index;
-          const keyboardKey = whiteKeyMapping[keyIndex];
+          const keyboardKey = chromaticWhiteKeyMapping[keyIndex];
 
-          keys.push({
-            note: `${note}${octave}`,
-            isBlack: false,
-            position: keyIndex,
-            keyboardKey,
-          });
+          // Show all white keys for 2 full octaves + next C (15 keys: 0-14)
+          if (keyIndex <= 14) { // 0-6 (first octave), 7-13 (second octave), 14 (next C)
+            keys.push({
+              note: `${note}${octave}`,
+              isBlack: false,
+              position: keyIndex,
+              keyboardKey: keyboardKey || undefined,
+            });
+          }
         });
       }
 
-      for (let i = 0; i < 2; i++) {
+      // Generate black keys for 2 full octaves (10 black keys total)
+      for (let i = 0; i < 2; i++) { // 2 iterations for 2 octaves
         blackNotes.forEach((note, index) => {
           if (note) {
             const octave = currentOctave + i;
             const position = i * 7 + index + 0.5;
-            const keyboardKey = blackKeyMapping[index];
+            const keyIndex = i * 7 + index;
+            const keyboardKey = chromaticBlackKeyMapping[keyIndex];
 
-            if (keyboardKey) {
+            // Show all black keys for 2 full octaves (10 keys: positions 0-13)
+            if (keyIndex <= 13) {
               keys.push({
                 note: `${note}${octave}`,
                 isBlack: true,
                 position,
-                keyboardKey,
+                keyboardKey: keyboardKey || undefined,
               });
             }
           }
@@ -364,6 +375,10 @@ export const useVirtualKeyboard = (
     setVelocity,
     chordVoicing,
     setChordVoicing,
+    sustain,
+    setSustain,
+    sustainToggle,
+    setSustainToggle,
     chordModifiers,
     setChordModifiers,
     pressedTriads,

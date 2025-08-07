@@ -8,9 +8,14 @@ interface InstrumentPreferences {
 }
 
 interface InstrumentPreferencesState {
-  preferences: InstrumentPreferences;
-  setPreferences: (instrument: string, category: InstrumentCategory) => void;
-  clearPreferences: () => void;
+  preferences: Record<string, InstrumentPreferences>;
+  setPreferences: (
+    instrumentId: string,
+    instrument: string,
+    category: InstrumentCategory,
+  ) => void;
+  getPreferences: (instrumentId: string) => InstrumentPreferences;
+  clearPreferences: (instrumentId?: string) => void;
 }
 
 const defaultPreferences: InstrumentPreferences = {
@@ -21,17 +26,37 @@ const defaultPreferences: InstrumentPreferences = {
 export const useInstrumentPreferencesStore =
   create<InstrumentPreferencesState>()(
     persist(
-      (set) => ({
-        preferences: defaultPreferences,
+      (set, get) => ({
+        preferences: {},
 
-        setPreferences: (instrument: string, category: InstrumentCategory) => {
-          set({
-            preferences: { instrument, category },
-          });
+        setPreferences: (
+          instrumentId: string,
+          instrument: string,
+          category: InstrumentCategory,
+        ) => {
+          set((state) => ({
+            preferences: {
+              ...state.preferences,
+              [instrumentId]: { instrument, category },
+            },
+          }));
         },
 
-        clearPreferences: () => {
-          set({ preferences: defaultPreferences });
+        getPreferences: (instrumentId: string) => {
+          const { preferences } = get();
+          return preferences[instrumentId] || defaultPreferences;
+        },
+
+        clearPreferences: (instrumentId?: string) => {
+          if (instrumentId) {
+            set((state) => {
+              const newPreferences = { ...state.preferences };
+              delete newPreferences[instrumentId];
+              return { preferences: newPreferences };
+            });
+          } else {
+            set({ preferences: {} });
+          }
         },
       }),
       {

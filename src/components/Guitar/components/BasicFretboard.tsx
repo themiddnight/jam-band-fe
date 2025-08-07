@@ -7,7 +7,7 @@ import {
   FretboardBase,
   type FretboardConfig,
 } from "../../shared/FretboardBase";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 
 interface BasicFretboardProps {
   scaleState: {
@@ -16,27 +16,32 @@ interface BasicFretboardProps {
     getScaleNotes: (root: string, scaleType: Scale, octave: number) => string[];
   };
   velocity: number;
-  sustain: boolean;
-  sustainToggle: boolean;
   pressedFrets: Set<string>;
-  onFretPress: (stringIndex: number, fret: number, note: string) => void;
-  onFretRelease: (stringIndex: number, fret: number, note: string) => void;
+  onFretPress: (stringIndex: number, fret: number) => void;
+  onFretRelease: (stringIndex: number, fret: number) => void;
   onVelocityChange: (velocity: number) => void;
-  onPlayNote: (note: string) => void;
-  onReleaseNote: (note: string) => void;
+  // Use unified state pattern like keyboard
+  unifiedState: {
+    sustain: boolean;
+    sustainToggle: boolean;
+    playNote: (note: string, velocity?: number, isKeyHeld?: boolean) => Promise<void>;
+    releaseKeyHeldNote: (note: string) => void;
+    stopSustainedNotes: () => void;
+  };
 }
 
 export const BasicFretboard: React.FC<BasicFretboardProps> = ({
   scaleState,
-  sustain,
-  sustainToggle,
+  velocity,
   pressedFrets,
   onFretPress,
   onFretRelease,
-  onPlayNote,
-  onReleaseNote,
+  unifiedState,
 }) => {
-  // Guitar configuration
+  // Track active notes per string for same-string behavior
+  const activeNotesPerString = useRef<Map<number, string>>(new Map());
+
+  // Guitar configuration - 6 strings as requested
   const config: FretboardConfig = {
     strings: ["E", "A", "D", "G", "B", "E"],
     frets: 12,
@@ -69,58 +74,8 @@ export const BasicFretboard: React.FC<BasicFretboardProps> = ({
     [config.strings, config.openNotes, config.frets, pressedFrets, scaleNotes],
   );
 
-  const handleFretPressWithNote = useCallback(
-    async (stringIndex: number, fret: number, note: string) => {
-      // If sustain is active and we're pressing a fret on the same string, stop the previous note
-      if (sustain) {
-        const stringKey = `${stringIndex}-`;
-        const existingFret = Array.from(pressedFrets).find(
-          (fretKey) =>
-            fretKey.startsWith(stringKey) &&
-            fretKey !== `${stringIndex}-${fret}`,
-        );
-        if (existingFret) {
-          const [existingStringIndex, existingFretNum] =
-            existingFret.split("-");
-          const existingNote = getNoteAtFret(
-            config.openNotes[parseInt(existingStringIndex)],
-            parseInt(existingFretNum),
-          );
-          onFretRelease(
-            parseInt(existingStringIndex),
-            parseInt(existingFretNum),
-            existingNote,
-          );
-          onReleaseNote(existingNote);
-        }
-      }
-
-      onFretPress(stringIndex, fret, note);
-      onPlayNote(note);
-    },
-    [
-      sustain,
-      pressedFrets,
-      onFretPress,
-      onFretRelease,
-      onPlayNote,
-      onReleaseNote,
-      config.openNotes,
-    ],
-  );
-
-  const handleFretReleaseWithNote = useCallback(
-    (stringIndex: number, fret: number, note: string) => {
-      onFretRelease(stringIndex, fret, note);
-      if (!sustain && !sustainToggle) {
-        onReleaseNote(note);
-      }
-    },
-    [onFretRelease, onReleaseNote, sustain, sustainToggle],
-  );
-
-  // Helper function to get note at fret (simplified version)
-  const getNoteAtFret = (openNote: string, fret: number): string => {
+  // Helper function to get fret number from note (simplified version for tracking)
+  const getExistingFret = useCallback((stringIndex: number, note: string): number => {
     const NOTE_NAMES = [
       "C",
       "C#",
@@ -135,16 +90,67 @@ export const BasicFretboard: React.FC<BasicFretboardProps> = ({
       "A#",
       "B",
     ];
+    const openNote = config.openNotes[stringIndex];
     const openNoteName = openNote.replace(/\d/, "");
     const openNoteIndex = NOTE_NAMES.indexOf(openNoteName);
-    const newNoteIndex = (openNoteIndex + fret) % 12;
-    const octave =
-      Math.floor((openNoteIndex + fret) / 12) +
-      parseInt(openNote.replace(/\D/g, ""));
-    return NOTE_NAMES[newNoteIndex] + octave;
-  };
+    const targetNoteName = note.replace(/\d/, "");
+    const targetNoteIndex = NOTE_NAMES.indexOf(targetNoteName);
+    
+    // Calculate fret difference (simplified)
+    let fretDiff = targetNoteIndex - openNoteIndex;
+    if (fretDiff < 0) fretDiff += 12;
+    
+    return fretDiff;
+  }, [config.openNotes]);
 
-  return (
+  const handleFretPressWithNote = useCallback(
+    async (stringIndex: number, fret: number, note: string) => {
+      // If sustain is active and we're pressing a fret on the same string, stop the previous note
+      if (unifiedState.sustain || unifiedState.sustainToggle) {
+        const existingNote = activeNotesPerString.current.get(stringIndex);
+        if (existingNote && existingNote !== note) {
+          // Stop the previous note on this string using unified state
+          unifiedState.releaseKeyHeldNote(existingNote);
+          // Remove from pressedFrets tracking
+          const existingFretKey = `${stringIndex}-${getExistingFret(stringIndex, existingNote)}`;
+          if (pressedFrets.has(existingFretKey)) {
+            const existingFretNum = getExistingFret(stringIndex, existingNote);
+            onFretRelease(stringIndex, existingFretNum);
+          }
+        }
+        // Track the new active note for this string
+        activeNotesPerString.current.set(stringIndex, note);
+      }
+
+      onFretPress(stringIndex, fret);
+      // Use unified state to play note with proper velocity and isKeyHeld=true like keyboard
+      await unifiedState.playNote(note, velocity, true);
+    },
+    [
+      unifiedState,
+      onFretPress,
+      onFretRelease,
+      pressedFrets,
+      getExistingFret,
+    ],
+  );
+
+  const handleFretReleaseWithNote = useCallback(
+    (stringIndex: number, fret: number, note: string) => {
+      onFretRelease(stringIndex, fret);
+      
+      // Remove from active notes tracking
+      if (activeNotesPerString.current.get(stringIndex) === note) {
+        activeNotesPerString.current.delete(stringIndex);
+      }
+      
+      // Always call releaseKeyHeldNote like keyboard - unified state will handle sustain logic automatically
+      unifiedState.releaseKeyHeldNote(note);
+    },
+    [onFretRelease, unifiedState],
+  );
+
+    return (
     <div className="flex flex-col gap-4">
       {/* Fretboard */}
       <FretboardBase
@@ -153,6 +159,8 @@ export const BasicFretboard: React.FC<BasicFretboardProps> = ({
         onFretPress={handleFretPressWithNote}
         onFretRelease={handleFretReleaseWithNote}
         className="guitar-fretboard"
+        sustain={unifiedState.sustain}
+        sustainToggle={unifiedState.sustainToggle}
       />
     </div>
   );

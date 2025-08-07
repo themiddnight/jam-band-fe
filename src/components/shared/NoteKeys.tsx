@@ -14,6 +14,9 @@ interface SharedNoteKeysProps {
   onKeyRelease: (noteKey: NoteKey) => void;
   variant?: "keyboard" | "guitar";
   size?: "sm" | "md" | "lg";
+  // Add sustain state to prevent mouse leave issues
+  sustain?: boolean;
+  sustainToggle?: boolean;
 }
 
 export const SharedNoteKeys = memo<SharedNoteKeysProps>(
@@ -23,6 +26,8 @@ export const SharedNoteKeys = memo<SharedNoteKeysProps>(
     onKeyRelease,
     variant = "keyboard",
     size = "md",
+    sustain = false,
+    sustainToggle = false,
   }) => {
     // Separate keys by position for better organization (for keyboard)
     const lowerRowKeys = noteKeys.filter((key) => (key.position || 0) < 100);
@@ -42,6 +47,8 @@ export const SharedNoteKeys = memo<SharedNoteKeysProps>(
               onRelease={() => onKeyRelease(noteKey)}
               variant="note"
               size={size}
+              sustain={sustain}
+              sustainToggle={sustainToggle}
             />
           ))}
         </div>
@@ -64,6 +71,8 @@ export const SharedNoteKeys = memo<SharedNoteKeysProps>(
                 onRelease={() => onKeyRelease(noteKey)}
                 variant="note"
                 size={size}
+                sustain={sustain}
+                sustainToggle={sustainToggle}
               />
             ))}
           </div>
@@ -82,6 +91,8 @@ export const SharedNoteKeys = memo<SharedNoteKeysProps>(
                 onRelease={() => onKeyRelease(noteKey)}
                 variant="note"
                 size={size}
+                sustain={sustain}
+                sustainToggle={sustainToggle}
               />
             ))}
           </div>
