@@ -1,4 +1,5 @@
 import { useInstrumentState } from "../../hooks/useInstrumentState";
+import { useVelocityControl } from "../../hooks/useVelocityControl";
 import { useBassStore } from "../../stores/bassStore";
 import {
   generateFretPositions,
@@ -7,7 +8,6 @@ import {
 } from "../../utils/musicUtils";
 import { FretboardBase, type FretboardConfig } from "../shared/FretboardBase";
 import { useCallback, useMemo, useEffect } from "react";
-import { useVelocityControl } from "../../hooks/useVelocityControl";
 
 export interface BassProps {
   scaleState: {
@@ -146,15 +146,18 @@ export default function Bass({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Only handle if not in an input field
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement
+      ) {
         return;
       }
       handleVelocityChange(event.key);
     };
 
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown);
     };
   }, [handleVelocityChange]);
 

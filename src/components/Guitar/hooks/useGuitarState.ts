@@ -69,12 +69,6 @@ export const useGuitarState = (
     velocity,
   );
 
-  // Update strumConfig when brushingSpeed changes
-  const updateStrumSpeed = (speed: number) => {
-    handleBrushingSpeedChange(speed);
-    chordLogic.updateStrumSpeed(speed);
-  };
-
   // Create a guitar state object that matches the interface expected by useGuitarKeysController
   const guitarState = {
     mode: { type: mode, description: mode },
@@ -115,7 +109,6 @@ export const useGuitarState = (
     pressedChords: chordLogic.pressedChords,
     setPressedChords: chordLogic.setPressedChords,
     strumConfig: chordLogic.strumConfig,
-    setStrumSpeed: updateStrumSpeed,
     setStrumDirection: chordLogic.updateStrumDirection,
     playNote: basicMode.handleBasicPlayNote,
     stopNote: basicMode.handleBasicReleaseNote,

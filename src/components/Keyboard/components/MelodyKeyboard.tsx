@@ -13,7 +13,14 @@ interface MelodyKeyboardProps {
 }
 
 export const MelodyKeyboard = memo<MelodyKeyboardProps>(
-  ({ virtualKeys, pressedKeys, onKeyPress, onKeyRelease, sustain = false, sustainToggle = false }) => {
+  ({
+    virtualKeys,
+    pressedKeys,
+    onKeyPress,
+    onKeyRelease,
+    sustain = false,
+    sustainToggle = false,
+  }) => {
     // Convert KeyboardKey to NoteKey format
     const noteKeys: NoteKey[] = virtualKeys.map((key) => ({
       note: key.note,

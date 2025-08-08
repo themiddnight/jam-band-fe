@@ -1,12 +1,12 @@
 import {
   DEFAULT_GUITAR_SHORTCUTS,
-  BRUSHING_TIME_STEPS,
   GUITAR_PLAY_BUTTONS,
 } from "../../../constants/guitarShortcuts";
 import type { Scale } from "../../../hooks/useScaleState";
+import { useVelocityControl } from "../../../hooks/useVelocityControl";
+import { useGuitarStore } from "../../../stores/guitarStore";
 import type { GuitarState } from "../types/guitar";
 import { useCallback } from "react";
-import { useVelocityControl } from "../../../hooks/useVelocityControl";
 
 interface UseGuitarKeysControllerProps {
   guitarState: GuitarState;
@@ -37,7 +37,6 @@ interface UseGuitarKeysControllerProps {
     pressedChords: Set<number>;
     setPressedChords: (chords: Set<number>) => void;
     strumConfig: { speed: number; direction: "up" | "down"; isActive: boolean };
-    setStrumSpeed: (speed: number) => void;
     setStrumDirection: (direction: "up" | "down") => void;
     playNote: (note: string, velocity?: number) => Promise<void>;
     stopNote: (note: string) => void;
@@ -70,6 +69,9 @@ export const useGuitarKeysController = ({
     velocity: guitarControls.velocity,
     setVelocity: guitarControls.setVelocity,
   });
+
+  // Get guitar store functions for brushing speed control
+  const { incrementBrushingSpeed, decrementBrushingSpeed } = useGuitarStore();
 
   const handleKeyDown = useCallback(
     async (event: KeyboardEvent) => {
@@ -246,7 +248,10 @@ export const useGuitarKeysController = ({
         if (key === "," || key === ".") {
           // Play notes for both strings with velocity adjustment for ',' key
           const velocity =
-            key === "," ? guitarState.velocity * GUITAR_PLAY_BUTTONS.PICK_UP_VELOCITY_MULTIPLIER : guitarState.velocity;
+            key === ","
+              ? guitarState.velocity *
+                GUITAR_PLAY_BUTTONS.PICK_UP_VELOCITY_MULTIPLIER
+              : guitarState.velocity;
           guitarControls.handlePlayButtonPress("lower", velocity);
           guitarControls.handlePlayButtonPress("higher", velocity);
           return;
@@ -294,21 +299,11 @@ export const useGuitarKeysController = ({
 
         // Strum speed controls
         if (key === shortcuts.strumSpeedDown.key) {
-          const currentSpeed = guitarState.strumConfig.speed;
-          const currentStep = BRUSHING_TIME_STEPS.indexOf(currentSpeed as any);
-          if (currentStep > 0) {
-            const newSpeed = BRUSHING_TIME_STEPS[currentStep - 1];
-            guitarControls.setStrumSpeed(newSpeed);
-          }
+          decrementBrushingSpeed();
           return;
         }
         if (key === shortcuts.strumSpeedUp.key) {
-          const currentSpeed = guitarState.strumConfig.speed;
-          const currentStep = BRUSHING_TIME_STEPS.indexOf(currentSpeed as any);
-          if (currentStep < BRUSHING_TIME_STEPS.length - 1) {
-            const newSpeed = BRUSHING_TIME_STEPS[currentStep + 1];
-            guitarControls.setStrumSpeed(newSpeed);
-          }
+          incrementBrushingSpeed();
           return;
         }
 
@@ -399,7 +394,15 @@ export const useGuitarKeysController = ({
         return;
       }
     },
-    [guitarState, scaleState, guitarControls, shortcuts, handleVelocityChange],
+    [
+      guitarState,
+      scaleState,
+      guitarControls,
+      shortcuts,
+      handleVelocityChange,
+      decrementBrushingSpeed,
+      incrementBrushingSpeed,
+    ],
   );
 
   const handleKeyUp = useCallback(

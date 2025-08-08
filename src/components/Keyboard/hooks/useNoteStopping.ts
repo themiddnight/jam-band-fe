@@ -22,7 +22,10 @@ export const useNoteStopping = (
   const handleNoteStopping = useCallback(
     (key: string) => {
       // Check if the key is a note key
-      const chromaticKeys = [...chromaticWhiteKeyMapping, ...chromaticBlackKeyMapping].filter(k => k !== "");
+      const chromaticKeys = [
+        ...chromaticWhiteKeyMapping,
+        ...chromaticBlackKeyMapping,
+      ].filter((k) => k !== "");
       const isNoteKey =
         melodySimpleKeys.includes(key) ||
         melodySimpleKeysUpper.includes(key) ||
@@ -79,24 +82,8 @@ export const useNoteStopping = (
           note = currentScaleNotes[keyIndex];
         } else if (chordTriadKeys.includes(key)) {
           const keyIndex = chordTriadKeys.indexOf(key);
-          const chord = virtualKeyboard.activeTriadChords.get(keyIndex);
-          if (chord) {
-            chord.forEach((note: string) =>
-              keyboardState.releaseKeyHeldNote(note),
-            );
-            virtualKeyboard.setActiveTriadChords(
-              (prev: Map<number, string[]>) => {
-                const newMap = new Map(prev);
-                newMap.delete(keyIndex);
-                return newMap;
-              },
-            );
-          }
-          virtualKeyboard.setPressedTriads((prev: Set<number>) => {
-            const newSet = new Set(prev);
-            newSet.delete(keyIndex);
-            return newSet;
-          });
+          // Use unified triad release handler to cancel pending arpeggio and stop only played notes
+          virtualKeyboard.handleTriadRelease(keyIndex);
           return;
         }
       } else if (keyboardState.mode === "basic") {
@@ -104,7 +91,7 @@ export const useNoteStopping = (
         if (chromaticKeys.includes(key)) {
           // Find the virtual key that matches this keyboard key
           const virtualKeys = virtualKeyboard.generateVirtualKeys;
-          const matchingKey = virtualKeys.find(vk => vk.keyboardKey === key);
+          const matchingKey = virtualKeys.find((vk) => vk.keyboardKey === key);
           if (matchingKey) {
             note = matchingKey.note;
           }

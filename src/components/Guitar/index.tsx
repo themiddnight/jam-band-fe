@@ -108,10 +108,10 @@ export default function Guitar({
             scaleState={scaleState}
             velocity={velocity}
             pressedFrets={pressedFrets}
-            onFretPress={(stringIndex: number, fret: number) => 
+            onFretPress={(stringIndex: number, fret: number) =>
               basicMode.handleBasicFretPress(stringIndex, fret)
             }
-            onFretRelease={(stringIndex: number, fret: number) => 
+            onFretRelease={(stringIndex: number, fret: number) =>
               basicMode.handleBasicFretRelease(stringIndex, fret)
             }
             onVelocityChange={setVelocity}

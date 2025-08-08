@@ -1,4 +1,7 @@
-import { DEFAULT_GUITAR_SHORTCUTS, GUITAR_PLAY_BUTTONS } from "../../../constants/guitarShortcuts";
+import {
+  DEFAULT_GUITAR_SHORTCUTS,
+  GUITAR_PLAY_BUTTONS,
+} from "../../../constants/guitarShortcuts";
 import { getKeyDisplayName } from "../../../constants/utils/displayUtils";
 import type { Scale } from "../../../hooks/useScaleState";
 import { useTouchEvents } from "../../../hooks/useTouchEvents";
@@ -41,8 +44,14 @@ export const MelodyGuitar: React.FC<MelodyGuitarProps> = ({
   const playNotes70TouchHandlers = useTouchEvents({
     onPress: () => {
       // Play notes for both strings with pick-up velocity
-      handlePlayButtonPress("lower", velocity * GUITAR_PLAY_BUTTONS.PICK_UP_VELOCITY_MULTIPLIER);
-      handlePlayButtonPress("higher", velocity * GUITAR_PLAY_BUTTONS.PICK_UP_VELOCITY_MULTIPLIER);
+      handlePlayButtonPress(
+        "lower",
+        velocity * GUITAR_PLAY_BUTTONS.PICK_UP_VELOCITY_MULTIPLIER,
+      );
+      handlePlayButtonPress(
+        "higher",
+        velocity * GUITAR_PLAY_BUTTONS.PICK_UP_VELOCITY_MULTIPLIER,
+      );
     },
     onRelease: () => {},
     isPlayButton: true,
@@ -215,8 +224,14 @@ export const MelodyGuitar: React.FC<MelodyGuitarProps> = ({
         <button
           onMouseDown={() => {
             // Play notes for both strings with pick-up velocity
-            handlePlayButtonPress("lower", velocity * GUITAR_PLAY_BUTTONS.PICK_UP_VELOCITY_MULTIPLIER);
-            handlePlayButtonPress("higher", velocity * GUITAR_PLAY_BUTTONS.PICK_UP_VELOCITY_MULTIPLIER);
+            handlePlayButtonPress(
+              "lower",
+              velocity * GUITAR_PLAY_BUTTONS.PICK_UP_VELOCITY_MULTIPLIER,
+            );
+            handlePlayButtonPress(
+              "higher",
+              velocity * GUITAR_PLAY_BUTTONS.PICK_UP_VELOCITY_MULTIPLIER,
+            );
           }}
           ref={
             playNotes70TouchHandlers.ref as React.RefObject<HTMLButtonElement>

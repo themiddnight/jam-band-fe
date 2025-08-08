@@ -1,8 +1,8 @@
+import { GUITAR_STRUM } from "../../../constants/guitarShortcuts";
 import type { Scale } from "../../../hooks/useScaleState";
 import { getChordFromDegree } from "../../../utils/musicUtils";
-import { GUITAR_STRUM } from "../../../constants/guitarShortcuts";
 import type { StrumConfig } from "../types/guitar";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 
 export const useGuitarChordLogic = (
   onPlayNotes: (notes: string[], velocity: number, isKeyHeld: boolean) => void,
@@ -20,14 +20,23 @@ export const useGuitarChordLogic = (
   const [powerChordMode, setPowerChordMode] = useState(false);
   const [pressedChords, setPressedChords] = useState<Set<number>>(new Set());
   // Track the actual notes that were played for each chord with their modifiers
-  const [playedChordNotes, setPlayedChordNotes] = useState<Map<number, string[]>>(new Map());
+  const [playedChordNotes, setPlayedChordNotes] = useState<
+    Map<number, string[]>
+  >(new Map());
   // Track scheduled timeouts for strumming to cancel them if needed
-  const [scheduledTimeouts, setScheduledTimeouts] = useState<Map<number, NodeJS.Timeout[]>>(new Map());
+  const [scheduledTimeouts, setScheduledTimeouts] = useState<
+    Map<number, NodeJS.Timeout[]>
+  >(new Map());
   const [strumConfig, setStrumConfig] = useState<StrumConfig>({
     speed: brushingSpeed,
     direction: "down",
     isActive: false,
   });
+
+  // Update strumConfig when brushingSpeed prop changes
+  useEffect(() => {
+    setStrumConfig((prev) => ({ ...prev, speed: brushingSpeed }));
+  }, [brushingSpeed]);
 
   // Convert shortcut keys to modifier names for chord generation
   const convertChordModifiers = useCallback(
@@ -121,10 +130,13 @@ export const useGuitarChordLogic = (
         direction === "down" ? chordNotes : [...chordNotes].reverse();
 
       // Use strum velocity for strum up (,) button
-      const strumVelocity = direction === "up" ? velocity * GUITAR_STRUM.UP_VELOCITY_MULTIPLIER : velocity;
+      const strumVelocity =
+        direction === "up"
+          ? velocity * GUITAR_STRUM.UP_VELOCITY_MULTIPLIER
+          : velocity;
 
       // Track the notes that are actually played for this chord
-      setPlayedChordNotes(prev => {
+      setPlayedChordNotes((prev) => {
         const newMap = new Map(prev);
         newMap.set(chordIndex, [...chordNotes]); // Store all chord notes regardless of strum order
         return newMap;
@@ -145,9 +157,9 @@ export const useGuitarChordLogic = (
           }, i * strumConfig.speed);
           timeouts.push(timeout);
         }
-        
+
         // Track timeouts so they can be cancelled if chord is released
-        setScheduledTimeouts(prev => {
+        setScheduledTimeouts((prev) => {
           const newMap = new Map(prev);
           const existingTimeouts = newMap.get(chordIndex) || [];
           newMap.set(chordIndex, [...existingTimeouts, ...timeouts]);
@@ -209,7 +221,7 @@ export const useGuitarChordLogic = (
       }
 
       // Store the notes that should be played for this chord
-      setPlayedChordNotes(prev => {
+      setPlayedChordNotes((prev) => {
         const newMap = new Map(prev);
         newMap.set(chordIndex, chordNotes);
         return newMap;
@@ -235,8 +247,8 @@ export const useGuitarChordLogic = (
       // Cancel any scheduled strum timeouts for this chord
       const timeouts = scheduledTimeouts.get(chordIndex);
       if (timeouts) {
-        timeouts.forEach(timeout => clearTimeout(timeout));
-        setScheduledTimeouts(prev => {
+        timeouts.forEach((timeout) => clearTimeout(timeout));
+        setScheduledTimeouts((prev) => {
           const newMap = new Map(prev);
           newMap.delete(chordIndex);
           return newMap;
@@ -248,9 +260,9 @@ export const useGuitarChordLogic = (
       if (actualPlayedNotes) {
         // Stop all the notes that were played for this chord immediately
         onStopNotes(actualPlayedNotes);
-        
+
         // Remove the chord from played notes
-        setPlayedChordNotes(prev => {
+        setPlayedChordNotes((prev) => {
           const newMap = new Map(prev);
           newMap.delete(chordIndex);
           return newMap;

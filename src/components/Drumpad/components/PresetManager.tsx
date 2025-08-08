@@ -88,7 +88,7 @@ export const PresetManager: React.FC<PresetManagerProps> = ({
                 onLoadPreset(selectedPreset);
               }
             }}
-            className="select select-bordered select-xs flex-1 min-w-48"
+            className="select select-bordered select-xs flex-1"
           >
             <option value="">Select a preset...</option>
             {availablePresets.map((preset) => (

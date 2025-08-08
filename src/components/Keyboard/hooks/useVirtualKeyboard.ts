@@ -35,11 +35,16 @@ export const useVirtualKeyboard = (
     setChordVoicing,
     setSustain,
     setSustainToggle,
+    arpeggioSpeed,
   } = useKeyboardStore();
   const [chordModifiers, setChordModifiers] = useState<Set<string>>(new Set());
   const [pressedTriads, setPressedTriads] = useState<Set<number>>(new Set());
   const [activeTriadChords, setActiveTriadChords] = useState<
     Map<number, string[]>
+  >(new Map());
+  // Track scheduled timeouts for arpeggio so they can be cancelled on release
+  const [scheduledArpTimeouts, setScheduledArpTimeouts] = useState<
+    Map<number, NodeJS.Timeout[]>
   >(new Map());
 
   // Memoize white and black note arrays
@@ -147,14 +152,16 @@ export const useVirtualKeyboard = (
     } else {
       // Basic mode - generate chromatic piano keys (full 2 octaves + next C)
       // Generate white keys for 2 full octaves + next C (15 white keys total)
-      for (let i = 0; i < 3; i++) { // 3 iterations to cover 2 full octaves + next C
+      for (let i = 0; i < 3; i++) {
+        // 3 iterations to cover 2 full octaves + next C
         whiteNotes.forEach((note, index) => {
           const octave = currentOctave + i;
           const keyIndex = i * 7 + index;
           const keyboardKey = chromaticWhiteKeyMapping[keyIndex];
 
           // Show all white keys for 2 full octaves + next C (15 keys: 0-14)
-          if (keyIndex <= 14) { // 0-6 (first octave), 7-13 (second octave), 14 (next C)
+          if (keyIndex <= 14) {
+            // 0-6 (first octave), 7-13 (second octave), 14 (next C)
             keys.push({
               note: `${note}${octave}`,
               isBlack: false,
@@ -166,7 +173,8 @@ export const useVirtualKeyboard = (
       }
 
       // Generate black keys for 2 full octaves (10 black keys total)
-      for (let i = 0; i < 2; i++) { // 2 iterations for 2 octaves
+      for (let i = 0; i < 2; i++) {
+        // 2 iterations for 2 octaves
         blackNotes.forEach((note, index) => {
           if (note) {
             const octave = currentOctave + i;
@@ -199,6 +207,143 @@ export const useVirtualKeyboard = (
     blackNotes,
   ]);
 
+  // Sort notes by pitch (low to high) helper
+  const sortNotesLowToHigh = useCallback((notes: string[]): string[] => {
+    return [...notes].sort((a, b) => {
+      const noteA = a.slice(0, -1);
+      const octaveA = parseInt(a.slice(-1));
+      const noteB = b.slice(0, -1);
+      const octaveB = parseInt(b.slice(-1));
+
+      if (octaveA !== octaveB) {
+        return octaveA - octaveB;
+      }
+
+      const order = ["C", "D", "E", "F", "G", "A", "B"];
+      return order.indexOf(noteA) - order.indexOf(noteB);
+    });
+  }, []);
+
+  const handleTriadPress = useCallback(
+    async (index: number) => {
+      const chord = getChord(
+        rootNote,
+        scale,
+        index,
+        chordVoicing,
+        chordModifiers,
+      );
+
+      const ordered = sortNotesLowToHigh(chord);
+
+      // Store active chord (for reference)
+      setActiveTriadChords((prev: Map<number, string[]>) => {
+        const existingChord = prev.get(index);
+        if (
+          existingChord &&
+          JSON.stringify(existingChord) === JSON.stringify(ordered)
+        ) {
+          return prev;
+        }
+        return new Map(prev).set(index, ordered);
+      });
+
+      // If speed is 0ms, trigger all notes effectively simultaneously
+      if (arpeggioSpeed === 0) {
+        if (keyboardState) {
+          ordered.forEach((note) => {
+            keyboardState.playNote(note, velocity, true);
+          });
+        } else {
+          ordered.forEach((note) => onPlayNotes([note], velocity, true));
+        }
+      } else {
+        // Schedule arpeggio low -> high
+        const timeouts: NodeJS.Timeout[] = [];
+        ordered.forEach((note, i) => {
+          const timeout = setTimeout(() => {
+            if (keyboardState) {
+              keyboardState.playNote(note, velocity, true);
+            } else {
+              onPlayNotes([note], velocity, true);
+            }
+          }, i * arpeggioSpeed);
+          timeouts.push(timeout);
+        });
+        setScheduledArpTimeouts((prev) => {
+          const next = new Map(prev);
+          next.set(index, timeouts);
+          return next;
+        });
+      }
+
+      setPressedTriads((prev: Set<number>) => {
+        if (prev.has(index)) return prev;
+        return new Set(prev).add(index);
+      });
+    },
+    [
+      rootNote,
+      scale,
+      getChord,
+      chordVoicing,
+      velocity,
+      chordModifiers,
+      keyboardState,
+      onPlayNotes,
+      arpeggioSpeed,
+      sortNotesLowToHigh,
+    ],
+  );
+
+  const handleTriadRelease = useCallback(
+    (index: number) => {
+      // Cancel any scheduled arpeggio timeouts
+      const timeouts = scheduledArpTimeouts.get(index);
+      if (timeouts) {
+        timeouts.forEach((t) => clearTimeout(t));
+        setScheduledArpTimeouts((prev) => {
+          const next = new Map(prev);
+          next.delete(index);
+          return next;
+        });
+      }
+
+      // Always release the planned chord notes to ensure all notes are properly released
+      // This is more reliable than depending on playedTriadNotes which might be incomplete
+      const chord = activeTriadChords.get(index);
+      if (chord) {
+        if (keyboardState) {
+          chord.forEach((note) => keyboardState.releaseKeyHeldNote(note));
+        } else {
+          chord.forEach((note) => onReleaseKeyHeldNote(note));
+        }
+      }
+
+      // Clean active chord map
+      setActiveTriadChords((prev: Map<number, string[]>) => {
+        if (!prev.has(index)) return prev;
+        const newMap = new Map(prev);
+        newMap.delete(index);
+        return newMap;
+      });
+
+      setPressedTriads((prev: Set<number>) => {
+        if (!prev.has(index)) return prev;
+        const newSet = new Set(prev);
+        newSet.delete(index);
+        return newSet;
+      });
+    },
+    [
+      scheduledArpTimeouts,
+      activeTriadChords,
+      keyboardState,
+      onReleaseKeyHeldNote,
+    ],
+  );
+
+  // Virtual key handlers (placed after triad handlers to satisfy dependencies)
   const handleVirtualKeyPress = useCallback(
     async (key: KeyboardKey) => {
       if (
@@ -206,28 +351,12 @@ export const useVirtualKeyboard = (
         chordTriadKeys.some((k) => k === key.keyboardKey)
       ) {
         const keyIndex = chordTriadKeys.indexOf(key.keyboardKey!);
-        const chord = getChord(
-          rootNote,
-          scale,
-          keyIndex,
-          chordVoicing,
-          chordModifiers,
-        );
-        await onPlayNotes(chord, velocity, true); // isKeyHeld = true for chord keys
+        await handleTriadPress(keyIndex);
       } else {
-        await onPlayNotes([key.note], velocity, true); // isKeyHeld = true for virtual key presses
+        await onPlayNotes([key.note], velocity, true);
       }
     },
-    [
-      mode,
-      rootNote,
-      scale,
-      getChord,
-      chordVoicing,
-      velocity,
-      onPlayNotes,
-      chordModifiers,
-    ],
+    [mode, velocity, onPlayNotes, handleTriadPress],
   );
 
   const handleVirtualKeyRelease = useCallback(
@@ -237,31 +366,12 @@ export const useVirtualKeyboard = (
         chordTriadKeys.some((k) => k === key.keyboardKey)
       ) {
         const keyIndex = chordTriadKeys.indexOf(key.keyboardKey!);
-        const chord = activeTriadChords.get(keyIndex);
-        if (chord) {
-          chord.forEach((note: string) => onReleaseKeyHeldNote(note));
-
-          // Optimized Map update - only create new Map if needed
-          setActiveTriadChords((prev) => {
-            if (!prev.has(keyIndex)) return prev;
-            const newMap = new Map(prev);
-            newMap.delete(keyIndex);
-            return newMap;
-          });
-        }
-
-        // Optimized Set update - only create new Set if needed
-        setPressedTriads((prev) => {
-          if (!prev.has(keyIndex)) return prev;
-          const newSet = new Set(prev);
-          newSet.delete(keyIndex);
-          return newSet;
-        });
+        handleTriadRelease(keyIndex);
       } else {
         onReleaseKeyHeldNote(key.note);
       }
     },
-    [mode, activeTriadChords, onReleaseKeyHeldNote],
+    [mode, onReleaseKeyHeldNote, handleTriadRelease],
   );
 
   const handleModifierPress = useCallback((modifier: string) => {
@@ -279,92 +389,6 @@ export const useVirtualKeyboard = (
       return newSet;
     });
   }, []);
-
-  const handleTriadPress = useCallback(
-    async (index: number) => {
-      const chord = getChord(
-        rootNote,
-        scale,
-        index,
-        chordVoicing,
-        chordModifiers,
-      );
-
-      // Optimized Map update - only create new Map if chord is different
-      setActiveTriadChords((prev: Map<number, string[]>) => {
-        const existingChord = prev.get(index);
-        if (
-          existingChord &&
-          JSON.stringify(existingChord) === JSON.stringify(chord)
-        ) {
-          return prev;
-        }
-        return new Map(prev).set(index, chord);
-      });
-
-      if (keyboardState) {
-        // Use keyboard state system to respect sustain settings
-        // Play all notes simultaneously by calling playNote for each note without await
-        // This ensures all notes are triggered at the same time without waiting for each one
-        chord.forEach((note) => {
-          keyboardState.playNote(note, velocity, true);
-        });
-      } else {
-        // Fallback to direct call (for backward compatibility)
-        onPlayNotes(chord, velocity, true);
-      }
-
-      // Optimized Set update - only create new Set if needed
-      setPressedTriads((prev: Set<number>) => {
-        if (prev.has(index)) return prev;
-        return new Set(prev).add(index);
-      });
-    },
-    [
-      rootNote,
-      scale,
-      getChord,
-      chordVoicing,
-      velocity,
-      chordModifiers,
-      keyboardState,
-      onPlayNotes,
-    ],
-  );
-
-  const handleTriadRelease = useCallback(
-    (index: number) => {
-      const chord = activeTriadChords.get(index);
-      if (chord) {
-        if (keyboardState) {
-          // Use keyboard state system for consistency
-          chord.forEach((note: string) =>
-            keyboardState.releaseKeyHeldNote(note),
-          );
-        } else {
-          // Fallback to direct call (for backward compatibility)
-          chord.forEach((note: string) => onReleaseKeyHeldNote(note));
-        }
-
-        // Optimized Map update - only create new Map if needed
-        setActiveTriadChords((prev: Map<number, string[]>) => {
-          if (!prev.has(index)) return prev;
-          const newMap = new Map(prev);
-          newMap.delete(index);
-          return newMap;
-        });
-      }
-
-      // Optimized Set update - only create new Set if needed
-      setPressedTriads((prev: Set<number>) => {
-        if (!prev.has(index)) return prev;
-        const newSet = new Set(prev);
-        newSet.delete(index);
-        return newSet;
-      });
-    },
-    [activeTriadChords, keyboardState, onReleaseKeyHeldNote],
-  );
 
   return {
     mode,

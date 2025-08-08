@@ -24,7 +24,11 @@ interface BasicFretboardProps {
   unifiedState: {
     sustain: boolean;
     sustainToggle: boolean;
-    playNote: (note: string, velocity?: number, isKeyHeld?: boolean) => Promise<void>;
+    playNote: (
+      note: string,
+      velocity?: number,
+      isKeyHeld?: boolean,
+    ) => Promise<void>;
     releaseKeyHeldNote: (note: string) => void;
     stopSustainedNotes: () => void;
   };
@@ -75,33 +79,36 @@ export const BasicFretboard: React.FC<BasicFretboardProps> = ({
   );
 
   // Helper function to get fret number from note (simplified version for tracking)
-  const getExistingFret = useCallback((stringIndex: number, note: string): number => {
-    const NOTE_NAMES = [
-      "C",
-      "C#",
-      "D",
-      "D#",
-      "E",
-      "F",
-      "F#",
-      "G",
-      "G#",
-      "A",
-      "A#",
-      "B",
-    ];
-    const openNote = config.openNotes[stringIndex];
-    const openNoteName = openNote.replace(/\d/, "");
-    const openNoteIndex = NOTE_NAMES.indexOf(openNoteName);
-    const targetNoteName = note.replace(/\d/, "");
-    const targetNoteIndex = NOTE_NAMES.indexOf(targetNoteName);
-    
-    // Calculate fret difference (simplified)
-    let fretDiff = targetNoteIndex - openNoteIndex;
-    if (fretDiff < 0) fretDiff += 12;
-    
-    return fretDiff;
-  }, [config.openNotes]);
+  const getExistingFret = useCallback(
+    (stringIndex: number, note: string): number => {
+      const NOTE_NAMES = [
+        "C",
+        "C#",
+        "D",
+        "D#",
+        "E",
+        "F",
+        "F#",
+        "G",
+        "G#",
+        "A",
+        "A#",
+        "B",
+      ];
+      const openNote = config.openNotes[stringIndex];
+      const openNoteName = openNote.replace(/\d/, "");
+      const openNoteIndex = NOTE_NAMES.indexOf(openNoteName);
+      const targetNoteName = note.replace(/\d/, "");
+      const targetNoteIndex = NOTE_NAMES.indexOf(targetNoteName);
+
+      // Calculate fret difference (simplified)
+      let fretDiff = targetNoteIndex - openNoteIndex;
+      if (fretDiff < 0) fretDiff += 12;
+
+      return fretDiff;
+    },
+    [config.openNotes],
+  );
 
   const handleFretPressWithNote = useCallback(
     async (stringIndex: number, fret: number, note: string) => {
@@ -126,31 +133,25 @@ export const BasicFretboard: React.FC<BasicFretboardProps> = ({
       // Use unified state to play note with proper velocity and isKeyHeld=true like keyboard
       await unifiedState.playNote(note, velocity, true);
     },
-    [
-      unifiedState,
-      onFretPress,
-      onFretRelease,
-      pressedFrets,
-      getExistingFret,
-    ],
+    [unifiedState, onFretPress, onFretRelease, pressedFrets, getExistingFret],
   );
 
   const handleFretReleaseWithNote = useCallback(
     (stringIndex: number, fret: number, note: string) => {
       onFretRelease(stringIndex, fret);
-      
+
       // Remove from active notes tracking
       if (activeNotesPerString.current.get(stringIndex) === note) {
         activeNotesPerString.current.delete(stringIndex);
       }
-      
+
       // Always call releaseKeyHeldNote like keyboard - unified state will handle sustain logic automatically
       unifiedState.releaseKeyHeldNote(note);
     },
     [onFretRelease, unifiedState],
   );
 
-    return (
+  return (
     <div className="flex flex-col gap-4">
       {/* Fretboard */}
       <FretboardBase

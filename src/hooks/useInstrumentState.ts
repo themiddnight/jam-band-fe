@@ -125,7 +125,10 @@ export const useInstrumentState = (
 
       // When toggle is active and we play a note, it will be sustained
       // When sustain is active (either through toggle or manual press), mark as sustained
-      if ((stateRef.current.sustainToggle || stateRef.current.sustain) && !isKeyHeld) {
+      if (
+        (stateRef.current.sustainToggle || stateRef.current.sustain) &&
+        !isKeyHeld
+      ) {
         setHasSustainedNotes(true);
       }
     },

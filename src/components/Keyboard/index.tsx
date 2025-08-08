@@ -1,4 +1,8 @@
-import { DEFAULT_KEYBOARD_SHORTCUTS } from "../../constants/keyboardShortcuts";
+import {
+  DEFAULT_KEYBOARD_SHORTCUTS,
+  ARPEGGIO_TIME_STEPS,
+  ARPEGGIO_TIME_LABELS,
+} from "../../constants/keyboardShortcuts";
 import { getKeyDisplayName } from "../../constants/utils/displayUtils";
 import { useInstrumentState } from "../../hooks/useInstrumentState";
 import type { Scale } from "../../hooks/useScaleState";
@@ -53,6 +57,8 @@ export default function Keyboard({
     setSustain,
     sustainToggle,
     setSustainToggle,
+    arpeggioSpeed,
+    setArpeggioSpeed,
   } = useKeyboardStore();
 
   // Use the unified instrument state hook for held keys and pressed keys
@@ -192,7 +198,7 @@ export default function Keyboard({
         onClick={() => setMode("simple-melody")}
         className={`btn btn-sm join-item touch-manipulation ${mode === "simple-melody" ? "btn-primary" : "btn-outline"}`}
       >
-        Melody{" "}
+        Melody {""}
         <kbd className="kbd kbd-xs">
           {getKeyDisplayName(shortcuts.toggleMode.key)}
         </kbd>
@@ -201,7 +207,7 @@ export default function Keyboard({
         onClick={() => setMode("simple-chord")}
         className={`btn btn-sm join-item touch-manipulation ${mode === "simple-chord" ? "btn-primary" : "btn-outline"}`}
       >
-        Chord{" "}
+        Chord {""}
         <kbd className="kbd kbd-xs">
           {getKeyDisplayName(shortcuts.toggleMode.key)}
         </kbd>
@@ -240,6 +246,54 @@ export default function Keyboard({
     return {};
   };
 
+  // Additional controls: Arpeggio (only in simple-chord mode)
+  const additionalControls =
+    mode === "simple-chord" ? (
+      <div className="flex items-center gap-2">
+        <label className="label py-1">
+          <span className="label-text text-sm">
+            Arpeggio:{" "}
+            {
+              ARPEGGIO_TIME_LABELS[
+                arpeggioSpeed as keyof typeof ARPEGGIO_TIME_LABELS
+              ]
+            }{" "}
+            ({arpeggioSpeed}ms)
+          </span>
+        </label>
+        <div className="join">
+          <button
+            onClick={() => {
+              const currentStep = ARPEGGIO_TIME_STEPS.indexOf(
+                arpeggioSpeed as any,
+              );
+              if (currentStep > 0) {
+                const newSpeed = ARPEGGIO_TIME_STEPS[currentStep - 1];
+                setArpeggioSpeed(newSpeed as any);
+              }
+            }}
+            className="btn btn-sm btn-outline join-item touch-manipulation"
+          >
+            -
+          </button>
+          <button
+            onClick={() => {
+              const currentStep = ARPEGGIO_TIME_STEPS.indexOf(
+                arpeggioSpeed as any,
+              );
+              if (currentStep < ARPEGGIO_TIME_STEPS.length - 1) {
+                const newSpeed = ARPEGGIO_TIME_STEPS[currentStep + 1];
+                setArpeggioSpeed(newSpeed as any);
+              }
+            }}
+            className="btn btn-sm btn-outline join-item touch-manipulation"
+          >
+            +
+          </button>
+        </div>
+      </div>
+    ) : undefined;
+
   return (
     <BaseInstrument
       title="Keyboard"
@@ -260,6 +314,7 @@ export default function Keyboard({
       setChordVoicing={setChordVoicing}
       handleKeyDown={handleKeyDown}
       handleKeyUp={handleKeyUp}
+      additionalControls={additionalControls}
     >
       {renderVirtualKeyboard()}
     </BaseInstrument>

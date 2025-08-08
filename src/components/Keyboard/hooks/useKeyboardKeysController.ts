@@ -29,7 +29,7 @@ export const useKeyboardKeysController = (
     virtualKeyboard,
   );
   const { handleChordModifierPress, handleChordModifierRelease } =
-    useChordModifiers(keyboardState, scaleState, virtualKeyboard);
+    useChordModifiers(keyboardState, virtualKeyboard);
   const { handleNotePlaying } = useNotePlaying(
     keyboardState,
     scaleState,
@@ -49,8 +49,8 @@ export const useKeyboardKeysController = (
       ...melodyAdvancedKeys,
       ...chordRootKeys,
       ...chordTriadKeys,
-      ...chromaticWhiteKeyMapping.filter(k => k !== ""),
-      ...chromaticBlackKeyMapping.filter(k => k !== ""),
+      ...chromaticWhiteKeyMapping.filter((k) => k !== ""),
+      ...chromaticBlackKeyMapping.filter((k) => k !== ""),
     ],
     [],
   );
@@ -70,6 +70,8 @@ export const useKeyboardKeysController = (
       DEFAULT_KEYBOARD_SHORTCUTS.sustainToggle.key,
       DEFAULT_KEYBOARD_SHORTCUTS.velocityDown.key,
       DEFAULT_KEYBOARD_SHORTCUTS.velocityUp.key,
+      DEFAULT_KEYBOARD_SHORTCUTS.arpeggioSpeedDown.key,
+      DEFAULT_KEYBOARD_SHORTCUTS.arpeggioSpeedUp.key,
     ]);
   }, []);
 

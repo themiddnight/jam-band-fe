@@ -20,7 +20,7 @@ export interface InstrumentButtonProps {
   className?: string;
   variant?: "note" | "chord" | "modifier";
   size?: "sm" | "md" | "lg";
-  
+
   // Sustain state to prevent mouse leave issues
   sustain?: boolean;
   sustainToggle?: boolean;

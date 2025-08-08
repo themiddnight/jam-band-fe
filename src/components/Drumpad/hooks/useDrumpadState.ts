@@ -3,6 +3,7 @@ import {
   DRUMPAD_COLORS,
   validatePresetAssignments,
 } from "../../../constants/presets/drumPresets";
+import { useVelocityControl } from "../../../hooks/useVelocityControl";
 import { useDrumpadPresetsStore } from "../../../stores/drumpadPresetsStore";
 import type {
   DrumPad,
@@ -11,7 +12,6 @@ import type {
   DrumpadActions,
 } from "../types/drumpad";
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { useVelocityControl } from "../../../hooks/useVelocityControl";
 
 export const useDrumpadState = ({
   onPlayNotes,
@@ -322,7 +322,13 @@ export const useDrumpadState = ({
       // Clear processing keys on cleanup
       currentProcessingKeys.clear();
     };
-  }, [padAssignments, isEditMode, handlePadPress, handlePadRelease, handleVelocityChange]);
+  }, [
+    padAssignments,
+    isEditMode,
+    handlePadPress,
+    handlePadRelease,
+    handleVelocityChange,
+  ]);
 
   return {
     // State

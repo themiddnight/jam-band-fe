@@ -4,14 +4,12 @@ import {
 } from "../../../constants/keyboardShortcuts";
 import type {
   KeyboardState,
-  ScaleState,
   VirtualKeyboardState,
 } from "../../../types/keyboard";
 import { useCallback } from "react";
 
 export const useChordModifiers = (
   keyboardState: KeyboardState,
-  scaleState: ScaleState,
   virtualKeyboard: VirtualKeyboardState,
 ) => {
   const chordModifierKeys = getChordModifierKeys(DEFAULT_KEYBOARD_SHORTCUTS);
@@ -28,40 +26,14 @@ export const useChordModifiers = (
           return new Set(prev).add(key);
         });
 
-        // Update all active triad chords with the new modifier
-        virtualKeyboard.activeTriadChords.forEach((chord, triadIndex) => {
-          if (virtualKeyboard.pressedTriads.has(triadIndex)) {
-            const newChord = virtualKeyboard.getChord(
-              scaleState.rootNote,
-              scaleState.scale,
-              triadIndex,
-              virtualKeyboard.chordVoicing,
-              virtualKeyboard.chordModifiers,
-            );
-
-            // Release old chord notes
-            chord.forEach((note: string) => {
-              keyboardState.releaseKeyHeldNote(note);
-            });
-
-            // Play new chord notes
-            newChord.forEach((note: string) => {
-              keyboardState.playNote(note, keyboardState.velocity, true);
-            });
-
-            // Update the active chord
-            virtualKeyboard.setActiveTriadChords(
-              (prev: Map<number, string[]>) =>
-                new Map(prev).set(triadIndex, newChord),
-            );
-          }
-        });
+        // Don't immediately update active chords - let the next triad press use the new modifiers
+        // This prevents unwanted sounds when pressing modifiers while holding a triad
 
         return true;
       }
       return false;
     },
-    [keyboardState, scaleState, virtualKeyboard, chordModifierKeys],
+    [keyboardState, virtualKeyboard, chordModifierKeys],
   );
 
   const handleChordModifierRelease = useCallback(
@@ -78,40 +50,14 @@ export const useChordModifiers = (
           return newSet;
         });
 
-        // Update all active triad chords with the removed modifier
-        virtualKeyboard.activeTriadChords.forEach((chord, triadIndex) => {
-          if (virtualKeyboard.pressedTriads.has(triadIndex)) {
-            const newChord = virtualKeyboard.getChord(
-              scaleState.rootNote,
-              scaleState.scale,
-              triadIndex,
-              virtualKeyboard.chordVoicing,
-              virtualKeyboard.chordModifiers,
-            );
-
-            // Release old chord notes
-            chord.forEach((note: string) => {
-              keyboardState.releaseKeyHeldNote(note);
-            });
-
-            // Play new chord notes
-            newChord.forEach((note: string) => {
-              keyboardState.playNote(note, keyboardState.velocity, true);
-            });
-
-            // Update the active chord
-            virtualKeyboard.setActiveTriadChords(
-              (prev: Map<number, string[]>) =>
-                new Map(prev).set(triadIndex, newChord),
-            );
-          }
-        });
+        // Don't immediately update active chords - let the next triad press use the new modifiers
+        // This prevents unwanted sounds when releasing modifiers while holding a triad
 
         return true;
       }
       return false;
     },
-    [keyboardState, scaleState, virtualKeyboard, chordModifierKeys],
+    [keyboardState, virtualKeyboard, chordModifierKeys],
   );
 
   return { handleChordModifierPress, handleChordModifierRelease };

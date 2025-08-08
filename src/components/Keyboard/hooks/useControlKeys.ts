@@ -1,10 +1,14 @@
-import { DEFAULT_KEYBOARD_SHORTCUTS } from "../../../constants/keyboardShortcuts";
+import {
+  DEFAULT_KEYBOARD_SHORTCUTS,
+  ARPEGGIO_TIME_STEPS,
+} from "../../../constants/keyboardShortcuts";
+import { useVelocityControl } from "../../../hooks/useVelocityControl";
+import { useKeyboardStore } from "../../../stores/keyboardStore";
 import type {
   KeyboardState,
   VirtualKeyboardState,
 } from "../../../types/keyboard";
 import { useCallback } from "react";
-import { useVelocityControl } from "../../../hooks/useVelocityControl";
 
 export const useControlKeys = (
   keyboardState: KeyboardState,
@@ -15,6 +19,7 @@ export const useControlKeys = (
     velocity: keyboardState.velocity,
     setVelocity: keyboardState.setVelocity,
   });
+  const { arpeggioSpeed, setArpeggioSpeed } = useKeyboardStore();
 
   const handleSustain = useCallback(
     (key: string) => {
@@ -91,11 +96,15 @@ export const useControlKeys = (
   const handleOctaveControls = useCallback(
     (key: string) => {
       if (key === shortcuts.octaveDown.key) {
-        keyboardState.setCurrentOctave(Math.max(0, keyboardState.currentOctave - 1));
+        keyboardState.setCurrentOctave(
+          Math.max(0, keyboardState.currentOctave - 1),
+        );
         return true;
       }
       if (key === shortcuts.octaveUp.key) {
-        keyboardState.setCurrentOctave(Math.min(8, keyboardState.currentOctave + 1));
+        keyboardState.setCurrentOctave(
+          Math.min(8, keyboardState.currentOctave + 1),
+        );
         return true;
       }
       return false;
@@ -126,6 +135,41 @@ export const useControlKeys = (
     [virtualKeyboard, shortcuts.voicingDown.key, shortcuts.voicingUp.key],
   );
 
+  const handleArpeggioControls = useCallback(
+    (key: string) => {
+      if (key === shortcuts.arpeggioSpeedDown.key) {
+        if (virtualKeyboard.mode === "simple-chord") {
+          const currentIndex = ARPEGGIO_TIME_STEPS.indexOf(
+            arpeggioSpeed as any,
+          );
+          if (currentIndex > 0) {
+            setArpeggioSpeed(ARPEGGIO_TIME_STEPS[currentIndex - 1] as any);
+          }
+        }
+        return true;
+      }
+      if (key === shortcuts.arpeggioSpeedUp.key) {
+        if (virtualKeyboard.mode === "simple-chord") {
+          const currentIndex = ARPEGGIO_TIME_STEPS.indexOf(
+            arpeggioSpeed as any,
+          );
+          if (currentIndex < ARPEGGIO_TIME_STEPS.length - 1) {
+            setArpeggioSpeed(ARPEGGIO_TIME_STEPS[currentIndex + 1] as any);
+          }
+        }
+        return true;
+      }
+      return false;
+    },
+    [
+      virtualKeyboard,
+      shortcuts.arpeggioSpeedDown.key,
+      shortcuts.arpeggioSpeedUp.key,
+      arpeggioSpeed,
+      setArpeggioSpeed,
+    ],
+  );
+
   const handleAllControlKeys = useCallback(
     (key: string) => {
       return (
@@ -134,10 +178,19 @@ export const useControlKeys = (
         handleToggleMode(key) ||
         handleOctaveControls(key) ||
         handleVoicingControls(key) ||
+        handleArpeggioControls(key) ||
         handleVelocityChange(key)
       );
     },
-    [handleSustain, handleSustainToggle, handleToggleMode, handleOctaveControls, handleVoicingControls, handleVelocityChange],
+    [
+      handleSustain,
+      handleSustainToggle,
+      handleToggleMode,
+      handleOctaveControls,
+      handleVoicingControls,
+      handleArpeggioControls,
+      handleVelocityChange,
+    ],
   );
 
   return {

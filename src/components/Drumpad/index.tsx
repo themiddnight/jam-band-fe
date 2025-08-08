@@ -160,9 +160,44 @@ export default function Drumpad({
       <div className="card-body">
         <h3 className="card-title text-xl mb-4">Drumpad</h3>
 
-        {/* Preset Controls */}
-        <div className="flex justify-between items-center gap-5 mb-3">
-          <h4 className="text-lg font-semibold">Presets</h4>
+        <div className="flex justify-between items-center gap-3 mb-3">
+          {/* Controls */}
+          <div className="flex flex-wrap gap-3">
+            {/* Velocity Control */}
+            <div className="flex items-center gap-2">
+              <label className="label">
+                <span className="label-text">
+                  Velocity: {Math.round(velocity * 10)}
+                </span>
+              </label>
+              <input
+                type="range"
+                min="1"
+                max="10"
+                value={Math.round(velocity * 10)}
+                onChange={(e) => setVelocity(parseInt(e.target.value) / 10)}
+                className="range range-primary range-sm w-32"
+              />
+            </div>
+
+            {/* Edit Mode Toggle */}
+            <button
+              onClick={toggleEditMode}
+              className={`btn btn-sm ${isEditMode ? "btn-success" : "btn-outline"}`}
+            >
+              {isEditMode ? "Exit Edit Mode" : "Edit Mode"}
+            </button>
+
+            {/* Reset Button */}
+            <button
+              onClick={resetAssignments}
+              className="btn btn-sm btn-outline"
+            >
+              Reset
+            </button>
+          </div>
+
+          {/* Preset Controls */}
           <PresetManager
             currentPreset={currentPreset}
             onLoadPreset={loadPreset}
@@ -178,39 +213,6 @@ export default function Drumpad({
             onExportPreset={exportPreset}
             onImportPreset={handleImportPreset}
           />
-        </div>
-
-        {/* Controls */}
-        <div className="flex flex-wrap gap-4 mb-4">
-          {/* Velocity Control */}
-          <div className="flex items-center gap-2">
-            <label className="label">
-              <span className="label-text">
-                Velocity: {Math.round(velocity * 10)}
-              </span>
-            </label>
-            <input
-              type="range"
-              min="1"
-              max="10"
-              value={Math.round(velocity * 10)}
-              onChange={(e) => setVelocity(parseInt(e.target.value) / 10)}
-              className="range range-primary w-32"
-            />
-          </div>
-
-          {/* Edit Mode Toggle */}
-          <button
-            onClick={toggleEditMode}
-            className={`btn btn-sm ${isEditMode ? "btn-success" : "btn-outline"}`}
-          >
-            {isEditMode ? "Exit Edit Mode" : "Edit Mode"}
-          </button>
-
-          {/* Reset Button */}
-          <button onClick={resetAssignments} className="btn btn-sm btn-outline">
-            Reset
-          </button>
         </div>
 
         {/* Drum Pad Grid */}

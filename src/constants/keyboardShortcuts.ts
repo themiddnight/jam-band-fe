@@ -6,7 +6,7 @@ import {
 export interface KeyboardShortcut {
   key: string;
   description: string;
-  category: "mode" | "chord" | "control" | "octave" | "velocity";
+  category: "mode" | "chord" | "control" | "octave" | "velocity" | "arpeggio";
 }
 
 export interface KeyboardShortcuts {
@@ -35,7 +35,40 @@ export interface KeyboardShortcuts {
   // Velocity controls
   velocityDown: KeyboardShortcut;
   velocityUp: KeyboardShortcut;
+
+  // Arpeggio controls
+  arpeggioSpeedDown: KeyboardShortcut;
+  arpeggioSpeedUp: KeyboardShortcut;
 }
+
+// Add arpeggio timing constants for keyboard triad playing
+export const ARPEGGIO_TIMES = {
+  FASTEST: 0,
+  FAST: 10,
+  NORMAL: 50,
+  SLOW: 100,
+  SLOWEST: 200,
+} as const;
+
+export type ArpeggioTime = (typeof ARPEGGIO_TIMES)[keyof typeof ARPEGGIO_TIMES];
+
+export const ARPEGGIO_TIME_LABELS: Record<ArpeggioTime, string> = {
+  [ARPEGGIO_TIMES.FASTEST]: "Fastest",
+  [ARPEGGIO_TIMES.FAST]: "Fast",
+  [ARPEGGIO_TIMES.NORMAL]: "Normal",
+  [ARPEGGIO_TIMES.SLOW]: "Slow",
+  [ARPEGGIO_TIMES.SLOWEST]: "Slowest",
+};
+
+export const DEFAULT_ARPEGGIO_TIME: ArpeggioTime = ARPEGGIO_TIMES.FAST;
+
+export const ARPEGGIO_TIME_STEPS: ArpeggioTime[] = [
+  ARPEGGIO_TIMES.FASTEST,
+  ARPEGGIO_TIMES.FAST,
+  ARPEGGIO_TIMES.NORMAL,
+  ARPEGGIO_TIMES.SLOW,
+  ARPEGGIO_TIMES.SLOWEST,
+];
 
 export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
   toggleMode: {
@@ -122,6 +155,19 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
     key: "=",
     description: "Increase velocity (10 steps)",
     category: "velocity",
+  },
+
+  // Add arpeggio controls
+  arpeggioSpeedDown: {
+    key: "n",
+    description: "Decrease arpeggio speed",
+    category: "arpeggio",
+  },
+
+  arpeggioSpeedUp: {
+    key: "m",
+    description: "Increase arpeggio speed",
+    category: "arpeggio",
   },
 };
 

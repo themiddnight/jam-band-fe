@@ -1,4 +1,8 @@
 import type { KeyboardMode } from "../components/Keyboard/types/keyboard";
+import {
+  ARPEGGIO_TIMES,
+  type ArpeggioTime,
+} from "../constants/keyboardShortcuts";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
@@ -10,6 +14,7 @@ interface KeyboardState {
   chordVoicing: number;
   sustain: boolean;
   sustainToggle: boolean;
+  arpeggioSpeed: ArpeggioTime;
 
   // Actions
   setMode: (mode: KeyboardMode) => void;
@@ -18,6 +23,7 @@ interface KeyboardState {
   setChordVoicing: (voicing: number) => void;
   setSustain: (sustain: boolean) => void;
   setSustainToggle: (sustainToggle: boolean) => void;
+  setArpeggioSpeed: (speed: ArpeggioTime) => void;
 
   // Utility actions
   toggleMode: () => void;
@@ -29,6 +35,8 @@ interface KeyboardState {
   decrementChordVoicing: () => void;
   toggleSustain: () => void;
   toggleSustainToggle: () => void;
+  incrementArpeggioSpeed: () => void;
+  decrementArpeggioSpeed: () => void;
 }
 
 export const useKeyboardStore = create<KeyboardState>()(
@@ -41,6 +49,7 @@ export const useKeyboardStore = create<KeyboardState>()(
       chordVoicing: 0,
       sustain: false,
       sustainToggle: false,
+      arpeggioSpeed: ARPEGGIO_TIMES.FAST,
 
       // Basic setters
       setMode: (mode) => set({ mode }),
@@ -52,6 +61,7 @@ export const useKeyboardStore = create<KeyboardState>()(
         set({ chordVoicing: Math.max(-2, Math.min(2, voicing)) }),
       setSustain: (sustain) => set({ sustain }),
       setSustainToggle: (sustainToggle) => set({ sustainToggle }),
+      setArpeggioSpeed: (speed) => set({ arpeggioSpeed: speed }),
 
       // Toggle actions
       toggleMode: () =>
@@ -88,6 +98,20 @@ export const useKeyboardStore = create<KeyboardState>()(
         set((state) => ({
           chordVoicing: Math.max(-2, state.chordVoicing - 1),
         })),
+      incrementArpeggioSpeed: () =>
+        set((state) => {
+          const speeds = Object.values(ARPEGGIO_TIMES);
+          const currentIndex = speeds.indexOf(state.arpeggioSpeed);
+          const nextIndex = Math.min(speeds.length - 1, currentIndex + 1);
+          return { arpeggioSpeed: speeds[nextIndex] as ArpeggioTime };
+        }),
+      decrementArpeggioSpeed: () =>
+        set((state) => {
+          const speeds = Object.values(ARPEGGIO_TIMES);
+          const currentIndex = speeds.indexOf(state.arpeggioSpeed);
+          const prevIndex = Math.max(0, currentIndex - 1);
+          return { arpeggioSpeed: speeds[prevIndex] as ArpeggioTime };
+        }),
     }),
     {
       name: "keyboard-state",

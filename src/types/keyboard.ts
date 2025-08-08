@@ -47,4 +47,6 @@ export interface VirtualKeyboardState {
     modifiers?: Set<string>,
   ) => string[];
   generateVirtualKeys: any[];
+  handleTriadPress: (index: number) => Promise<void> | void;
+  handleTriadRelease: (index: number) => void;
 }

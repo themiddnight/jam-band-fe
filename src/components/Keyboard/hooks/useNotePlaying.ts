@@ -77,48 +77,20 @@ export const useNotePlaying = (
           note = currentScaleNotes[keyIndex];
         } else if (chordTriadKeys.includes(key)) {
           const keyIndex = chordTriadKeys.indexOf(key);
-          const chord = virtualKeyboard.getChord(
-            scaleState.rootNote,
-            scaleState.scale,
-            keyIndex,
-            virtualKeyboard.chordVoicing,
-            virtualKeyboard.chordModifiers,
-          );
-
-          // Update active triad chords
-          virtualKeyboard.setActiveTriadChords(
-            (prev: Map<number, string[]>) => {
-              const existingChord = prev.get(keyIndex);
-              if (
-                existingChord &&
-                JSON.stringify(existingChord) === JSON.stringify(chord)
-              ) {
-                return prev;
-              }
-              return new Map(prev).set(keyIndex, chord);
-            },
-          );
-
-          // Play all chord notes simultaneously (without await)
-          chord.forEach((chordNote) => {
-            keyboardState.playNote(chordNote, keyboardState.velocity, true);
-          });
-
-          // Update pressed triads
-          virtualKeyboard.setPressedTriads((prev: Set<number>) => {
-            if (prev.has(keyIndex)) return prev;
-            return new Set(prev).add(keyIndex);
-          });
-
-          return; // Don't continue to the single note handling
+          // Use unified triad handler to benefit from arpeggio logic
+          await virtualKeyboard.handleTriadPress(keyIndex);
+          return; // Triad handled
         }
       } else if (keyboardState.mode === "basic") {
         // Handle basic mode keys - chromatic mapping
-        const chromaticKeys = [...chromaticWhiteKeyMapping, ...chromaticBlackKeyMapping].filter(k => k !== "");
+        const chromaticKeys = [
+          ...chromaticWhiteKeyMapping,
+          ...chromaticBlackKeyMapping,
+        ].filter((k) => k !== "");
         if (chromaticKeys.includes(key)) {
           // Find the virtual key that matches this keyboard key
           const virtualKeys = virtualKeyboard.generateVirtualKeys;
-          const matchingKey = virtualKeys.find(vk => vk.keyboardKey === key);
+          const matchingKey = virtualKeys.find((vk) => vk.keyboardKey === key);
           if (matchingKey) {
             note = matchingKey.note;
           }

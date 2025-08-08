@@ -343,7 +343,11 @@ export const useInstrument = (
         ) {
           setCurrentInstrument(validatedInstrument);
           setCurrentCategory(validatedCategory);
-          setPreferences(currentUserId.current, validatedInstrument, validatedCategory);
+          setPreferences(
+            currentUserId.current,
+            validatedInstrument,
+            validatedCategory,
+          );
         }
 
         // This will initialize the audio context in the manager
@@ -451,7 +455,11 @@ export const useInstrument = (
               setLastFallbackCategory(category);
               setCurrentInstrument(fallbackInstrument);
               setCurrentCategory(category);
-              setPreferences(currentUserId.current, fallbackInstrument, category);
+              setPreferences(
+                currentUserId.current,
+                fallbackInstrument,
+                category,
+              );
             },
           });
         } else {
@@ -465,7 +473,11 @@ export const useInstrument = (
         setCurrentCategory(validatedCategory);
 
         // Save preferences when instrument changes
-        setPreferences(currentUserId.current, instrumentName, validatedCategory);
+        setPreferences(
+          currentUserId.current,
+          instrumentName,
+          validatedCategory,
+        );
 
         // Update available samples for drum machines
         if (validatedCategory === InstrumentCategory.DrumBeat) {
