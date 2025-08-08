@@ -68,7 +68,8 @@ export const useKeyboardKeysController = (
       DEFAULT_KEYBOARD_SHORTCUTS.toggleMode.key,
       DEFAULT_KEYBOARD_SHORTCUTS.sustain.key,
       DEFAULT_KEYBOARD_SHORTCUTS.sustainToggle.key,
-      ...Array.from({ length: 9 }, (_, i) => (i + 1).toString()),
+      DEFAULT_KEYBOARD_SHORTCUTS.velocityDown.key,
+      DEFAULT_KEYBOARD_SHORTCUTS.velocityUp.key,
     ]);
   }, []);
 

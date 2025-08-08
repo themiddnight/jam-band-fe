@@ -158,6 +158,8 @@ export default function Drumpad({
   return (
     <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
       <div className="card-body">
+        <h3 className="card-title text-xl mb-4">Drumpad</h3>
+
         {/* Preset Controls */}
         <div className="flex justify-between items-center gap-5 mb-3">
           <h4 className="text-lg font-semibold">Presets</h4>
@@ -178,38 +180,36 @@ export default function Drumpad({
           />
         </div>
 
-        {/* Drum Pad Controls */}
-        <div className="flex items-center gap-4 mb-4 flex-wrap">
+        {/* Controls */}
+        <div className="flex flex-wrap gap-4 mb-4">
           {/* Velocity Control */}
           <div className="flex items-center gap-2">
             <label className="label">
               <span className="label-text">
-                Velocity: {Math.round(velocity * 9)}
+                Velocity: {Math.round(velocity * 10)}
               </span>
             </label>
             <input
               type="range"
               min="1"
-              max="9"
-              value={Math.round(velocity * 9)}
-              onChange={(e) => setVelocity(parseInt(e.target.value) / 9)}
-              className="range range-sm range-primary w-32"
+              max="10"
+              value={Math.round(velocity * 10)}
+              onChange={(e) => setVelocity(parseInt(e.target.value) / 10)}
+              className="range range-primary w-32"
             />
           </div>
 
           {/* Edit Mode Toggle */}
           <button
             onClick={toggleEditMode}
-            className={`btn btn-sm ${
-              isEditMode ? "btn-secondary" : "btn-outline btn-secondary"
-            }`}
+            className={`btn btn-sm ${isEditMode ? "btn-success" : "btn-outline"}`}
           >
             {isEditMode ? "Exit Edit Mode" : "Edit Mode"}
           </button>
 
           {/* Reset Button */}
-          <button onClick={resetAssignments} className="btn btn-warning btn-sm">
-            Reset Assignments
+          <button onClick={resetAssignments} className="btn btn-sm btn-outline">
+            Reset
           </button>
         </div>
 

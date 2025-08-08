@@ -31,6 +31,10 @@ export interface KeyboardShortcuts {
   // Voicing controls
   voicingDown: KeyboardShortcut;
   voicingUp: KeyboardShortcut;
+
+  // Velocity controls
+  velocityDown: KeyboardShortcut;
+  velocityUp: KeyboardShortcut;
 }
 
 export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
@@ -104,6 +108,19 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
   voicingUp: {
     key: "v",
     description: "Increase chord voicing",
+    category: "velocity",
+  },
+
+  // Add velocity controls
+  velocityDown: {
+    key: "-",
+    description: "Decrease velocity (10 steps)",
+    category: "velocity",
+  },
+
+  velocityUp: {
+    key: "=",
+    description: "Increase velocity (10 steps)",
     category: "velocity",
   },
 };

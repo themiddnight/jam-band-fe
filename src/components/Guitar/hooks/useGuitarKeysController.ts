@@ -6,6 +6,7 @@ import {
 import type { Scale } from "../../../hooks/useScaleState";
 import type { GuitarState } from "../types/guitar";
 import { useCallback } from "react";
+import { useVelocityControl } from "../../../hooks/useVelocityControl";
 
 interface UseGuitarKeysControllerProps {
   guitarState: GuitarState;
@@ -65,6 +66,10 @@ export const useGuitarKeysController = ({
   guitarControls,
 }: UseGuitarKeysControllerProps) => {
   const shortcuts = DEFAULT_GUITAR_SHORTCUTS;
+  const { handleVelocityChange } = useVelocityControl({
+    velocity: guitarControls.velocity,
+    setVelocity: guitarControls.setVelocity,
+  });
 
   const handleKeyDown = useCallback(
     async (event: KeyboardEvent) => {
@@ -75,6 +80,11 @@ export const useGuitarKeysController = ({
         Object.values(shortcuts).some((shortcut) => shortcut.key.includes(key))
       ) {
         event.preventDefault();
+      }
+
+      // Handle velocity changes first
+      if (handleVelocityChange(key)) {
+        return;
       }
 
       // Mode controls
@@ -92,16 +102,8 @@ export const useGuitarKeysController = ({
         return;
       }
 
-      // Basic mode - sustain and velocity shortcuts only
+      // Basic mode - sustain shortcuts only
       if (guitarState.mode.type === "basic") {
-        // Velocity controls
-        const velocityKeys = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
-        if (velocityKeys.includes(key)) {
-          const velocity = parseInt(key) / 9;
-          guitarControls.setVelocity(velocity);
-          return;
-        }
-
         // Sustain controls
         if (key === shortcuts.sustain.key) {
           if (guitarState.sustainToggle) {
@@ -397,7 +399,7 @@ export const useGuitarKeysController = ({
         return;
       }
     },
-    [guitarState, scaleState, guitarControls, shortcuts],
+    [guitarState, scaleState, guitarControls, shortcuts, handleVelocityChange],
   );
 
   const handleKeyUp = useCallback(

@@ -11,6 +11,7 @@ import type {
   DrumpadActions,
 } from "../types/drumpad";
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { useVelocityControl } from "../../../hooks/useVelocityControl";
 
 export const useDrumpadState = ({
   onPlayNotes,
@@ -30,6 +31,12 @@ export const useDrumpadState = ({
   const [selectedPadForAssign, setSelectedPadForAssign] = useState<
     string | null
   >(null);
+
+  // Add velocity control hook
+  const { handleVelocityChange } = useVelocityControl({
+    velocity,
+    setVelocity,
+  });
 
   // Add refs for better event handling performance
   const processingKeys = useRef<Set<string>>(new Set());
@@ -264,6 +271,11 @@ export const useDrumpadState = ({
         return;
       }
 
+      // Handle velocity changes first
+      if (handleVelocityChange(key)) {
+        return;
+      }
+
       // Early exit if key is being processed
       if (currentProcessingKeys.has(key)) {
         return;
@@ -310,7 +322,7 @@ export const useDrumpadState = ({
       // Clear processing keys on cleanup
       currentProcessingKeys.clear();
     };
-  }, [padAssignments, isEditMode, handlePadPress, handlePadRelease]);
+  }, [padAssignments, isEditMode, handlePadPress, handlePadRelease, handleVelocityChange]);
 
   return {
     // State

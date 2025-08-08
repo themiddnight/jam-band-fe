@@ -4,30 +4,29 @@ import type {
   VirtualKeyboardState,
 } from "../../../types/keyboard";
 import { useCallback } from "react";
+import { useVelocityControl } from "../../../hooks/useVelocityControl";
 
 export const useControlKeys = (
   keyboardState: KeyboardState,
   virtualKeyboard: VirtualKeyboardState,
 ) => {
   const shortcuts = DEFAULT_KEYBOARD_SHORTCUTS;
+  const { handleVelocityChange } = useVelocityControl({
+    velocity: keyboardState.velocity,
+    setVelocity: keyboardState.setVelocity,
+  });
 
   const handleSustain = useCallback(
     (key: string) => {
       if (key === shortcuts.sustain.key) {
         if (!keyboardState.heldKeys.has(key)) {
           if (keyboardState.sustainToggle) {
-            // If toggle mode is active, spacebar stops current sustained notes
-            // This creates the "inverse" behavior where tapping sustain stops sound
             keyboardState.stopSustainedNotes();
-            // Also temporarily turn off sustain to communicate with remote users
-            // then immediately turn it back on to maintain the toggle state
             keyboardState.setSustain(false);
-            // Use setTimeout to ensure the sustain off message is sent before turning it back on
             setTimeout(() => {
               keyboardState.setSustain(true);
             }, 10);
           } else {
-            // Normal momentary sustain behavior
             keyboardState.setSustain(true);
           }
           keyboardState.setHeldKeys((prev: Set<string>) =>
@@ -45,11 +44,8 @@ export const useControlKeys = (
     (key: string) => {
       if (key === shortcuts.sustain.key) {
         if (keyboardState.sustainToggle) {
-          // If toggle mode is active, releasing sustain should resume sustain mode
-          // This creates the "inverse" behavior where lifting sustain resumes sustain
           keyboardState.setSustain(true);
         } else {
-          // Normal momentary sustain behavior - turn off sustain
           keyboardState.setSustain(false);
         }
         keyboardState.setHeldKeys((prev: Set<string>) => {
@@ -75,28 +71,14 @@ export const useControlKeys = (
     [keyboardState, shortcuts.sustainToggle.key],
   );
 
-  const handleVelocity = useCallback(
-    (key: string) => {
-      if (key >= "1" && key <= "9") {
-        keyboardState.setVelocity(parseInt(key) / 9);
-        return true;
-      }
-      return false;
-    },
-    [keyboardState],
-  );
-
   const handleToggleMode = useCallback(
     (key: string) => {
       if (key === shortcuts.toggleMode.key) {
         if (virtualKeyboard.mode === "basic") {
-          // When in basic mode, shift switches to melody mode
           virtualKeyboard.setMode("simple-melody");
         } else if (virtualKeyboard.mode === "simple-melody") {
-          // When in melody mode, shift switches to chord mode
           virtualKeyboard.setMode("simple-chord");
         } else if (virtualKeyboard.mode === "simple-chord") {
-          // When in chord mode, shift switches back to melody mode
           virtualKeyboard.setMode("simple-melody");
         }
         return true;
@@ -109,15 +91,11 @@ export const useControlKeys = (
   const handleOctaveControls = useCallback(
     (key: string) => {
       if (key === shortcuts.octaveDown.key) {
-        keyboardState.setCurrentOctave(
-          Math.max(0, keyboardState.currentOctave - 1),
-        );
+        keyboardState.setCurrentOctave(Math.max(0, keyboardState.currentOctave - 1));
         return true;
       }
       if (key === shortcuts.octaveUp.key) {
-        keyboardState.setCurrentOctave(
-          Math.min(8, keyboardState.currentOctave + 1),
-        );
+        keyboardState.setCurrentOctave(Math.min(8, keyboardState.currentOctave + 1));
         return true;
       }
       return false;
@@ -153,21 +131,17 @@ export const useControlKeys = (
       return (
         handleSustain(key) ||
         handleSustainToggle(key) ||
-        handleVelocity(key) ||
         handleToggleMode(key) ||
         handleOctaveControls(key) ||
-        handleVoicingControls(key)
+        handleVoicingControls(key) ||
+        handleVelocityChange(key)
       );
     },
-    [
-      handleSustain,
-      handleSustainToggle,
-      handleVelocity,
-      handleToggleMode,
-      handleOctaveControls,
-      handleVoicingControls,
-    ],
+    [handleSustain, handleSustainToggle, handleToggleMode, handleOctaveControls, handleVoicingControls, handleVelocityChange],
   );
 
-  return { handleAllControlKeys, handleSustainRelease };
+  return {
+    handleAllControlKeys,
+    handleSustainRelease,
+  };
 };

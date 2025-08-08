@@ -7,6 +7,7 @@ import {
 } from "../../utils/musicUtils";
 import { FretboardBase, type FretboardConfig } from "../shared/FretboardBase";
 import { useCallback, useMemo, useEffect } from "react";
+import { useVelocityControl } from "../../hooks/useVelocityControl";
 
 export interface BassProps {
   scaleState: {
@@ -135,12 +136,27 @@ export default function Bass({
     [setSustain],
   );
 
-  const handleVelocityChange = useCallback(
-    (newVelocity: number) => {
-      setVelocity(newVelocity);
-    },
-    [setVelocity],
-  );
+  // Use velocity control hook
+  const { handleVelocityChange } = useVelocityControl({
+    velocity,
+    setVelocity,
+  });
+
+  // Set up keyboard event listener for velocity control
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Only handle if not in an input field
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      handleVelocityChange(event.key);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleVelocityChange]);
 
   return (
     <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
@@ -207,15 +223,15 @@ export default function Bass({
         <div className="flex items-center gap-2 mb-4">
           <label className="label">
             <span className="label-text">
-              Velocity: {Math.round(velocity * 9)}
+              Velocity: {Math.round(velocity * 10)}
             </span>
           </label>
           <input
             type="range"
             min="1"
-            max="9"
-            value={Math.round(velocity * 9)}
-            onChange={(e) => handleVelocityChange(parseInt(e.target.value) / 9)}
+            max="10"
+            value={Math.round(velocity * 10)}
+            onChange={(e) => setVelocity(parseInt(e.target.value) / 10)}
             className="range range-primary w-32"
           />
         </div>
