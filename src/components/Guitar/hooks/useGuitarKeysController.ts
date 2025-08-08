@@ -256,14 +256,6 @@ export const useGuitarKeysController = ({
           guitarControls.handlePlayButtonPress("higher", velocity);
           return;
         }
-
-        // Velocity controls
-        const velocityKeys = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
-        if (velocityKeys.includes(key)) {
-          const velocity = parseInt(key) / 9;
-          guitarControls.setVelocity(velocity);
-          return;
-        }
       }
 
       // Simple - Chord mode
@@ -363,12 +355,6 @@ export const useGuitarKeysController = ({
         }
 
         // Velocity controls
-        const velocityKeys = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
-        if (velocityKeys.includes(key)) {
-          const velocity = parseInt(key) / 9;
-          guitarControls.setVelocity(velocity);
-          return;
-        }
       }
 
       // Sustain controls (available in all modes)

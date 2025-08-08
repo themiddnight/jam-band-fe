@@ -47,13 +47,14 @@ export const BasicFretboard: React.FC<BasicFretboardProps> = ({
 
   // Guitar configuration - 6 strings as requested
   const config: FretboardConfig = {
-    strings: ["E", "A", "D", "G", "B", "E"],
-    frets: 12,
-    openNotes: ["E2", "A2", "D3", "G3", "B3", "E4"],
+    strings: ["E", "A", "D", "G", "B", "E"].reverse(),
+    frets: 15,
+    openNotes: ["E2", "A2", "D3", "G3", "B3", "E4"].reverse(),
     mode: "melody",
     showNoteNames: true,
     showFretNumbers: true,
     highlightScaleNotes: true,
+    highlightFrets: [0, 3, 5, 7, 9, 12],
   };
 
   // Generate scale notes for highlighting
@@ -133,7 +134,7 @@ export const BasicFretboard: React.FC<BasicFretboardProps> = ({
       // Use unified state to play note with proper velocity and isKeyHeld=true like keyboard
       await unifiedState.playNote(note, velocity, true);
     },
-    [unifiedState, onFretPress, onFretRelease, pressedFrets, getExistingFret],
+    [unifiedState, onFretPress, onFretRelease, pressedFrets, getExistingFret, velocity],
   );
 
   const handleFretReleaseWithNote = useCallback(

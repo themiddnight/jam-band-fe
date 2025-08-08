@@ -18,6 +18,7 @@ export interface FretboardConfig {
   showNoteNames?: boolean;
   showFretNumbers?: boolean;
   highlightScaleNotes?: boolean;
+  highlightFrets?: number[];
 }
 
 export interface FretboardBaseProps {
@@ -73,7 +74,7 @@ const FretButton: React.FC<{
         ${isPressed ? "bg-blue-500 scale-95" : "bg-gray-100 hover:bg-gray-200"}
         ${isHighlighted ? "ring-2 ring-yellow-400" : ""}
         ${isScaleNote ? "bg-green-100" : ""}
-        ${fret === 0 ? "border-l-4 border-l-gray-800" : ""}
+        ${fret === 0 ? "brightness-70" : ""}
         touch-manipulation
       `}
       onMouseDown={onPress}
@@ -105,6 +106,7 @@ export const FretboardBase: React.FC<FretboardBaseProps> = ({
     frets,
     showNoteNames = true,
     showFretNumbers = true,
+    highlightFrets = [],
   } = config;
 
   const getFretPosition = (
@@ -139,10 +141,14 @@ export const FretboardBase: React.FC<FretboardBaseProps> = ({
     if (!showFretNumbers) return null;
 
     return (
-      <div className="flex mb-2 ml-10">
+      <div className="flex mb-2">
         {Array.from({ length: frets + 1 }, (_, fret) => (
           <div key={fret} className="w-12 text-center text-xs text-gray-500">
-            {fret}
+            {highlightFrets?.includes(fret) ? (
+              <span className="text-yellow-500">{fret}</span>
+            ) : (
+              fret
+            )}
           </div>
         ))}
       </div>
@@ -150,14 +156,14 @@ export const FretboardBase: React.FC<FretboardBaseProps> = ({
   };
 
   return (
-    <div className={`fretboard-base mx-auto ${className}`}>
+    <div className={`fretboard-base mx-auto p-3 ${className}`}>
       {renderFretNumbers()}
       <div className="fretboard-grid">
-        {strings.map((stringName, stringIndex) => (
+        {strings.map((_stringName, stringIndex) => (
           <div key={stringIndex} className="flex items-center mb-1">
-            <div className="w-8 text-right text-sm text-gray-600 mr-2">
+            {/* <div className="w-2 text-right text-sm text-gray-600 mr-2">
               {stringName}
-            </div>
+            </div> */}
             <div className="flex">
               {Array.from({ length: frets + 1 }, (_, fret) =>
                 renderFret(stringIndex, fret),

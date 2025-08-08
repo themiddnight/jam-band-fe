@@ -13,6 +13,9 @@ export * from "./presets/drumPresets";
 // Virtual Keyboard Keys
 export * from "./virtualKeyboardKeys";
 
+// Scale Slots
+export * from "./scaleSlots";
+
 // UI Components
 export * from "./chordModifierConfig";
 

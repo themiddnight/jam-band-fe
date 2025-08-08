@@ -48,17 +48,6 @@ export interface GuitarShortcuts {
   sustain: GuitarShortcut;
   sustainToggle: GuitarShortcut;
 
-  // Velocity controls
-  velocity1: GuitarShortcut;
-  velocity2: GuitarShortcut;
-  velocity3: GuitarShortcut;
-  velocity4: GuitarShortcut;
-  velocity5: GuitarShortcut;
-  velocity6: GuitarShortcut;
-  velocity7: GuitarShortcut;
-  velocity8: GuitarShortcut;
-  velocity9: GuitarShortcut;
-
   // Brushing controls
   brushingSpeedDown: GuitarShortcut;
   brushingSpeedUp: GuitarShortcut;
@@ -240,17 +229,6 @@ export const DEFAULT_GUITAR_SHORTCUTS: GuitarShortcuts = {
     description: "Toggle sustain mode",
     category: "control",
   },
-
-  // Velocity controls
-  velocity1: { key: "1", description: "Velocity 1", category: "velocity" },
-  velocity2: { key: "2", description: "Velocity 2", category: "velocity" },
-  velocity3: { key: "3", description: "Velocity 3", category: "velocity" },
-  velocity4: { key: "4", description: "Velocity 4", category: "velocity" },
-  velocity5: { key: "5", description: "Velocity 5", category: "velocity" },
-  velocity6: { key: "6", description: "Velocity 6", category: "velocity" },
-  velocity7: { key: "7", description: "Velocity 7", category: "velocity" },
-  velocity8: { key: "8", description: "Velocity 8", category: "velocity" },
-  velocity9: { key: "9", description: "Velocity 9", category: "velocity" },
 
   // Brushing controls
   brushingSpeedDown: {

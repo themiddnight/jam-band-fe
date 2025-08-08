@@ -9,16 +9,18 @@ import {
 } from "../components/LazyComponents";
 import MidiStatus from "../components/MidiStatus";
 import PlayingIndicator from "../components/PlayingIndicator";
-import ScaleSelector from "../components/ScaleSelector";
+import ScaleSlots from "../components/ScaleSlots";
 import { Modal } from "../components/shared/Modal";
 import { InstrumentCategory } from "../constants/instruments";
 import { useRoom } from "../hooks/useRoom";
+import { useScaleSlotKeyboard } from "../hooks/useScaleSlotKeyboard";
+import { useScaleSlotsStore } from "../stores/scaleSlotsStore";
 import { ControlType } from "../types";
 import { preloadCriticalComponents } from "../utils/componentPreloader";
 import { getSafariUserMessage } from "../utils/webkitCompat";
-import React from "react";
+import { memo, useEffect, useMemo } from "react";
 
-const Room = React.memo(() => {
+const Room = memo(() => {
   const {
     // Room state
     currentRoom,
@@ -79,7 +81,7 @@ const Room = React.memo(() => {
   } = useRoom();
 
   // Memoize commonProps to prevent child component re-renders
-  const commonProps = React.useMemo(
+  const commonProps = useMemo(
     () => ({
       scaleState: {
         rootNote: scaleState.rootNote,
@@ -107,9 +109,34 @@ const Room = React.memo(() => {
   );
 
   // Preload critical components when component mounts
-  React.useEffect(() => {
+  useEffect(() => {
     preloadCriticalComponents();
   }, []);
+
+  // Initialize scale slots store and apply selected slot
+  const { initialize, getSelectedSlot } = useScaleSlotsStore();
+
+  // Initialize scale slots on first load
+  useEffect(() => {
+    initialize();
+    const selectedSlot = getSelectedSlot();
+    if (selectedSlot) {
+      // Only apply the selected slot if it's different from current state
+      if (
+        scaleState.rootNote !== selectedSlot.rootNote ||
+        scaleState.scale !== selectedSlot.scale
+      ) {
+        scaleState.setRootNote(selectedSlot.rootNote);
+        scaleState.setScale(selectedSlot.scale);
+      }
+    }
+  }, [initialize, getSelectedSlot, scaleState]);
+
+  // Setup scale slot keyboard shortcuts
+  useScaleSlotKeyboard((rootNote, scale) => {
+    scaleState.setRootNote(rootNote);
+    scaleState.setScale(scale);
+  });
 
   // Copy room URL to clipboard
   const handleCopyRoomUrl = async () => {
@@ -380,11 +407,11 @@ const Room = React.memo(() => {
                 isRequesting={midiController.isRequesting}
                 refreshMidiDevices={midiController.refreshMidiDevices}
               />
-              <ScaleSelector
-                rootNote={scaleState.rootNote}
-                scale={scaleState.scale}
-                onRootNoteChange={scaleState.setRootNote}
-                onScaleChange={scaleState.setScale}
+              <ScaleSlots
+                onSlotSelect={(rootNote, scale) => {
+                  scaleState.setRootNote(rootNote);
+                  scaleState.setScale(scale);
+                }}
               />
               <InstrumentCategorySelector
                 currentCategory={currentCategory}

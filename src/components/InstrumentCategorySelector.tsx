@@ -37,7 +37,7 @@ export default function InstrumentCategorySelector({
   return (
     <div className="card bg-base-100 shadow-lg grow">
       <div className="card-body p-3">
-        <div className="flex justify-center gap-4">
+        <div className="flex justify-center gap-2 flex-wrap">
           {/* Category Selection */}
           <div className="flex items-center gap-2">
             <label className="label py-1 hidden lg:block">

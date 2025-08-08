@@ -10,6 +10,7 @@ export { useBassStore } from "./bassStore";
 // Specialized stores
 export { useInstrumentPreferencesStore } from "./instrumentPreferencesStore";
 export { useDrumpadPresetsStore } from "./drumpadPresetsStore";
+export { useScaleSlotsStore } from "./scaleSlotsStore";
 
 // Room and user management
 export { useRoomStore } from "./roomStore";

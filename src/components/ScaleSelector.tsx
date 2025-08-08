@@ -1,5 +1,7 @@
 import type { Scale } from "../hooks/useScaleState";
+import { useScaleSlotsStore } from "../stores/scaleSlotsStore";
 import { NOTE_NAMES } from "../utils/musicUtils";
+import { useEffect } from "react";
 
 export interface ScaleSelectorProps {
   rootNote: string;
@@ -14,6 +16,14 @@ export default function ScaleSelector({
   onRootNoteChange,
   onScaleChange,
 }: ScaleSelectorProps) {
+  const { selectedSlotId, setSlot, isInitialized } = useScaleSlotsStore();
+
+  // Update the selected slot when scale changes, but only after initialization
+  useEffect(() => {
+    if (selectedSlotId !== null && isInitialized) {
+      setSlot(selectedSlotId, rootNote, scale);
+    }
+  }, [rootNote, scale, selectedSlotId, setSlot, isInitialized]);
   return (
     <div className="card bg-base-100 shadow-lg grow">
       <div className="card-body p-3">
