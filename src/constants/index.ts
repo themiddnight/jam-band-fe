@@ -44,3 +44,9 @@ export {
   getChordModifierKeys as getGuitarChordModifierKeys,
   getGuitarKeyDisplayName,
 } from "./guitarShortcuts";
+
+export {
+  DEFAULT_BASS_SHORTCUTS,
+  getBassShortcutsByCategory,
+  getBassKeyDisplayName,
+} from "./bassShortcuts";

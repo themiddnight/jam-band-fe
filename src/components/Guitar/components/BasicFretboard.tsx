@@ -32,6 +32,10 @@ interface BasicFretboardProps {
     releaseKeyHeldNote: (note: string) => void;
     stopSustainedNotes: () => void;
   };
+  // Optional overrides for different instruments (e.g., bass)
+  stringsOverride?: string[];
+  openNotesOverride?: string[];
+  fretsOverride?: number;
 }
 
 export const BasicFretboard: React.FC<BasicFretboardProps> = ({
@@ -41,15 +45,22 @@ export const BasicFretboard: React.FC<BasicFretboardProps> = ({
   onFretPress,
   onFretRelease,
   unifiedState,
+  stringsOverride,
+  openNotesOverride,
+  fretsOverride,
 }) => {
   // Track active notes per string for same-string behavior
   const activeNotesPerString = useRef<Map<number, string>>(new Map());
 
-  // Guitar configuration - 6 strings as requested
+  // Default to guitar config but allow overrides (used by Bass)
+  const strings = stringsOverride ?? ["E", "A", "D", "G", "B", "E"].reverse();
+  const openNotes = openNotesOverride ?? ["E2", "A2", "D3", "G3", "B3", "E4"].reverse();
+  const frets = fretsOverride ?? 15;
+
   const config: FretboardConfig = {
-    strings: ["E", "A", "D", "G", "B", "E"].reverse(),
-    frets: 15,
-    openNotes: ["E2", "A2", "D3", "G3", "B3", "E4"].reverse(),
+    strings,
+    frets,
+    openNotes,
     mode: "melody",
     showNoteNames: true,
     showFretNumbers: true,

@@ -3,20 +3,20 @@ import { persist, createJSONStorage } from "zustand/middleware";
 
 interface BassState {
   // Main states
-  mode: "finger" | "pick" | "slap";
+  mode: "basic" | "melody";
   velocity: number;
   currentOctave: number;
   sustain: boolean;
   sustainToggle: boolean;
-  palmMute: boolean;
+  alwaysRoot: boolean;
 
   // Actions
-  setMode: (mode: "finger" | "pick" | "slap") => void;
+  setMode: (mode: "basic" | "melody") => void;
   setVelocity: (velocity: number) => void;
   setCurrentOctave: (octave: number) => void;
   setSustain: (sustain: boolean) => void;
   setSustainToggle: (sustainToggle: boolean) => void;
-  setPalmMute: (palmMute: boolean) => void;
+  setAlwaysRoot: (alwaysRoot: boolean) => void;
 
   // Utility actions
   toggleMode: () => void;
@@ -26,46 +26,37 @@ interface BassState {
   decrementVelocity: () => void;
   toggleSustain: () => void;
   toggleSustainToggle: () => void;
-  togglePalmMute: () => void;
+  toggleAlwaysRoot: () => void;
 }
 
 export const useBassStore = create<BassState>()(
   persist(
     (set) => ({
       // Initial state
-      mode: "finger",
-      velocity: 0.7,
+      mode: "basic",
+      velocity: 0.6,
       currentOctave: 2,
       sustain: false,
       sustainToggle: false,
-      palmMute: false,
+      alwaysRoot: false,
 
       // Basic setters
       setMode: (mode) => set({ mode }),
       setVelocity: (velocity) =>
-        set({ velocity: Math.max(0, Math.min(1, velocity)) }),
+        set({ velocity: Math.max(0.1, Math.min(1, velocity)) }),
       setCurrentOctave: (octave) =>
         set({ currentOctave: Math.max(0, Math.min(6, octave)) }),
       setSustain: (sustain) => set({ sustain }),
       setSustainToggle: (sustainToggle) => set({ sustainToggle }),
-      setPalmMute: (palmMute) => set({ palmMute }),
+      setAlwaysRoot: (alwaysRoot) => set({ alwaysRoot }),
 
       // Toggle actions
       toggleMode: () =>
-        set((state) => {
-          const modes: ("finger" | "pick" | "slap")[] = [
-            "finger",
-            "pick",
-            "slap",
-          ];
-          const currentIndex = modes.indexOf(state.mode);
-          const nextIndex = (currentIndex + 1) % modes.length;
-          return { mode: modes[nextIndex] };
-        }),
+        set((state) => ({ mode: state.mode === "basic" ? "melody" : "basic" })),
       toggleSustain: () => set((state) => ({ sustain: !state.sustain })),
       toggleSustainToggle: () =>
         set((state) => ({ sustainToggle: !state.sustainToggle })),
-      togglePalmMute: () => set((state) => ({ palmMute: !state.palmMute })),
+      toggleAlwaysRoot: () => set((state) => ({ alwaysRoot: !state.alwaysRoot })),
 
       // Increment/Decrement actions
       incrementOctave: () =>
@@ -82,7 +73,7 @@ export const useBassStore = create<BassState>()(
         })),
       decrementVelocity: () =>
         set((state) => ({
-          velocity: Math.max(0, state.velocity - 0.1),
+          velocity: Math.max(0.1, state.velocity - 0.1),
         })),
     }),
     {
