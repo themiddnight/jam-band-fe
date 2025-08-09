@@ -6,6 +6,7 @@ import {
 import { getKeyDisplayName } from "../../constants/utils/displayUtils";
 import { useInstrumentState } from "../../hooks/useInstrumentState";
 import type { Scale } from "../../hooks/useScaleState";
+import { useSustainSync } from "../../hooks/useSustainSync";
 import { useKeyboardStore } from "../../stores/keyboardStore";
 import BaseInstrument from "../shared/BaseInstrument";
 import { BasicKeyboard } from "./components/BasicKeyboard";
@@ -13,7 +14,6 @@ import { ChordKeyboard } from "./components/ChordKeyboard";
 import { MelodyKeyboard } from "./components/MelodyKeyboard";
 import { useKeyboardKeysController } from "./hooks/useKeyboardKeysController";
 import { useVirtualKeyboard } from "./hooks/useVirtualKeyboard";
-import { useEffect } from "react";
 
 export interface Props {
   // Scale state - the core functionality
@@ -71,18 +71,15 @@ export default function Keyboard({
     onSustainToggleChange,
   });
 
-  // Synchronize keyboard store state with unified state
-  useEffect(() => {
-    if (unifiedState.sustainToggle !== sustainToggle) {
-      setSustainToggle(unifiedState.sustainToggle);
-    }
-  }, [unifiedState.sustainToggle, sustainToggle, setSustainToggle]);
-
-  useEffect(() => {
-    if (unifiedState.sustain !== sustain) {
-      setSustain(unifiedState.sustain);
-    }
-  }, [unifiedState.sustain, sustain, setSustain]);
+  // Use shared sustain sync hook to eliminate duplicate useEffect blocks
+  useSustainSync({
+    unifiedSustain: unifiedState.sustain,
+    localSustain: sustain,
+    setLocalSustain: setSustain,
+    unifiedSustainToggle: unifiedState.sustainToggle,
+    localSustainToggle: sustainToggle,
+    setLocalSustainToggle: setSustainToggle,
+  });
 
   const virtualKeyboard = useVirtualKeyboard(
     scaleState.getScaleNotes,

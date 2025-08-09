@@ -1,4 +1,7 @@
-import { getKeyDisplayName, getShortcutsByCategory } from "./utils/displayUtils";
+import {
+  getKeyDisplayName,
+  getShortcutsByCategory,
+} from "./utils/displayUtils";
 
 export interface BassShortcut {
   key: string;
@@ -72,4 +75,4 @@ export const DEFAULT_BASS_SHORTCUTS: BassShortcuts = {
 };
 
 export const getBassShortcutsByCategory = getShortcutsByCategory;
-export const getBassKeyDisplayName = getKeyDisplayName; 
+export const getBassKeyDisplayName = getKeyDisplayName;

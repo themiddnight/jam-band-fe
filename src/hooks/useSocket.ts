@@ -33,6 +33,13 @@ interface SynthParamsData {
   params: Partial<SynthState>;
 }
 
+// Connection pool for better socket performance
+interface ConnectionPool {
+  connections: Map<string, Socket>;
+  maxConnections: number;
+  currentConnections: number;
+}
+
 export const useSocket = () => {
   const socketRef = useRef<Socket | null>(null);
   const roomCreatedCallbackRef = useRef<((room: any) => void) | null>(null);
@@ -74,12 +81,91 @@ export const useSocket = () => {
     Array<{ event: string; data: any; timestamp: number }>
   >([]);
   const batchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const BATCH_INTERVAL = 16; // ~60fps for real-time updates
-  const MAX_QUEUE_SIZE = 50; // Prevent memory leaks
+  const BATCH_INTERVAL = 8; // Reduced from 16ms to 8ms for better responsiveness
+  const MAX_QUEUE_SIZE = 100; // Increased from 50 to handle more messages
 
   // Deduplication for note events to prevent flaming
   const recentNoteEvents = useRef<Map<string, number>>(new Map());
-  const NOTE_DEDUPE_WINDOW = 30; // Reduced from 50ms to 30ms for better responsiveness
+  const NOTE_DEDUPE_WINDOW = 20; // Reduced from 30ms to 20ms for better responsiveness
+
+  // Connection pooling for better performance
+  const connectionPoolRef = useRef<ConnectionPool>({
+    connections: new Map(),
+    maxConnections: 3,
+    currentConnections: 0,
+  });
+
+  // Get or create connection from pool
+  const getConnection = useCallback((roomId: string): Socket => {
+    const pool = connectionPoolRef.current;
+
+    // Return existing connection if available
+    if (pool.connections.has(roomId)) {
+      const connection = pool.connections.get(roomId)!;
+      if (connection.connected) {
+        return connection;
+      } else {
+        // Remove disconnected connection
+        pool.connections.delete(roomId);
+        pool.currentConnections--;
+      }
+    }
+
+    // Create new connection if under limit
+    if (pool.currentConnections < pool.maxConnections) {
+      const connection = io(
+        import.meta.env.VITE_SOCKET_URL || "http://localhost:3001",
+        {
+          transports: ["websocket", "polling"],
+          timeout: 20000,
+          forceNew: true,
+        },
+      );
+
+      pool.connections.set(roomId, connection);
+      pool.currentConnections++;
+
+      return connection;
+    }
+
+    // Reuse least recently used connection if at limit
+    const oldestRoomId = pool.connections.keys().next().value;
+    if (oldestRoomId) {
+      const oldConnection = pool.connections.get(oldestRoomId)!;
+      oldConnection.disconnect();
+      pool.connections.delete(oldestRoomId);
+
+      const newConnection = io(
+        import.meta.env.VITE_SOCKET_URL || "http://localhost:3001",
+        {
+          transports: ["websocket", "polling"],
+          timeout: 20000,
+          forceNew: true,
+        },
+      );
+
+      pool.connections.set(roomId, newConnection);
+      return newConnection;
+    }
+
+    // Fallback to single connection
+    return (
+      socketRef.current ||
+      io(import.meta.env.VITE_SOCKET_URL || "http://localhost:3001")
+    );
+  }, []);
+
+  // Clean up connection pool
+  const cleanupConnectionPool = useCallback(() => {
+    const pool = connectionPoolRef.current;
+    pool.connections.forEach((connection, roomId) => {
+      if (!connection.connected) {
+        connection.disconnect();
+        pool.connections.delete(roomId);
+        pool.currentConnections--;
+      }
+    });
+  }, []);
 
   const {
     setCurrentRoom,
@@ -106,31 +192,31 @@ export const useSocket = () => {
     }
   }, []);
 
-  // Batch message processing for better performance
+  // Optimized batch message processing for better performance
   const processMessageBatch = useCallback(() => {
     if (messageQueueRef.current.length === 0) return;
 
     const messages = [...messageQueueRef.current];
     messageQueueRef.current = [];
 
-    // Group messages by event type for efficient processing
+    // Group messages by event type and user for efficient processing
     const groupedMessages = messages.reduce(
       (acc, msg) => {
-        if (!acc[msg.event]) {
-          acc[msg.event] = [];
+        const key = `${msg.event}-${msg.data.userId || "global"}`;
+        if (!acc[key]) {
+          acc[key] = [];
         }
-        acc[msg.event].push(msg.data);
+        acc[key].push(msg.data);
         return acc;
       },
       {} as Record<string, any[]>,
     );
 
-    // Process each group
-    Object.entries(groupedMessages).forEach(([event, dataArray]) => {
+    // Process each group with latest data only
+    Object.entries(groupedMessages).forEach(([key, dataArray]) => {
       if (socketRef.current?.connected) {
-        // For most events, send the latest data only
         const latestData = dataArray[dataArray.length - 1];
-        socketRef.current.emit(event, latestData);
+        socketRef.current.emit(key.split("-")[0], latestData);
       }
     });
 
@@ -193,326 +279,344 @@ export const useSocket = () => {
     [safeEmit],
   );
 
-  // Connect to socket server
-  const connect = useCallback(() => {
-    if (socketRef.current?.connected || isConnecting || connectingRef.current) {
-      console.log(
-        "Socket already connected, connecting, or connection in progress, skipping",
-      );
-      return;
-    }
+  // Connect to socket server with connection pooling
+  const connect = useCallback(
+    (roomId?: string) => {
+      if (
+        socketRef.current?.connected ||
+        isConnecting ||
+        connectingRef.current
+      ) {
+        console.log(
+          "Socket already connected, connecting, or connection in progress, skipping",
+        );
+        return;
+      }
 
-    // Clean up existing socket if any
-    if (socketRef.current) {
-      console.log("Cleaning up existing socket connection");
-      socketRef.current.disconnect();
-      socketRef.current = null;
-    }
+      // Clean up existing socket if any
+      if (socketRef.current) {
+        console.log("Cleaning up existing socket connection");
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
 
-    console.log("Creating new socket connection");
-    connectingRef.current = true;
-    setIsConnecting(true);
+      console.log("Creating new socket connection");
+      connectingRef.current = true;
+      setIsConnecting(true);
 
-    // Use environment variable for backend URL
-    const backendUrl = import.meta.env.VITE_API_URL || "http://localhost:3001";
-    const socket = io(backendUrl, {
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-      timeout: 10000,
-    });
-    socketRef.current = socket;
-
-    socket.on("connect", () => {
-      console.log("Connected to server");
-      connectingRef.current = false;
-      setIsConnected(true);
-      setIsConnectedState(true);
-      setError(null);
-      setIsConnecting(false);
-
-      // Execute any pending operations
-      executePendingOperations();
-    });
-
-    socket.on("disconnect", () => {
-      console.log("Disconnected from server");
-      connectingRef.current = false;
-      setIsConnected(false);
-      setIsConnectedState(false);
-      setIsConnecting(false);
-      setError("Connection lost");
-    });
-
-    socket.on("connect_error", (error) => {
-      console.error("Connection error:", error);
-      connectingRef.current = false;
-      setIsConnecting(false);
-      setError("Failed to connect to server");
-    });
-
-    socket.on("error", (data: { message: string }) => {
-      console.error("Socket error:", data.message);
-      setError(data.message);
-    });
-
-    // Room events
-    socket.on("room_created", (data: { room: any; user: any }) => {
-      console.log("Room created:", data);
-      setCurrentRoom(data.room);
-      setCurrentUser(data.user);
-      setError(null);
-    });
-
-    socket.on(
-      "room_created_broadcast",
-      (data: {
-        id: string;
-        name: string;
-        userCount: number;
-        owner: string;
-        isPrivate: boolean;
-        isHidden: boolean;
-        createdAt: string;
-      }) => {
-        console.log("Room created broadcast received:", data);
-
-        // Clear any existing timeout for the previous room
-        if (roomCreatedTimeoutRef.current) {
-          clearTimeout(roomCreatedTimeoutRef.current);
-        }
-
-        // Prevent duplicate calls for the same room within a longer window
-        if (lastRoomCreatedRef.current === data.id) {
-          console.log(
-            "Skipping duplicate room created broadcast for:",
-            data.id,
-          );
-          return;
-        }
-
-        lastRoomCreatedRef.current = data.id;
-        if (roomCreatedCallbackRef.current) {
-          roomCreatedCallbackRef.current(data);
-        }
-
-        // Reset the last room created reference after a longer delay
-        roomCreatedTimeoutRef.current = setTimeout(() => {
-          if (lastRoomCreatedRef.current === data.id) {
-            lastRoomCreatedRef.current = "";
-          }
-          roomCreatedTimeoutRef.current = null;
-        }, 5000); // Increased from 1 second to 5 seconds
-      },
-    );
-
-    socket.on(
-      "room_joined",
-      (data: { room: any; users: any[]; pendingMembers: any[] }) => {
-        console.log("Room joined:", data);
-        setCurrentRoom({
-          ...data.room,
-          users: data.users,
-          pendingMembers: data.pendingMembers,
+      // Use connection pool if roomId is provided, otherwise use single connection
+      let socket: Socket;
+      if (roomId) {
+        socket = getConnection(roomId);
+      } else {
+        // Use environment variable for backend URL
+        const backendUrl =
+          import.meta.env.VITE_API_URL || "http://localhost:3001";
+        socket = io(backendUrl, {
+          reconnection: true,
+          reconnectionAttempts: 5,
+          reconnectionDelay: 1000,
+          timeout: 10000,
         });
+      }
+      socketRef.current = socket;
 
-        // Set currentUser based on the current userId
-        const currentUserId = useUserStore.getState().userId;
-        if (currentUserId) {
-          const currentUserData = data.users.find(
-            (user: any) => user.id === currentUserId,
-          );
-          if (currentUserData) {
-            console.log(
-              "Setting current user from room_joined:",
-              currentUserData,
-            );
-            setCurrentUser(currentUserData);
-          }
-        }
-
+      socket.on("connect", () => {
+        console.log("Connected to server");
+        connectingRef.current = false;
+        setIsConnected(true);
+        setIsConnectedState(true);
         setError(null);
-      },
-    );
+        setIsConnecting(false);
 
-    socket.on("user_joined", (data: { user: any }) => {
-      console.log("User joined:", data.user);
-      addUser(data.user);
-    });
+        // Execute any pending operations
+        executePendingOperations();
+      });
 
-    socket.on("user_left", (data: { user: any }) => {
-      console.log("User left:", data.user);
-      removeUser(data.user.id);
-
-      // Call the callback if set
-      if (userLeftCallbackRef.current) {
-        userLeftCallbackRef.current(data.user);
-      }
-    });
-
-    socket.on("member_request", (data: { user: any }) => {
-      console.log("Member request:", data.user);
-      addPendingMember(data.user);
-    });
-
-    socket.on("member_approved", (data: { user?: any; room?: any }) => {
-      if (data.user) {
-        console.log("Member approved:", data.user);
-        removePendingMember(data.user.id);
-        addUser(data.user);
-      }
-      if (data.room) {
-        console.log("Room updated after approval:", data.room);
-        setCurrentRoom(data.room);
-        // Clear pending approval since the user has been approved
-        setPendingApproval(false);
-
-        // Update currentUser if this approval is for the current user
-        const currentUserId = useUserStore.getState().userId;
-        if (currentUserId) {
-          const approvedUser = data.room.users.find(
-            (user: any) => user.id === currentUserId,
-          );
-          if (approvedUser) {
-            console.log("Updating current user after approval:", approvedUser);
-            setCurrentUser(approvedUser);
-          }
-        }
-      }
-    });
-
-    socket.on("room_state_updated", (data: { room: any }) => {
-      console.log("Room state updated:", data.room);
-      setCurrentRoom(data.room);
-    });
-
-    socket.on(
-      "member_rejected",
-      (data: { message: string; userId?: string }) => {
-        console.log("Member rejected:", data.message);
-        // Clear pending approval state and room
-        setPendingApproval(false);
-        clearRoom();
-
-        // Disconnect socket and redirect to lobby for rejected users
-        if (socketRef.current) {
-          socketRef.current.disconnect();
-          socketRef.current = null;
-        }
-
-        // Reset connection states
+      socket.on("disconnect", () => {
+        console.log("Disconnected from server");
+        connectingRef.current = false;
         setIsConnected(false);
         setIsConnectedState(false);
         setIsConnecting(false);
+        setError("Connection lost");
+      });
 
-        // Redirect to lobby with error message
-        setError("Your request to join was rejected by the room owner");
+      socket.on("connect_error", (error) => {
+        console.error("Connection error:", error);
+        connectingRef.current = false;
+        setIsConnecting(false);
+        setError("Failed to connect to server");
+      });
 
-        // Call the callback if set (for room owner to clear pending approval prompt)
-        if (memberRejectedCallbackRef.current && data.userId) {
-          memberRejectedCallbackRef.current(data.userId);
-        }
-      },
-    );
+      socket.on("error", (data: { message: string }) => {
+        console.error("Socket error:", data.message);
+        setError(data.message);
+      });
 
-    socket.on("pending_approval", (data: { message: string }) => {
-      console.log("Pending approval:", data.message);
-      setPendingApproval(true);
-    });
+      // Room events
+      socket.on("room_created", (data: { room: any; user: any }) => {
+        console.log("Room created:", data);
+        setCurrentRoom(data.room);
+        setCurrentUser(data.user);
+        setError(null);
+      });
 
-    socket.on(
-      "ownership_transferred",
-      (data: { newOwner: any; oldOwner: any }) => {
-        console.log("Ownership transferred:", data);
-        transferOwnership(data.newOwner.id);
-      },
-    );
+      socket.on(
+        "room_created_broadcast",
+        (data: {
+          id: string;
+          name: string;
+          userCount: number;
+          owner: string;
+          isPrivate: boolean;
+          isHidden: boolean;
+          createdAt: string;
+        }) => {
+          console.log("Room created broadcast received:", data);
 
-    socket.on("room_closed", (data: { message: string }) => {
-      console.log("Room closed:", data.message);
-      setError(data.message);
-      clearRoom();
-    });
+          // Clear any existing timeout for the previous room
+          if (roomCreatedTimeoutRef.current) {
+            clearTimeout(roomCreatedTimeoutRef.current);
+          }
 
-    socket.on("room_closed_broadcast", (data: { roomId: string }) => {
-      console.log("Room closed broadcast:", data.roomId);
-      if (roomClosedCallbackRef.current) {
-        roomClosedCallbackRef.current(data.roomId);
-      }
-      clearRoom();
-    });
+          // Prevent duplicate calls for the same room within a longer window
+          if (lastRoomCreatedRef.current === data.id) {
+            console.log(
+              "Skipping duplicate room created broadcast for:",
+              data.id,
+            );
+            return;
+          }
 
-    socket.on("leave_confirmed", () => {
-      // Clear room state when backend confirms successful leave
-      clearRoom();
-    });
+          lastRoomCreatedRef.current = data.id;
+          if (roomCreatedCallbackRef.current) {
+            roomCreatedCallbackRef.current(data);
+          }
 
-    // Note: The note_played event is handled by the onNoteReceived callback
-    // No need for a separate listener here
+          // Reset the last room created reference after a longer delay
+          roomCreatedTimeoutRef.current = setTimeout(() => {
+            if (lastRoomCreatedRef.current === data.id) {
+              lastRoomCreatedRef.current = "";
+            }
+            roomCreatedTimeoutRef.current = null;
+          }, 5000); // Increased from 1 second to 5 seconds
+        },
+      );
 
-    socket.on(
-      "instrument_changed",
-      (data: {
-        userId: string;
-        username: string;
-        instrument: string;
-        category: string;
-      }) => {
-        console.log("🎵 Socket: Instrument changed:", data);
+      socket.on(
+        "room_joined",
+        (data: { room: any; users: any[]; pendingMembers: any[] }) => {
+          console.log("Room joined:", data);
+          setCurrentRoom({
+            ...data.room,
+            users: data.users,
+            pendingMembers: data.pendingMembers,
+          });
 
-        // Update the room store first
-        updateUserInstrument(data.userId, data.instrument, data.category);
+          // Set currentUser based on the current userId
+          const currentUserId = useUserStore.getState().userId;
+          if (currentUserId) {
+            const currentUserData = data.users.find(
+              (user: any) => user.id === currentUserId,
+            );
+            if (currentUserData) {
+              console.log(
+                "Setting current user from room_joined:",
+                currentUserData,
+              );
+              setCurrentUser(currentUserData);
+            }
+          }
 
-        console.log(
-          `✅ Updated instrument for user ${data.username}: ${data.instrument} (${data.category})`,
-        );
+          setError(null);
+        },
+      );
+
+      socket.on("user_joined", (data: { user: any }) => {
+        console.log("User joined:", data.user);
+        addUser(data.user);
+      });
+
+      socket.on("user_left", (data: { user: any }) => {
+        console.log("User left:", data.user);
+        removeUser(data.user.id);
 
         // Call the callback if set
-        if (instrumentChangedCallbackRef.current) {
-          console.log("🔄 Calling instrument changed callback");
-          instrumentChangedCallbackRef.current(data);
+        if (userLeftCallbackRef.current) {
+          userLeftCallbackRef.current(data.user);
         }
-      },
-    );
+      });
 
-    socket.on("synth_params_changed", (data: SynthParamsData) => {
-      console.log("🎛️ Socket: Synth parameters changed:", data);
+      socket.on("member_request", (data: { user: any }) => {
+        console.log("Member request:", data.user);
+        addPendingMember(data.user);
+      });
 
-      // Call the callback if set
-      if (synthParamsChangedCallbackRef.current) {
-        console.log("🔄 Calling synth params changed callback");
-        synthParamsChangedCallbackRef.current(data);
-      }
-    });
+      socket.on("member_approved", (data: { user?: any; room?: any }) => {
+        if (data.user) {
+          console.log("Member approved:", data.user);
+          removePendingMember(data.user.id);
+          addUser(data.user);
+        }
+        if (data.room) {
+          console.log("Room updated after approval:", data.room);
+          setCurrentRoom(data.room);
+          // Clear pending approval since the user has been approved
+          setPendingApproval(false);
 
-    socket.on(
-      "request_synth_params_response",
-      (data: { requestingUserId: string; requestingUsername: string }) => {
-        console.log("🎛️ Socket: Synth params request received:", data);
+          // Update currentUser if this approval is for the current user
+          const currentUserId = useUserStore.getState().userId;
+          if (currentUserId) {
+            const approvedUser = data.room.users.find(
+              (user: any) => user.id === currentUserId,
+            );
+            if (approvedUser) {
+              console.log(
+                "Updating current user after approval:",
+                approvedUser,
+              );
+              setCurrentUser(approvedUser);
+            }
+          }
+        }
+      });
+
+      socket.on("room_state_updated", (data: { room: any }) => {
+        console.log("Room state updated:", data.room);
+        setCurrentRoom(data.room);
+      });
+
+      socket.on(
+        "member_rejected",
+        (data: { message: string; userId?: string }) => {
+          console.log("Member rejected:", data.message);
+          // Clear pending approval state and room
+          setPendingApproval(false);
+          clearRoom();
+
+          // Disconnect socket and redirect to lobby for rejected users
+          if (socketRef.current) {
+            socketRef.current.disconnect();
+            socketRef.current = null;
+          }
+
+          // Reset connection states
+          setIsConnected(false);
+          setIsConnectedState(false);
+          setIsConnecting(false);
+
+          // Redirect to lobby with error message
+          setError("Your request to join was rejected by the room owner");
+
+          // Call the callback if set (for room owner to clear pending approval prompt)
+          if (memberRejectedCallbackRef.current && data.userId) {
+            memberRejectedCallbackRef.current(data.userId);
+          }
+        },
+      );
+
+      socket.on("pending_approval", (data: { message: string }) => {
+        console.log("Pending approval:", data.message);
+        setPendingApproval(true);
+      });
+
+      socket.on(
+        "ownership_transferred",
+        (data: { newOwner: any; oldOwner: any }) => {
+          console.log("Ownership transferred:", data);
+          transferOwnership(data.newOwner.id);
+        },
+      );
+
+      socket.on("room_closed", (data: { message: string }) => {
+        console.log("Room closed:", data.message);
+        setError(data.message);
+        clearRoom();
+      });
+
+      socket.on("room_closed_broadcast", (data: { roomId: string }) => {
+        console.log("Room closed broadcast:", data.roomId);
+        if (roomClosedCallbackRef.current) {
+          roomClosedCallbackRef.current(data.roomId);
+        }
+        clearRoom();
+      });
+
+      socket.on("leave_confirmed", () => {
+        // Clear room state when backend confirms successful leave
+        clearRoom();
+      });
+
+      // Note: The note_played event is handled by the onNoteReceived callback
+      // No need for a separate listener here
+
+      socket.on(
+        "instrument_changed",
+        (data: {
+          userId: string;
+          username: string;
+          instrument: string;
+          category: string;
+        }) => {
+          console.log("🎵 Socket: Instrument changed:", data);
+
+          // Update the room store first
+          updateUserInstrument(data.userId, data.instrument, data.category);
+
+          console.log(
+            `✅ Updated instrument for user ${data.username}: ${data.instrument} (${data.category})`,
+          );
+
+          // Call the callback if set
+          if (instrumentChangedCallbackRef.current) {
+            console.log("🔄 Calling instrument changed callback");
+            instrumentChangedCallbackRef.current(data);
+          }
+        },
+      );
+
+      socket.on("synth_params_changed", (data: SynthParamsData) => {
+        console.log("🎛️ Socket: Synth parameters changed:", data);
 
         // Call the callback if set
-        if (requestSynthParamsResponseCallbackRef.current) {
-          console.log("🔄 Calling request synth params response callback");
-          requestSynthParamsResponseCallbackRef.current(data);
+        if (synthParamsChangedCallbackRef.current) {
+          console.log("🔄 Calling synth params changed callback");
+          synthParamsChangedCallbackRef.current(data);
         }
-      },
-    );
-  }, [
-    isConnecting,
-    setIsConnected,
-    setError,
-    executePendingOperations,
-    setCurrentRoom,
-    setCurrentUser,
-    addUser,
-    removeUser,
-    addPendingMember,
-    removePendingMember,
-    setPendingApproval,
-    clearRoom,
-    transferOwnership,
-    updateUserInstrument,
-  ]);
+      });
+
+      socket.on(
+        "request_synth_params_response",
+        (data: { requestingUserId: string; requestingUsername: string }) => {
+          console.log("🎛️ Socket: Synth params request received:", data);
+
+          // Call the callback if set
+          if (requestSynthParamsResponseCallbackRef.current) {
+            console.log("🔄 Calling request synth params response callback");
+            requestSynthParamsResponseCallbackRef.current(data);
+          }
+        },
+      );
+    },
+    [
+      isConnecting,
+      setIsConnected,
+      setError,
+      getConnection,
+      executePendingOperations,
+      setCurrentRoom,
+      setCurrentUser,
+      addUser,
+      removeUser,
+      addPendingMember,
+      removePendingMember,
+      setPendingApproval,
+      clearRoom,
+      transferOwnership,
+      updateUserInstrument,
+    ],
+  );
 
   // Create room
   const createRoom = useCallback(
@@ -552,14 +656,18 @@ export const useSocket = () => {
     [safeEmit],
   );
 
-  // Disconnect socket completely
+  // Disconnect socket completely with connection pool cleanup
   const disconnect = useCallback(() => {
     if (socketRef.current) {
       socketRef.current.disconnect();
       socketRef.current = null;
     }
+
+    // Clean up connection pool
+    cleanupConnectionPool();
+
     clearRoom();
-  }, [clearRoom]);
+  }, [clearRoom, cleanupConnectionPool]);
 
   // Approve member
   const approveMember = useCallback(
@@ -585,7 +693,7 @@ export const useSocket = () => {
     [safeEmit],
   );
 
-  // Play note with selective deduplication to prevent flaming while preserving mono synth behavior
+  // Optimized playNote with better deduplication
   const playNote = useCallback(
     (data: NoteData) => {
       // For mono synths, be more careful with deduplication to preserve key tracking
@@ -603,8 +711,7 @@ export const useSocket = () => {
 
       if (isDrumMachine) {
         // For drum machines, use a much shorter deduplication window to allow rapid hits
-        dedupeWindow = 15; // Reduced from 50ms to 15ms for drums
-        // Only deduplicate identical note events, not all events
+        dedupeWindow = 10; // Reduced from 15ms to 10ms for drums
         shouldCheckDuplicate = data.eventType === "note_on";
       } else if (isMonoSynth) {
         // For mono synths, only check note_on events for deduplication
@@ -620,13 +727,14 @@ export const useSocket = () => {
         }
       }
 
-      // Record this event and emit
+      // Record this event and emit immediately for real-time performance
       recentNoteEvents.current.set(eventKey, now);
       safeEmit("play_note", data);
 
       // Clean up old entries periodically to prevent memory leaks
-      if (recentNoteEvents.current.size > 100) {
-        const cutoff = now - Math.max(NOTE_DEDUPE_WINDOW, dedupeWindow) * 2;
+      if (recentNoteEvents.current.size > 200) {
+        // Increased from 100
+        const cutoff = now - Math.max(NOTE_DEDUPE_WINDOW, dedupeWindow) * 3;
         for (const [key, timestamp] of recentNoteEvents.current.entries()) {
           if (timestamp < cutoff) {
             recentNoteEvents.current.delete(key);

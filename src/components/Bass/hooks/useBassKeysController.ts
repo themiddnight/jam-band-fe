@@ -1,6 +1,6 @@
-import { useCallback } from "react";
 import { DEFAULT_BASS_SHORTCUTS } from "../../../constants/bassShortcuts";
 import type { Scale } from "../../../hooks/useScaleState";
+import { useCallback } from "react";
 
 interface UseBassKeysControllerProps {
   bassState: {
@@ -23,11 +23,17 @@ interface UseBassKeysControllerProps {
     setSustainToggle: (sustainToggle: boolean) => void;
     setCurrentOctave: (octave: number) => void;
     setAlwaysRoot: (alwaysRoot: boolean) => void;
-    handlePlayButtonPress: (stringId: "lower" | "higher", customVelocity?: number) => void;
+    handlePlayButtonPress: (
+      stringId: "lower" | "higher",
+      customVelocity?: number,
+    ) => void;
   };
 }
 
-export const useBassKeysController = ({ bassState, bassControls }: UseBassKeysControllerProps) => {
+export const useBassKeysController = ({
+  bassState,
+  bassControls,
+}: UseBassKeysControllerProps) => {
   const shortcuts = DEFAULT_BASS_SHORTCUTS;
 
   const handleKeyDown = useCallback(
@@ -39,17 +45,23 @@ export const useBassKeysController = ({ bassState, bassControls }: UseBassKeysCo
       }
 
       if (key === shortcuts.toggleMode.key) {
-        bassControls.setMode(bassState.mode.type === "basic" ? "melody" : "basic");
+        bassControls.setMode(
+          bassState.mode.type === "basic" ? "melody" : "basic",
+        );
         return;
       }
 
       if (bassState.mode.type === "melody") {
         if (key === shortcuts.octaveDown.key) {
-          bassControls.setCurrentOctave(Math.max(0, bassState.currentOctave - 1));
+          bassControls.setCurrentOctave(
+            Math.max(0, bassState.currentOctave - 1),
+          );
           return;
         }
         if (key === shortcuts.octaveUp.key) {
-          bassControls.setCurrentOctave(Math.min(8, bassState.currentOctave + 1));
+          bassControls.setCurrentOctave(
+            Math.min(8, bassState.currentOctave + 1),
+          );
           return;
         }
         if (key === shortcuts.alwaysRoot.key) {
@@ -92,4 +104,4 @@ export const useBassKeysController = ({ bassState, bassControls }: UseBassKeysCo
   );
 
   return { handleKeyDown, handleKeyUp };
-}; 
+};

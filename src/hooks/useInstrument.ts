@@ -610,12 +610,15 @@ export const useInstrument = (
   const playNote = useCallback(
     async (notes: string[], velocity: number, isKeyHeld: boolean = false) => {
       try {
+        if (!instrumentManager.isReady()) {
+          await initializeAudioContext();
+        }
         await instrumentManager.playLocalNotes(notes, velocity, isKeyHeld);
       } catch (error) {
         console.error("Failed to play local notes:", error);
       }
     },
-    [instrumentManager],
+    [instrumentManager, initializeAudioContext],
   );
 
   const stopNotes = useCallback(

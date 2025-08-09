@@ -1,13 +1,14 @@
 import { DEFAULT_GUITAR_SHORTCUTS } from "../../constants/guitarShortcuts";
 import { getKeyDisplayName } from "../../constants/utils/displayUtils";
 import type { Scale } from "../../hooks/useScaleState";
+import { useSustainSync } from "../../hooks/useSustainSync";
 import BaseInstrument from "../shared/BaseInstrument";
 import { BasicFretboard } from "./components/BasicFretboard";
 import { SimpleChordKeys } from "./components/ChordGuitar";
 import { MelodyGuitar } from "./components/MelodyGuitar";
 import { useGuitarKeysController } from "./hooks/useGuitarKeysController";
 import { useGuitarState } from "./hooks/useGuitarState";
-import { useMemo, useEffect } from "react";
+import { useMemo } from "react";
 
 export interface GuitarProps {
   scaleState: {
@@ -64,18 +65,15 @@ export default function Guitar({
     onSustainToggleChange,
   );
 
-  // Synchronize unified state TO guitar store (BaseInstrument controls modify unified state)
-  useEffect(() => {
-    if (unifiedState.sustain !== sustain) {
-      setSustain(unifiedState.sustain);
-    }
-  }, [unifiedState.sustain, sustain, setSustain]);
-
-  useEffect(() => {
-    if (unifiedState.sustainToggle !== sustainToggle) {
-      setSustainToggle(unifiedState.sustainToggle);
-    }
-  }, [unifiedState.sustainToggle, sustainToggle, setSustainToggle]);
+  // Use shared sustain sync hook to eliminate duplicate useEffect blocks
+  useSustainSync({
+    unifiedSustain: unifiedState.sustain,
+    localSustain: sustain,
+    setLocalSustain: setSustain,
+    unifiedSustainToggle: unifiedState.sustainToggle,
+    localSustainToggle: sustainToggle,
+    setLocalSustainToggle: setSustainToggle,
+  });
 
   const { handleKeyDown, handleKeyUp } = useGuitarKeysController({
     guitarState,

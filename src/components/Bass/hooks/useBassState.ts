@@ -5,7 +5,7 @@ import { useGuitarBasicMode } from "../../Guitar/hooks/useGuitarBasicMode";
 import { useGuitarStringBehavior } from "../../Guitar/hooks/useGuitarStringBehavior";
 
 export const useBassState = (
-  scaleState: {
+  _scaleState: {
     rootNote: string;
     scale: Scale;
     getScaleNotes: (root: string, scaleType: Scale, octave: number) => string[];
@@ -40,8 +40,16 @@ export const useBassState = (
   } = useBassStore();
 
   // Reuse basic and string behavior from guitar
-  const basicMode = useGuitarBasicMode(onPlayNotes, onReleaseKeyHeldNote, velocity);
-  const stringBehavior = useGuitarStringBehavior(onPlayNotes, onStopNotes, velocity);
+  const basicMode = useGuitarBasicMode(
+    onPlayNotes,
+    onReleaseKeyHeldNote,
+    velocity,
+  );
+  const stringBehavior = useGuitarStringBehavior(
+    onPlayNotes,
+    onStopNotes,
+    velocity,
+  );
 
   // Construct bass state for controllers
   const bassState = {
@@ -100,4 +108,4 @@ export const useBassState = (
     stringBehavior,
     basicMode,
   };
-}; 
+};

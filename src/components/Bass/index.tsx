@@ -1,12 +1,13 @@
 import { DEFAULT_BASS_SHORTCUTS } from "../../constants/bassShortcuts";
 import { getKeyDisplayName } from "../../constants/utils/displayUtils";
 import type { Scale } from "../../hooks/useScaleState";
-import BaseInstrument from "../shared/BaseInstrument";
-import { BasicFretboard } from "../Guitar/components/BasicFretboard";
-import { useMemo, useEffect, useCallback } from "react";
-import { useBassState } from "./hooks/useBassState";
-import { MelodyBass } from "./components/MelodyBass";
+import { useSustainSync } from "../../hooks/useSustainSync";
 import { useVelocityControl } from "../../hooks/useVelocityControl";
+import { BasicFretboard } from "../Guitar/components/BasicFretboard";
+import BaseInstrument from "../shared/BaseInstrument";
+import { MelodyBass } from "./components/MelodyBass";
+import { useBassState } from "./hooks/useBassState";
+import { useMemo, useCallback } from "react";
 
 export interface BassProps {
   scaleState: {
@@ -61,19 +62,21 @@ export default function Bass({
     setVelocity,
   });
 
-  // Sync BaseInstrument sustain with store (already unified)
-  useEffect(() => {
-    if (unifiedState.sustain !== sustain) setSustain(unifiedState.sustain);
-  }, [unifiedState.sustain, sustain, setSustain]);
-
-  useEffect(() => {
-    if (unifiedState.sustainToggle !== sustainToggle) {
-      setSustainToggle(unifiedState.sustainToggle);
-    }
-  }, [unifiedState.sustainToggle, sustainToggle, setSustainToggle]);
+  // Use shared sustain sync hook to eliminate duplicate useEffect blocks
+  useSustainSync({
+    unifiedSustain: unifiedState.sustain,
+    localSustain: sustain,
+    setLocalSustain: setSustain,
+    unifiedSustainToggle: unifiedState.sustainToggle,
+    localSustainToggle: sustainToggle,
+    setLocalSustainToggle: setSustainToggle,
+  });
 
   // Pressed frets projection for basic mode
-  const pressedFrets = useMemo(() => new Set<string>(unifiedState.pressedKeys), [unifiedState.pressedKeys]);
+  const pressedFrets = useMemo(
+    () => new Set<string>(unifiedState.pressedKeys),
+    [unifiedState.pressedKeys],
+  );
 
   // Custom basic fretboard config for bass (4 strings; low note at bottom)
   const renderBasicFretboard = () => (
@@ -81,8 +84,12 @@ export default function Bass({
       scaleState={scaleState}
       velocity={velocity}
       pressedFrets={pressedFrets}
-      onFretPress={(stringIndex: number, fret: number) => basicMode.handleBasicFretPress(stringIndex, fret)}
-      onFretRelease={(stringIndex: number, fret: number) => basicMode.handleBasicFretRelease(stringIndex, fret)}
+      onFretPress={(stringIndex: number, fret: number) =>
+        basicMode.handleBasicFretPress(stringIndex, fret)
+      }
+      onFretRelease={(stringIndex: number, fret: number) =>
+        basicMode.handleBasicFretRelease(stringIndex, fret)
+      }
       onVelocityChange={setVelocity}
       unifiedState={unifiedState}
       stringsOverride={["G", "D", "A", "E"]}
@@ -185,14 +192,28 @@ export default function Bass({
               .getScaleNotes(scaleState.rootNote, scaleState.scale, 0)
               .map((n) => n.slice(0, -1));
 
-            const NOTE_ORDER = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+            const NOTE_ORDER = [
+              "C",
+              "C#",
+              "D",
+              "D#",
+              "E",
+              "F",
+              "F#",
+              "G",
+              "G#",
+              "A",
+              "A#",
+              "B",
+            ];
             const idx = (name: string) => NOTE_ORDER.indexOf(name);
             const toIndex = (note: string) => {
               const name = note.slice(0, -1);
               const oct = parseInt(note.slice(-1));
               return oct * 12 + idx(name);
             };
-            const fromIndex = (i: number) => `${NOTE_ORDER[i % 12]}${Math.floor(i/12)}`;
+            const fromIndex = (i: number) =>
+              `${NOTE_ORDER[i % 12]}${Math.floor(i / 12)}`;
 
             const lowIndex = toIndex("E1");
             const highIndex = toIndex("D#2");
@@ -215,9 +236,16 @@ export default function Bass({
               currentTime - string.lastPlayTime <=
               bassState.hammerOnState.windowMs;
 
-            if (string.isHammerOnEnabled && isHammerOnWindow && string.lastPlayedNote !== lowerOctaveNotes[keyIndex]) {
+            if (
+              string.isHammerOnEnabled &&
+              isHammerOnWindow &&
+              string.lastPlayedNote !== lowerOctaveNotes[keyIndex]
+            ) {
               // Try hammer-on
-              bassControls.handleHammerOnPress("lower", lowerOctaveNotes[keyIndex]);
+              bassControls.handleHammerOnPress(
+                "lower",
+                lowerOctaveNotes[keyIndex],
+              );
             } else {
               // Normal note press
               bassControls.handleNotePress("lower", lowerOctaveNotes[keyIndex]);
@@ -244,21 +272,38 @@ export default function Bass({
               scaleState.scale,
               currentOctave + 2,
             );
-            higherOctaveNotes = [...nextOctaveScaleNotes, ...upperOctaveScaleNotes];
+            higherOctaveNotes = [
+              ...nextOctaveScaleNotes,
+              ...upperOctaveScaleNotes,
+            ];
           } else {
             // Always Root mode: use fixed ranges
             const baseScaleNames = scaleState
               .getScaleNotes(scaleState.rootNote, scaleState.scale, 0)
               .map((n) => n.slice(0, -1));
 
-            const NOTE_ORDER = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+            const NOTE_ORDER = [
+              "C",
+              "C#",
+              "D",
+              "D#",
+              "E",
+              "F",
+              "F#",
+              "G",
+              "G#",
+              "A",
+              "A#",
+              "B",
+            ];
             const idx = (name: string) => NOTE_ORDER.indexOf(name);
             const toIndex = (note: string) => {
               const name = note.slice(0, -1);
               const oct = parseInt(note.slice(-1));
               return oct * 12 + idx(name);
             };
-            const fromIndex = (i: number) => `${NOTE_ORDER[i % 12]}${Math.floor(i/12)}`;
+            const fromIndex = (i: number) =>
+              `${NOTE_ORDER[i % 12]}${Math.floor(i / 12)}`;
 
             const lowIndex = toIndex("E2");
             const highIndex = toIndex("D#3");
@@ -281,12 +326,22 @@ export default function Bass({
               currentTime - string.lastPlayTime <=
               bassState.hammerOnState.windowMs;
 
-            if (string.isHammerOnEnabled && isHammerOnWindow && string.lastPlayedNote !== higherOctaveNotes[keyIndex]) {
+            if (
+              string.isHammerOnEnabled &&
+              isHammerOnWindow &&
+              string.lastPlayedNote !== higherOctaveNotes[keyIndex]
+            ) {
               // Try hammer-on
-              bassControls.handleHammerOnPress("higher", higherOctaveNotes[keyIndex]);
+              bassControls.handleHammerOnPress(
+                "higher",
+                higherOctaveNotes[keyIndex],
+              );
             } else {
               // Normal note press
-              bassControls.handleNotePress("higher", higherOctaveNotes[keyIndex]);
+              bassControls.handleNotePress(
+                "higher",
+                higherOctaveNotes[keyIndex],
+              );
             }
           }
           return;
@@ -313,7 +368,23 @@ export default function Bass({
         }
       }
     },
-    [shortcuts, mode, setMode, setCurrentOctave, currentOctave, setAlwaysRoot, alwaysRoot, velocity, bassControls, setSustain, setSustainToggle, sustainToggle, scaleState, bassState, handleVelocityChange],
+    [
+      shortcuts,
+      mode,
+      setMode,
+      setCurrentOctave,
+      currentOctave,
+      setAlwaysRoot,
+      alwaysRoot,
+      velocity,
+      bassControls,
+      setSustain,
+      setSustainToggle,
+      sustainToggle,
+      scaleState,
+      bassState,
+      handleVelocityChange,
+    ],
   );
 
   const handleKeyUp = useCallback(
@@ -353,14 +424,28 @@ export default function Bass({
               .getScaleNotes(scaleState.rootNote, scaleState.scale, 0)
               .map((n) => n.slice(0, -1));
 
-            const NOTE_ORDER = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+            const NOTE_ORDER = [
+              "C",
+              "C#",
+              "D",
+              "D#",
+              "E",
+              "F",
+              "F#",
+              "G",
+              "G#",
+              "A",
+              "A#",
+              "B",
+            ];
             const idx = (name: string) => NOTE_ORDER.indexOf(name);
             const toIndex = (note: string) => {
               const name = note.slice(0, -1);
               const oct = parseInt(note.slice(-1));
               return oct * 12 + idx(name);
             };
-            const fromIndex = (i: number) => `${NOTE_ORDER[i % 12]}${Math.floor(i/12)}`;
+            const fromIndex = (i: number) =>
+              `${NOTE_ORDER[i % 12]}${Math.floor(i / 12)}`;
 
             const lowIndex = toIndex("E1");
             const highIndex = toIndex("D#2");
@@ -399,21 +484,38 @@ export default function Bass({
               scaleState.scale,
               currentOctave + 2,
             );
-            higherOctaveNotes = [...nextOctaveScaleNotes, ...upperOctaveScaleNotes];
+            higherOctaveNotes = [
+              ...nextOctaveScaleNotes,
+              ...upperOctaveScaleNotes,
+            ];
           } else {
             // Always Root mode: use fixed ranges
             const baseScaleNames = scaleState
               .getScaleNotes(scaleState.rootNote, scaleState.scale, 0)
               .map((n) => n.slice(0, -1));
 
-            const NOTE_ORDER = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+            const NOTE_ORDER = [
+              "C",
+              "C#",
+              "D",
+              "D#",
+              "E",
+              "F",
+              "F#",
+              "G",
+              "G#",
+              "A",
+              "A#",
+              "B",
+            ];
             const idx = (name: string) => NOTE_ORDER.indexOf(name);
             const toIndex = (note: string) => {
               const name = note.slice(0, -1);
               const oct = parseInt(note.slice(-1));
               return oct * 12 + idx(name);
             };
-            const fromIndex = (i: number) => `${NOTE_ORDER[i % 12]}${Math.floor(i/12)}`;
+            const fromIndex = (i: number) =>
+              `${NOTE_ORDER[i % 12]}${Math.floor(i / 12)}`;
 
             const lowIndex = toIndex("E2");
             const highIndex = toIndex("D#3");
@@ -429,13 +531,25 @@ export default function Bass({
           }
 
           if (higherOctaveNotes[keyIndex]) {
-            bassControls.handleNoteRelease("higher", higherOctaveNotes[keyIndex]);
+            bassControls.handleNoteRelease(
+              "higher",
+              higherOctaveNotes[keyIndex],
+            );
           }
           return;
         }
       }
     },
-    [mode, shortcuts, sustainToggle, setSustain, scaleState, currentOctave, alwaysRoot, bassControls],
+    [
+      mode,
+      shortcuts,
+      sustainToggle,
+      setSustain,
+      scaleState,
+      currentOctave,
+      alwaysRoot,
+      bassControls,
+    ],
   );
 
   // Mode controls
@@ -445,7 +559,10 @@ export default function Bass({
         onClick={() => setMode("melody")}
         className={`btn btn-sm join-item touch-manipulation ${mode === "melody" ? "btn-primary" : "btn-outline"}`}
       >
-        Melody <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.toggleMode.key)}</kbd>
+        Melody{" "}
+        <kbd className="kbd kbd-xs">
+          {getKeyDisplayName(shortcuts.toggleMode.key)}
+        </kbd>
       </button>
       <button
         onClick={() => setMode("basic")}
@@ -457,9 +574,10 @@ export default function Bass({
   );
 
   // Control config per mode
-  const controlConfig = mode === "basic"
-    ? { velocity: true, sustain: true }
-    : { velocity: true, octave: true };
+  const controlConfig =
+    mode === "basic"
+      ? { velocity: true, sustain: true }
+      : { velocity: true, octave: true };
 
   // Additional controls
   const additionalControls = (
@@ -469,7 +587,10 @@ export default function Bass({
           onClick={() => setAlwaysRoot(!alwaysRoot)}
           className={`btn btn-sm join-item touch-manipulation ${alwaysRoot ? "btn-success" : "btn-outline"}`}
         >
-          Always Root <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.alwaysRoot.key)}</kbd>
+          Always Root{" "}
+          <kbd className="kbd kbd-xs">
+            {getKeyDisplayName(shortcuts.alwaysRoot.key)}
+          </kbd>
         </button>
       )}
     </div>

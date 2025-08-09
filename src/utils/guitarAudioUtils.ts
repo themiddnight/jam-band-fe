@@ -1,17 +1,3 @@
-// Guitar audio utilities for handling muted and snap sounds
-
-export interface GuitarAudioSamples {
-  mutedNote: string; // Path to muted note sound file
-  snapSound: string; // Path to snap sound file
-}
-
-// Default audio sample paths
-// TODO: Replace these with actual audio file paths
-export const DEFAULT_GUITAR_AUDIO_SAMPLES: GuitarAudioSamples = {
-  mutedNote: "/audio/guitar/muted-note.mp3",
-  snapSound: "/audio/guitar/snap-sound.mp3",
-};
-
 /**
  * Audio file placement instructions:
  *
@@ -32,16 +18,29 @@ export const DEFAULT_GUITAR_AUDIO_SAMPLES: GuitarAudioSamples = {
  * - fret-noise.mp3
  * - pick-attack.mp3
  */
+import { loadAudioBufferWithCache } from "./audioBufferCache";
+
+// Guitar audio utilities for handling muted and snap sounds
+
+export interface GuitarAudioSamples {
+  mutedNote: string; // Path to muted note sound file
+  snapSound: string; // Path to snap sound file
+}
+
+// Default audio sample paths
+// TODO: Replace these with actual audio file paths
+export const DEFAULT_GUITAR_AUDIO_SAMPLES: GuitarAudioSamples = {
+  mutedNote: "/audio/guitar/muted-note.mp3",
+  snapSound: "/audio/guitar/snap-sound.mp3",
+};
 
 export const loadGuitarAudioSample = async (
   samplePath: string,
 ): Promise<AudioBuffer> => {
   try {
-    const response = await fetch(samplePath);
-    const arrayBuffer = await response.arrayBuffer();
     const audioContext = new (window.AudioContext ||
       (window as any).webkitAudioContext)();
-    return await audioContext.decodeAudioData(arrayBuffer);
+    return await loadAudioBufferWithCache(samplePath, audioContext);
   } catch (error) {
     console.warn(`Failed to load guitar audio sample: ${samplePath}`, error);
     throw error;

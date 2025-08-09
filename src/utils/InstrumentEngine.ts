@@ -87,6 +87,8 @@ export class InstrumentEngine {
   private filterEnvelopeRef: Tone.FrequencyEnvelope | null = null;
   private gainRef: Tone.Gain | null = null;
 
+  // Audio buffer cache integration (uses shared cache)
+
   // State management
   private isLoaded = false;
   private isLoading = false;
@@ -111,13 +113,45 @@ export class InstrumentEngine {
     string,
     { action: "play" | "stop"; timestamp: number }
   >();
-  private readonly PROCESSING_INTERVAL = 8; // ~120fps for audio processing
+  private readonly PROCESSING_INTERVAL = 4; // Reduced from 8ms to 4ms for better responsiveness
   private processingTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  // Audio performance optimizations (future enhancement)
+  // private audioBufferCache = new Map<string, AudioBuffer>();
+  // private readonly MAX_CACHE_SIZE = 50;
+  // private audioWorkletSupported = false;
 
   // Throttled parameter updates for better performance
   private throttledParamUpdate = throttle((params: Partial<SynthState>) => {
     this.updateSynthParamsInternal(params);
-  }, 16); // ~60fps
+  }, 8); // Reduced from 16ms to 8ms for better responsiveness
+
+  // Audio buffer cache integration
+  private clearAudioBufferCache(): void {
+    // Clear shared audio buffer cache
+    import("./audioBufferCache")
+      .then(({ clearAudioBufferCache }) => {
+        clearAudioBufferCache();
+      })
+      .catch(() => {
+        // Ignore import errors
+      });
+  }
+
+  // Get cache statistics for monitoring
+  async getCacheStats(): Promise<{
+    hits: number;
+    misses: number;
+    hitRate: number;
+    size: number;
+  }> {
+    try {
+      const { getAudioBufferCacheStats } = await import("./audioBufferCache");
+      return getAudioBufferCacheStats();
+    } catch {
+      return { hits: 0, misses: 0, hitRate: 0, size: 0 };
+    }
+  }
 
   constructor(config: InstrumentEngineConfig) {
     this.config = config;
@@ -127,7 +161,7 @@ export class InstrumentEngine {
     );
   }
 
-  // Process note queue for better performance
+  // Optimized note processing with better batching
   private processNoteQueue(): void {
     if (this.noteProcessingQueue.size === 0) return;
 
@@ -136,9 +170,13 @@ export class InstrumentEngine {
       { action: "play" | "stop"; timestamp: number }
     >();
 
-    // Collect notes to process
+    // Collect notes to process with timestamp filtering
+    const now = Date.now();
     this.noteProcessingQueue.forEach((value, key) => {
-      notesToProcess.set(key, value);
+      // Only process notes that aren't too old
+      if (now - value.timestamp < 100) {
+        notesToProcess.set(key, value);
+      }
     });
 
     // Clear the queue
@@ -156,14 +194,14 @@ export class InstrumentEngine {
       }
     });
 
-    // Batch process play notes
+    // Batch process play notes with optimized batching
     if (playNotes.length > 0) {
-      this.processPlayNotes(playNotes);
+      this.processPlayNotesOptimized(playNotes);
     }
 
-    // Batch process stop notes
+    // Batch process stop notes with optimized batching
     if (stopNotes.length > 0) {
-      this.processStopNotes(stopNotes);
+      this.processStopNotesOptimized(stopNotes);
     }
 
     // Schedule next processing if there are more notes
@@ -185,43 +223,45 @@ export class InstrumentEngine {
     );
   }
 
-  // Process multiple play notes efficiently
-  private processPlayNotes(notes: string[]): void {
+  // Optimized play notes processing
+  private processPlayNotesOptimized(notes: string[]): void {
     if (this.config.category === InstrumentCategory.Synthesizer) {
+      // For synths, process all notes at once for better performance
       notes.forEach((note) => this.playPolySynthNote(note, 0.7, false));
     } else {
-      // For traditional instruments, process in smaller batches
-      const batchSize = 5;
+      // For traditional instruments, use larger batches for better performance
+      const batchSize = 10; // Increased from 5
       for (let i = 0; i < notes.length; i += batchSize) {
         const batch = notes.slice(i, i + batchSize);
-        this.playTraditionalNotesBatch(batch, 0.7);
+        this.playTraditionalNotesBatchOptimized(batch, 0.7);
       }
     }
   }
 
-  // Process multiple stop notes efficiently
-  private processStopNotes(notes: string[]): void {
+  // Optimized stop notes processing
+  private processStopNotesOptimized(notes: string[]): void {
     if (this.config.category === InstrumentCategory.Synthesizer) {
       notes.forEach((note) => this.stopSynthNotes([note]));
     } else {
-      // For traditional instruments, process in smaller batches
-      const batchSize = 5;
+      // For traditional instruments, use larger batches for better performance
+      const batchSize = 10; // Increased from 5
       for (let i = 0; i < notes.length; i += batchSize) {
         const batch = notes.slice(i, i + batchSize);
-        this.stopTraditionalNotesBatch(batch);
+        this.stopTraditionalNotesBatchOptimized(batch);
       }
     }
   }
 
-  // Batch play traditional notes
-  private async playTraditionalNotesBatch(
+  // Optimized batch play traditional notes
+  private async playTraditionalNotesBatchOptimized(
     notes: string[],
     velocity: number,
   ): Promise<void> {
     if (!this.instrument || !this.isLoaded) return;
 
     try {
-      await Promise.all(
+      // Use Promise.allSettled for better error handling
+      await Promise.allSettled(
         notes.map((note) =>
           this.instrument.start({ note, velocity, duration: 1 }),
         ),
@@ -231,12 +271,17 @@ export class InstrumentEngine {
     }
   }
 
-  // Batch stop traditional notes
-  private async stopTraditionalNotesBatch(notes: string[]): Promise<void> {
+  // Optimized batch stop traditional notes
+  private async stopTraditionalNotesBatchOptimized(
+    notes: string[],
+  ): Promise<void> {
     if (!this.instrument || !this.isLoaded) return;
 
     try {
-      await Promise.all(notes.map((note) => this.instrument.stop({ note })));
+      // Use Promise.allSettled for better error handling
+      await Promise.allSettled(
+        notes.map((note) => this.instrument.stop({ note })),
+      );
     } catch (error) {
       console.error("Error stopping traditional notes batch:", error);
     }
@@ -528,11 +573,8 @@ export class InstrumentEngine {
       await Tone.start();
 
       const audioConfig = getOptimalAudioConfig();
-      Tone.context.lookAhead = audioConfig.TONE_CONTEXT.lookAhead;
-      Tone.Transport.scheduleRepeat(
-        () => {},
-        audioConfig.TONE_CONTEXT.updateInterval,
-      );
+      const context = Tone.getContext();
+      context.lookAhead = audioConfig.TONE_CONTEXT.lookAhead;
 
       // Create audio chain: synth -> filter -> gain -> destination
       this.filterRef = new Tone.Filter({
@@ -1284,6 +1326,9 @@ export class InstrumentEngine {
     this.pendingReleases.clear();
     this.pendingStop.forEach((timeout) => clearTimeout(timeout));
     this.pendingStop.clear();
+
+    // Clear audio buffer cache
+    this.clearAudioBufferCache();
 
     // Dispose instruments
     if (this.instrument && this.instrument.disconnect) {

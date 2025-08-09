@@ -112,6 +112,15 @@ export const useInstrumentManager = (): UseInstrumentManagerReturn => {
   const localEngine = useRef<InstrumentEngine | null>(null);
   const remoteEngines = useRef<Map<string, InstrumentEngine>>(new Map());
   const isInitialized = useRef<boolean>(false);
+  // Track last known local config so we can lazy-initialize after hot reloads or resume
+  const lastLocalConfig = useRef<Omit<
+    InstrumentEngineConfig,
+    "isLocalUser"
+  > | null>(null);
+  // Prevent concurrent local engine initializations
+  const localEngineLoadingPromise = useRef<Promise<InstrumentEngine> | null>(
+    null,
+  );
 
   // Track loading states to prevent concurrent requests
   const loadingEngines = useRef<Map<string, Promise<InstrumentEngine>>>(
@@ -145,8 +154,15 @@ export const useInstrumentManager = (): UseInstrumentManagerReturn => {
 
   const initializeLocalEngine = useCallback(
     async (config: Omit<InstrumentEngineConfig, "isLocalUser">) => {
+      lastLocalConfig.current = { ...config };
+
       if (!isInitialized.current) {
         await initializeAudioContext();
+      }
+
+      // If an initialization is already in progress, reuse it
+      if (localEngineLoadingPromise.current) {
+        return localEngineLoadingPromise.current;
       }
 
       // Dispose existing local engine
@@ -169,24 +185,47 @@ export const useInstrumentManager = (): UseInstrumentManagerReturn => {
         },
       };
 
-      localEngine.current = new InstrumentEngine(engineConfig);
-      await localEngine.current.initialize(audioContext.current!);
+      const initPromise = (async () => {
+        localEngine.current = new InstrumentEngine(engineConfig);
+        await localEngine.current.initialize(audioContext.current!);
+        return localEngine.current;
+      })();
 
-      return localEngine.current;
+      localEngineLoadingPromise.current = initPromise;
+
+      try {
+        const engine = await initPromise;
+        return engine;
+      } finally {
+        localEngineLoadingPromise.current = null;
+      }
     },
     [initializeAudioContext],
   );
 
   const updateLocalInstrument = useCallback(
     async (instrumentName: string, category: InstrumentCategory) => {
+      // If the local engine is missing (e.g., after hot-reload), try to restore it lazily
       if (!localEngine.current) {
-        throw new Error("Local engine not initialized");
+        if (lastLocalConfig.current) {
+          await initializeLocalEngine({
+            ...lastLocalConfig.current,
+            instrumentName,
+            category,
+          });
+          return;
+        }
+        // No config to restore from; nothing we can do
+        console.warn(
+          "updateLocalInstrument called before local engine was initialized",
+        );
+        return;
       }
 
       localEngine.current.updateInstrument(instrumentName, category);
       await localEngine.current.load();
     },
-    [],
+    [initializeLocalEngine],
   );
 
   // Remote instrument management
@@ -323,13 +362,23 @@ export const useInstrumentManager = (): UseInstrumentManagerReturn => {
   // Local playback methods
   const playLocalNotes = useCallback(
     async (notes: string[], velocity: number, isKeyHeld: boolean = false) => {
+      // Ensure local engine exists; handle hot-reload or late init gracefully
       if (!localEngine.current) {
-        throw new Error("Local engine not initialized");
+        if (localEngineLoadingPromise.current) {
+          await localEngineLoadingPromise.current;
+        } else if (lastLocalConfig.current) {
+          await initializeLocalEngine(lastLocalConfig.current);
+        } else {
+          console.warn(
+            "playLocalNotes called before local engine was initialized",
+          );
+          return; // Drop the event silently instead of throwing
+        }
       }
 
-      await localEngine.current.playNotes(notes, velocity, isKeyHeld);
+      await localEngine.current!.playNotes(notes, velocity, isKeyHeld);
     },
-    [],
+    [initializeLocalEngine],
   );
 
   const stopLocalNotes = useCallback(async (notes: string[]) => {
@@ -411,13 +460,23 @@ export const useInstrumentManager = (): UseInstrumentManagerReturn => {
   // Synthesizer parameter management
   const updateLocalSynthParams = useCallback(
     async (params: Partial<SynthState>) => {
+      // Ensure local engine exists; handle hot-reload or late init gracefully
       if (!localEngine.current) {
-        throw new Error("Local engine not initialized");
+        if (localEngineLoadingPromise.current) {
+          await localEngineLoadingPromise.current;
+        } else if (lastLocalConfig.current) {
+          await initializeLocalEngine(lastLocalConfig.current);
+        } else {
+          console.warn(
+            "updateLocalSynthParams called before local engine was initialized",
+          );
+          return;
+        }
       }
 
-      await localEngine.current.updateSynthParams(params);
+      await localEngine.current!.updateSynthParams(params);
     },
-    [],
+    [initializeLocalEngine],
   );
 
   const updateRemoteSynthParams = useCallback(
@@ -481,6 +540,7 @@ export const useInstrumentManager = (): UseInstrumentManagerReturn => {
 
     // Clear loading states
     loadingEngines.current.clear();
+    localEngineLoadingPromise.current = null;
 
     // Close audio context
     if (audioContext.current && audioContext.current.state !== "closed") {

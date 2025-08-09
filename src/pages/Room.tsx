@@ -8,8 +8,9 @@ import {
   LazySynthControlsWrapper as SynthControls,
 } from "../components/LazyComponents";
 import MidiStatus from "../components/MidiStatus";
-import PlayingIndicator from "../components/PlayingIndicator";
+import RoomMembers from "../components/RoomMembers";
 import ScaleSlots from "../components/ScaleSlots";
+import AnchoredPopup from "../components/shared/AnchoredPopup";
 import { Modal } from "../components/shared/Modal";
 import { InstrumentCategory } from "../constants/instruments";
 import { useRoom } from "../hooks/useRoom";
@@ -18,7 +19,7 @@ import { useScaleSlotsStore } from "../stores/scaleSlotsStore";
 import { ControlType } from "../types";
 import { preloadCriticalComponents } from "../utils/componentPreloader";
 import { getSafariUserMessage } from "../utils/webkitCompat";
-import { memo, useEffect, useMemo } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 const Room = memo(() => {
   const {
@@ -79,6 +80,11 @@ const Room = memo(() => {
     stopSustainedNotes,
     playNotes,
   } = useRoom();
+
+  // Notification popup state
+  const [isPendingPopupOpen, setIsPendingPopupOpen] = useState(false);
+  const pendingBtnRef = useRef<HTMLButtonElement>(null);
+  const pendingCount = currentRoom?.pendingMembers?.length ?? 0;
 
   // Memoize commonProps to prevent child component re-renders
   const commonProps = useMemo(
@@ -281,7 +287,85 @@ const Room = memo(() => {
                 📋
               </button>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              {/* Pending notification button for room owner */}
+              {currentUser?.role === "room_owner" && (
+                <div className="relative">
+                  <button
+                    ref={pendingBtnRef}
+                    aria-label="Pending member requests"
+                    className="btn btn-ghost btn-sm relative"
+                    onClick={() => setIsPendingPopupOpen((v) => !v)}
+                    title={
+                      pendingCount > 0
+                        ? `${pendingCount} pending requests`
+                        : "No pending requests"
+                    }
+                  >
+                    🔔
+                    {pendingCount > 0 && (
+                      <span className="badge badge-error text-white badge-xs absolute -top-1 -right-1">
+                        {pendingCount}
+                      </span>
+                    )}
+                  </button>
+                  <AnchoredPopup
+                    open={isPendingPopupOpen}
+                    onClose={() => setIsPendingPopupOpen(false)}
+                    anchorRef={pendingBtnRef}
+                    placement="bottom"
+                    className="w-72"
+                  >
+                    <div className="p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-semibold text-sm">
+                          Pending Members
+                        </h4>
+                        {pendingCount > 0 && (
+                          <span className="badge badge-ghost badge-sm">
+                            {pendingCount}
+                          </span>
+                        )}
+                      </div>
+                      {pendingCount === 0 ? (
+                        <div className="text-sm text-base-content/70">
+                          No pending requests
+                        </div>
+                      ) : (
+                        <ul className="menu bg-base-100 w-full p-0">
+                          {currentRoom!.pendingMembers.map((user) => (
+                            <div
+                              key={user.id}
+                              className="flex items-center justify-between gap-2 px-0"
+                            >
+                              <div className="flex items-center gap-2 px-2 py-1">
+                                <span className="font-medium text-sm">
+                                  {user.username}
+                                </span>
+                              </div>
+                              <div className="flex gap-1 pr-1">
+                                <button
+                                  className="btn btn-xs btn-success"
+                                  onClick={() => handleApproveMember(user.id)}
+                                >
+                                  ✓
+                                </button>
+                                <button
+                                  className="btn btn-xs btn-error"
+                                  onClick={() => handleRejectMember(user.id)}
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </AnchoredPopup>
+                </div>
+              )}
+
               <div className="flex items-center gap-2">
                 <div
                   className={`w-3 h-3 rounded-full ${
@@ -312,85 +396,6 @@ const Room = memo(() => {
                   ? "Band Member"
                   : "Audience"}
             </span>
-          </div>
-        </div>
-
-        {/* Room Members */}
-        <div className="w-full max-w-6xl mb-3">
-          <div className="card bg-base-100 shadow-xl">
-            <div className="card-body p-2">
-              {/* Active Members - Compact List */}
-              <div className="flex flex-wrap gap-2">
-                {currentRoom?.users
-                  .slice() // make a shallow copy to avoid mutating original
-                  .sort((a, b) => {
-                    const roleOrder = {
-                      room_owner: 0,
-                      band_member: 1,
-                      audience: 2,
-                    };
-                    return (roleOrder[a.role] ?? 3) - (roleOrder[b.role] ?? 3);
-                  })
-                  .map((user) => {
-                    const playingIndicator = playingIndicators.get(
-                      user.username,
-                    );
-
-                    return (
-                      <div
-                        key={user.id}
-                        className="flex items-center gap-2 p-2 bg-base-200 rounded-lg min-w-fit"
-                      >
-                        {user.role !== "audience" && (
-                          <PlayingIndicator
-                            velocity={playingIndicator?.velocity || 0}
-                          />
-                        )}
-                        <span className="font-medium text-sm whitespace-nowrap">
-                          {user.username}
-                        </span>
-                        {user.role !== "audience" && user.currentInstrument ? (
-                          <span className="text-xs text-base-content/60 bg-base-300 px-2 py-1 rounded whitespace-nowrap">
-                            {user.currentInstrument.replace(/_/g, " ")}
-                          </span>
-                        ) : null}
-                        <span className="text-xs whitespace-nowrap">
-                          {user.role === "room_owner"
-                            ? "👑"
-                            : user.role === "band_member"
-                              ? "🎹"
-                              : "🦻🏼"}
-                        </span>
-                      </div>
-                    );
-                  })}
-
-                {/* Pending Members - Compact */}
-                {currentRoom?.pendingMembers &&
-                  currentRoom.pendingMembers.map((user) => (
-                    <div
-                      key={user.id}
-                      className="flex justify-between items-center gap-2 p-2 bg-warning/30 rounded-lg"
-                    >
-                      <span className="text-sm">{user.username}</span>
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => handleApproveMember(user.id)}
-                          className="btn btn-xs btn-success"
-                        >
-                          ✓
-                        </button>
-                        <button
-                          onClick={() => handleRejectMember(user.id)}
-                          className="btn btn-xs btn-error"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </div>
           </div>
         </div>
 
@@ -440,6 +445,15 @@ const Room = memo(() => {
             {renderInstrumentControl()}
           </>
         )}
+
+        {/* Room Members */}
+        <RoomMembers
+          users={currentRoom?.users ?? []}
+          pendingMembers={currentRoom?.pendingMembers ?? []}
+          playingIndicators={playingIndicators}
+          onApproveMember={handleApproveMember}
+          onRejectMember={handleRejectMember}
+        />
 
         {/* Audience View */}
         {currentUser?.role === "audience" && (

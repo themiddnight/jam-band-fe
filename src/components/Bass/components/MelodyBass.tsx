@@ -1,9 +1,9 @@
-import { useMemo } from "react";
 import { DEFAULT_BASS_SHORTCUTS } from "../../../constants/bassShortcuts";
 import { getKeyDisplayName } from "../../../constants/utils/displayUtils";
 import type { Scale } from "../../../hooks/useScaleState";
 import { useTouchEvents } from "../../../hooks/useTouchEvents";
 import { SharedNoteKeys } from "../../shared/NoteKeys";
+import { useMemo } from "react";
 
 interface MelodyBassProps {
   scaleState: {
@@ -25,8 +25,18 @@ interface MelodyBassProps {
     sustain: boolean;
     sustainToggle: boolean;
     strings: {
-      lower: { pressedNotes: Set<string>; lastPlayTime: number; lastPlayedNote: string | null; isHammerOnEnabled: boolean };
-      higher: { pressedNotes: Set<string>; lastPlayTime: number; lastPlayedNote: string | null; isHammerOnEnabled: boolean };
+      lower: {
+        pressedNotes: Set<string>;
+        lastPlayTime: number;
+        lastPlayedNote: string | null;
+        isHammerOnEnabled: boolean;
+      };
+      higher: {
+        pressedNotes: Set<string>;
+        lastPlayTime: number;
+        lastPlayedNote: string | null;
+        isHammerOnEnabled: boolean;
+      };
     };
     hammerOnState: { windowMs: number };
   };
@@ -65,8 +75,16 @@ export const MelodyBass: React.FC<MelodyBassProps> = ({
 
   // Compute note keys
   const noteKeys = useMemo(() => {
-    const lowerKeys: { note: string; isPressed: boolean; keyboardKey: string }[] = [];
-    const higherKeys: { note: string; isPressed: boolean; keyboardKey: string }[] = [];
+    const lowerKeys: {
+      note: string;
+      isPressed: boolean;
+      keyboardKey: string;
+    }[] = [];
+    const higherKeys: {
+      note: string;
+      isPressed: boolean;
+      keyboardKey: string;
+    }[] = [];
 
     const lowerKeyChars = shortcuts.lowerOctaveNotes.key.split("");
     const higherKeyChars = shortcuts.higherOctaveNotes.key.split("");
@@ -123,14 +141,28 @@ export const MelodyBass: React.FC<MelodyBassProps> = ({
         const low = `${"E"}${lowOct}`; // E low bound
         const high = `${"D#"}${highOct}`; // D# high bound
 
-        const NOTE_ORDER = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+        const NOTE_ORDER = [
+          "C",
+          "C#",
+          "D",
+          "D#",
+          "E",
+          "F",
+          "F#",
+          "G",
+          "G#",
+          "A",
+          "A#",
+          "B",
+        ];
         const idx = (name: string) => NOTE_ORDER.indexOf(name);
         const toIndex = (note: string) => {
           const name = note.slice(0, -1);
           const oct = parseInt(note.slice(-1));
           return oct * 12 + idx(name);
         };
-        const fromIndex = (i: number) => `${NOTE_ORDER[i % 12]}${Math.floor(i/12)}`;
+        const fromIndex = (i: number) =>
+          `${NOTE_ORDER[i % 12]}${Math.floor(i / 12)}`;
 
         const lowIndex = toIndex(low);
         const highIndex = toIndex(high);
@@ -173,8 +205,14 @@ export const MelodyBass: React.FC<MelodyBassProps> = ({
             onKeyPress={(nk) => {
               const string = bassState.strings.higher;
               const currentTime = Date.now();
-              const isHammer = currentTime - string.lastPlayTime <= bassState.hammerOnState.windowMs;
-              if (string.isHammerOnEnabled && isHammer && string.lastPlayedNote !== nk.note) {
+              const isHammer =
+                currentTime - string.lastPlayTime <=
+                bassState.hammerOnState.windowMs;
+              if (
+                string.isHammerOnEnabled &&
+                isHammer &&
+                string.lastPlayedNote !== nk.note
+              ) {
                 handleHammerOnPress("higher", nk.note);
               } else {
                 handleNotePress("higher", nk.note);
@@ -199,8 +237,14 @@ export const MelodyBass: React.FC<MelodyBassProps> = ({
             onKeyPress={(nk) => {
               const string = bassState.strings.lower;
               const currentTime = Date.now();
-              const isHammer = currentTime - string.lastPlayTime <= bassState.hammerOnState.windowMs;
-              if (string.isHammerOnEnabled && isHammer && string.lastPlayedNote !== nk.note) {
+              const isHammer =
+                currentTime - string.lastPlayTime <=
+                bassState.hammerOnState.windowMs;
+              if (
+                string.isHammerOnEnabled &&
+                isHammer &&
+                string.lastPlayedNote !== nk.note
+              ) {
                 handleHammerOnPress("lower", nk.note);
               } else {
                 handleNotePress("lower", nk.note);
@@ -222,9 +266,16 @@ export const MelodyBass: React.FC<MelodyBassProps> = ({
             handlePlayButtonPress("lower", velocity * 0.7);
             handlePlayButtonPress("higher", velocity * 0.7);
           }}
-          ref={playNotes70TouchHandlers.ref as React.RefObject<HTMLButtonElement>}
+          ref={
+            playNotes70TouchHandlers.ref as React.RefObject<HTMLButtonElement>
+          }
           className="btn btn-primary btn-lg lg:btn-sm touch-manipulation"
-          style={{ WebkitTapHighlightColor: "transparent", WebkitTouchCallout: "none", WebkitUserSelect: "none", touchAction: "manipulation" }}
+          style={{
+            WebkitTapHighlightColor: "transparent",
+            WebkitTouchCallout: "none",
+            WebkitUserSelect: "none",
+            touchAction: "manipulation",
+          }}
         >
           Pick Up <kbd className="kbd kbd-sm">{getKeyDisplayName(",")}</kbd>
         </button>
@@ -233,13 +284,20 @@ export const MelodyBass: React.FC<MelodyBassProps> = ({
             handlePlayButtonPress("lower", velocity);
             handlePlayButtonPress("higher", velocity);
           }}
-          ref={playNotesFullTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
+          ref={
+            playNotesFullTouchHandlers.ref as React.RefObject<HTMLButtonElement>
+          }
           className="btn btn-secondary btn-lg lg:btn-sm touch-manipulation"
-          style={{ WebkitTapHighlightColor: "transparent", WebkitTouchCallout: "none", WebkitUserSelect: "none", touchAction: "manipulation" }}
+          style={{
+            WebkitTapHighlightColor: "transparent",
+            WebkitTouchCallout: "none",
+            WebkitUserSelect: "none",
+            touchAction: "manipulation",
+          }}
         >
           Pick Down <kbd className="kbd kbd-sm">{getKeyDisplayName(".")}</kbd>
         </button>
       </div>
     </div>
   );
-}; 
+};

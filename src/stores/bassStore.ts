@@ -56,7 +56,8 @@ export const useBassStore = create<BassState>()(
       toggleSustain: () => set((state) => ({ sustain: !state.sustain })),
       toggleSustainToggle: () =>
         set((state) => ({ sustainToggle: !state.sustainToggle })),
-      toggleAlwaysRoot: () => set((state) => ({ alwaysRoot: !state.alwaysRoot })),
+      toggleAlwaysRoot: () =>
+        set((state) => ({ alwaysRoot: !state.alwaysRoot })),
 
       // Increment/Decrement actions
       incrementOctave: () =>

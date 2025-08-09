@@ -54,7 +54,8 @@ export const BasicFretboard: React.FC<BasicFretboardProps> = ({
 
   // Default to guitar config but allow overrides (used by Bass)
   const strings = stringsOverride ?? ["E", "A", "D", "G", "B", "E"].reverse();
-  const openNotes = openNotesOverride ?? ["E2", "A2", "D3", "G3", "B3", "E4"].reverse();
+  const openNotes =
+    openNotesOverride ?? ["E2", "A2", "D3", "G3", "B3", "E4"].reverse();
   const frets = fretsOverride ?? 15;
 
   const config: FretboardConfig = {
@@ -145,7 +146,14 @@ export const BasicFretboard: React.FC<BasicFretboardProps> = ({
       // Use unified state to play note with proper velocity and isKeyHeld=true like keyboard
       await unifiedState.playNote(note, velocity, true);
     },
-    [unifiedState, onFretPress, onFretRelease, pressedFrets, getExistingFret, velocity],
+    [
+      unifiedState,
+      onFretPress,
+      onFretRelease,
+      pressedFrets,
+      getExistingFret,
+      velocity,
+    ],
   );
 
   const handleFretReleaseWithNote = useCallback(

@@ -1,7 +1,4 @@
-import {
-  DEFAULT_SCALE_SLOTS,
-  type ScaleSlot,
-} from "../constants/scaleSlots";
+import { DEFAULT_SCALE_SLOTS, type ScaleSlot } from "../constants/scaleSlots";
 import type { Scale } from "../hooks/useScaleState";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
