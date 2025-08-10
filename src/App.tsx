@@ -4,6 +4,7 @@ import { useUserStore } from "./stores/userStore";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useLayoutEffect } from "react";
 import { Routes, Route } from "react-router-dom";
+import { PWAUpdatePrompt } from "./components/PWAUpdatePrompt";
 
 const queryClient = new QueryClient();
 
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/" element={<Lobby />} />
         <Route path="/room/:roomId" element={<Room />} />
       </Routes>
+      <PWAUpdatePrompt />
     </QueryClientProvider>
   );
 }
