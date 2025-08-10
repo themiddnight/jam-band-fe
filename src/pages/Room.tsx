@@ -10,16 +10,18 @@ import {
 import MidiStatus from "../components/MidiStatus";
 import RoomMembers from "../components/RoomMembers";
 import ScaleSlots from "../components/ScaleSlots";
+import VoiceInput from "../components/VoiceInput";
 import AnchoredPopup from "../components/shared/AnchoredPopup";
 import { Modal } from "../components/shared/Modal";
 import { InstrumentCategory } from "../constants/instruments";
 import { useRoom } from "../hooks/useRoom";
 import { useScaleSlotKeyboard } from "../hooks/useScaleSlotKeyboard";
+import { useWebRTCVoice } from "../hooks/useWebRTCVoice";
 import { useScaleSlotsStore } from "../stores/scaleSlotsStore";
 import { ControlType } from "../types";
 import { preloadCriticalComponents } from "../utils/componentPreloader";
 import { getSafariUserMessage } from "../utils/webkitCompat";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
 
 const Room = memo(() => {
   const {
@@ -79,12 +81,62 @@ const Room = memo(() => {
     // Audio management
     stopSustainedNotes,
     playNotes,
+
+    // Socket connection
+    socketRef,
   } = useRoom();
 
   // Notification popup state
   const [isPendingPopupOpen, setIsPendingPopupOpen] = useState(false);
   const pendingBtnRef = useRef<HTMLButtonElement>(null);
   const pendingCount = currentRoom?.pendingMembers?.length ?? 0;
+
+  // WebRTC Voice Communication - allow all users (including audience) to participate
+  const isVoiceEnabled = !!currentUser?.role;
+  const canTransmitVoice =
+    currentUser?.role === "room_owner" || currentUser?.role === "band_member";
+
+  // WebRTC hook parameters
+  const webRTCParams = {
+    socket: socketRef.current,
+    currentUserId: currentUser?.id || "",
+    currentUsername: currentUser?.username || "",
+    roomId: currentRoom?.id || "",
+    isEnabled: isVoiceEnabled,
+    canTransmit: canTransmitVoice,
+  };
+
+  const {
+    voiceUsers,
+    addLocalStream,
+    removeLocalStream,
+    performIntentionalCleanup,
+    enableAudioReception,
+    canTransmit,
+    isAudioEnabled,
+    // isConnecting: isVoiceConnecting,
+    // connectionError: voiceConnectionError
+  } = useWebRTCVoice(webRTCParams);
+
+  // Override the leave room handler to include WebRTC cleanup
+  const handleLeaveRoomConfirmWithCleanup = useCallback(async () => {
+    // Perform intentional WebRTC cleanup before leaving
+    performIntentionalCleanup();
+    // Call the original leave room handler
+    await handleLeaveRoomConfirm();
+  }, [performIntentionalCleanup, handleLeaveRoomConfirm]);
+
+  // Memoize VoiceInput callbacks to prevent component recreation
+  const handleStreamReady = useCallback(
+    (stream: MediaStream) => {
+      addLocalStream(stream);
+    },
+    [addLocalStream],
+  );
+
+  const handleStreamRemoved = useCallback(() => {
+    removeLocalStream();
+  }, [removeLocalStream]);
 
   // Memoize commonProps to prevent child component re-renders
   const commonProps = useMemo(
@@ -118,6 +170,36 @@ const Room = memo(() => {
   useEffect(() => {
     preloadCriticalComponents();
   }, []);
+
+  // Auto-enable audio for audience members when they join (with user gesture fallback)
+  useEffect(() => {
+    if (
+      currentUser?.role === "audience" &&
+      isVoiceEnabled &&
+      !isAudioEnabled &&
+      currentRoom
+    ) {
+      // Try to auto-enable audio after a short delay to ensure room is fully loaded
+      const timer = setTimeout(() => {
+        console.log("🎧 Auto-attempting to enable audio for audience member");
+        enableAudioReception().catch((error) => {
+          console.log(
+            "🎧 Auto audio enable failed (user gesture required):",
+            error,
+          );
+          // This is expected on mobile - user will need to click the button
+        });
+      }, 1000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [
+    currentUser?.role,
+    isVoiceEnabled,
+    isAudioEnabled,
+    currentRoom,
+    enableAudioReception,
+  ]);
 
   // Initialize scale slots store and apply selected slot
   const { initialize, getSelectedSlot } = useScaleSlotsStore();
@@ -399,19 +481,33 @@ const Room = memo(() => {
           </div>
         </div>
 
-        {/* Instrument Controls */}
-        {(currentUser?.role === "room_owner" ||
-          currentUser?.role === "band_member") && (
-          <>
-            <div className="flex gap-2 flex-wrap w-full max-w-6xl mb-3">
-              <MidiStatus
-                isConnected={midiController.isConnected}
-                getMidiInputs={midiController.getMidiInputs}
-                onRequestAccess={midiController.requestMidiAccess}
-                connectionError={midiController.connectionError}
-                isRequesting={midiController.isRequesting}
-                refreshMidiDevices={midiController.refreshMidiDevices}
-              />
+        <div className="flex gap-2 flex-wrap w-full max-w-6xl mb-3">
+          {/* Instrument Controls */}
+          {(currentUser?.role === "room_owner" ||
+            currentUser?.role === "band_member") && (
+            <MidiStatus
+              isConnected={midiController.isConnected}
+              getMidiInputs={midiController.getMidiInputs}
+              onRequestAccess={midiController.requestMidiAccess}
+              connectionError={midiController.connectionError}
+              isRequesting={midiController.isRequesting}
+              refreshMidiDevices={midiController.refreshMidiDevices}
+            />
+          )}
+
+          {/* Voice Communication - Only for users who can transmit */}
+          {isVoiceEnabled && canTransmit && (
+            <VoiceInput
+              isVisible={isVoiceEnabled}
+              onStreamReady={handleStreamReady}
+              onStreamRemoved={handleStreamRemoved}
+            />
+          )}
+
+          {/* Instrument Controls */}
+          {(currentUser?.role === "room_owner" ||
+            currentUser?.role === "band_member") && (
+            <>
               <ScaleSlots
                 onSlotSelect={(rootNote, scale) => {
                   scaleState.setRootNote(rootNote);
@@ -426,34 +522,25 @@ const Room = memo(() => {
                 isLoading={isLoadingInstrument}
                 dynamicDrumMachines={dynamicDrumMachines}
               />
-            </div>
 
-            {/* Synthesizer Controls */}
-            {currentCategory === InstrumentCategory.Synthesizer &&
-              synthState && (
-                <div className="w-full max-w-6xl mb-3">
-                  <SynthControls
-                    currentInstrument={currentInstrument}
-                    synthState={synthState}
-                    onParamChange={updateSynthParams}
-                    onLoadPreset={loadPresetParams}
-                  />
-                </div>
-              )}
+              {/* Synthesizer Controls */}
+              {currentCategory === InstrumentCategory.Synthesizer &&
+                synthState && (
+                  <div className="w-full max-w-6xl mb-3">
+                    <SynthControls
+                      currentInstrument={currentInstrument}
+                      synthState={synthState}
+                      onParamChange={updateSynthParams}
+                      onLoadPreset={loadPresetParams}
+                    />
+                  </div>
+                )}
 
-            {/* Instrument Interface */}
-            {renderInstrumentControl()}
-          </>
-        )}
-
-        {/* Room Members */}
-        <RoomMembers
-          users={currentRoom?.users ?? []}
-          pendingMembers={currentRoom?.pendingMembers ?? []}
-          playingIndicators={playingIndicators}
-          onApproveMember={handleApproveMember}
-          onRejectMember={handleRejectMember}
-        />
+              {/* Instrument Interface */}
+              {renderInstrumentControl()}
+            </>
+          )}
+        </div>
 
         {/* Audience View */}
         {currentUser?.role === "audience" && (
@@ -465,10 +552,42 @@ const Room = memo(() => {
                   You are listening to the jam session. Band members can play
                   instruments while you enjoy the music.
                 </p>
+                {isVoiceEnabled && (
+                  <div className="mt-4 space-y-3">
+                    {!isAudioEnabled ? (
+                      <div className="space-y-2">
+                        <p className="text-sm text-base-content/80">
+                          Enable audio to hear voice chat from band members
+                        </p>
+                        <button
+                          onClick={enableAudioReception}
+                          className="btn btn-primary btn-sm"
+                        >
+                          🔊 Enable Audio
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2 text-sm text-base-content/60">
+                        <span className="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
+                        Voice chat: Listen-only mode (Audio enabled)
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
         )}
+
+        {/* Room Members */}
+        <RoomMembers
+          users={currentRoom?.users ?? []}
+          pendingMembers={currentRoom?.pendingMembers ?? []}
+          playingIndicators={playingIndicators}
+          voiceUsers={voiceUsers}
+          onApproveMember={handleApproveMember}
+          onRejectMember={handleRejectMember}
+        />
       </div>
 
       {/* Leave Room Confirmation Modal */}
@@ -478,7 +597,7 @@ const Room = memo(() => {
         title="Leave Room"
         okText="Leave Room"
         cancelText="Cancel"
-        onOk={handleLeaveRoomConfirm}
+        onOk={handleLeaveRoomConfirmWithCleanup}
       >
         <p className="text-base-content/70 mb-4">
           Are you sure you want to leave the room? This action cannot be undone.

@@ -38,11 +38,9 @@ export function useRoomQuery() {
     { roomId: string; userId: string }
   >({
     mutationFn: ({ roomId, userId }) => leaveRoom(roomId, userId),
-    onSuccess: (data) => {
+    onSuccess: () => {
       // Invalidate room list to refresh the lobby
       queryClient.invalidateQueries({ queryKey: roomKeys.lists() });
-
-      console.log("Successfully left room:", data.message);
     },
     onError: (error) => {
       console.error("Failed to leave room:", error);

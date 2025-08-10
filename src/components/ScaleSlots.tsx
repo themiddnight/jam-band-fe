@@ -4,7 +4,10 @@ import { useScaleSlotsStore } from "../stores/scaleSlotsStore";
 import ScaleSelector from "./ScaleSelector";
 import AnchoredPopup from "./shared/AnchoredPopup";
 import { useRef, useState } from "react";
-import type { MouseEvent as ReactMouseEvent, TouchEvent as ReactTouchEvent } from "react";
+import type {
+  MouseEvent as ReactMouseEvent,
+  TouchEvent as ReactTouchEvent,
+} from "react";
 
 export interface ScaleSlotsProps {
   onSlotSelect: (rootNote: string, scale: Scale) => void;
@@ -110,8 +113,9 @@ export default function ScaleSlots({ onSlotSelect }: ScaleSlotsProps) {
                     onClick={() => handleSlotClick(slotId)}
                     onDoubleClick={(e) => handleSlotDoubleClick(slotId, e)}
                     onTouchEnd={(e) => handleSlotTouch(slotId, e)}
-                    className={`btn btn-xs lg:btn-sm join-item ${isSelected ? "btn-primary" : "btn-outline"
-                      }`}
+                    className={`btn btn-xs lg:btn-sm join-item ${
+                      isSelected ? "btn-primary" : "btn-outline"
+                    }`}
                     title={`Slot ${slotId}: ${slot ? getScaleSlotLabel(slot.rootNote, slot.scale) : ""} (Press ${slotId}, Double-click/tap to edit)`}
                   >
                     <span className="text-xs">
@@ -127,7 +131,12 @@ export default function ScaleSlots({ onSlotSelect }: ScaleSlotsProps) {
       </div>
 
       {/* Scale Selector Anchored Popup */}
-      <AnchoredPopup open={showPopup} onClose={handlePopupClose} anchorRef={anchorRef} placement="bottom">
+      <AnchoredPopup
+        open={showPopup}
+        onClose={handlePopupClose}
+        anchorRef={anchorRef}
+        placement="bottom"
+      >
         <div className="p-3 w-fit">
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-medium text-sm">{`Edit Slot ${editingSlot ?? ""}`}</h3>

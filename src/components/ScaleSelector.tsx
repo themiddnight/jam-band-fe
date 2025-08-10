@@ -41,15 +41,17 @@ export default function ScaleSelector({
       <div className="join">
         <button
           onClick={() => onScaleChange("major")}
-          className={`btn btn-sm join-item ${scale === "major" ? "btn-primary" : "btn-outline"
-            }`}
+          className={`btn btn-sm join-item ${
+            scale === "major" ? "btn-primary" : "btn-outline"
+          }`}
         >
           Major
         </button>
         <button
           onClick={() => onScaleChange("minor")}
-          className={`btn btn-sm join-item ${scale === "minor" ? "btn-primary" : "btn-outline"
-            }`}
+          className={`btn btn-sm join-item ${
+            scale === "minor" ? "btn-primary" : "btn-outline"
+          }`}
         >
           Minor
         </button>

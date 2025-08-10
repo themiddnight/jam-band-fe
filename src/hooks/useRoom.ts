@@ -57,6 +57,7 @@ export const useRoom = () => {
     onRequestSynthParamsResponse,
     isConnected,
     isConnecting,
+    socketRef,
     cleanup: socketCleanup,
   } = useSocket();
 
@@ -240,9 +241,6 @@ export const useRoom = () => {
     const cleanup = onInstrumentChanged(async (data) => {
       // Skip if this is the current user's own instrument change
       if (currentUser && data.userId === currentUser.id) {
-        console.log(
-          `⏭️ Skipping own instrument change for user ${data.username}`,
-        );
         return;
       }
 
@@ -282,9 +280,6 @@ export const useRoom = () => {
     const cleanup = onSynthParamsChanged(async (data) => {
       // Skip if this is the current user's own synth params change
       if (currentUser && data.userId === currentUser.id) {
-        console.log(
-          `⏭️ Skipping own synth params change for user ${data.username}`,
-        );
         return;
       }
 
@@ -443,9 +438,6 @@ export const useRoom = () => {
       });
 
     if (instrumentsToPreload.length > 0) {
-      console.log(
-        `🎵 Preloading ${instrumentsToPreload.length} new instruments for room users`,
-      );
       preloadRoomInstruments(instrumentsToPreload);
     }
   }, [instrumentChanges, isAudioContextReady, preloadRoomInstruments]);
@@ -603,9 +595,6 @@ export const useRoom = () => {
   // Handle instrument changes
   useEffect(() => {
     if (currentInstrument && currentCategory) {
-      console.log(
-        `🎵 Sending instrument change to backend: ${currentInstrument} (${currentCategory})`,
-      );
       changeInstrument(currentInstrument, currentCategory);
     }
   }, [currentInstrument, currentCategory, changeInstrument]);
@@ -869,8 +858,6 @@ export const useRoom = () => {
       const result = await roomLeaveMutate.mutateAsync({ roomId, userId });
 
       if (result.success) {
-        console.log("Successfully left room via HTTP:", result.message);
-
         // Disconnect socket to prevent automatic reconnection
         disconnect();
 
@@ -960,5 +947,8 @@ export const useRoom = () => {
     // Audio management
     stopSustainedNotes,
     playNotes,
+
+    // Socket connection
+    socketRef,
   };
 };

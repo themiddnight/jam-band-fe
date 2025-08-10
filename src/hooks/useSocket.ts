@@ -287,20 +287,15 @@ export const useSocket = () => {
         isConnecting ||
         connectingRef.current
       ) {
-        console.log(
-          "Socket already connected, connecting, or connection in progress, skipping",
-        );
         return;
       }
 
       // Clean up existing socket if any
       if (socketRef.current) {
-        console.log("Cleaning up existing socket connection");
         socketRef.current.disconnect();
         socketRef.current = null;
       }
 
-      console.log("Creating new socket connection");
       connectingRef.current = true;
       setIsConnecting(true);
 
@@ -322,7 +317,6 @@ export const useSocket = () => {
       socketRef.current = socket;
 
       socket.on("connect", () => {
-        console.log("Connected to server");
         connectingRef.current = false;
         setIsConnected(true);
         setIsConnectedState(true);
@@ -334,7 +328,6 @@ export const useSocket = () => {
       });
 
       socket.on("disconnect", () => {
-        console.log("Disconnected from server");
         connectingRef.current = false;
         setIsConnected(false);
         setIsConnectedState(false);
@@ -356,7 +349,6 @@ export const useSocket = () => {
 
       // Room events
       socket.on("room_created", (data: { room: any; user: any }) => {
-        console.log("Room created:", data);
         setCurrentRoom(data.room);
         setCurrentUser(data.user);
         setError(null);
@@ -373,8 +365,6 @@ export const useSocket = () => {
           isHidden: boolean;
           createdAt: string;
         }) => {
-          console.log("Room created broadcast received:", data);
-
           // Clear any existing timeout for the previous room
           if (roomCreatedTimeoutRef.current) {
             clearTimeout(roomCreatedTimeoutRef.current);
@@ -382,10 +372,6 @@ export const useSocket = () => {
 
           // Prevent duplicate calls for the same room within a longer window
           if (lastRoomCreatedRef.current === data.id) {
-            console.log(
-              "Skipping duplicate room created broadcast for:",
-              data.id,
-            );
             return;
           }
 
@@ -407,7 +393,6 @@ export const useSocket = () => {
       socket.on(
         "room_joined",
         (data: { room: any; users: any[]; pendingMembers: any[] }) => {
-          console.log("Room joined:", data);
           setCurrentRoom({
             ...data.room,
             users: data.users,
@@ -421,10 +406,6 @@ export const useSocket = () => {
               (user: any) => user.id === currentUserId,
             );
             if (currentUserData) {
-              console.log(
-                "Setting current user from room_joined:",
-                currentUserData,
-              );
               setCurrentUser(currentUserData);
             }
           }
@@ -434,12 +415,10 @@ export const useSocket = () => {
       );
 
       socket.on("user_joined", (data: { user: any }) => {
-        console.log("User joined:", data.user);
         addUser(data.user);
       });
 
       socket.on("user_left", (data: { user: any }) => {
-        console.log("User left:", data.user);
         removeUser(data.user.id);
 
         // Call the callback if set
@@ -449,18 +428,15 @@ export const useSocket = () => {
       });
 
       socket.on("member_request", (data: { user: any }) => {
-        console.log("Member request:", data.user);
         addPendingMember(data.user);
       });
 
       socket.on("member_approved", (data: { user?: any; room?: any }) => {
         if (data.user) {
-          console.log("Member approved:", data.user);
           removePendingMember(data.user.id);
           addUser(data.user);
         }
         if (data.room) {
-          console.log("Room updated after approval:", data.room);
           setCurrentRoom(data.room);
           // Clear pending approval since the user has been approved
           setPendingApproval(false);
@@ -472,10 +448,6 @@ export const useSocket = () => {
               (user: any) => user.id === currentUserId,
             );
             if (approvedUser) {
-              console.log(
-                "Updating current user after approval:",
-                approvedUser,
-              );
               setCurrentUser(approvedUser);
             }
           }
@@ -483,14 +455,12 @@ export const useSocket = () => {
       });
 
       socket.on("room_state_updated", (data: { room: any }) => {
-        console.log("Room state updated:", data.room);
         setCurrentRoom(data.room);
       });
 
       socket.on(
         "member_rejected",
         (data: { message: string; userId?: string }) => {
-          console.log("Member rejected:", data.message);
           // Clear pending approval state and room
           setPendingApproval(false);
           clearRoom();
@@ -516,27 +486,23 @@ export const useSocket = () => {
         },
       );
 
-      socket.on("pending_approval", (data: { message: string }) => {
-        console.log("Pending approval:", data.message);
+      socket.on("pending_approval", () => {
         setPendingApproval(true);
       });
 
       socket.on(
         "ownership_transferred",
         (data: { newOwner: any; oldOwner: any }) => {
-          console.log("Ownership transferred:", data);
           transferOwnership(data.newOwner.id);
         },
       );
 
       socket.on("room_closed", (data: { message: string }) => {
-        console.log("Room closed:", data.message);
         setError(data.message);
         clearRoom();
       });
 
       socket.on("room_closed_broadcast", (data: { roomId: string }) => {
-        console.log("Room closed broadcast:", data.roomId);
         if (roomClosedCallbackRef.current) {
           roomClosedCallbackRef.current(data.roomId);
         }
@@ -559,29 +525,19 @@ export const useSocket = () => {
           instrument: string;
           category: string;
         }) => {
-          console.log("🎵 Socket: Instrument changed:", data);
-
           // Update the room store first
           updateUserInstrument(data.userId, data.instrument, data.category);
 
-          console.log(
-            `✅ Updated instrument for user ${data.username}: ${data.instrument} (${data.category})`,
-          );
-
           // Call the callback if set
           if (instrumentChangedCallbackRef.current) {
-            console.log("🔄 Calling instrument changed callback");
             instrumentChangedCallbackRef.current(data);
           }
         },
       );
 
       socket.on("synth_params_changed", (data: SynthParamsData) => {
-        console.log("🎛️ Socket: Synth parameters changed:", data);
-
         // Call the callback if set
         if (synthParamsChangedCallbackRef.current) {
-          console.log("🔄 Calling synth params changed callback");
           synthParamsChangedCallbackRef.current(data);
         }
       });
@@ -589,11 +545,8 @@ export const useSocket = () => {
       socket.on(
         "request_synth_params_response",
         (data: { requestingUserId: string; requestingUsername: string }) => {
-          console.log("🎛️ Socket: Synth params request received:", data);
-
           // Call the callback if set
           if (requestSynthParamsResponseCallbackRef.current) {
-            console.log("🔄 Calling request synth params response callback");
             requestSynthParamsResponseCallbackRef.current(data);
           }
         },
