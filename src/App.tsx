@@ -23,6 +23,7 @@ export default function App() {
         <Route path="/" element={<Lobby />} />
         <Route path="/room/:roomId" element={<Room />} />
         <Route path="/invite/:roomId" element={<Invite />} />
+        <Route path="*" element={<Lobby />} />
       </Routes>
       <PWAUpdatePrompt />
     </QueryClientProvider>

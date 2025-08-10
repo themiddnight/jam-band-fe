@@ -1,0 +1,27 @@
+{
+  "rewrites": [
+    {
+      "source": "/invite/:roomId",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/room/:roomId",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/invite/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    }
+  ]
+} 
