@@ -50,6 +50,7 @@ export const useRoom = () => {
     changeInstrument,
     updateSynthParams: socketUpdateSynthParams,
     requestSynthParams,
+    sendChatMessage,
     onNoteReceived,
     onUserLeft,
     onInstrumentChanged,
@@ -936,6 +937,7 @@ export const useRoom = () => {
     handleLeaveRoomClick,
     handleLeaveRoomConfirm,
     clearFallbackNotification,
+    sendChatMessage,
 
     // Instrument management
     handleInstrumentChange,

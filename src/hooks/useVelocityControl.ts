@@ -34,9 +34,12 @@ export const useVelocityControl = ({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Only handle if not in an input field
+      const target = event.target as HTMLElement;
       if (
         event.target instanceof HTMLInputElement ||
-        event.target instanceof HTMLTextAreaElement
+        event.target instanceof HTMLTextAreaElement ||
+        target.hasAttribute("data-chat-input") ||
+        target.closest("[data-chat-input]")
       ) {
         return;
       }

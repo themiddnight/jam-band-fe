@@ -27,7 +27,9 @@ export const useKeyboardHandler = (config: KeyboardHandlerConfig) => {
       target.tagName === "TEXTAREA" ||
       target.contentEditable === "true" ||
       target.closest('input, textarea, [contenteditable="true"]') ||
-      target.hasAttribute("data-dropdown-search")
+      target.hasAttribute("data-dropdown-search") ||
+      target.hasAttribute("data-chat-input") ||
+      target.closest("[data-chat-input]")
     ) {
       return;
     }

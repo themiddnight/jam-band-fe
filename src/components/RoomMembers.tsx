@@ -29,63 +29,52 @@ const RoomMembers = memo(
       return (roleOrder[a.role] ?? 3) - (roleOrder[b.role] ?? 3);
     });
 
-    const mapLevel = (level: number) => {
-      if (level <= 0) return 0;
-      const mapped = Math.log10(1 + 9 * level) / Math.log10(10);
-      return Math.min(1, Math.max(0, mapped));
-    };
-
     return (
-      <div className="w-full max-w-6xl my-3">
-        <div className="card bg-base-100 shadow-xl">
-          <div className="card-body p-2">
-            <h3 className="card-title">Room Members</h3>
-            {/* Active Members - Compact List */}
-            <div className="flex flex-wrap gap-2">
-              {sortedUsers.map((user) => {
-                const playingIndicator = playingIndicators.get(user.username);
-                const voiceUser = voiceUsers.find((v) => v.userId === user.id);
+      <div className="card bg-base-100 shadow-lg w-full">
+        <div className="card-body p-3">
+          <h3 className="card-title">Room Members</h3>
+          {/* Active Members - Compact List */}
+          <div className="flex flex-wrap gap-2">
+            {sortedUsers.map((user) => {
+              const playingIndicator = playingIndicators.get(user.username);
+              const voiceUser = voiceUsers.find((v) => v.userId === user.id);
 
-                return (
-                  <div
-                    key={user.id}
-                    className="flex items-center gap-2 p-2 bg-base-200 rounded-lg min-w-fit"
-                  >
-                    {user.role !== "audience" && (
-                      <PlayingIndicator
-                        velocity={playingIndicator?.velocity || 0}
-                        mode="pulse"
-                      />
-                    )}
-
-                    {/* Voice Indicator for all users */}
-                    {voiceUser && !voiceUser.isMuted && (
-                      <PlayingIndicator
-                        value={mapLevel(voiceUser.audioLevel)}
-                        color="hsl(30, 100%, 60%)"
-                        mode="continuous"
-                      />
-                    )}
-
-                    <span className="font-medium text-sm whitespace-nowrap">
-                      {user.username}
+              return (
+                <div
+                  key={user.id}
+                  className="flex items-center gap-2 p-2 bg-base-200 rounded-lg min-w-fit transition-all duration-100 border-2"
+                  style={{
+                    borderColor:
+                      voiceUser?.audioLevel && voiceUser.audioLevel > 0.05
+                        ? "hsl(30, 100%, 60%)"
+                        : "transparent",
+                  }}
+                >
+                  {user.role !== "audience" && (
+                    <PlayingIndicator
+                      velocity={playingIndicator?.velocity || 0}
+                      mode="pulse"
+                    />
+                  )}
+                  {voiceUser?.isMuted && "🔇"}
+                  <span className="font-medium text-sm whitespace-nowrap">
+                    {user.username}
+                  </span>
+                  {user.role !== "audience" && user.currentInstrument ? (
+                    <span className="text-xs text-base-content/60 bg-base-300 px-2 py-1 rounded whitespace-nowrap">
+                      {user.currentInstrument.replace(/_/g, " ")}
                     </span>
-                    {user.role !== "audience" && user.currentInstrument ? (
-                      <span className="text-xs text-base-content/60 bg-base-300 px-2 py-1 rounded whitespace-nowrap">
-                        {user.currentInstrument.replace(/_/g, " ")}
-                      </span>
-                    ) : null}
-                    <span className="text-xs whitespace-nowrap">
-                      {user.role === "room_owner"
-                        ? "👑"
-                        : user.role === "band_member"
-                          ? "🎹"
-                          : "🦻🏼"}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+                  ) : null}
+                  <span className="text-xs whitespace-nowrap">
+                    {user.role === "room_owner"
+                      ? "👑"
+                      : user.role === "band_member"
+                        ? "🎹"
+                        : "🦻🏼"}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

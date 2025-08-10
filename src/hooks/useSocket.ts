@@ -103,6 +103,8 @@ export const useSocket = () => {
     if (pool.connections.has(roomId)) {
       const connection = pool.connections.get(roomId)!;
       if (connection.connected) {
+        // Clear existing listeners to prevent duplicates
+        connection.removeAllListeners();
         return connection;
       } else {
         // Remove disconnected connection
@@ -314,6 +316,10 @@ export const useSocket = () => {
           timeout: 10000,
         });
       }
+
+      // Clear any existing listeners to prevent duplicates
+      socket.removeAllListeners();
+
       socketRef.current = socket;
 
       socket.on("connect", () => {
@@ -551,6 +557,14 @@ export const useSocket = () => {
           }
         },
       );
+
+      // Chat message handler
+      socket.on("chat_message", (data: any) => {
+        // Call the global handler if it exists
+        if ((window as any).handleChatMessage) {
+          (window as any).handleChatMessage(data);
+        }
+      });
     },
     [
       isConnecting,
@@ -824,6 +838,14 @@ export const useSocket = () => {
     recentNoteEvents.current.clear();
   }, [processMessageBatch]);
 
+  // Send chat message
+  const sendChatMessage = useCallback(
+    (message: string) => {
+      safeEmit("chat_message", { message });
+    },
+    [safeEmit],
+  );
+
   return {
     connect,
     createRoom,
@@ -837,6 +859,7 @@ export const useSocket = () => {
     changeInstrument,
     updateSynthParams,
     requestSynthParams,
+    sendChatMessage,
 
     onNoteReceived,
     onRoomCreated,

@@ -18,7 +18,9 @@ export const useScaleSlotKeyboard = (
         target.tagName === "INPUT" ||
         target.tagName === "TEXTAREA" ||
         target.contentEditable === "true" ||
-        target.closest('input, textarea, [contenteditable="true"]');
+        target.closest('input, textarea, [contenteditable="true"]') ||
+        target.hasAttribute("data-chat-input") ||
+        target.closest("[data-chat-input]");
 
       // Skip if it's an input element
       if (isInputElement) {

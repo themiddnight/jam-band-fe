@@ -1,3 +1,4 @@
+import ChatBox from "../components/ChatBox";
 import InstrumentCategorySelector from "../components/InstrumentCategorySelector";
 import {
   LazyKeyboardWrapper as Keyboard,
@@ -70,6 +71,7 @@ const Room = memo(() => {
     handleLeaveRoomClick,
     handleLeaveRoomConfirm,
     clearFallbackNotification,
+    sendChatMessage,
 
     // Instrument management
     handleInstrumentChange,
@@ -544,7 +546,7 @@ const Room = memo(() => {
 
         {/* Audience View */}
         {currentUser?.role === "audience" && (
-          <div className="w-full max-w-6xl">
+          <div className="w-full max-w-6xl mb-3">
             <div className="card bg-base-100 shadow-xl">
               <div className="card-body text-center">
                 <h3 className="card-title justify-center">Audience Mode</h3>
@@ -579,15 +581,23 @@ const Room = memo(() => {
           </div>
         )}
 
-        {/* Room Members */}
-        <RoomMembers
-          users={currentRoom?.users ?? []}
-          pendingMembers={currentRoom?.pendingMembers ?? []}
-          playingIndicators={playingIndicators}
-          voiceUsers={voiceUsers}
-          onApproveMember={handleApproveMember}
-          onRejectMember={handleRejectMember}
-        />
+        {/* Room Members and Chat */}
+        <div className="flex flex-col-reverse md:flex-row gap-3 w-full max-w-6xl items-start">
+          <RoomMembers
+            users={currentRoom?.users ?? []}
+            pendingMembers={currentRoom?.pendingMembers ?? []}
+            playingIndicators={playingIndicators}
+            voiceUsers={voiceUsers}
+            onApproveMember={handleApproveMember}
+            onRejectMember={handleRejectMember}
+          />
+
+          {/* Chat Box */}
+          <ChatBox
+            currentUserId={currentUser?.id || ""}
+            onSendMessage={sendChatMessage}
+          />
+        </div>
       </div>
 
       {/* Leave Room Confirmation Modal */}

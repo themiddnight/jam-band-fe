@@ -19,6 +19,9 @@ export * from "./scaleSlots";
 // UI Components
 export * from "./chordModifierConfig";
 
+// Chat & Communication
+export * from "./chat";
+
 // Shared Utilities
 export * from "./utils/displayUtils";
 
