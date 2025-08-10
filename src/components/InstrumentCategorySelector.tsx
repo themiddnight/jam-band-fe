@@ -1,4 +1,6 @@
-import { InstrumentCategory, SOUNDFONT_INSTRUMENTS, DRUM_MACHINES, SYNTHESIZER_INSTRUMENTS } from "../constants/instruments";
+import { InstrumentCategory, DRUM_MACHINES } from "../constants/instruments";
+import { getGroupedInstrumentsForCategory } from "../utils/instrumentGrouping";
+import GroupedDropdown from "./shared/GroupedDropdown";
 
 export interface InstrumentCategorySelectorProps {
   currentCategory: InstrumentCategory;
@@ -6,7 +8,11 @@ export interface InstrumentCategorySelectorProps {
   onCategoryChange: (category: InstrumentCategory) => void;
   onInstrumentChange: (instrument: string) => void;
   isLoading?: boolean;
-  dynamicDrumMachines?: Array<{ value: string; label: string; controlType: any }>;
+  dynamicDrumMachines?: Array<{
+    value: string;
+    label: string;
+    controlType: any;
+  }>;
 }
 
 export default function InstrumentCategorySelector({
@@ -23,25 +29,15 @@ export default function InstrumentCategorySelector({
     { value: InstrumentCategory.Synthesizer, label: "Synthesizer" },
   ];
 
-  const getInstrumentsForCategory = () => {
-    switch (currentCategory) {
-      case InstrumentCategory.Melodic:
-        return SOUNDFONT_INSTRUMENTS;
-      case InstrumentCategory.DrumBeat:
-        return dynamicDrumMachines;
-      case InstrumentCategory.Synthesizer:
-        return SYNTHESIZER_INSTRUMENTS;
-      default:
-        return SOUNDFONT_INSTRUMENTS;
-    }
-  };
-
-  const instruments = getInstrumentsForCategory();
+  const groupedInstruments = getGroupedInstrumentsForCategory(
+    currentCategory,
+    dynamicDrumMachines,
+  );
 
   return (
     <div className="card bg-base-100 shadow-lg grow">
       <div className="card-body p-3">
-        <div className="flex justify-center gap-4">
+        <div className="flex justify-center gap-2 flex-wrap">
           {/* Category Selection */}
           <div className="flex items-center gap-2">
             <label className="label py-1 hidden lg:block">
@@ -49,7 +45,9 @@ export default function InstrumentCategorySelector({
             </label>
             <select
               value={currentCategory}
-              onChange={(e) => onCategoryChange(e.target.value as InstrumentCategory)}
+              onChange={(e) =>
+                onCategoryChange(e.target.value as InstrumentCategory)
+              }
               disabled={isLoading}
               className="select select-bordered select-sm w-full max-w-xs"
             >
@@ -66,21 +64,17 @@ export default function InstrumentCategorySelector({
             <label className="label py-1 hidden lg:block">
               <span className="label-text text-xs">Inst</span>
             </label>
-            <select
+            <GroupedDropdown
+              options={groupedInstruments}
               value={currentInstrument}
-              onChange={(e) => onInstrumentChange(e.target.value)}
+              onChange={onInstrumentChange}
+              placeholder="Select instrument"
               disabled={isLoading}
-              className="select select-bordered select-sm w-full max-w-xs"
-            >
-              {instruments.map((instrument) => (
-                <option key={instrument.value} value={instrument.value}>
-                  {instrument.label}
-                </option>
-              ))}
-            </select>
+              className="w-full min-w-50"
+            />
           </div>
         </div>
       </div>
     </div>
   );
-} 
+}

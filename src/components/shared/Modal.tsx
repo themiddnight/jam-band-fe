@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect } from "react";
 
 interface ModalProps {
   open: boolean;
@@ -13,7 +13,17 @@ interface ModalProps {
   cancelText?: string;
   onOk?: () => void;
   onCancel?: () => void;
-  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | '6xl' | '7xl';
+  size?:
+    | "sm"
+    | "md"
+    | "lg"
+    | "xl"
+    | "2xl"
+    | "3xl"
+    | "4xl"
+    | "5xl"
+    | "6xl"
+    | "7xl";
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -21,32 +31,32 @@ export const Modal: React.FC<ModalProps> = ({
   setOpen,
   onOpen,
   onClose,
-  title = 'Confirm',
+  title = "Confirm",
   children,
   showCancelButton = true,
   showOkButton = true,
-  okText = 'OK',
-  cancelText = 'Cancel',
+  okText = "OK",
+  cancelText = "Cancel",
   onOk,
   onCancel,
-  size = 'md'
+  size = "md",
 }) => {
   // Handle keyboard events
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!open) return;
-      
-      if (e.key === 'Escape') {
+
+      if (e.key === "Escape") {
         e.preventDefault();
         handleCancel();
-      } else if (e.key === 'Enter' && showOkButton && onOk) {
+      } else if (e.key === "Enter" && showOkButton && onOk) {
         // Don't handle Enter if focus is on an input element
         const activeElement = document.activeElement;
-        const isInputElement = activeElement && (
-          activeElement.tagName === 'TEXTAREA' ||
-          (activeElement as HTMLElement).contentEditable === 'true'
-        );
-        
+        const isInputElement =
+          activeElement &&
+          (activeElement.tagName === "TEXTAREA" ||
+            (activeElement as HTMLElement).contentEditable === "true");
+
         if (!isInputElement) {
           e.preventDefault();
           handleOk();
@@ -55,14 +65,14 @@ export const Modal: React.FC<ModalProps> = ({
     };
 
     if (open) {
-      document.addEventListener('keydown', handleKeyDown);
+      document.addEventListener("keydown", handleKeyDown);
       onOpen?.();
     }
 
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener("keydown", handleKeyDown);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, showOkButton, onOk]);
 
   const handleClose = () => {
@@ -89,11 +99,10 @@ export const Modal: React.FC<ModalProps> = ({
   if (!open) return null;
 
   return (
-    <div 
-      className="modal modal-open"
-      onClick={handleBackdropClick}
-    >
-      <div className={`modal-box max-w-${size} max-h-[90vh] flex flex-col overflow-hidden`}>
+    <div className="modal modal-open" onClick={handleBackdropClick}>
+      <div
+        className={`modal-box max-w-${size} max-h-[90vh] flex flex-col overflow-hidden`}
+      >
         {/* Header */}
         <div className="flex justify-between items-center mb-4">
           <h3 className="font-bold text-lg">{title}</h3>
@@ -115,18 +124,12 @@ export const Modal: React.FC<ModalProps> = ({
         {(showOkButton || showCancelButton) && (
           <div className="modal-action">
             {showCancelButton && (
-              <button
-                onClick={handleCancel}
-                className="btn btn-outline"
-              >
+              <button onClick={handleCancel} className="btn btn-outline">
                 {cancelText}
               </button>
             )}
             {showOkButton && (
-              <button
-                onClick={handleOk}
-                className="btn btn-primary"
-              >
+              <button onClick={handleOk} className="btn btn-primary">
                 {okText}
               </button>
             )}
@@ -135,4 +138,4 @@ export const Modal: React.FC<ModalProps> = ({
       </div>
     </div>
   );
-}; 
+};

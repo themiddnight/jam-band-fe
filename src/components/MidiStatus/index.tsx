@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
 import type { MidiDevice } from "../../hooks/useMidiController";
+import { useState, useEffect } from "react";
 
 interface MidiStatusProps {
   isConnected: boolean;
@@ -54,7 +54,7 @@ export default function MidiStatus({
       const hasDevices = refreshMidiDevices();
       const updatedDevices = getMidiInputs();
       setDevices(updatedDevices);
-      
+
       if (!hasDevices && updatedDevices.length === 0) {
         console.log("No MIDI devices found after refresh");
       }
@@ -73,7 +73,7 @@ export default function MidiStatus({
     const timeout = setTimeout(() => {
       setShowTooltip(false);
     }, 300); // 300ms delay before hiding
-    setTooltipTimeout(timeout);
+    setTooltipTimeout(timeout as unknown as number);
   };
 
   const getStatusBadge = () => {
@@ -138,7 +138,7 @@ export default function MidiStatus({
                   </button>
                 )}
               </div>
-              
+
               {devices.length > 0 ? (
                 <div className="space-y-2">
                   {devices.map((device) => (
@@ -212,7 +212,7 @@ export default function MidiStatus({
                 </div>
               )}
 
-              {typeof navigator.requestMIDIAccess === 'function' && (
+              {typeof navigator.requestMIDIAccess === "function" && (
                 <button
                   onClick={handleRequestAccess}
                   disabled={isRequesting}
@@ -229,7 +229,7 @@ export default function MidiStatus({
                 </button>
               )}
 
-              {typeof navigator.requestMIDIAccess !== 'function' && (
+              {typeof navigator.requestMIDIAccess !== "function" && (
                 <div className="alert alert-warning">
                   <span className="text-xs">
                     Web MIDI API not supported in this browser

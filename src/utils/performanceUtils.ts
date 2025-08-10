@@ -1,15 +1,14 @@
 /**
  * Performance optimization utilities for keyboard components
  */
-
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef } from "react";
 
 /**
  * Debounce utility for expensive operations
  */
 export const debounce = <T extends (...args: any[]) => any>(
   func: T,
-  wait: number
+  wait: number,
 ): ((...args: Parameters<T>) => void) => {
   let timeout: ReturnType<typeof setTimeout>;
   return (...args: Parameters<T>) => {
@@ -23,14 +22,14 @@ export const debounce = <T extends (...args: any[]) => any>(
  */
 export const throttle = <T extends (...args: any[]) => any>(
   func: T,
-  limit: number
+  limit: number,
 ): ((...args: Parameters<T>) => void) => {
   let inThrottle: boolean;
   return (...args: Parameters<T>) => {
     if (!inThrottle) {
       func(...args);
       inThrottle = true;
-      setTimeout(() => inThrottle = false, limit);
+      setTimeout(() => (inThrottle = false), limit);
     }
   };
 };
@@ -40,7 +39,7 @@ export const throttle = <T extends (...args: any[]) => any>(
  */
 export const useOptimizedSet = <T>() => {
   const setRef = useRef<Set<T>>(new Set());
-  
+
   const add = useCallback((item: T) => {
     if (!setRef.current.has(item)) {
       setRef.current = new Set(setRef.current).add(item);
@@ -48,7 +47,7 @@ export const useOptimizedSet = <T>() => {
     }
     return false;
   }, []);
-  
+
   const remove = useCallback((item: T) => {
     if (setRef.current.has(item)) {
       const newSet = new Set(setRef.current);
@@ -58,13 +57,13 @@ export const useOptimizedSet = <T>() => {
     }
     return false;
   }, []);
-  
+
   const has = useCallback((item: T) => setRef.current.has(item), []);
-  
+
   const clear = useCallback(() => {
     setRef.current = new Set();
   }, []);
-  
+
   return {
     set: setRef.current,
     add,
@@ -80,7 +79,7 @@ export const useOptimizedSet = <T>() => {
  */
 export const useOptimizedMap = <K, V>() => {
   const mapRef = useRef<Map<K, V>>(new Map());
-  
+
   const set = useCallback((key: K, value: V) => {
     const existing = mapRef.current.get(key);
     if (existing !== value) {
@@ -89,7 +88,7 @@ export const useOptimizedMap = <K, V>() => {
     }
     return false;
   }, []);
-  
+
   const remove = useCallback((key: K) => {
     if (mapRef.current.has(key)) {
       const newMap = new Map(mapRef.current);
@@ -99,15 +98,15 @@ export const useOptimizedMap = <K, V>() => {
     }
     return false;
   }, []);
-  
+
   const get = useCallback((key: K) => mapRef.current.get(key), []);
-  
+
   const has = useCallback((key: K) => mapRef.current.has(key), []);
-  
+
   const clear = useCallback(() => {
     mapRef.current = new Map();
   }, []);
-  
+
   return {
     map: mapRef.current,
     set,
@@ -124,13 +123,13 @@ export const useOptimizedMap = <K, V>() => {
  */
 export const memoize = <T extends (...args: any[]) => any>(fn: T): T => {
   const cache = new Map();
-  
+
   return ((...args: Parameters<T>) => {
     const key = JSON.stringify(args);
     if (cache.has(key)) {
       return cache.get(key);
     }
-    
+
     const result = fn(...args);
     cache.set(key, result);
     return result;
@@ -142,22 +141,24 @@ export const memoize = <T extends (...args: any[]) => any>(fn: T): T => {
  */
 export const useBatchedUpdates = () => {
   const batchRef = useRef<(() => void)[]>([]);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+
   const addUpdate = useCallback((update: () => void) => {
     batchRef.current.push(update);
-    
+
     if (timeoutRef.current !== undefined) {
       clearTimeout(timeoutRef.current);
     }
-    
+
     timeoutRef.current = setTimeout(() => {
       const updates = batchRef.current;
       batchRef.current = [];
-      updates.forEach(update => update());
+      updates.forEach((update) => update());
     }, 0);
   }, []);
-  
+
   return addUpdate;
 };
 
@@ -175,11 +176,11 @@ export const measurePerformance = (name: string, fn: () => void) => {
  * Hook for stable event handlers
  */
 export const useStableCallback = <T extends (...args: any[]) => any>(
-  callback: T
+  callback: T,
 ): T => {
   const callbackRef = useRef<T>(callback);
   callbackRef.current = callback;
-  
+
   return useCallback((...args: Parameters<T>) => {
     return callbackRef.current(...args);
   }, []) as T;
@@ -198,12 +199,12 @@ export const arrayEquals = <T>(a: T[], b: T[]): boolean => {
  */
 export const shallowEquals = <T extends Record<string, any>>(
   a: T,
-  b: T
+  b: T,
 ): boolean => {
   const keysA = Object.keys(a);
   const keysB = Object.keys(b);
-  
+
   if (keysA.length !== keysB.length) return false;
-  
-  return keysA.every(key => a[key] === b[key]);
-}; 
+
+  return keysA.every((key) => a[key] === b[key]);
+};

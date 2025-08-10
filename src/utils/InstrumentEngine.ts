@@ -1,31 +1,35 @@
-import { Soundfont, DrumMachine } from 'smplr';
-import * as Tone from 'tone';
-import { InstrumentCategory } from '../constants/instruments';
-import { getSafariLoadTimeout, handleSafariAudioError, findNextCompatibleInstrument } from './webkitCompat';
-import { getOptimalAudioConfig } from '../constants/audioConfig';
-import { throttle } from './performanceUtils';
+import { getOptimalAudioConfig } from "../constants/audioConfig";
+import { InstrumentCategory } from "../constants/instruments";
+import { throttle } from "./performanceUtils";
+import {
+  getSafariLoadTimeout,
+  handleSafariAudioError,
+  findNextCompatibleInstrument,
+} from "./webkitCompat";
+import { Soundfont, DrumMachine } from "smplr";
+import * as Tone from "tone";
 
 export interface SynthState {
   // Volume control
   volume: number;
-  
+
   // Amplitude envelope
   ampAttack: number;
   ampDecay: number;
   ampSustain: number;
   ampRelease: number;
-  
+
   // Analog synth controls
   oscillatorType: string;
   filterFrequency: number;
   filterResonance: number;
-  
+
   // Filter envelope
   filterAttack: number;
   filterDecay: number;
   filterSustain: number;
   filterRelease: number;
-  
+
   // FM synth controls
   modulationIndex: number;
   harmonicity: number;
@@ -63,65 +67,116 @@ export interface InstrumentEngineConfig {
   category: InstrumentCategory;
   isLocalUser?: boolean;
   onSynthParamsChange?: (params: Partial<SynthState>) => void;
-  onInstrumentFallback?: (originalInstrument: string, fallbackInstrument: string, category: InstrumentCategory) => void;
+  onInstrumentFallback?: (
+    originalInstrument: string,
+    fallbackInstrument: string,
+    category: InstrumentCategory,
+  ) => void;
 }
 
 export class InstrumentEngine {
   private config: InstrumentEngineConfig;
   private audioContext: AudioContext | null = null;
-  
+
   // Traditional instruments (smplr)
   private instrument: any = null;
-  
+
   // Synthesizer components (Tone.js)
   private synthRef: any = null;
   private filterRef: Tone.Filter | null = null;
   private filterEnvelopeRef: Tone.FrequencyEnvelope | null = null;
   private gainRef: Tone.Gain | null = null;
-  
+
+  // Audio buffer cache integration (uses shared cache)
+
   // State management
   private isLoaded = false;
   private isLoading = false;
   private loadPromise: Promise<any> | null = null;
   private synthState: SynthState = { ...defaultSynthState };
-  
+
   // Note tracking with optimized data structures
   private activeNotes = new Map<string, any>();
   private sustainedNotes = new Set<any>();
   private keyHeldNotes = new Set<string>();
   private sustain = false;
-  
+
   // Synthesizer specific tracking
   private noteStack: string[] = [];
   private currentNote: string | null = null;
   private filterEnvelopeActive = false;
   private pendingReleases = new Map<string, number>();
   private pendingStop = new Map<string, number>();
-  
+
   // Performance optimizations
-  private noteProcessingQueue = new Map<string, { action: 'play' | 'stop'; timestamp: number }>();
-  private readonly PROCESSING_INTERVAL = 8; // ~120fps for audio processing
+  private noteProcessingQueue = new Map<
+    string,
+    { action: "play" | "stop"; timestamp: number }
+  >();
+  private readonly PROCESSING_INTERVAL = 4; // Reduced from 8ms to 4ms for better responsiveness
   private processingTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  // Audio performance optimizations (future enhancement)
+  // private audioBufferCache = new Map<string, AudioBuffer>();
+  // private readonly MAX_CACHE_SIZE = 50;
+  // private audioWorkletSupported = false;
 
   // Throttled parameter updates for better performance
   private throttledParamUpdate = throttle((params: Partial<SynthState>) => {
     this.updateSynthParamsInternal(params);
-  }, 16); // ~60fps
-  
-  constructor(config: InstrumentEngineConfig) {
-    this.config = config;
-    this.throttledParamUpdate = throttle(this.updateSynthParamsInternal.bind(this), 16);
+  }, 8); // Reduced from 16ms to 8ms for better responsiveness
+
+  // Audio buffer cache integration
+  private clearAudioBufferCache(): void {
+    // Clear shared audio buffer cache
+    import("./audioBufferCache")
+      .then(({ clearAudioBufferCache }) => {
+        clearAudioBufferCache();
+      })
+      .catch(() => {
+        // Ignore import errors
+      });
   }
 
-  // Process note queue for better performance
+  // Get cache statistics for monitoring
+  async getCacheStats(): Promise<{
+    hits: number;
+    misses: number;
+    hitRate: number;
+    size: number;
+  }> {
+    try {
+      const { getAudioBufferCacheStats } = await import("./audioBufferCache");
+      return getAudioBufferCacheStats();
+    } catch {
+      return { hits: 0, misses: 0, hitRate: 0, size: 0 };
+    }
+  }
+
+  constructor(config: InstrumentEngineConfig) {
+    this.config = config;
+    this.throttledParamUpdate = throttle(
+      this.updateSynthParamsInternal.bind(this),
+      16,
+    );
+  }
+
+  // Optimized note processing with better batching
   private processNoteQueue(): void {
     if (this.noteProcessingQueue.size === 0) return;
 
-    const notesToProcess = new Map<string, { action: 'play' | 'stop'; timestamp: number }>();
+    const notesToProcess = new Map<
+      string,
+      { action: "play" | "stop"; timestamp: number }
+    >();
 
-    // Collect notes to process
+    // Collect notes to process with timestamp filtering
+    const now = Date.now();
     this.noteProcessingQueue.forEach((value, key) => {
-      notesToProcess.set(key, value);
+      // Only process notes that aren't too old
+      if (now - value.timestamp < 100) {
+        notesToProcess.set(key, value);
+      }
     });
 
     // Clear the queue
@@ -132,21 +187,21 @@ export class InstrumentEngine {
     const stopNotes: string[] = [];
 
     notesToProcess.forEach((value, note) => {
-      if (value.action === 'play') {
+      if (value.action === "play") {
         playNotes.push(note);
       } else {
         stopNotes.push(note);
       }
     });
 
-    // Batch process play notes
+    // Batch process play notes with optimized batching
     if (playNotes.length > 0) {
-      this.processPlayNotes(playNotes);
+      this.processPlayNotesOptimized(playNotes);
     }
 
-    // Batch process stop notes
+    // Batch process stop notes with optimized batching
     if (stopNotes.length > 0) {
-      this.processStopNotes(stopNotes);
+      this.processStopNotesOptimized(stopNotes);
     }
 
     // Schedule next processing if there are more notes
@@ -162,60 +217,73 @@ export class InstrumentEngine {
     if (this.processingTimeout) {
       clearTimeout(this.processingTimeout);
     }
-    this.processingTimeout = setTimeout(() => this.processNoteQueue(), this.PROCESSING_INTERVAL);
+    this.processingTimeout = setTimeout(
+      () => this.processNoteQueue(),
+      this.PROCESSING_INTERVAL,
+    );
   }
 
-  // Process multiple play notes efficiently
-  private processPlayNotes(notes: string[]): void {
+  // Optimized play notes processing
+  private processPlayNotesOptimized(notes: string[]): void {
     if (this.config.category === InstrumentCategory.Synthesizer) {
-      notes.forEach(note => this.playPolySynthNote(note, 0.7, false));
+      // For synths, process all notes at once for better performance
+      notes.forEach((note) => this.playPolySynthNote(note, 0.7, false));
     } else {
-      // For traditional instruments, process in smaller batches
-      const batchSize = 5;
+      // For traditional instruments, use larger batches for better performance
+      const batchSize = 10; // Increased from 5
       for (let i = 0; i < notes.length; i += batchSize) {
         const batch = notes.slice(i, i + batchSize);
-        this.playTraditionalNotesBatch(batch, 0.7);
+        this.playTraditionalNotesBatchOptimized(batch, 0.7);
       }
     }
   }
 
-  // Process multiple stop notes efficiently
-  private processStopNotes(notes: string[]): void {
+  // Optimized stop notes processing
+  private processStopNotesOptimized(notes: string[]): void {
     if (this.config.category === InstrumentCategory.Synthesizer) {
-      notes.forEach(note => this.stopSynthNotes([note]));
+      notes.forEach((note) => this.stopSynthNotes([note]));
     } else {
-      // For traditional instruments, process in smaller batches
-      const batchSize = 5;
+      // For traditional instruments, use larger batches for better performance
+      const batchSize = 10; // Increased from 5
       for (let i = 0; i < notes.length; i += batchSize) {
         const batch = notes.slice(i, i + batchSize);
-        this.stopTraditionalNotesBatch(batch);
+        this.stopTraditionalNotesBatchOptimized(batch);
       }
     }
   }
 
-  // Batch play traditional notes
-  private async playTraditionalNotesBatch(notes: string[], velocity: number): Promise<void> {
+  // Optimized batch play traditional notes
+  private async playTraditionalNotesBatchOptimized(
+    notes: string[],
+    velocity: number,
+  ): Promise<void> {
     if (!this.instrument || !this.isLoaded) return;
 
     try {
-      await Promise.all(notes.map(note => 
-        this.instrument.start({ note, velocity, duration: 1 })
-      ));
+      // Use Promise.allSettled for better error handling
+      await Promise.allSettled(
+        notes.map((note) =>
+          this.instrument.start({ note, velocity, duration: 1 }),
+        ),
+      );
     } catch (error) {
-      console.error('Error playing traditional notes batch:', error);
+      console.error("Error playing traditional notes batch:", error);
     }
   }
 
-  // Batch stop traditional notes
-  private async stopTraditionalNotesBatch(notes: string[]): Promise<void> {
+  // Optimized batch stop traditional notes
+  private async stopTraditionalNotesBatchOptimized(
+    notes: string[],
+  ): Promise<void> {
     if (!this.instrument || !this.isLoaded) return;
 
     try {
-      await Promise.all(notes.map(note => 
-        this.instrument.stop({ note })
-      ));
+      // Use Promise.allSettled for better error handling
+      await Promise.allSettled(
+        notes.map((note) => this.instrument.stop({ note })),
+      );
     } catch (error) {
-      console.error('Error stopping traditional notes batch:', error);
+      console.error("Error stopping traditional notes batch:", error);
     }
   }
 
@@ -240,7 +308,9 @@ export class InstrumentEngine {
   }
 
   isReady(): boolean {
-    return this.isLoaded && (this.instrument !== null || this.synthRef !== null);
+    return (
+      this.isLoaded && (this.instrument !== null || this.synthRef !== null)
+    );
   }
 
   getIsLoading(): boolean {
@@ -255,7 +325,11 @@ export class InstrumentEngine {
    * Get available samples for drum machines
    */
   getAvailableSamples(): string[] {
-    if (this.config.category === InstrumentCategory.DrumBeat && this.instrument && this.instrument.getSampleNames) {
+    if (
+      this.config.category === InstrumentCategory.DrumBeat &&
+      this.instrument &&
+      this.instrument.getSampleNames
+    ) {
       try {
         const samples = this.instrument.getSampleNames();
         // Ensure we have actual samples, not just an empty array
@@ -277,18 +351,20 @@ export class InstrumentEngine {
     }
 
     const startTime = Date.now();
-    
+
     while (Date.now() - startTime < maxWaitTime) {
       const samples = this.getAvailableSamples();
       if (samples.length > 0) {
         return samples;
       }
-      
+
       // Wait a bit before checking again
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    
-    console.warn(`Timeout waiting for drum machine samples after ${maxWaitTime}ms`);
+
+    console.warn(
+      `Timeout waiting for drum machine samples after ${maxWaitTime}ms`,
+    );
     return [];
   }
 
@@ -304,22 +380,31 @@ export class InstrumentEngine {
 
     if (this.isLoading && this.loadPromise) {
       // If already loading, return the existing promise to prevent duplicate requests
-      console.log(`⏳ Instrument ${this.config.instrumentName} already loading for ${this.config.username}, waiting for existing load...`);
+      console.log(
+        `⏳ Instrument ${this.config.instrumentName} already loading for ${this.config.username}, waiting for existing load...`,
+      );
       return this.loadPromise;
     }
 
     this.isLoading = true;
-    console.log(`🎵 Starting to load ${this.config.instrumentName} (${this.config.category}) for ${this.config.isLocalUser ? 'local' : 'remote'} user ${this.config.username}`);
-    
+    console.log(
+      `🎵 Starting to load ${this.config.instrumentName} (${this.config.category}) for ${this.config.isLocalUser ? "local" : "remote"} user ${this.config.username}`,
+    );
+
     this.loadPromise = this._loadInstrumentWithFallback();
-    
+
     try {
       const result = await this.loadPromise;
       this.isLoaded = true;
-      console.log(`✅ Successfully loaded ${this.config.instrumentName} for ${this.config.username}`);
+      console.log(
+        `✅ Successfully loaded ${this.config.instrumentName} for ${this.config.username}`,
+      );
       return result;
     } catch (error) {
-      console.error(`❌ Failed to load ${this.config.instrumentName} for ${this.config.username}:`, error);
+      console.error(
+        `❌ Failed to load ${this.config.instrumentName} for ${this.config.username}:`,
+        error,
+      );
       throw error;
     } finally {
       this.isLoading = false;
@@ -332,70 +417,91 @@ export class InstrumentEngine {
     let currentInstrument = this.config.instrumentName;
     const currentCategory = this.config.category;
     let maxAttempts = 5; // Limit the number of fallback attempts
-    
+
     while (maxAttempts > 0) {
       try {
-        console.log(`🎵 Attempting to load ${currentInstrument} (${currentCategory}) for ${this.config.username}`);
-        
+        console.log(
+          `🎵 Attempting to load ${currentInstrument} (${currentCategory}) for ${this.config.username}`,
+        );
+
         // Update the config with the current instrument
         this.config.instrumentName = currentInstrument;
         this.config.category = currentCategory;
-        
+
         const result = await this._loadInstrument();
-        console.log(`✅ Successfully loaded ${currentInstrument} for ${this.config.username}`);
+        console.log(
+          `✅ Successfully loaded ${currentInstrument} for ${this.config.username}`,
+        );
         return result;
       } catch (error) {
         maxAttempts--;
         failedInstruments.add(currentInstrument);
-        
-        console.warn(`⚠️ Failed to load ${currentInstrument} for ${this.config.username}:`, error);
-        
-        // Check if this is a Safari audio decoding error
-        const isSafariError = error instanceof Error && (
-          error.message.includes('Safari audio decoding failed') ||
-          error.message.includes('Safari audio decoding error') ||
-          error.message.includes('EncodingError')
+
+        console.warn(
+          `⚠️ Failed to load ${currentInstrument} for ${this.config.username}:`,
+          error,
         );
-        
+
+        // Check if this is a Safari audio decoding error
+        const isSafariError =
+          error instanceof Error &&
+          (error.message.includes("Safari audio decoding failed") ||
+            error.message.includes("Safari audio decoding error") ||
+            error.message.includes("EncodingError"));
+
         if (!isSafariError) {
           // If it's not a Safari-specific error, don't try fallbacks
           throw error;
         }
-        
+
         // Try to find the next compatible instrument
         const nextInstrument = await findNextCompatibleInstrument(
           currentInstrument,
           currentCategory,
-          failedInstruments
+          failedInstruments,
         );
-        
+
         if (!nextInstrument) {
-          console.error(`❌ No more compatible instruments available for ${this.config.username} in category ${currentCategory}`);
-          throw new Error(`No compatible instruments available in category ${currentCategory}`);
+          console.error(
+            `❌ No more compatible instruments available for ${this.config.username} in category ${currentCategory}`,
+          );
+          throw new Error(
+            `No compatible instruments available in category ${currentCategory}`,
+          );
         }
-        
-        console.log(`🔄 Trying next compatible instrument: ${nextInstrument} for ${this.config.username}`);
-        
+
+        console.log(
+          `🔄 Trying next compatible instrument: ${nextInstrument} for ${this.config.username}`,
+        );
+
         // Notify about the fallback if callback is provided
         if (this.config.onInstrumentFallback) {
-          this.config.onInstrumentFallback(this.config.instrumentName, nextInstrument, currentCategory);
+          this.config.onInstrumentFallback(
+            this.config.instrumentName,
+            nextInstrument,
+            currentCategory,
+          );
         }
-        
+
         currentInstrument = nextInstrument;
-        
+
         // If we're out of attempts, throw the error
         if (maxAttempts <= 0) {
-          throw new Error(`Failed to load any compatible instrument after multiple attempts for ${this.config.username}`);
+          throw new Error(
+            `Failed to load any compatible instrument after multiple attempts for ${this.config.username}`,
+          );
         }
       }
     }
-    
-    throw new Error(`Failed to load any compatible instrument for ${this.config.username}`);
+
+    throw new Error(
+      `Failed to load any compatible instrument for ${this.config.username}`,
+    );
   }
 
   private async _loadInstrument(): Promise<any> {
-    if (!this.audioContext || this.audioContext.state !== 'running') {
-      throw new Error('AudioContext not ready');
+    if (!this.audioContext || this.audioContext.state !== "running") {
+      throw new Error("AudioContext not ready");
     }
 
     try {
@@ -406,7 +512,10 @@ export class InstrumentEngine {
         return await this.loadTraditionalInstrument();
       }
     } catch (error) {
-      console.error(`Failed to load instrument ${this.config.instrumentName} for user ${this.config.username}:`, error);
+      console.error(
+        `Failed to load instrument ${this.config.instrumentName} for user ${this.config.username}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -427,10 +536,12 @@ export class InstrumentEngine {
     }
 
     const loadTimeout = getSafariLoadTimeout();
-    
+
     const loadPromise = new Promise<void>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
-        reject(new Error(`Instrument loading timed out after ${loadTimeout}ms`));
+        reject(
+          new Error(`Instrument loading timed out after ${loadTimeout}ms`),
+        );
       }, loadTimeout);
 
       newInstrument.load
@@ -446,8 +557,10 @@ export class InstrumentEngine {
 
     await loadPromise;
     this.instrument = newInstrument;
-    
-    console.log(`Loaded ${this.config.category} instrument ${this.config.instrumentName} for ${this.config.isLocalUser ? 'local' : 'remote'} user ${this.config.username}`);
+
+    console.log(
+      `Loaded ${this.config.category} instrument ${this.config.instrumentName} for ${this.config.isLocalUser ? "local" : "remote"} user ${this.config.username}`,
+    );
     return newInstrument;
   }
 
@@ -458,11 +571,11 @@ export class InstrumentEngine {
 
     try {
       await Tone.start();
-      
+
       const audioConfig = getOptimalAudioConfig();
-      Tone.context.lookAhead = audioConfig.TONE_CONTEXT.lookAhead;
-      Tone.Transport.scheduleRepeat(() => {}, audioConfig.TONE_CONTEXT.updateInterval);
-      
+      const context = Tone.getContext();
+      context.lookAhead = audioConfig.TONE_CONTEXT.lookAhead;
+
       // Create audio chain: synth -> filter -> gain -> destination
       this.filterRef = new Tone.Filter({
         frequency: this.synthState.filterFrequency,
@@ -482,7 +595,7 @@ export class InstrumentEngine {
           baseFrequency: this.synthState.filterFrequency,
           octaves: 4,
         });
-        
+
         this.filterEnvelopeRef.connect(this.filterRef.frequency);
       }
 
@@ -496,14 +609,19 @@ export class InstrumentEngine {
         this.gainRef.toDestination();
       }
 
-      console.log(`Initialized Tone.js synthesizer ${this.config.instrumentName} for ${this.config.isLocalUser ? 'local' : 'remote'} user ${this.config.username}`);
-      
+      console.log(
+        `Initialized Tone.js synthesizer ${this.config.instrumentName} for ${this.config.isLocalUser ? "local" : "remote"} user ${this.config.username}`,
+      );
+
       // Ensure all current synth parameters are applied to the new synthesizer
       if (this.synthRef) {
         this.updateSynthParamsInternal(this.synthState);
       }
     } catch (error) {
-      console.error(`Failed to initialize synthesizer for user ${this.config.username}:`, error);
+      console.error(
+        `Failed to initialize synthesizer for user ${this.config.username}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -516,8 +634,8 @@ export class InstrumentEngine {
       release: this.synthState.ampRelease,
     };
 
-    const commonOscillator = { 
-      type: this.synthState.oscillatorType as any 
+    const commonOscillator = {
+      type: this.synthState.oscillatorType as any,
     };
 
     switch (this.config.instrumentName) {
@@ -572,7 +690,9 @@ export class InstrumentEngine {
 
   async updateSynthParams(params: Partial<SynthState>): Promise<void> {
     if (this.config.category !== InstrumentCategory.Synthesizer) {
-      console.warn(`❌ Attempted to update synth params for non-synthesizer instrument: ${this.config.instrumentName}`);
+      console.warn(
+        `❌ Attempted to update synth params for non-synthesizer instrument: ${this.config.instrumentName}`,
+      );
       return;
     }
 
@@ -585,7 +705,10 @@ export class InstrumentEngine {
       try {
         await this.initializeSynthesizer();
       } catch (error) {
-        console.error(`❌ Failed to initialize synthesizer for parameter update:`, error);
+        console.error(
+          `❌ Failed to initialize synthesizer for parameter update:`,
+          error,
+        );
         this.synthState = prevState;
         return;
       }
@@ -594,7 +717,7 @@ export class InstrumentEngine {
     // Apply parameters
     try {
       this.throttledParamUpdate(params);
-      
+
       // Notify callback for network synchronization (local user only)
       if (this.config.isLocalUser && this.config.onSynthParamsChange) {
         this.config.onSynthParamsChange(params);
@@ -612,12 +735,12 @@ export class InstrumentEngine {
 
     try {
       const synth = this.synthRef as any;
-      
+
       // Update volume
       if (params.volume !== undefined) {
         this.gainRef.gain.value = params.volume;
       }
-      
+
       // Update filter parameters
       if (params.filterFrequency !== undefined) {
         this.filterRef.frequency.value = params.filterFrequency;
@@ -628,15 +751,19 @@ export class InstrumentEngine {
       if (params.filterResonance !== undefined) {
         this.filterRef.Q.value = params.filterResonance;
       }
-      
+
       // Update filter envelope
       if (this.filterEnvelopeRef) {
-        if (params.filterAttack !== undefined) this.filterEnvelopeRef.attack = params.filterAttack;
-        if (params.filterDecay !== undefined) this.filterEnvelopeRef.decay = params.filterDecay;
-        if (params.filterSustain !== undefined) this.filterEnvelopeRef.sustain = params.filterSustain;
-        if (params.filterRelease !== undefined) this.filterEnvelopeRef.release = params.filterRelease;
+        if (params.filterAttack !== undefined)
+          this.filterEnvelopeRef.attack = params.filterAttack;
+        if (params.filterDecay !== undefined)
+          this.filterEnvelopeRef.decay = params.filterDecay;
+        if (params.filterSustain !== undefined)
+          this.filterEnvelopeRef.sustain = params.filterSustain;
+        if (params.filterRelease !== undefined)
+          this.filterEnvelopeRef.release = params.filterRelease;
       }
-      
+
       // Handle PolySynth vs mono synth updates
       if (synth instanceof Tone.PolySynth) {
         this.updatePolySynthParams(synth, params);
@@ -651,21 +778,24 @@ export class InstrumentEngine {
   private updatePolySynthParams(synth: any, params: Partial<SynthState>): void {
     // Update default options for new voices
     const updates: any = {};
-    
+
     if (params.oscillatorType) {
       updates.oscillator = { type: params.oscillatorType as any };
     }
-    
+
     const envelopeParams: any = {};
-    if (params.ampAttack !== undefined) envelopeParams.attack = params.ampAttack;
+    if (params.ampAttack !== undefined)
+      envelopeParams.attack = params.ampAttack;
     if (params.ampDecay !== undefined) envelopeParams.decay = params.ampDecay;
-    if (params.ampSustain !== undefined) envelopeParams.sustain = params.ampSustain;
-    if (params.ampRelease !== undefined) envelopeParams.release = params.ampRelease;
-    
+    if (params.ampSustain !== undefined)
+      envelopeParams.sustain = params.ampSustain;
+    if (params.ampRelease !== undefined)
+      envelopeParams.release = params.ampRelease;
+
     if (Object.keys(envelopeParams).length > 0) {
       updates.envelope = envelopeParams;
     }
-    
+
     // FM parameters
     if (params.modulationIndex !== undefined) {
       updates.modulationIndex = params.modulationIndex;
@@ -673,21 +803,25 @@ export class InstrumentEngine {
     if (params.harmonicity !== undefined) {
       updates.harmonicity = params.harmonicity;
     }
-    
+
     const modEnvelopeParams: any = {};
-    if (params.modAttack !== undefined) modEnvelopeParams.attack = params.modAttack;
-    if (params.modDecay !== undefined) modEnvelopeParams.decay = params.modDecay;
-    if (params.modSustain !== undefined) modEnvelopeParams.sustain = params.modSustain;
-    if (params.modRelease !== undefined) modEnvelopeParams.release = params.modRelease;
-    
+    if (params.modAttack !== undefined)
+      modEnvelopeParams.attack = params.modAttack;
+    if (params.modDecay !== undefined)
+      modEnvelopeParams.decay = params.modDecay;
+    if (params.modSustain !== undefined)
+      modEnvelopeParams.sustain = params.modSustain;
+    if (params.modRelease !== undefined)
+      modEnvelopeParams.release = params.modRelease;
+
     if (Object.keys(modEnvelopeParams).length > 0) {
       updates.modulationEnvelope = modEnvelopeParams;
     }
-    
+
     if (Object.keys(updates).length > 0) {
       synth.set(updates);
     }
-    
+
     // Update existing voices
     if (synth.voices && Array.isArray(synth.voices)) {
       synth.voices.forEach((voice: any) => {
@@ -701,15 +835,18 @@ export class InstrumentEngine {
     if (params.oscillatorType && synth.oscillator) {
       synth.oscillator.type = params.oscillatorType as any;
     }
-    
+
     // Update amplitude envelope
     if (synth.envelope) {
-      if (params.ampAttack !== undefined) synth.envelope.attack = params.ampAttack;
+      if (params.ampAttack !== undefined)
+        synth.envelope.attack = params.ampAttack;
       if (params.ampDecay !== undefined) synth.envelope.decay = params.ampDecay;
-      if (params.ampSustain !== undefined) synth.envelope.sustain = params.ampSustain;
-      if (params.ampRelease !== undefined) synth.envelope.release = params.ampRelease;
+      if (params.ampSustain !== undefined)
+        synth.envelope.sustain = params.ampSustain;
+      if (params.ampRelease !== undefined)
+        synth.envelope.release = params.ampRelease;
     }
-    
+
     // Update FM parameters
     if (params.modulationIndex !== undefined && synth.modulationIndex) {
       synth.modulationIndex.value = params.modulationIndex;
@@ -717,13 +854,17 @@ export class InstrumentEngine {
     if (params.harmonicity !== undefined && synth.harmonicity) {
       synth.harmonicity.value = params.harmonicity;
     }
-    
+
     // Update FM modulation envelope
     if (synth.modulationEnvelope) {
-      if (params.modAttack !== undefined) synth.modulationEnvelope.attack = params.modAttack;
-      if (params.modDecay !== undefined) synth.modulationEnvelope.decay = params.modDecay;
-      if (params.modSustain !== undefined) synth.modulationEnvelope.sustain = params.modSustain;
-      if (params.modRelease !== undefined) synth.modulationEnvelope.release = params.modRelease;
+      if (params.modAttack !== undefined)
+        synth.modulationEnvelope.attack = params.modAttack;
+      if (params.modDecay !== undefined)
+        synth.modulationEnvelope.decay = params.modDecay;
+      if (params.modSustain !== undefined)
+        synth.modulationEnvelope.sustain = params.modSustain;
+      if (params.modRelease !== undefined)
+        synth.modulationEnvelope.release = params.modRelease;
     }
   }
 
@@ -732,10 +873,13 @@ export class InstrumentEngine {
       voice.oscillator.type = params.oscillatorType;
     }
     if (voice.envelope) {
-      if (params.ampAttack !== undefined) voice.envelope.attack = params.ampAttack;
+      if (params.ampAttack !== undefined)
+        voice.envelope.attack = params.ampAttack;
       if (params.ampDecay !== undefined) voice.envelope.decay = params.ampDecay;
-      if (params.ampSustain !== undefined) voice.envelope.sustain = params.ampSustain;
-      if (params.ampRelease !== undefined) voice.envelope.release = params.ampRelease;
+      if (params.ampSustain !== undefined)
+        voice.envelope.sustain = params.ampSustain;
+      if (params.ampRelease !== undefined)
+        voice.envelope.release = params.ampRelease;
     }
     if (params.modulationIndex !== undefined && voice.modulationIndex) {
       voice.modulationIndex.value = params.modulationIndex;
@@ -744,14 +888,22 @@ export class InstrumentEngine {
       voice.harmonicity.value = params.harmonicity;
     }
     if (voice.modulationEnvelope) {
-      if (params.modAttack !== undefined) voice.modulationEnvelope.attack = params.modAttack;
-      if (params.modDecay !== undefined) voice.modulationEnvelope.decay = params.modDecay;
-      if (params.modSustain !== undefined) voice.modulationEnvelope.sustain = params.modSustain;
-      if (params.modRelease !== undefined) voice.modulationEnvelope.release = params.modRelease;
+      if (params.modAttack !== undefined)
+        voice.modulationEnvelope.attack = params.modAttack;
+      if (params.modDecay !== undefined)
+        voice.modulationEnvelope.decay = params.modDecay;
+      if (params.modSustain !== undefined)
+        voice.modulationEnvelope.sustain = params.modSustain;
+      if (params.modRelease !== undefined)
+        voice.modulationEnvelope.release = params.modRelease;
     }
   }
 
-  async playNotes(notes: string[], velocity: number, isKeyHeld: boolean = false): Promise<void> {
+  async playNotes(
+    notes: string[],
+    velocity: number,
+    isKeyHeld: boolean = false,
+  ): Promise<void> {
     if (!this.isReady()) {
       await this.load();
     }
@@ -763,13 +915,17 @@ export class InstrumentEngine {
     }
   }
 
-  private async playSynthNotes(notes: string[], velocity: number, isKeyHeld: boolean): Promise<void> {
+  private async playSynthNotes(
+    notes: string[],
+    velocity: number,
+    isKeyHeld: boolean,
+  ): Promise<void> {
     if (!this.synthRef) return;
 
-    notes.forEach(note => {
+    notes.forEach((note) => {
       // Clear pending releases/stops
       this.clearPendingNote(note);
-      
+
       if (this.synthRef instanceof Tone.PolySynth) {
         this.playPolySynthNote(note, velocity, isKeyHeld);
       } else {
@@ -778,7 +934,11 @@ export class InstrumentEngine {
     });
   }
 
-  private playPolySynthNote(note: string, velocity: number, isKeyHeld: boolean): void {
+  private playPolySynthNote(
+    note: string,
+    velocity: number,
+    isKeyHeld: boolean,
+  ): void {
     try {
       // Release existing note to avoid stacking
       if (this.activeNotes.has(note)) {
@@ -786,12 +946,12 @@ export class InstrumentEngine {
         this.activeNotes.delete(note);
         this.sustainedNotes.delete(note);
       }
-      
+
       this.synthRef.triggerAttack(note, Tone.now(), velocity);
       this.activeNotes.set(note, () => {
         this.synthRef.triggerRelease(note, Tone.now());
       });
-      
+
       // Track notes
       if (isKeyHeld) {
         this.keyHeldNotes.add(note);
@@ -799,9 +959,12 @@ export class InstrumentEngine {
       if (this.sustain && !isKeyHeld) {
         this.sustainedNotes.add(note);
       }
-      
+
       // Trigger filter envelope
-      if (this.filterEnvelopeRef && this.config.instrumentName.startsWith("analog_")) {
+      if (
+        this.filterEnvelopeRef &&
+        this.config.instrumentName.startsWith("analog_")
+      ) {
         if (this.filterEnvelopeActive) {
           this.filterEnvelopeRef.triggerRelease(Tone.now());
         }
@@ -812,7 +975,7 @@ export class InstrumentEngine {
           }
         }, 10);
       }
-      
+
       // Auto-stop non-held notes if sustain is off
       if (!isKeyHeld && !this.sustain) {
         setTimeout(() => {
@@ -827,15 +990,19 @@ export class InstrumentEngine {
     }
   }
 
-  private playMonoSynthNote(note: string, velocity: number, isKeyHeld: boolean): void {
+  private playMonoSynthNote(
+    note: string,
+    velocity: number,
+    isKeyHeld: boolean,
+  ): void {
     try {
       if (isKeyHeld) {
         this.keyHeldNotes.add(note);
       }
-      
+
       this.addToNoteStack(note);
       const topNote = this.getTopNote();
-      
+
       if (topNote === note) {
         if (this.currentNote) {
           this.synthRef.setNote(note);
@@ -847,14 +1014,14 @@ export class InstrumentEngine {
             this.filterEnvelopeActive = true;
           }
         }
-        
+
         this.currentNote = note;
         this.activeNotes.set(note, () => this.handleMonoSynthRelease(note));
-        
+
         if (this.sustain && !isKeyHeld) {
           this.sustainedNotes.add(note);
         }
-        
+
         if (!isKeyHeld && !this.sustain) {
           setTimeout(() => {
             if (this.activeNotes.has(note) && !this.keyHeldNotes.has(note)) {
@@ -868,39 +1035,45 @@ export class InstrumentEngine {
     }
   }
 
-  private async playTraditionalNotes(notes: string[], velocity: number, isKeyHeld: boolean): Promise<void> {
+  private async playTraditionalNotes(
+    notes: string[],
+    velocity: number,
+    isKeyHeld: boolean,
+  ): Promise<void> {
     if (!this.instrument) return;
 
-    notes.forEach(note => {
+    notes.forEach((note) => {
       // Stop existing note
       const existingNote = this.activeNotes.get(note);
       if (existingNote) {
-        if (typeof existingNote === 'function') {
+        if (typeof existingNote === "function") {
           existingNote();
         } else if (existingNote.stop) {
           existingNote.stop();
         }
         this.activeNotes.delete(note);
       }
-      
-      const scaledVelocity = Math.round(Math.max(1, Math.min(127, velocity * 127)));
-      
+
+      const scaledVelocity = Math.round(
+        Math.max(1, Math.min(127, velocity * 127)),
+      );
+
       const playedNote = this.instrument.start({
         note: note,
         velocity: scaledVelocity,
         time: this.audioContext!.currentTime + 0.001,
       });
-      
+
       if (playedNote) {
         this.activeNotes.set(note, playedNote);
-        
+
         if (isKeyHeld) {
           this.keyHeldNotes.add(note);
         }
         if (this.sustain && !isKeyHeld) {
           this.sustainedNotes.add(playedNote);
         }
-        
+
         // Auto cleanup for drums
         if (this.config.category === InstrumentCategory.DrumBeat) {
           setTimeout(() => {
@@ -909,12 +1082,12 @@ export class InstrumentEngine {
             }
           }, 5000);
         }
-        
+
         // Auto-stop non-held notes
         if (!isKeyHeld && !this.sustain) {
           setTimeout(() => {
             if (this.activeNotes.has(note) && !this.keyHeldNotes.has(note)) {
-              if (typeof playedNote === 'function') {
+              if (typeof playedNote === "function") {
                 playedNote();
               } else if (playedNote.stop) {
                 playedNote.stop();
@@ -938,12 +1111,12 @@ export class InstrumentEngine {
   }
 
   private async stopSynthNotes(notes: string[]): Promise<void> {
-    notes.forEach(note => {
+    notes.forEach((note) => {
       const isKeyHeld = this.keyHeldNotes.has(note);
-      
+
       if (isKeyHeld) {
         this.keyHeldNotes.delete(note);
-        
+
         if (this.sustain) {
           this.sustainedNotes.add(note);
         } else {
@@ -967,24 +1140,24 @@ export class InstrumentEngine {
   }
 
   private async stopTraditionalNotes(notes: string[]): Promise<void> {
-    notes.forEach(note => {
+    notes.forEach((note) => {
       const activeNote = this.activeNotes.get(note);
       if (activeNote) {
         const isKeyHeld = this.keyHeldNotes.has(note);
-        
+
         if (isKeyHeld) {
           this.keyHeldNotes.delete(note);
-          
+
           if (this.sustain) {
             this.sustainedNotes.add(activeNote);
           } else {
-            if (typeof activeNote === 'function') {
+            if (typeof activeNote === "function") {
               activeNote();
             }
             this.activeNotes.delete(note);
           }
         } else {
-          if (typeof activeNote === 'function') {
+          if (typeof activeNote === "function") {
             activeNote();
           }
           this.activeNotes.delete(note);
@@ -996,7 +1169,7 @@ export class InstrumentEngine {
 
   setSustain(sustain: boolean): void {
     this.sustain = sustain;
-    
+
     if (!sustain) {
       this.stopSustainedNotes();
     }
@@ -1004,7 +1177,7 @@ export class InstrumentEngine {
 
   private stopSustainedNotes(): void {
     if (this.config.category === InstrumentCategory.Synthesizer) {
-      this.sustainedNotes.forEach(note => {
+      this.sustainedNotes.forEach((note) => {
         if (this.synthRef instanceof Tone.PolySynth) {
           this.synthRef.triggerRelease(note, Tone.now());
         } else if (this.keyHeldNotes.size === 0) {
@@ -1016,8 +1189,8 @@ export class InstrumentEngine {
         }
       });
     } else {
-      this.sustainedNotes.forEach(note => {
-        if (typeof note === 'function') {
+      this.sustainedNotes.forEach((note) => {
+        if (typeof note === "function") {
           note();
         }
       });
@@ -1027,16 +1200,18 @@ export class InstrumentEngine {
 
   // Helper methods for mono synth note stack management
   private addToNoteStack(note: string): void {
-    this.noteStack = this.noteStack.filter(n => n !== note);
+    this.noteStack = this.noteStack.filter((n) => n !== note);
     this.noteStack.push(note);
   }
 
   private removeFromNoteStack(note: string): void {
-    this.noteStack = this.noteStack.filter(n => n !== note);
+    this.noteStack = this.noteStack.filter((n) => n !== note);
   }
 
   private getTopNote(): string | null {
-    return this.noteStack.length > 0 ? this.noteStack[this.noteStack.length - 1] : null;
+    return this.noteStack.length > 0
+      ? this.noteStack[this.noteStack.length - 1]
+      : null;
   }
 
   private handleMonoSynthRelease(noteToRelease: string): void {
@@ -1044,31 +1219,39 @@ export class InstrumentEngine {
 
     this.activeNotes.delete(noteToRelease);
     this.removeFromNoteStack(noteToRelease);
-    
+
     const wasKeyHeld = this.keyHeldNotes.has(noteToRelease);
     if (wasKeyHeld) {
       this.keyHeldNotes.delete(noteToRelease);
     }
-    
+
     const remainingHeldKeys = Array.from(this.keyHeldNotes);
-    
+
     if (remainingHeldKeys.length > 0) {
       const mostRecentHeldKey = remainingHeldKeys[remainingHeldKeys.length - 1];
       try {
         this.synthRef.setNote(mostRecentHeldKey);
         this.currentNote = mostRecentHeldKey;
-        this.activeNotes.set(mostRecentHeldKey, () => this.handleMonoSynthRelease(mostRecentHeldKey));
-        
-        if (this.filterEnvelopeRef && this.config.instrumentName.startsWith("analog_")) {
+        this.activeNotes.set(mostRecentHeldKey, () =>
+          this.handleMonoSynthRelease(mostRecentHeldKey),
+        );
+
+        if (
+          this.filterEnvelopeRef &&
+          this.config.instrumentName.startsWith("analog_")
+        ) {
           this.filterEnvelopeRef.triggerAttack(Tone.now(), 0.7);
         }
       } catch (error) {
-        console.warn(`Error retriggering held key ${mostRecentHeldKey}:`, error);
+        console.warn(
+          `Error retriggering held key ${mostRecentHeldKey}:`,
+          error,
+        );
       }
     } else {
       this.synthRef.triggerRelease();
       this.currentNote = null;
-      
+
       if (this.filterEnvelopeRef && this.filterEnvelopeActive) {
         this.filterEnvelopeRef.triggerRelease(Tone.now());
         this.filterEnvelopeActive = false;
@@ -1082,7 +1265,7 @@ export class InstrumentEngine {
       clearTimeout(releaseTimeout);
       this.pendingReleases.delete(note);
     }
-    
+
     const stopTimeout = this.pendingStop.get(note);
     if (stopTimeout) {
       clearTimeout(stopTimeout);
@@ -1094,32 +1277,38 @@ export class InstrumentEngine {
     // Stop all active notes
     this.activeNotes.forEach((stopFunction) => {
       try {
-        if (typeof stopFunction === 'function') {
+        if (typeof stopFunction === "function") {
           stopFunction();
         }
       } catch (error) {
-        console.error('Error stopping active note during update:', error);
+        console.error("Error stopping active note during update:", error);
       }
     });
-    
+
     // Store current synth parameters before cleanup (for synthesizers)
-    const currentSynthParams = category === InstrumentCategory.Synthesizer ? { ...this.synthState } : null;
-    
+    const currentSynthParams =
+      category === InstrumentCategory.Synthesizer
+        ? { ...this.synthState }
+        : null;
+
     this.cleanup();
-    
+
     // Update config
     this.config.instrumentName = instrumentName;
     this.config.category = category;
-    
+
     // Reset state
     this.isLoaded = false;
     this.isLoading = false;
     this.loadPromise = null;
-    
+
     // Restore synth parameters after instrument change (for synthesizers)
     if (currentSynthParams && category === InstrumentCategory.Synthesizer) {
       this.synthState = { ...currentSynthParams };
-      console.log("🎛️ Preserved synth parameters during instrument change:", currentSynthParams);
+      console.log(
+        "🎛️ Preserved synth parameters during instrument change:",
+        currentSynthParams,
+      );
     }
   }
 
@@ -1131,54 +1320,57 @@ export class InstrumentEngine {
     this.noteStack = [];
     this.currentNote = null;
     this.filterEnvelopeActive = false;
-    
+
     // Clear timeouts
-    this.pendingReleases.forEach(timeout => clearTimeout(timeout));
+    this.pendingReleases.forEach((timeout) => clearTimeout(timeout));
     this.pendingReleases.clear();
-    this.pendingStop.forEach(timeout => clearTimeout(timeout));
+    this.pendingStop.forEach((timeout) => clearTimeout(timeout));
     this.pendingStop.clear();
-    
+
+    // Clear audio buffer cache
+    this.clearAudioBufferCache();
+
     // Dispose instruments
     if (this.instrument && this.instrument.disconnect) {
       try {
         this.instrument.disconnect();
       } catch (error) {
-        console.error('Error disconnecting traditional instrument:', error);
+        console.error("Error disconnecting traditional instrument:", error);
       }
     }
-    
+
     if (this.synthRef) {
       try {
         this.synthRef.dispose();
       } catch (error) {
-        console.error('Error disposing synthesizer:', error);
+        console.error("Error disposing synthesizer:", error);
       }
     }
-    
+
     if (this.filterRef) {
       try {
         this.filterRef.dispose();
       } catch (error) {
-        console.error('Error disposing filter:', error);
+        console.error("Error disposing filter:", error);
       }
     }
-    
+
     if (this.filterEnvelopeRef) {
       try {
         this.filterEnvelopeRef.dispose();
       } catch (error) {
-        console.error('Error disposing filter envelope:', error);
+        console.error("Error disposing filter envelope:", error);
       }
     }
-    
+
     if (this.gainRef) {
       try {
         this.gainRef.dispose();
       } catch (error) {
-        console.error('Error disposing gain:', error);
+        console.error("Error disposing gain:", error);
       }
     }
-    
+
     // Reset references
     this.instrument = null;
     this.synthRef = null;
@@ -1199,4 +1391,4 @@ export class InstrumentEngine {
 
     this.cleanup();
   }
-} 
+}

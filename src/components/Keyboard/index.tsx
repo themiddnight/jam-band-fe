@@ -1,13 +1,19 @@
-import { useEffect } from "react";
-import { useVirtualKeyboard } from "./hooks/useVirtualKeyboard";
-import { useKeyboardKeysController } from "./hooks/useKeyboardKeysController";
-import { useKeyboardState } from "./hooks/useKeyboardState";
-import { useTouchEvents } from "../../hooks/useTouchEvents";
-import { MelodyKeys } from "./components/MelodyKeys";
-import { ChordKeys } from "./components/ChordKeys";
-import { AdvancedKeys } from "./components/AdvancedKeys";
-import { getKeyDisplayName, DEFAULT_KEYBOARD_SHORTCUTS } from "../../constants/keyboardShortcuts";
+import {
+  DEFAULT_KEYBOARD_SHORTCUTS,
+  ARPEGGIO_TIME_STEPS,
+  ARPEGGIO_TIME_LABELS,
+} from "../../constants/keyboardShortcuts";
+import { getKeyDisplayName } from "../../constants/utils/displayUtils";
+import { useInstrumentState } from "../../hooks/useInstrumentState";
 import type { Scale } from "../../hooks/useScaleState";
+import { useSustainSync } from "../../hooks/useSustainSync";
+import { useKeyboardStore } from "../../stores/keyboardStore";
+import BaseInstrument from "../shared/BaseInstrument";
+import { BasicKeyboard } from "./components/BasicKeyboard";
+import { ChordKeyboard } from "./components/ChordKeyboard";
+import { MelodyKeyboard } from "./components/MelodyKeyboard";
+import { useKeyboardKeysController } from "./hooks/useKeyboardKeysController";
+import { useVirtualKeyboard } from "./hooks/useVirtualKeyboard";
 
 export interface Props {
   // Scale state - the core functionality
@@ -37,9 +43,26 @@ export default function Keyboard({
 }: Props) {
   const shortcuts = DEFAULT_KEYBOARD_SHORTCUTS;
 
-  // Use the new keyboard state hook
-  const keyboardStateData = useKeyboardState({
-    scaleState,
+  // Use keyboard store for persistent state
+  const {
+    mode,
+    setMode,
+    currentOctave,
+    setCurrentOctave,
+    velocity,
+    setVelocity,
+    chordVoicing,
+    setChordVoicing,
+    sustain,
+    setSustain,
+    sustainToggle,
+    setSustainToggle,
+    arpeggioSpeed,
+    setArpeggioSpeed,
+  } = useKeyboardStore();
+
+  // Use the unified instrument state hook for held keys and pressed keys
+  const unifiedState = useInstrumentState({
     onPlayNotes,
     onStopNotes,
     onStopSustainedNotes,
@@ -48,26 +71,26 @@ export default function Keyboard({
     onSustainToggleChange,
   });
 
+  // Use shared sustain sync hook to eliminate duplicate useEffect blocks
+  useSustainSync({
+    unifiedSustain: unifiedState.sustain,
+    localSustain: sustain,
+    setLocalSustain: setSustain,
+    unifiedSustainToggle: unifiedState.sustainToggle,
+    localSustainToggle: sustainToggle,
+    setLocalSustainToggle: setSustainToggle,
+  });
+
   const virtualKeyboard = useVirtualKeyboard(
     scaleState.getScaleNotes,
     scaleState.rootNote,
     scaleState.scale,
     onPlayNotes,
     onReleaseKeyHeldNote,
-    keyboardStateData // Pass keyboardState to respect sustain settings
+    unifiedState, // Pass unified state to respect sustain settings
   );
 
   const {
-    mainMode,
-    setMainMode,
-    simpleMode,
-    setSimpleMode,
-    currentOctave,
-    setCurrentOctave,
-    velocity,
-    setVelocity,
-    chordVoicing,
-    setChordVoicing,
     chordModifiers,
     setChordModifiers,
     pressedTriads,
@@ -84,23 +107,22 @@ export default function Keyboard({
 
   // Create a keyboard state object that matches the interface expected by useKeyboardKeysController
   const keyboardState = {
-    mainMode,
-    simpleMode,
+    mode,
     currentOctave,
     velocity,
-    sustain: keyboardStateData.sustain,
-    sustainToggle: keyboardStateData.sustainToggle,
-    hasSustainedNotes: keyboardStateData.hasSustainedNotes,
-    heldKeys: keyboardStateData.heldKeys,
-    setSustain: keyboardStateData.setSustain,
-    setSustainToggle: keyboardStateData.setSustainToggle,
-    setHeldKeys: keyboardStateData.setHeldKeys,
-    setSimpleMode,
+    sustain,
+    sustainToggle,
+    hasSustainedNotes: unifiedState.hasSustainedNotes,
+    heldKeys: unifiedState.heldKeys,
+    setSustain: unifiedState.setSustain,
+    setSustainToggle: unifiedState.setSustainToggle,
+    setHeldKeys: unifiedState.setHeldKeys,
+    setMode,
     setCurrentOctave,
     setVelocity,
-    playNote: keyboardStateData.playNote,
-    releaseKeyHeldNote: keyboardStateData.releaseKeyHeldNote,
-    stopSustainedNotes: keyboardStateData.stopSustainedNotes,
+    playNote: unifiedState.playNote,
+    releaseKeyHeldNote: unifiedState.releaseKeyHeldNote,
+    stopSustainedNotes: unifiedState.stopSustainedNotes,
   };
 
   const { handleKeyDown, handleKeyUp } = useKeyboardKeysController(
@@ -116,29 +138,17 @@ export default function Keyboard({
       setPressedTriads,
       activeTriadChords,
       setActiveTriadChords,
-    }
+    },
   );
-
-  useEffect(() => {
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
-    };
-  }, [handleKeyDown, handleKeyUp]);
-
-
 
   const virtualKeys = virtualKeyboard.generateVirtualKeys;
 
   const renderVirtualKeyboard = () => {
-    if (mainMode === "simple" && simpleMode === "chord") {
+    if (mode === "simple-chord") {
       return (
-        <ChordKeys
+        <ChordKeyboard
           virtualKeys={virtualKeys}
-          pressedKeys={keyboardStateData.pressedKeys}
+          pressedKeys={unifiedState.pressedKeys}
           pressedTriads={pressedTriads}
           chordModifiers={chordModifiers}
           scale={scaleState.scale}
@@ -149,254 +159,161 @@ export default function Keyboard({
           onTriadRelease={handleTriadRelease}
           onModifierPress={handleModifierPress}
           onModifierRelease={handleModifierRelease}
+          sustain={sustain}
+          sustainToggle={sustainToggle}
         />
       );
-    } else if (mainMode === "simple") {
+    } else if (mode === "simple-melody") {
       return (
-        <MelodyKeys
+        <MelodyKeyboard
           virtualKeys={virtualKeys}
-          pressedKeys={keyboardStateData.pressedKeys}
+          pressedKeys={unifiedState.pressedKeys}
           onKeyPress={handleVirtualKeyPress}
           onKeyRelease={handleVirtualKeyRelease}
+          sustain={sustain}
+          sustainToggle={sustainToggle}
         />
       );
     } else {
       return (
-        <AdvancedKeys
+        <BasicKeyboard
           virtualKeys={virtualKeys}
-          pressedKeys={keyboardStateData.pressedKeys}
+          pressedKeys={unifiedState.pressedKeys}
           onKeyPress={handleVirtualKeyPress}
           onKeyRelease={handleVirtualKeyRelease}
+          sustain={sustain}
+          sustainToggle={sustainToggle}
         />
       );
     }
   };
 
-  return (
-    <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
-      <div className="card-body p-3">
-        <div className="flex justify-between items-center mb-1">
-          <div className="flex items-center gap-2">
-            <h3 className="card-title text-base">Mode Controls</h3>
-          </div>
+  // Mode controls JSX
+  const modeControls = (
+    <div className="block join">
+      <button
+        onClick={() => setMode("simple-melody")}
+        className={`btn btn-sm join-item touch-manipulation ${mode === "simple-melody" ? "btn-primary" : "btn-outline"}`}
+      >
+        Melody {""}
+        <kbd className="kbd kbd-xs">
+          {getKeyDisplayName(shortcuts.toggleMode.key)}
+        </kbd>
+      </button>
+      <button
+        onClick={() => setMode("simple-chord")}
+        className={`btn btn-sm join-item touch-manipulation ${mode === "simple-chord" ? "btn-primary" : "btn-outline"}`}
+      >
+        Chord {""}
+        <kbd className="kbd kbd-xs">
+          {getKeyDisplayName(shortcuts.toggleMode.key)}
+        </kbd>
+      </button>
+      <button
+        onClick={() => setMode("basic")}
+        className={`btn btn-sm join-item touch-manipulation ${mode === "basic" ? "btn-primary" : "btn-outline"}`}
+      >
+        Basic
+      </button>
+    </div>
+  );
 
-          <div className="flex gap-3 flex-wrap justify-end">
-            {mainMode === "simple" && (
-              <div className="block join">
-                <button
-                  onClick={() => setSimpleMode("melody")}
-                  className={`btn btn-sm join-item touch-manipulation ${simpleMode === "melody" ? "btn-success" : "btn-outline"
-                    }`}
-                >
-                  Notes{" "}
-                  <kbd className="kbd kbd-xs">
-                    {getKeyDisplayName(shortcuts.toggleMelodyChord.key)}
-                  </kbd>
-                </button>
-                <button
-                  onClick={() => setSimpleMode("chord")}
-                  className={`btn btn-sm join-item touch-manipulation ${simpleMode === "chord" ? "btn-success" : "btn-outline"
-                    }`}
-                >
-                  Chord{" "}
-                  <kbd className="kbd kbd-xs">
-                    {getKeyDisplayName(shortcuts.toggleMelodyChord.key)}
-                  </kbd>
-                </button>
-              </div>
-            )}
-            <div className="block join">
-              <button
-                onClick={() => setMainMode("simple")}
-                className={`btn btn-sm join-item touch-manipulation ${mainMode === "simple" ? "btn-primary" : "btn-outline"
-                  }`}
-              >
-                Simple
-              </button>
-              <button
-                onClick={() => setMainMode("advanced")}
-                className={`btn btn-sm join-item touch-manipulation ${mainMode === "advanced" ? "btn-primary" : "btn-outline"
-                  }`}
-              >
-                Basic
-              </button>
-            </div>
-          </div>
-        </div>
+  // Get control configuration based on mode
+  const getControlConfig = () => {
+    if (mode === "simple-melody") {
+      return {
+        velocity: true,
+        octave: true,
+        sustain: true,
+      };
+    } else if (mode === "simple-chord") {
+      return {
+        velocity: true,
+        octave: true,
+        sustain: true,
+        chordVoicing: true,
+      };
+    } else if (mode === "basic") {
+      return {
+        velocity: true,
+        octave: true,
+        sustain: true,
+      };
+    }
+    return {};
+  };
 
-        <div className="bg-neutral p-4 rounded-lg shadow-2xl overflow-auto">
-          {renderVirtualKeyboard()}
-        </div>
-
-        <div className="flex justify-center items-center gap-3 flex-wrap mt-1">
-          <div className="join">
-            <button
-              onMouseDown={(e) => {
-                e.preventDefault();
-                if (keyboardStateData.sustainToggle) {
-                  // If toggle mode is active, sustain button stops current sustained notes
-                  // This creates the "inverse" behavior where tapping sustain stops sound
-                  onStopSustainedNotes();
-                  // Also temporarily turn off sustain to communicate with remote users
-                  // then immediately turn it back on to maintain the toggle state
-                  keyboardStateData.setSustain(false);
-                  // Use setTimeout to ensure the sustain off message is sent before turning it back on
-                  setTimeout(() => {
-                    keyboardStateData.setSustain(true);
-                  }, 10);
-                } else {
-                  // Normal momentary sustain behavior
-                  keyboardStateData.setSustain(true);
-                }
-              }}
-              onMouseUp={(e) => {
-                e.preventDefault();
-                if (keyboardStateData.sustainToggle) {
-                  // If toggle mode is active, releasing sustain should resume sustain mode
-                  // This creates the "inverse" behavior where lifting sustain resumes sustain
-                  keyboardStateData.setSustain(true);
-                } else {
-                  // Normal momentary sustain behavior - turn off sustain
-                  keyboardStateData.setSustain(false);
-                  onStopSustainedNotes();
-                }
-              }}
-              onMouseLeave={() => {
-                if (!keyboardStateData.sustainToggle) {
-                  keyboardStateData.setSustain(false);
-                  onStopSustainedNotes();
-                }
-              }}
-              ref={useTouchEvents(
-                () => {
-                  if (keyboardStateData.sustainToggle) {
-                    // If toggle mode is active, tapping sustain stops current sustained notes
-                    onStopSustainedNotes();
-                    // Also temporarily turn off sustain to communicate with remote users
-                    // then immediately turn it back on to maintain the toggle state
-                    keyboardStateData.setSustain(false);
-                    // Use setTimeout to ensure the sustain off message is sent before turning it back on
-                    setTimeout(() => {
-                      keyboardStateData.setSustain(true);
-                    }, 10);
-                  } else {
-                    keyboardStateData.setSustain(true);
-                  }
-                },
-                () => {
-                  if (keyboardStateData.sustainToggle) {
-                    // If toggle mode is active, releasing sustain should resume sustain mode
-                    keyboardStateData.setSustain(true);
-                  } else {
-                    keyboardStateData.setSustain(false);
-                    onStopSustainedNotes();
-                  }
-                }
-              ).ref as React.Ref<HTMLButtonElement>}
-              className={`btn btn-sm join-item touch-manipulation select-none ${(keyboardStateData.sustain &&
-                !keyboardStateData.sustainToggle) ||
-                (keyboardStateData.sustainToggle &&
-                  keyboardStateData.hasSustainedNotes)
-                ? "btn-warning"
-                : "btn-outline"
-                }`}
-              style={{
-                WebkitTapHighlightColor: 'transparent',
-                WebkitTouchCallout: 'none',
-                WebkitUserSelect: 'none',
-                touchAction: 'manipulation'
-              }}
-            >
-              Sustain <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.sustain.key)}</kbd>
-            </button>
-            <button
-              onClick={() => {
-                keyboardStateData.setSustainToggle(
-                  !keyboardStateData.sustainToggle
-                );
-              }}
-              className={`btn btn-sm join-item touch-manipulation ${keyboardStateData.sustainToggle
-                ? "btn-success"
-                : "btn-outline"
-                }`}
-            >
-              {keyboardStateData.sustainToggle ? "🔒" : "🔓"}
-              <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.sustainToggle.key)}</kbd>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="label py-1">
-              <span className="label-text text-sm">
-                Velocity: {Math.round(velocity * 9)}
-              </span>
-            </label>
-            <input
-              type="range"
-              min="1"
-              max="9"
-              value={Math.round(velocity * 9)}
-              onChange={(e) => setVelocity(parseInt(e.target.value) / 9)}
-              className="range range-sm range-primary w-20"
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <label className="label py-1">
-              <span className="label-text text-sm">
-                Octave: {currentOctave}
-              </span>
-            </label>
-            <div className="join">
-              <button
-                onClick={() =>
-                  setCurrentOctave(Math.max(0, currentOctave - 1))
-                }
-                className="btn btn-sm btn-outline join-item touch-manipulation"
-              >
-                - <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.octaveDown.key)}</kbd>
-              </button>
-              <button
-                onClick={() =>
-                  setCurrentOctave(Math.min(8, currentOctave + 1))
-                }
-                className="btn btn-sm btn-outline join-item touch-manipulation"
-              >
-                + <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.octaveUp.key)}</kbd>
-              </button>
-            </div>
-          </div>
-
-          {mainMode === "simple" && simpleMode === "chord" && (
-            <div className="flex items-center gap-2">
-              <label className="label py-1">
-                <span className="label-text text-sm">
-                  Voicing: {chordVoicing}
-                </span>
-              </label>
-              <div className="join">
-                <button
-                  onClick={() =>
-                    setChordVoicing(Math.max(-2, chordVoicing - 1))
-                  }
-                  className="btn btn-sm btn-outline join-item touch-manipulation"
-                >
-                  - <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.voicingDown.key)}</kbd>
-                </button>
-                <button
-                  onClick={() =>
-                    setChordVoicing(Math.min(4, chordVoicing + 1))
-                  }
-                  className="btn btn-sm btn-outline join-item touch-manipulation"
-                >
-                  + <kbd className="kbd kbd-xs">{getKeyDisplayName(shortcuts.voicingUp.key)}</kbd>
-                </button>
-              </div>
-            </div>
-          )}
-
+  // Additional controls: Arpeggio (only in simple-chord mode)
+  const additionalControls =
+    mode === "simple-chord" ? (
+      <div className="flex items-center gap-2">
+        <label className="label py-1">
+          <span className="label-text text-sm">
+            Arpeggio:{" "}
+            {
+              ARPEGGIO_TIME_LABELS[
+                arpeggioSpeed as keyof typeof ARPEGGIO_TIME_LABELS
+              ]
+            }{" "}
+            ({arpeggioSpeed}ms)
+          </span>
+        </label>
+        <div className="join">
+          <button
+            onClick={() => {
+              const currentStep = ARPEGGIO_TIME_STEPS.indexOf(
+                arpeggioSpeed as any,
+              );
+              if (currentStep > 0) {
+                const newSpeed = ARPEGGIO_TIME_STEPS[currentStep - 1];
+                setArpeggioSpeed(newSpeed as any);
+              }
+            }}
+            className="btn btn-sm btn-outline join-item touch-manipulation"
+          >
+            -
+          </button>
+          <button
+            onClick={() => {
+              const currentStep = ARPEGGIO_TIME_STEPS.indexOf(
+                arpeggioSpeed as any,
+              );
+              if (currentStep < ARPEGGIO_TIME_STEPS.length - 1) {
+                const newSpeed = ARPEGGIO_TIME_STEPS[currentStep + 1];
+                setArpeggioSpeed(newSpeed as any);
+              }
+            }}
+            className="btn btn-sm btn-outline join-item touch-manipulation"
+          >
+            +
+          </button>
         </div>
       </div>
-    </div>
+    ) : undefined;
+
+  return (
+    <BaseInstrument
+      title="Keyboard"
+      shortcuts={shortcuts}
+      modeControls={modeControls}
+      controlConfig={getControlConfig()}
+      velocity={velocity}
+      setVelocity={setVelocity}
+      currentOctave={currentOctave}
+      setCurrentOctave={setCurrentOctave}
+      sustain={sustain}
+      setSustain={unifiedState.setSustain}
+      sustainToggle={sustainToggle}
+      setSustainToggle={unifiedState.setSustainToggle}
+      onStopSustainedNotes={onStopSustainedNotes}
+      hasSustainedNotes={unifiedState.hasSustainedNotes}
+      chordVoicing={chordVoicing}
+      setChordVoicing={setChordVoicing}
+      handleKeyDown={handleKeyDown}
+      handleKeyUp={handleKeyUp}
+      additionalControls={additionalControls}
+    >
+      {renderVirtualKeyboard()}
+    </BaseInstrument>
   );
 }

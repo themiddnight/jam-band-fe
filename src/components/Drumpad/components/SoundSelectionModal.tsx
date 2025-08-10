@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Modal } from '../../shared/Modal';
-import type { SoundSelectionModalProps } from '../types/drumpad';
+import { Modal } from "../../shared/Modal";
+import type { SoundSelectionModalProps } from "../types/drumpad";
+import React, { useState } from "react";
 
 export const SoundSelectionModal: React.FC<SoundSelectionModalProps> = ({
   isOpen,
@@ -9,7 +9,7 @@ export const SoundSelectionModal: React.FC<SoundSelectionModalProps> = ({
   onPreview,
   availableSamples,
   selectedPad,
-  padShortcut
+  padShortcut,
 }) => {
   const [selectedSound, setSelectedSound] = useState<string | null>(null);
 
@@ -34,7 +34,7 @@ export const SoundSelectionModal: React.FC<SoundSelectionModalProps> = ({
     <Modal
       open={isOpen}
       setOpen={(open) => !open && handleClose()}
-      title={`Select Sound for Pad ${selectedPad?.replace('pad-', '')} (${padShortcut?.toUpperCase()})`}
+      title={`Select Sound for Pad ${selectedPad?.replace("pad-", "")} (${padShortcut?.toUpperCase()})`}
       onOk={handleAssign}
       onCancel={handleClose}
       okText="Assign Sound"
@@ -43,18 +43,22 @@ export const SoundSelectionModal: React.FC<SoundSelectionModalProps> = ({
       size="2xl"
     >
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-        {availableSamples.map(sound => (
+        {availableSamples.map((sound) => (
           <button
             key={sound}
             className={`btn btn-sm text-left justify-start ${
-              selectedSound === sound ? 'btn-primary' : 'btn-outline'
+              selectedSound === sound ? "btn-primary" : "btn-outline"
             }`}
             onClick={() => handleSoundSelect(sound)}
           >
-            {sound.replace(/-/g, ' ').replace(/_/g, ' ').replace(/\d+/g, '').trim()}
+            {sound
+              .replace(/-/g, " ")
+              .replace(/_/g, " ")
+              .replace(/\d+/g, "")
+              .trim()}
           </button>
         ))}
       </div>
     </Modal>
   );
-}; 
+};

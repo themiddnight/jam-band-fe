@@ -1,6 +1,6 @@
-import React from 'react';
-import { useTouchEvents } from '../../../hooks/useTouchEvents';
-import type { PadButtonProps } from '../types/drumpad';
+import { useTouchEvents } from "../../../hooks/useTouchEvents";
+import type { PadButtonProps } from "../types/drumpad";
+import React from "react";
 
 export const PadButton: React.FC<PadButtonProps> = ({
   pad,
@@ -9,9 +9,9 @@ export const PadButton: React.FC<PadButtonProps> = ({
   onPress,
   onRelease,
   onVolumeChange,
-  availableSamples = []
+  availableSamples = [],
 }) => {
-  const touchHandlers = useTouchEvents(onPress, onRelease);
+  const touchHandlers = useTouchEvents({ onPress, onRelease });
 
   // Handle slider click to preview sound with current volume
   const handleSliderClick = (e: React.MouseEvent) => {
@@ -35,26 +35,29 @@ export const PadButton: React.FC<PadButtonProps> = ({
       <button
         className={`
           w-20 h-20 rounded-lg border-2 transition-all duration-100 flex flex-col items-center justify-center gap-1
-          ${pad.isPressed ? 'scale-95 border-gray-800' : 
-            isEditMode ? 'border-orange-400 animate-pulse' : 'border-gray-300'}
-          ${isSoundAvailable ? pad.color : 'bg-gray-600'} 
-          ${isSoundAvailable ? 'hover:brightness-110' : 'opacity-50 cursor-not-allowed'}
-          ${isEditMode && selectedPadForAssign === pad.id ? 'ring-4 ring-yellow-400' : ''}
-          ${!isSoundAvailable ? 'border-red-500' : ''}
+          ${
+            pad.isPressed
+              ? "scale-95 border-gray-800"
+              : isEditMode
+                ? "border-orange-400 animate-pulse"
+                : "border-gray-300"
+          }
+          ${isSoundAvailable ? pad.color : "bg-gray-600"} 
+          ${isSoundAvailable ? "hover:brightness-110" : "opacity-50 cursor-not-allowed"}
+          ${isEditMode && selectedPadForAssign === pad.id ? "ring-4 ring-yellow-400" : ""}
+          ${!isSoundAvailable ? "border-red-500" : ""}
           touch-manipulation
         `}
+        ref={touchHandlers.ref as React.RefObject<HTMLButtonElement>}
         onMouseDown={handleButtonPress}
         onMouseUp={onRelease}
         onMouseLeave={onRelease}
         disabled={!isSoundAvailable}
-        {...touchHandlers}
       >
         <span className="text-xs font-bold text-white drop-shadow-lg">
           {pad.label}
         </span>
-        <kbd className="kbd kbd-sm">
-          {pad.keyboardShortcut.toUpperCase()}
-        </kbd>
+        <kbd className="kbd kbd-sm">{pad.keyboardShortcut.toUpperCase()}</kbd>
         {/* Show warning icon if sound is not available */}
         {!isSoundAvailable && (
           <div className="absolute top-1 right-1">
@@ -62,7 +65,7 @@ export const PadButton: React.FC<PadButtonProps> = ({
           </div>
         )}
       </button>
-      
+
       {/* Volume Slider - Only show in edit mode */}
       {isEditMode && (
         <div className="absolute bottom-1 left-1 right-1">
@@ -80,4 +83,4 @@ export const PadButton: React.FC<PadButtonProps> = ({
       )}
     </div>
   );
-}; 
+};

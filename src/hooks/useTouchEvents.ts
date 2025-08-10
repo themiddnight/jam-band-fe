@@ -1,43 +1,69 @@
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect } from "react";
 
 interface TouchEventHandlers {
-  ref: React.RefObject<HTMLButtonElement | null>;
-  onContextMenu: (e: React.MouseEvent) => void;
+  ref: React.RefObject<HTMLElement | null>;
 }
 
-export const useTouchEvents = (
-  onPress: (isSliderClick?: boolean) => void,
-  onRelease: () => void
-): TouchEventHandlers => {
-  const activeTouchIds = useRef<Set<number>>(new Set());
-  const elementRef = useRef<HTMLButtonElement | null>(null);
+interface UseTouchEventsProps {
+  onPress: (isSliderClick?: boolean) => void;
+  onRelease: () => void;
+  isPlayButton?: boolean; // For play button behavior (no press state tracking)
+}
 
-  const handleTouchStart = useCallback((e: Event) => {
-    const touchEvent = e as TouchEvent;
-    touchEvent.preventDefault();
-    
-    for (const touch of Array.from(touchEvent.changedTouches)) {
-      if (activeTouchIds.current.size === 0) {
-        onPress(false); // Regular touch press, not slider click
+export const useTouchEvents = ({
+  onPress,
+  onRelease,
+  isPlayButton = false,
+}: UseTouchEventsProps): TouchEventHandlers => {
+  const elementRef = useRef<HTMLElement>(null);
+  const isPressed = useRef<boolean>(false);
+
+  const handleTouchStart = useCallback(
+    (e: TouchEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (isPlayButton) {
+        onPress(false);
+      } else if (!isPressed.current) {
+        isPressed.current = true;
+        onPress(false);
       }
-      activeTouchIds.current.add(touch.identifier);
-    }
-  }, [onPress]);
+    },
+    [onPress, isPlayButton],
+  );
 
-  const handleTouchEndAndCancel = useCallback((e: Event) => {
-    const touchEvent = e as TouchEvent;
-    touchEvent.preventDefault();
+  const handleTouchEnd = useCallback(
+    (e: TouchEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-    for (const touch of Array.from(touchEvent.changedTouches)) {
-      activeTouchIds.current.delete(touch.identifier);
-    }
+      if (isPlayButton) {
+        // Play button doesn't track press state
+      } else if (isPressed.current) {
+        isPressed.current = false;
+        onRelease();
+      }
+    },
+    [onRelease, isPlayButton],
+  );
 
-    if (activeTouchIds.current.size === 0) {
-      onRelease();
-    }
-  }, [onRelease]);
+  const handleTouchCancel = useCallback(
+    (e: TouchEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+      if (isPlayButton) {
+        // Play button doesn't track press state
+      } else if (isPressed.current) {
+        isPressed.current = false;
+        onRelease();
+      }
+    },
+    [onRelease, isPlayButton],
+  );
+
+  const handleContextMenu = useCallback((e: MouseEvent) => {
     e.preventDefault();
   }, []);
 
@@ -46,19 +72,26 @@ export const useTouchEvents = (
     if (!element) return;
 
     // Add event listeners with passive: false to allow preventDefault
-    element.addEventListener('touchstart', handleTouchStart, { passive: false });
-    element.addEventListener('touchend', handleTouchEndAndCancel, { passive: false });
-    element.addEventListener('touchcancel', handleTouchEndAndCancel, { passive: false });
+    element.addEventListener("touchstart", handleTouchStart, {
+      passive: false,
+    });
+    element.addEventListener("touchend", handleTouchEnd, { passive: false });
+    element.addEventListener("touchcancel", handleTouchCancel, {
+      passive: false,
+    });
+    element.addEventListener("contextmenu", handleContextMenu, {
+      passive: false,
+    });
 
     return () => {
-      element.removeEventListener('touchstart', handleTouchStart);
-      element.removeEventListener('touchend', handleTouchEndAndCancel);
-      element.removeEventListener('touchcancel', handleTouchEndAndCancel);
+      element.removeEventListener("touchstart", handleTouchStart);
+      element.removeEventListener("touchend", handleTouchEnd);
+      element.removeEventListener("touchcancel", handleTouchCancel);
+      element.removeEventListener("contextmenu", handleContextMenu);
     };
-  }, [handleTouchStart, handleTouchEndAndCancel]);
+  }, [handleTouchStart, handleTouchEnd, handleTouchCancel, handleContextMenu]);
 
   return {
     ref: elementRef,
-    onContextMenu: handleContextMenu,
   };
-}; 
+};

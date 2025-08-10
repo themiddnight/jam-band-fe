@@ -1,80 +1,64 @@
-import { useCallback } from 'react';
-import { getChordModifierKeys, DEFAULT_KEYBOARD_SHORTCUTS } from '../../../constants/keyboardShortcuts';
-import type { KeyboardState, ScaleState, VirtualKeyboardState } from '../../../types/keyboard';
+import {
+  getChordModifierKeys,
+  DEFAULT_KEYBOARD_SHORTCUTS,
+} from "../../../constants/keyboardShortcuts";
+import type {
+  KeyboardState,
+  VirtualKeyboardState,
+} from "../../../types/keyboard";
+import { useCallback } from "react";
 
 export const useChordModifiers = (
   keyboardState: KeyboardState,
-  scaleState: ScaleState,
-  virtualKeyboard: VirtualKeyboardState
+  virtualKeyboard: VirtualKeyboardState,
 ) => {
-  const shortcuts = DEFAULT_KEYBOARD_SHORTCUTS;
+  const chordModifierKeys = getChordModifierKeys(DEFAULT_KEYBOARD_SHORTCUTS);
 
-  const handleChordModifierPress = useCallback((key: string) => {
-    if (
-      getChordModifierKeys(shortcuts).includes(key) &&
-      keyboardState.mainMode === "simple" &&
-      keyboardState.simpleMode === "chord"
-    ) {
-      virtualKeyboard.setChordModifiers((prev: Set<string>) =>
-        new Set(prev).add(key)
-      );
-      return true;
-    }
-    return false;
-  }, [keyboardState, virtualKeyboard, shortcuts]);
+  const handleChordModifierPress = useCallback(
+    (key: string): boolean => {
+      if (
+        keyboardState.mode === "simple-chord" &&
+        chordModifierKeys.includes(key)
+      ) {
+        // Add the modifier to the chord modifiers set
+        virtualKeyboard.setChordModifiers((prev: Set<string>) => {
+          if (prev.has(key)) return prev;
+          return new Set(prev).add(key);
+        });
 
-  const handleChordModifierRelease = useCallback((key: string) => {
-    if (
-      getChordModifierKeys(shortcuts).includes(key) &&
-      keyboardState.mainMode === "simple" &&
-      keyboardState.simpleMode === "chord"
-    ) {
-      virtualKeyboard.setChordModifiers((prev: Set<string>) => {
-        const newSet = new Set(prev);
-        newSet.delete(key);
-        return newSet;
-      });
+        // Don't immediately update active chords - let the next triad press use the new modifiers
+        // This prevents unwanted sounds when pressing modifiers while holding a triad
 
-      // Handle modifier release logic
-      virtualKeyboard.activeTriadChords.forEach(
-        (chord: string[], triadIndex: number) => {
-          if (virtualKeyboard.pressedTriads.has(triadIndex)) {
-            const newChord = virtualKeyboard.getChord(
-              scaleState.rootNote,
-              scaleState.scale,
-              triadIndex,
-              virtualKeyboard.chordVoicing,
-              virtualKeyboard.chordModifiers
-            );
+        return true;
+      }
+      return false;
+    },
+    [keyboardState, virtualKeyboard, chordModifierKeys],
+  );
 
-            // Release notes that are no longer in the chord
-            chord.forEach((note: string) => {
-              if (!newChord.includes(note)) {
-                keyboardState.releaseKeyHeldNote(note);
-              }
-            });
+  const handleChordModifierRelease = useCallback(
+    (key: string): boolean => {
+      if (
+        keyboardState.mode === "simple-chord" &&
+        chordModifierKeys.includes(key)
+      ) {
+        // Remove the modifier from the chord modifiers set
+        virtualKeyboard.setChordModifiers((prev: Set<string>) => {
+          if (!prev.has(key)) return prev;
+          const newSet = new Set(prev);
+          newSet.delete(key);
+          return newSet;
+        });
 
-            // Play new notes simultaneously to avoid flam
-            const newNotes = newChord.filter((note: string) => !chord.includes(note));
-            if (newNotes.length > 0) {
-              // Play all new notes simultaneously by calling playNote for each note without await
-              // This ensures all notes are triggered at the same time without waiting for each one
-              newNotes.forEach((note: string) => {
-                keyboardState.playNote(note, keyboardState.velocity, true);
-              });
-            }
+        // Don't immediately update active chords - let the next triad press use the new modifiers
+        // This prevents unwanted sounds when releasing modifiers while holding a triad
 
-            virtualKeyboard.setActiveTriadChords(
-              (prev: Map<number, string[]>) =>
-                new Map(prev).set(triadIndex, newChord)
-            );
-          }
-        }
-      );
-      return true;
-    }
-    return false;
-  }, [keyboardState, virtualKeyboard, shortcuts, scaleState.rootNote, scaleState.scale]);
+        return true;
+      }
+      return false;
+    },
+    [keyboardState, virtualKeyboard, chordModifierKeys],
+  );
 
   return { handleChordModifierPress, handleChordModifierRelease };
-}; 
+};

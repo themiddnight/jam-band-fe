@@ -1,13 +1,15 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense } from "react";
 
 // Lazy load heavy components
-const LazyKeyboard = lazy(() => import('./Keyboard'));
-const LazyGuitar = lazy(() => import('./Guitar'));
-const LazyBass = lazy(() => import('./Bass'));
-const LazyDrumpad = lazy(() => import('./Drumpad'));
-const LazyDrumset = lazy(() => import('./Drumset'));
-const LazySynthControls = lazy(() => 
-  import('./Synthesizer/SynthControls').then(module => ({ default: module.SynthControls }))
+const LazyKeyboard = lazy(() => import("./Keyboard"));
+const LazyGuitar = lazy(() => import("./Guitar"));
+const LazyBass = lazy(() => import("./Bass"));
+const LazyDrumpad = lazy(() => import("./Drumpad"));
+const LazyDrumset = lazy(() => import("./Drumset"));
+const LazySynthControls = lazy(() =>
+  import("./Synthesizer/SynthControls").then((module) => ({
+    default: module.SynthControls,
+  })),
 );
 
 // Loading component
@@ -55,4 +57,4 @@ export const LazySynthControlsWrapper = (props: any) => (
   <Suspense fallback={<ComponentLoader name="Synthesizer Controls" />}>
     <LazySynthControls {...props} />
   </Suspense>
-); 
+);

@@ -1,5 +1,5 @@
-import React from 'react';
-import { useTouchEvents } from '../../hooks/useTouchEvents';
+import { useTouchEvents } from "../../hooks/useTouchEvents";
+import React from "react";
 
 export interface FretPosition {
   string: number;
@@ -14,10 +14,11 @@ export interface FretboardConfig {
   strings: string[];
   frets: number;
   openNotes: string[];
-  mode: 'melody' | 'chord' | 'octave';
+  mode: "melody" | "chord" | "octave";
   showNoteNames?: boolean;
   showFretNumbers?: boolean;
   highlightScaleNotes?: boolean;
+  highlightFrets?: number[];
 }
 
 export interface FretboardBaseProps {
@@ -25,9 +26,10 @@ export interface FretboardBaseProps {
   positions: FretPosition[];
   onFretPress: (stringIndex: number, fret: number, note: string) => void;
   onFretRelease: (stringIndex: number, fret: number, note: string) => void;
-  velocity: number;
-  onVelocityChange: (velocity: number) => void;
   className?: string;
+  // Add sustain state to prevent mouse leave issues
+  sustain?: boolean;
+  sustainToggle?: boolean;
 }
 
 // Separate component for fret button to use hooks properly
@@ -38,31 +40,51 @@ const FretButton: React.FC<{
   onPress: () => void;
   onRelease: () => void;
   showNoteNames?: boolean;
-}> = ({ stringIndex, fret, position, onPress, onRelease, showNoteNames = true }) => {
-  const touchHandlers = useTouchEvents(onPress, onRelease);
+  sustain?: boolean;
+  sustainToggle?: boolean;
+}> = ({
+  stringIndex,
+  fret,
+  position,
+  onPress,
+  onRelease,
+  showNoteNames = true,
+  sustain = false,
+  sustainToggle = false,
+}) => {
+  const touchHandlers = useTouchEvents({ onPress, onRelease });
 
   const isPressed = position.isPressed;
   const isHighlighted = position.isHighlighted;
   const isScaleNote = position.isScaleNote;
 
+  // Only call onRelease on mouse leave if sustain is not active
+  const handleMouseLeave = () => {
+    if (!sustain && !sustainToggle) {
+      onRelease();
+    }
+  };
+
   return (
     <button
       key={`${stringIndex}-${fret}`}
+      ref={touchHandlers.ref as React.RefObject<HTMLButtonElement>}
       className={`
         relative w-12 h-8 border border-gray-300 transition-all duration-100
-        ${isPressed ? 'bg-blue-500 scale-95' : 'bg-gray-100 hover:bg-gray-200'}
-        ${isHighlighted ? 'ring-2 ring-yellow-400' : ''}
-        ${isScaleNote ? 'bg-green-100' : ''}
-        ${fret === 0 ? 'border-l-4 border-l-gray-800' : ''}
+        ${isPressed ? "bg-blue-500 scale-95" : "bg-gray-100 hover:bg-gray-200"}
+        ${isHighlighted ? "ring-2 ring-yellow-400" : ""}
+        ${isScaleNote ? "bg-green-100" : ""}
+        ${fret === 0 ? "brightness-70" : ""}
         touch-manipulation
       `}
       onMouseDown={onPress}
       onMouseUp={onRelease}
-      onMouseLeave={onRelease}
-      {...touchHandlers}
+      onMouseLeave={handleMouseLeave}
     >
       {showNoteNames && (
-        <span className={`text-xs ${isPressed ? 'text-white' : 'text-gray-700'}`}>
+        <span
+          className={`text-xs ${isPressed ? "text-white" : "text-gray-700"}`}
+        >
           {position.note}
         </span>
       )}
@@ -75,14 +97,25 @@ export const FretboardBase: React.FC<FretboardBaseProps> = ({
   positions,
   onFretPress,
   onFretRelease,
-  velocity,
-  onVelocityChange,
   className = "",
+  sustain = false,
+  sustainToggle = false,
 }) => {
-  const { strings, frets, showNoteNames = true, showFretNumbers = true } = config;
+  const {
+    strings,
+    frets,
+    showNoteNames = true,
+    showFretNumbers = true,
+    highlightFrets = [],
+  } = config;
 
-  const getFretPosition = (stringIndex: number, fret: number): FretPosition | undefined => {
-    return positions.find(pos => pos.string === stringIndex && pos.fret === fret);
+  const getFretPosition = (
+    stringIndex: number,
+    fret: number,
+  ): FretPosition | undefined => {
+    return positions.find(
+      (pos) => pos.string === stringIndex && pos.fret === fret,
+    );
   };
 
   const renderFret = (stringIndex: number, fret: number) => {
@@ -98,53 +131,42 @@ export const FretboardBase: React.FC<FretboardBaseProps> = ({
         onPress={() => onFretPress(stringIndex, fret, position.note)}
         onRelease={() => onFretRelease(stringIndex, fret, position.note)}
         showNoteNames={showNoteNames}
+        sustain={sustain}
+        sustainToggle={sustainToggle}
       />
     );
   };
 
   const renderFretNumbers = () => {
     if (!showFretNumbers) return null;
-    
+
     return (
       <div className="flex mb-2">
         {Array.from({ length: frets + 1 }, (_, fret) => (
           <div key={fret} className="w-12 text-center text-xs text-gray-500">
-            {fret}
+            {highlightFrets?.includes(fret) ? (
+              <span className="text-yellow-500">{fret}</span>
+            ) : (
+              fret
+            )}
           </div>
         ))}
       </div>
     );
   };
 
-  const renderVelocityControl = () => (
-    <div className="mb-4 flex items-center gap-2">
-      <label className="text-sm text-gray-600">Velocity:</label>
-      <input
-        type="range"
-        min="0.1"
-        max="1"
-        step="0.1"
-        value={velocity}
-        onChange={(e) => onVelocityChange(parseFloat(e.target.value))}
-        className="w-32"
-      />
-      <span className="text-sm text-gray-600">{Math.round(velocity * 100)}%</span>
-    </div>
-  );
-
   return (
-    <div className={`fretboard-base ${className}`}>
-      {renderVelocityControl()}
+    <div className={`fretboard-base mx-auto p-3 ${className}`}>
       {renderFretNumbers()}
       <div className="fretboard-grid">
-        {strings.map((stringName, stringIndex) => (
+        {strings.map((_stringName, stringIndex) => (
           <div key={stringIndex} className="flex items-center mb-1">
-            <div className="w-8 text-right text-sm text-gray-600 mr-2">
+            {/* <div className="w-2 text-right text-sm text-gray-600 mr-2">
               {stringName}
-            </div>
+            </div> */}
             <div className="flex">
-              {Array.from({ length: frets + 1 }, (_, fret) => 
-                renderFret(stringIndex, fret)
+              {Array.from({ length: frets + 1 }, (_, fret) =>
+                renderFret(stringIndex, fret),
               )}
             </div>
           </div>
@@ -152,4 +174,4 @@ export const FretboardBase: React.FC<FretboardBaseProps> = ({
       </div>
     </div>
   );
-}; 
+};

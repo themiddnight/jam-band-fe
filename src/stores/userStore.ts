@@ -1,6 +1,6 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from "uuid";
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 
 interface UserState {
   username: string | null;
@@ -36,8 +36,8 @@ export const useUserStore = create<UserState>()(
       },
     }),
     {
-      name: 'user-store',
+      name: "user-store",
       storage: createJSONStorage(() => localStorage),
-    }
-  )
-); 
+    },
+  ),
+);

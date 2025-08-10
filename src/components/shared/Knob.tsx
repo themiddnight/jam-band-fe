@@ -1,11 +1,12 @@
-import React, {
-  useRef,
-  useState,
-  useCallback,
-  useEffect,
-  useMemo,
-} from "react";
 import { throttle } from "../../utils/performanceUtils";
+import React, { useState, useMemo, useCallback } from "react";
+
+// Knob angle limits and visuals
+const KNOB_MIN_ANGLE = -150;
+const KNOB_MAX_ANGLE = 150;
+const KNOB_ANGLE_SPAN = KNOB_MAX_ANGLE - KNOB_MIN_ANGLE;
+const KNOB_BORDER_WIDTH = 3;
+const DRAG_SENSITIVITY = 0.005; // px -> percent
 
 export interface KnobProps {
   value: number;
@@ -46,20 +47,15 @@ export const Knob: React.FC<KnobProps> = ({
   tooltipFormat = (val) => val.toFixed(3),
   color = "primary",
 }) => {
-  const knobRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [startY, setStartY] = useState(0);
+  const [isHovering, setIsHovering] = useState(false);
+  const [startPos, setStartPos] = useState(0);
   const [startValue, setStartValue] = useState(0);
-  const [showTooltipState, setShowTooltipState] = useState(false);
 
-  // Create throttled onChange to prevent excessive updates
-  const throttledOnChange = useMemo(
-    () => throttle(onChange, 16), // ~60fps
-    [onChange]
-  );
+  // Throttle onChange to ~60fps
+  const throttledOnChange = useMemo(() => throttle(onChange, 16), [onChange]);
 
-  // Convert value to percentage (0-1)
+  // Value <-> percentage
   const valueToPercentage = useCallback(
     (val: number) => {
       if (curve === "logarithmic") {
@@ -70,10 +66,9 @@ export const Knob: React.FC<KnobProps> = ({
       }
       return (val - min) / (max - min);
     },
-    [min, max, curve]
+    [min, max, curve],
   );
 
-  // Convert percentage to value
   const percentageToValue = useCallback(
     (percentage: number) => {
       if (curve === "logarithmic") {
@@ -84,264 +79,242 @@ export const Knob: React.FC<KnobProps> = ({
       }
       return min + percentage * (max - min);
     },
-    [min, max, curve]
+    [min, max, curve],
   );
 
-  // Calculate current rotation angle
+  // Angle from value
   const currentPercentage = valueToPercentage(value);
-  const rotationAngle =
-    orientation === "vertical"
-      ? -120 + currentPercentage * 240 // -120° to +120°
-      : -120 + currentPercentage * 240; // Same range for horizontal
+  const rotationAngle = KNOB_MIN_ANGLE + currentPercentage * KNOB_ANGLE_SPAN;
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+  // Pointer events unify mouse/touch/pen
+  const handlePointerDown = useCallback<
+    React.PointerEventHandler<HTMLDivElement>
+  >(
+    (e) => {
       if (disabled) return;
       e.preventDefault();
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
       setIsDragging(true);
-      setStartY(orientation === "vertical" ? e.clientY : e.clientX);
+      const initialAxis = orientation === "vertical" ? e.clientY : e.clientX;
+      setStartPos(initialAxis);
       setStartValue(value);
-      // Show tooltip when starting to drag
-      if (showTooltip) {
-        setShowTooltipState(true);
-      }
     },
-    [disabled, orientation, value, showTooltip]
+    [disabled, orientation, value],
   );
 
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
+  const handlePointerMove = useCallback<
+    React.PointerEventHandler<HTMLDivElement>
+  >(
+    (e) => {
       if (!isDragging || disabled) return;
       e.preventDefault();
+      const currentAxis = orientation === "vertical" ? e.clientY : e.clientX;
+      const delta = startPos - currentAxis;
+      const deltaPct = delta * DRAG_SENSITIVITY;
 
-      const currentY = orientation === "vertical" ? e.clientY : e.clientX;
-      const delta = startY - currentY;
-      const sensitivity = 0.005; // Adjust for sensitivity
-      const deltaPercentage = delta * sensitivity;
-
-      const newPercentage = Math.max(
+      const newPct = Math.max(
         0,
-        Math.min(1, valueToPercentage(startValue) + deltaPercentage)
+        Math.min(1, valueToPercentage(startValue) + deltaPct),
       );
-      const newValue = percentageToValue(newPercentage);
+      const newValue = percentageToValue(newPct);
 
-      // Apply step
-      const steppedValue = Math.round(newValue / step) * step;
-      const clampedValue = Math.max(min, Math.min(max, steppedValue));
-
-      throttledOnChange(clampedValue);
+      const stepped = Math.round(newValue / step) * step;
+      const clamped = Math.max(min, Math.min(max, stepped));
+      throttledOnChange(clamped);
     },
     [
       isDragging,
       disabled,
-      startY,
-      startValue,
       orientation,
+      startPos,
+      startValue,
       valueToPercentage,
       percentageToValue,
-      throttledOnChange,
       step,
       min,
       max,
-    ]
-  );
-
-  const handleMouseUp = useCallback((e?: MouseEvent) => {
-    setIsDragging(false);
-    // Hide tooltip when finishing drag (unless still hovering)
-    if (e) {
-      const container = containerRef.current;
-      if (container) {
-        const rect = container.getBoundingClientRect();
-        const isHovering =
-          e.clientX >= rect.left &&
-          e.clientX <= rect.right &&
-          e.clientY >= rect.top &&
-          e.clientY <= rect.bottom;
-        if (!isHovering) {
-          setShowTooltipState(false);
-        }
-      }
-    } else {
-      // If no event provided, hide tooltip
-      setShowTooltipState(false);
-    }
-  }, []);
-
-  // Touch event handlers for mobile
-  const handleTouchStart = useCallback(
-    (e: TouchEvent) => {
-      if (disabled) return;
-      e.preventDefault(); // Prevent scrolling
-      e.stopPropagation(); // Stop event bubbling
-      setIsDragging(true);
-      const touch = e.touches[0];
-      setStartY(orientation === "vertical" ? touch.clientY : touch.clientX);
-      setStartValue(value);
-      // Show tooltip when starting to drag on touch
-      if (showTooltip) {
-        setShowTooltipState(true);
-      }
-    },
-    [disabled, orientation, value, showTooltip]
-  );
-
-  const handleTouchMove = useCallback(
-    (e: TouchEvent) => {
-      if (!isDragging || disabled) return;
-      e.preventDefault(); // Prevent scrolling
-      e.stopPropagation(); // Stop event bubbling
-
-      const touch = e.touches[0];
-      const currentY =
-        orientation === "vertical" ? touch.clientY : touch.clientX;
-      const delta = startY - currentY;
-      const sensitivity = 0.005; // Adjust for sensitivity
-      const deltaPercentage = delta * sensitivity;
-
-      const newPercentage = Math.max(
-        0,
-        Math.min(1, valueToPercentage(startValue) + deltaPercentage)
-      );
-      const newValue = percentageToValue(newPercentage);
-
-      // Apply step
-      const steppedValue = Math.round(newValue / step) * step;
-      const clampedValue = Math.max(min, Math.min(max, steppedValue));
-
-      throttledOnChange(clampedValue);
-    },
-    [
-      isDragging,
-      disabled,
-      startY,
-      startValue,
-      orientation,
-      valueToPercentage,
-      percentageToValue,
       throttledOnChange,
-      step,
-      min,
-      max,
-    ]
+    ],
   );
 
-  const handleTouchEnd = useCallback((e: TouchEvent) => {
-    e.preventDefault(); // Prevent any default behavior
-    e.stopPropagation(); // Stop event bubbling
+  const handlePointerUp = useCallback<
+    React.PointerEventHandler<HTMLDivElement>
+  >(() => {
     setIsDragging(false);
-    // Hide tooltip when finishing touch drag
-    setShowTooltipState(false);
   }, []);
 
-  const handleMouseEnter = useCallback(() => {
-    if (showTooltip && !disabled) {
-      setShowTooltipState(true);
-    }
-  }, [showTooltip, disabled]);
+  // Tooltip visibility
+  const showTooltipNow = showTooltip && !disabled && (isHovering || isDragging);
 
-  const handleMouseLeave = useCallback(() => {
-    if (!isDragging) {
-      setShowTooltipState(false);
-    }
-  }, [isDragging]);
-
-  // Set up touch event listeners on the container
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const touchStartHandler = (e: TouchEvent) => handleTouchStart(e);
-    const touchMoveHandler = (e: TouchEvent) => handleTouchMove(e);
-    const touchEndHandler = (e: TouchEvent) => handleTouchEnd(e);
-
-    container.addEventListener("touchstart", touchStartHandler, {
-      passive: false,
-    });
-    container.addEventListener("touchmove", touchMoveHandler, {
-      passive: false,
-    });
-    container.addEventListener("touchend", touchEndHandler, { passive: false });
-
-    return () => {
-      container.removeEventListener("touchstart", touchStartHandler);
-      container.removeEventListener("touchmove", touchMoveHandler);
-      container.removeEventListener("touchend", touchEndHandler);
-    };
-  }, [handleTouchStart, handleTouchMove, handleTouchEnd]);
-
-  useEffect(() => {
-    if (isDragging) {
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-      return () => {
-        document.removeEventListener("mousemove", handleMouseMove);
-        document.removeEventListener("mouseup", handleMouseUp);
-      };
-    }
-  }, [isDragging, handleMouseMove, handleMouseUp]);
-
-  const knobStyle = {
+  // Styles
+  const knobStyle: React.CSSProperties = {
     width: `${size}px`,
     height: `${size}px`,
     transform: `rotate(${rotationAngle}deg)`,
   };
 
-  const containerStyle = {
+  const containerStyle: React.CSSProperties = {
     width: `${size}px`,
     height: `${size}px`,
+    touchAction: "none", // prevent scrolling on touch devices
   };
 
-  // Get color classes based on color prop
-  const getColorClasses = (elementType: "border" | "bg") => {
+  // Color utility
+  const getColorClasses = (elementType: "border" | "bg" | "text") => {
     const colorMap = {
-      primary: elementType === "border" ? "border-primary" : "bg-primary",
-      secondary: elementType === "border" ? "border-secondary" : "bg-secondary",
-      accent: elementType === "border" ? "border-accent" : "bg-accent",
-      neutral: elementType === "border" ? "border-neutral" : "bg-neutral",
-      info: elementType === "border" ? "border-info" : "bg-info",
-      success: elementType === "border" ? "border-success" : "bg-success",
-      warning: elementType === "border" ? "border-warning" : "bg-warning",
-      error: elementType === "border" ? "border-error" : "bg-error",
-    };
+      primary:
+        elementType === "border"
+          ? "border-primary"
+          : elementType === "bg"
+            ? "bg-primary"
+            : "text-primary",
+      secondary:
+        elementType === "border"
+          ? "border-secondary"
+          : elementType === "bg"
+            ? "bg-secondary"
+            : "text-secondary",
+      accent:
+        elementType === "border"
+          ? "border-accent"
+          : elementType === "bg"
+            ? "bg-accent"
+            : "text-accent",
+      neutral:
+        elementType === "border"
+          ? "border-neutral"
+          : elementType === "bg"
+            ? "bg-neutral"
+            : "text-neutral",
+      info:
+        elementType === "border"
+          ? "border-info"
+          : elementType === "bg"
+            ? "bg-info"
+            : "text-info",
+      success:
+        elementType === "border"
+          ? "border-success"
+          : elementType === "bg"
+            ? "bg-success"
+            : "text-success",
+      warning:
+        elementType === "border"
+          ? "border-warning"
+          : elementType === "bg"
+            ? "bg-warning"
+            : "text-warning",
+      error:
+        elementType === "border"
+          ? "border-error"
+          : elementType === "bg"
+            ? "bg-error"
+            : "text-error",
+    } as const;
     return colorMap[color] || colorMap.primary;
+  };
+
+  // Arc path for the knob border
+  const cx = size / 2;
+  const cy = size / 2;
+  const radius = Math.max(0, size / 2 - KNOB_BORDER_WIDTH / 2);
+  const startDeg = KNOB_MIN_ANGLE - 90; // offset so 0° is at top
+  const endDeg = KNOB_MAX_ANGLE - 90;
+
+  const toRadians = (deg: number) => (deg * Math.PI) / 180;
+  const polarToCartesian = (
+    centerX: number,
+    centerY: number,
+    r: number,
+    angleDeg: number,
+  ) => {
+    const a = toRadians(angleDeg);
+    return { x: centerX + r * Math.cos(a), y: centerY + r * Math.sin(a) };
+  };
+
+  const describeArc = (
+    centerX: number,
+    centerY: number,
+    r: number,
+    aStart: number,
+    aEnd: number,
+  ) => {
+    const start = polarToCartesian(centerX, centerY, r, aStart);
+    const end = polarToCartesian(centerX, centerY, r, aEnd);
+    let delta = aEnd - aStart;
+    delta = ((delta % 360) + 360) % 360; // normalize to [0, 360)
+    const largeArcFlag = delta > 180 ? 1 : 0;
+    const sweepFlag = 1; // clockwise
+    return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArcFlag} ${sweepFlag} ${end.x} ${end.y}`;
+  };
+
+  const arcPath = describeArc(cx, cy, radius, startDeg, endDeg);
+
+  const innerDiscInset = Math.max(2, Math.floor(KNOB_BORDER_WIDTH * 0.6));
+  const innerDiscStyle: React.CSSProperties = {
+    position: "absolute",
+    top: innerDiscInset,
+    left: innerDiscInset,
+    right: innerDiscInset,
+    bottom: innerDiscInset,
+    borderRadius: "9999px",
   };
 
   return (
     <div
       className={`relative inline-block ${className}`}
       style={containerStyle}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      onMouseDown={handleMouseDown}
-      ref={containerRef}
+      onPointerEnter={() => setIsHovering(true)}
+      onPointerLeave={() => setIsHovering(false)}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
     >
+      {/* Adjustable range arc (acts as the "border") */}
+      <svg
+        className={`absolute inset-0 z-10 pointer-events-none ${getColorClasses("text")}`}
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        aria-hidden
+        focusable="false"
+      >
+        <path
+          d={arcPath}
+          stroke="currentColor"
+          strokeWidth={KNOB_BORDER_WIDTH}
+          strokeLinecap="round"
+          fill="none"
+        />
+      </svg>
+
+      {/* Rotating indicator carrier (outer) */}
       <div
-        ref={knobRef}
-        className={`absolute inset-0 rounded-full border-2 ${getColorClasses(
-          "border"
-        )} bg-base-200 cursor-pointer transition-transform duration-100 ${
+        className={`absolute inset-0 z-0 cursor-pointer transition-transform duration-100 ${
           disabled ? "opacity-50 cursor-not-allowed" : ""
         }`}
         style={knobStyle}
       >
-        {/* Knob indicator */}
-        <div
-          className={`absolute top-1 left-1/2 w-1 h-3 ${getColorClasses(
-            "bg"
-          )} rounded-full transform -translate-x-1/2`}
-        />
+        {/* Inner disc */}
+        <div className="bg-base-200 rounded-full" style={innerDiscStyle}>
+          {/* Knob indicator */}
+          <div
+            className={`absolute top-1 left-1/2 w-1 h-3 ${getColorClasses(
+              "bg",
+            )} rounded-full transform -translate-x-1/2`}
+          />
+          {/* Knob center dot */}
+          <div
+            className={`absolute top-1/2 left-1/2 w-2 h-2 ${getColorClasses(
+              "bg",
+            )} rounded-full transform -translate-x-1/2 -translate-y-1/2`}
+          />
+        </div>
       </div>
 
-      {/* Knob center dot */}
-      <div
-        className={`absolute top-1/2 left-1/2 w-2 h-2 ${getColorClasses(
-          "bg"
-        )} rounded-full transform -translate-x-1/2 -translate-y-1/2`}
-      />
-
       {/* Tooltip */}
-      {showTooltip && (showTooltipState || isDragging) && (
+      {showTooltipNow && (
         <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg z-10 whitespace-nowrap">
           {tooltipFormat(value)}
           <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>

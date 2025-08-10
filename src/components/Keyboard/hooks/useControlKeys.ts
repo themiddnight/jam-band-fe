@@ -1,132 +1,200 @@
-import { useCallback } from 'react';
-import { DEFAULT_KEYBOARD_SHORTCUTS } from '../../../constants/keyboardShortcuts';
-import type { KeyboardState, VirtualKeyboardState } from '../../../types/keyboard';
+import {
+  DEFAULT_KEYBOARD_SHORTCUTS,
+  ARPEGGIO_TIME_STEPS,
+} from "../../../constants/keyboardShortcuts";
+import { useVelocityControl } from "../../../hooks/useVelocityControl";
+import { useKeyboardStore } from "../../../stores/keyboardStore";
+import type {
+  KeyboardState,
+  VirtualKeyboardState,
+} from "../../../types/keyboard";
+import { useCallback } from "react";
 
 export const useControlKeys = (
   keyboardState: KeyboardState,
-  virtualKeyboard: VirtualKeyboardState
+  virtualKeyboard: VirtualKeyboardState,
 ) => {
   const shortcuts = DEFAULT_KEYBOARD_SHORTCUTS;
+  const { handleVelocityChange } = useVelocityControl({
+    velocity: keyboardState.velocity,
+    setVelocity: keyboardState.setVelocity,
+  });
+  const { arpeggioSpeed, setArpeggioSpeed } = useKeyboardStore();
 
-  const handleSustain = useCallback((key: string) => {
-    if (key === shortcuts.sustain.key) {
-      if (!keyboardState.heldKeys.has(key)) {
-        if (keyboardState.sustainToggle) {
-          // If toggle mode is active, spacebar stops current sustained notes
-          // This creates the "inverse" behavior where tapping sustain stops sound
-          keyboardState.stopSustainedNotes();
-          // Also temporarily turn off sustain to communicate with remote users
-          // then immediately turn it back on to maintain the toggle state
-          keyboardState.setSustain(false);
-          // Use setTimeout to ensure the sustain off message is sent before turning it back on
-          setTimeout(() => {
+  const handleSustain = useCallback(
+    (key: string) => {
+      if (key === shortcuts.sustain.key) {
+        if (!keyboardState.heldKeys.has(key)) {
+          if (keyboardState.sustainToggle) {
+            keyboardState.stopSustainedNotes();
+            keyboardState.setSustain(false);
+            setTimeout(() => {
+              keyboardState.setSustain(true);
+            }, 10);
+          } else {
             keyboardState.setSustain(true);
-          }, 10);
-        } else {
-          // Normal momentary sustain behavior
-          keyboardState.setSustain(true);
+          }
+          keyboardState.setHeldKeys((prev: Set<string>) =>
+            new Set(prev).add(key),
+          );
         }
-        keyboardState.setHeldKeys((prev: Set<string>) =>
-          new Set(prev).add(key)
+        return true;
+      }
+      return false;
+    },
+    [keyboardState, shortcuts.sustain.key],
+  );
+
+  const handleSustainRelease = useCallback(
+    (key: string) => {
+      if (key === shortcuts.sustain.key) {
+        if (keyboardState.sustainToggle) {
+          keyboardState.setSustain(true);
+        } else {
+          keyboardState.setSustain(false);
+        }
+        keyboardState.setHeldKeys((prev: Set<string>) => {
+          const newSet = new Set(prev);
+          newSet.delete(key);
+          return newSet;
+        });
+        return true;
+      }
+      return false;
+    },
+    [keyboardState, shortcuts.sustain.key],
+  );
+
+  const handleSustainToggle = useCallback(
+    (key: string) => {
+      if (key === shortcuts.sustainToggle.key) {
+        keyboardState.setSustainToggle(!keyboardState.sustainToggle);
+        return true;
+      }
+      return false;
+    },
+    [keyboardState, shortcuts.sustainToggle.key],
+  );
+
+  const handleToggleMode = useCallback(
+    (key: string) => {
+      if (key === shortcuts.toggleMode.key) {
+        if (virtualKeyboard.mode === "basic") {
+          virtualKeyboard.setMode("simple-melody");
+        } else if (virtualKeyboard.mode === "simple-melody") {
+          virtualKeyboard.setMode("simple-chord");
+        } else if (virtualKeyboard.mode === "simple-chord") {
+          virtualKeyboard.setMode("simple-melody");
+        }
+        return true;
+      }
+      return false;
+    },
+    [virtualKeyboard, shortcuts.toggleMode.key],
+  );
+
+  const handleOctaveControls = useCallback(
+    (key: string) => {
+      if (key === shortcuts.octaveDown.key) {
+        keyboardState.setCurrentOctave(
+          Math.max(0, keyboardState.currentOctave - 1),
         );
+        return true;
       }
-      return true;
-    }
-    return false;
-  }, [keyboardState, shortcuts.sustain.key]);
-
-  const handleSustainRelease = useCallback((key: string) => {
-    if (key === shortcuts.sustain.key) {
-      if (keyboardState.sustainToggle) {
-        // If toggle mode is active, releasing sustain should resume sustain mode
-        // This creates the "inverse" behavior where lifting sustain resumes sustain
-        keyboardState.setSustain(true);
-      } else {
-        // Normal momentary sustain behavior - turn off sustain
-        keyboardState.setSustain(false);
-      }
-      keyboardState.setHeldKeys((prev: Set<string>) => {
-        const newSet = new Set(prev);
-        newSet.delete(key);
-        return newSet;
-      });
-      return true;
-    }
-    return false;
-  }, [keyboardState, shortcuts.sustain.key]);
-
-  const handleSustainToggle = useCallback((key: string) => {
-    if (key === shortcuts.sustainToggle.key) {
-      keyboardState.setSustainToggle(!keyboardState.sustainToggle);
-      return true;
-    }
-    return false;
-  }, [keyboardState, shortcuts.sustainToggle.key]);
-
-  const handleVelocity = useCallback((key: string) => {
-    if (key >= "1" && key <= "9") {
-      keyboardState.setVelocity(parseInt(key) / 9);
-      return true;
-    }
-    return false;
-  }, [keyboardState]);
-
-  const handleToggleMelodyChord = useCallback((key: string) => {
-    if (key === shortcuts.toggleMelodyChord.key) {
-      if (keyboardState.mainMode === "simple") {
-        keyboardState.setSimpleMode(
-          keyboardState.simpleMode === "melody" ? "chord" : "melody"
+      if (key === shortcuts.octaveUp.key) {
+        keyboardState.setCurrentOctave(
+          Math.min(8, keyboardState.currentOctave + 1),
         );
+        return true;
       }
-      return true;
-    }
-    return false;
-  }, [keyboardState, shortcuts.toggleMelodyChord.key]);
+      return false;
+    },
+    [keyboardState, shortcuts.octaveDown.key, shortcuts.octaveUp.key],
+  );
 
-  const handleOctaveControls = useCallback((key: string) => {
-    if (key === shortcuts.octaveDown.key) {
-      keyboardState.setCurrentOctave(Math.max(0, keyboardState.currentOctave - 1));
-      return true;
-    }
-    if (key === shortcuts.octaveUp.key) {
-      keyboardState.setCurrentOctave(Math.min(8, keyboardState.currentOctave + 1));
-      return true;
-    }
-    return false;
-  }, [keyboardState, shortcuts.octaveDown.key, shortcuts.octaveUp.key]);
-
-  const handleVoicingControls = useCallback((key: string) => {
-    if (key === shortcuts.voicingDown.key) {
-      if (
-        keyboardState.mainMode === "simple" &&
-        keyboardState.simpleMode === "chord"
-      ) {
-        virtualKeyboard.setChordVoicing(Math.max(-2, virtualKeyboard.chordVoicing - 1));
+  const handleVoicingControls = useCallback(
+    (key: string) => {
+      if (key === shortcuts.voicingDown.key) {
+        if (virtualKeyboard.mode === "simple-chord") {
+          virtualKeyboard.setChordVoicing(
+            Math.max(-2, virtualKeyboard.chordVoicing - 1),
+          );
+        }
+        return true;
       }
-      return true;
-    }
-    if (key === shortcuts.voicingUp.key) {
-      if (
-        keyboardState.mainMode === "simple" &&
-        keyboardState.simpleMode === "chord"
-      ) {
-        virtualKeyboard.setChordVoicing(Math.min(4, virtualKeyboard.chordVoicing + 1));
+      if (key === shortcuts.voicingUp.key) {
+        if (virtualKeyboard.mode === "simple-chord") {
+          virtualKeyboard.setChordVoicing(
+            Math.min(4, virtualKeyboard.chordVoicing + 1),
+          );
+        }
+        return true;
       }
-      return true;
-    }
-    return false;
-  }, [keyboardState, virtualKeyboard, shortcuts.voicingDown.key, shortcuts.voicingUp.key]);
+      return false;
+    },
+    [virtualKeyboard, shortcuts.voicingDown.key, shortcuts.voicingUp.key],
+  );
 
-  const handleAllControlKeys = useCallback((key: string) => {
-    return (
-      handleSustain(key) ||
-      handleSustainToggle(key) ||
-      handleVelocity(key) ||
-      handleToggleMelodyChord(key) ||
-      handleOctaveControls(key) ||
-      handleVoicingControls(key)
-    );
-  }, [handleSustain, handleSustainToggle, handleVelocity, handleToggleMelodyChord, handleOctaveControls, handleVoicingControls]);
+  const handleArpeggioControls = useCallback(
+    (key: string) => {
+      if (key === shortcuts.arpeggioSpeedDown.key) {
+        if (virtualKeyboard.mode === "simple-chord") {
+          const currentIndex = ARPEGGIO_TIME_STEPS.indexOf(
+            arpeggioSpeed as any,
+          );
+          if (currentIndex > 0) {
+            setArpeggioSpeed(ARPEGGIO_TIME_STEPS[currentIndex - 1] as any);
+          }
+        }
+        return true;
+      }
+      if (key === shortcuts.arpeggioSpeedUp.key) {
+        if (virtualKeyboard.mode === "simple-chord") {
+          const currentIndex = ARPEGGIO_TIME_STEPS.indexOf(
+            arpeggioSpeed as any,
+          );
+          if (currentIndex < ARPEGGIO_TIME_STEPS.length - 1) {
+            setArpeggioSpeed(ARPEGGIO_TIME_STEPS[currentIndex + 1] as any);
+          }
+        }
+        return true;
+      }
+      return false;
+    },
+    [
+      virtualKeyboard,
+      shortcuts.arpeggioSpeedDown.key,
+      shortcuts.arpeggioSpeedUp.key,
+      arpeggioSpeed,
+      setArpeggioSpeed,
+    ],
+  );
 
-  return { handleAllControlKeys, handleSustainRelease };
-}; 
+  const handleAllControlKeys = useCallback(
+    (key: string) => {
+      return (
+        handleSustain(key) ||
+        handleSustainToggle(key) ||
+        handleToggleMode(key) ||
+        handleOctaveControls(key) ||
+        handleVoicingControls(key) ||
+        handleArpeggioControls(key) ||
+        handleVelocityChange(key)
+      );
+    },
+    [
+      handleSustain,
+      handleSustainToggle,
+      handleToggleMode,
+      handleOctaveControls,
+      handleVoicingControls,
+      handleArpeggioControls,
+      handleVelocityChange,
+    ],
+  );
+
+  return {
+    handleAllControlKeys,
+    handleSustainRelease,
+  };
+};

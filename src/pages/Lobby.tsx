@@ -1,5 +1,5 @@
-import { useLobby } from '../hooks/useLobby';
-import { Modal } from '../components/shared/Modal';
+import { Modal } from "../components/shared/Modal";
+import { useLobby } from "../hooks/useLobby";
 
 export default function Lobby() {
   const {
@@ -17,7 +17,7 @@ export default function Lobby() {
     isConnecting,
     isPrivate,
     isHidden,
-    
+
     // Actions
     fetchRooms,
     handleUsernameSubmit,
@@ -28,7 +28,7 @@ export default function Lobby() {
     handleRejectionModalClose,
     handleCreateRoomSubmit,
     handleCreateRoomButtonClick,
-    
+
     // Setters
     setTempUsername,
     setNewRoomName,
@@ -44,7 +44,9 @@ export default function Lobby() {
           <h1 className="text-4xl font-bold text-primary">collab</h1>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-success' : isConnecting ? 'bg-warning' : 'bg-error'}`}></div>
+              <div
+                className={`w-3 h-3 rounded-full ${isConnected ? "bg-success" : isConnecting ? "bg-warning" : "bg-error"}`}
+              ></div>
               {/* <span className="text-sm">
                 {isConnected ? 'Connected' : isConnecting ? 'Connecting...' : 'Disconnected'}
               </span> */}
@@ -70,7 +72,7 @@ export default function Lobby() {
                   className="btn btn-sm btn-outline"
                   disabled={loading}
                 >
-                  {loading ? 'Loading...' : 'Refresh'}
+                  {loading ? "Loading..." : "Refresh"}
                 </button>
                 <button
                   onClick={handleCreateRoomButtonClick}
@@ -98,29 +100,40 @@ export default function Lobby() {
                             <div className="flex items-center gap-2">
                               <h3 className="font-semibold">{room.name}</h3>
                               {room.isPrivate && (
-                                <span className="badge badge-warning badge-sm">Private</span>
+                                <span className="badge badge-warning badge-sm">
+                                  Private
+                                </span>
                               )}
                               {room.isHidden && (
-                                <span className="badge badge-neutral badge-sm">Hidden</span>
+                                <span className="badge badge-neutral badge-sm">
+                                  Hidden
+                                </span>
                               )}
                             </div>
                             <p className="text-xs text-base-content/70">
-                              {room.userCount} member{room.userCount !== 1 ? 's' : ''}
+                              {room.userCount} member
+                              {room.userCount !== 1 ? "s" : ""}
                             </p>
                             {/* <p className="text-xs text-base-content/50">
                               Created {new Date(room.createdAt).toLocaleDateString()}
                             </p> */}
                           </div>
                           <div className="flex items-center gap-2 flex-wrap justify-end">
-                            <span className="text-xs text-base-content/70">Join as:</span>
+                            <span className="text-xs text-base-content/70">
+                              Join as:
+                            </span>
                             <button
-                              onClick={() => handleJoinRoom(room.id, 'band_member')}
+                              onClick={() =>
+                                handleJoinRoom(room.id, "band_member")
+                              }
                               className="btn btn-xs btn-primary"
                             >
                               Band Member
                             </button>
                             <button
-                              onClick={() => handleJoinRoom(room.id, 'audience')}
+                              onClick={() =>
+                                handleJoinRoom(room.id, "audience")
+                              }
                               className="btn btn-xs btn-outline"
                             >
                               Audience
@@ -167,7 +180,7 @@ export default function Lobby() {
                 autoFocus
                 required
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && tempUsername.trim()) {
+                  if (e.key === "Enter" && tempUsername.trim()) {
                     handleUsernameSubmit();
                   }
                 }}
@@ -187,7 +200,11 @@ export default function Lobby() {
           cancelText="Cancel"
           showOkButton={!!newRoomName.trim()}
         >
-          <form onSubmit={(e) => { e.preventDefault(); }}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+            }}
+          >
             <div className="space-y-4">
               <div className="form-control">
                 <label className="label" htmlFor="newRoomName">
@@ -204,7 +221,7 @@ export default function Lobby() {
                   required
                 />
               </div>
-              
+
               <div className="form-control">
                 <label className="label cursor-pointer flex items-start gap-2">
                   <input
@@ -228,7 +245,7 @@ export default function Lobby() {
                     type="checkbox"
                     className="checkbox checkbox-primary"
                     checked={isHidden}
-                    onChange={(e) => setIsHidden(e.target.checked)} 
+                    onChange={(e) => setIsHidden(e.target.checked)}
                   />
                   <div className="flex flex-col">
                     <span className="label-text select-none">Hidden Room</span>
@@ -256,4 +273,4 @@ export default function Lobby() {
       </div>
     </div>
   );
-} 
+}

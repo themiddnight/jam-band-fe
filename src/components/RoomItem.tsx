@@ -1,4 +1,4 @@
-import type { Room } from '../types';
+import type { Room } from "../types";
 
 interface RoomItemProps {
   room: Room;
@@ -7,11 +7,11 @@ interface RoomItemProps {
   onCopyRoomUrl: (roomId: string) => void;
 }
 
-export default function RoomItem({ 
-  room, 
-  onJoinAsBandMember, 
-  onJoinAsAudience, 
-  onCopyRoomUrl 
+export default function RoomItem({
+  room,
+  onJoinAsBandMember,
+  onJoinAsAudience,
+  onCopyRoomUrl,
 }: RoomItemProps) {
   const userCount = room.users.length;
 
@@ -31,7 +31,7 @@ export default function RoomItem({
               </button>
             </div>
             <p className="text-sm text-base-content/70">
-              {userCount} member{userCount !== 1 ? 's' : ''}
+              {userCount} member{userCount !== 1 ? "s" : ""}
             </p>
             <p className="text-xs text-base-content/50">
               Created {new Date(room.createdAt).toLocaleDateString()}
@@ -63,4 +63,4 @@ export default function RoomItem({
       </div>
     </div>
   );
-} 
+}

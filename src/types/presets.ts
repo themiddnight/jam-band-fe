@@ -23,12 +23,20 @@ export interface PresetManagerState {
 }
 
 export interface PresetManagerActions {
-  savePreset: (name: string, synthType: "analog" | "fm", polyphony: "mono" | "poly", parameters: SynthState) => void;
+  savePreset: (
+    name: string,
+    synthType: "analog" | "fm",
+    polyphony: "mono" | "poly",
+    parameters: SynthState,
+  ) => void;
   loadPreset: (preset: SynthPreset) => void;
   deletePreset: (presetId: string) => void;
   exportPresets: () => string;
   importPresets: (data: string) => void;
-  getPresetsForSynth: (synthType: "analog" | "fm", polyphony: "mono" | "poly") => SynthPreset[];
+  getPresetsForSynth: (
+    synthType: "analog" | "fm",
+    polyphony: "mono" | "poly",
+  ) => SynthPreset[];
 }
 
-export type PresetManager = PresetManagerState & PresetManagerActions; 
+export type PresetManager = PresetManagerState & PresetManagerActions;
