@@ -228,14 +228,17 @@ const Room = memo(() => {
     scaleState.setScale(scale);
   });
 
-  // Copy room URL to clipboard
-  const handleCopyRoomUrl = async () => {
+  // Copy room URL to clipboard with role selection
+  const [isInvitePopupOpen, setIsInvitePopupOpen] = useState(false);
+  const inviteBtnRef = useRef<HTMLButtonElement>(null);
+
+  const handleCopyInviteUrl = async (role: "band_member" | "audience") => {
     try {
-      const roomUrl = `${window.location.origin}/room/${currentRoom?.id}`;
-      await navigator.clipboard.writeText(roomUrl);
+      const inviteUrl = `${window.location.origin}/invite/${currentRoom?.id}?role=${role}`;
+      await navigator.clipboard.writeText(inviteUrl);
 
       // Show a temporary success message
-      const button = document.getElementById("copy-room-url");
+      const button = document.getElementById(`copy-invite-${role}`);
       if (button) {
         const originalText = button.textContent;
         button.textContent = "Copied!";
@@ -247,11 +250,11 @@ const Room = memo(() => {
         }, 2000);
       }
     } catch (error) {
-      console.error("Failed to copy room URL:", error);
+      console.error("Failed to copy invite URL:", error);
       // Fallback for older browsers
-      const roomUrl = `${window.location.origin}/room/${currentRoom?.id}`;
+      const inviteUrl = `${window.location.origin}/invite/${currentRoom?.id}?role=${role}`;
       const textArea = document.createElement("textarea");
-      textArea.value = roomUrl;
+      textArea.value = inviteUrl;
       document.body.appendChild(textArea);
       textArea.select();
       document.execCommand("copy");
@@ -362,14 +365,53 @@ const Room = memo(() => {
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold">{currentRoom?.name}</h1>
-              <button
-                id="copy-room-url"
-                onClick={handleCopyRoomUrl}
-                className="btn btn-xs"
-                title="Copy room URL to clipboard"
-              >
-                📋
-              </button>
+              <div className="relative">
+                <button
+                  ref={inviteBtnRef}
+                  aria-label="Copy invite link"
+                  className="btn btn-xs"
+                  onClick={() => setIsInvitePopupOpen((v) => !v)}
+                  title="Copy invite link with role selection"
+                >
+                  📋
+                </button>
+                <AnchoredPopup
+                  open={isInvitePopupOpen}
+                  onClose={() => setIsInvitePopupOpen(false)}
+                  anchorRef={inviteBtnRef}
+                  placement="bottom"
+                  className="w-64"
+                >
+                  <div className="p-3">
+                    <div className="mb-3">
+                      <h4 className="font-semibold text-sm mb-2">
+                        Copy Invite Link
+                      </h4>
+                      <p className="text-xs text-base-content/70">
+                        Select the role for the invited user
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <button
+                        id="copy-invite-band_member"
+                        onClick={() => handleCopyInviteUrl("band_member")}
+                        className="btn btn-sm btn-primary w-full justify-start"
+                        title="Copy link for band member invitation"
+                      >
+                        🎸 Band Member
+                      </button>
+                      <button
+                        id="copy-invite-audience"
+                        onClick={() => handleCopyInviteUrl("audience")}
+                        className="btn btn-sm btn-outline w-full justify-start"
+                        title="Copy link for audience invitation"
+                      >
+                        👥 Audience
+                      </button>
+                    </div>
+                  </div>
+                </AnchoredPopup>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               {/* Pending notification button for room owner */}

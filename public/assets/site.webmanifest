@@ -2,8 +2,6 @@
   "name": "COLLAB - Jam Band",
   "short_name": "COLLAB",
   "description": "Collaborative music making app",
-  "theme_color": "#aaa6e5",
-  "background_color": "#aaa6e5",
   "display": "standalone",
   "orientation": "portrait",
   "scope": "/",

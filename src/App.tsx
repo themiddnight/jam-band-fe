@@ -1,5 +1,6 @@
 import Lobby from "./pages/Lobby";
 import Room from "./pages/Room";
+import Invite from "./pages/Invite";
 import { useUserStore } from "./stores/userStore";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useLayoutEffect } from "react";
@@ -21,6 +22,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Lobby />} />
         <Route path="/room/:roomId" element={<Room />} />
+        <Route path="/invite/:roomId" element={<Invite />} />
       </Routes>
       <PWAUpdatePrompt />
     </QueryClientProvider>

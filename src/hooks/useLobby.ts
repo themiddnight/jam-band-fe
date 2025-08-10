@@ -36,8 +36,21 @@ export function useLobby() {
   useEffect(() => {
     if (!username) {
       setShowUsernameModal(true);
+    } else {
+      // Check if there's a pending invite in sessionStorage (for when user refreshes after setting username)
+      const pendingInvite = sessionStorage.getItem('pendingInvite');
+      if (pendingInvite) {
+        try {
+          const { roomId, role } = JSON.parse(pendingInvite);
+          sessionStorage.removeItem('pendingInvite');
+          navigate(`/room/${roomId}`, { state: { role } });
+        } catch (error) {
+          console.error('Failed to parse pending invite:', error);
+          sessionStorage.removeItem('pendingInvite');
+        }
+      }
     }
-  }, [username]);
+  }, [username, navigate]);
 
   // Check for rejection message in location state
   useEffect(() => {
