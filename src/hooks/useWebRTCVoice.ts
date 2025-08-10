@@ -55,7 +55,7 @@ export const useWebRTCVoice = ({
 
   const peersRef = useRef<RTCPeerMap>({});
   const localStreamRef = useRef<MediaStream | null>(null);
-  const audioLevelInterval = useRef<NodeJS.Timeout | null>(null);
+  const audioLevelInterval = useRef<number | null>(null);
 
   // Audio analysis
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -72,7 +72,7 @@ export const useWebRTCVoice = ({
 
   // Track intentional disconnection to avoid cleaning up during grace period
   const isIntentionalDisconnectRef = useRef<boolean>(false);
-  const gracePeriodTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const gracePeriodTimeoutRef = useRef<number | null>(null);
 
   // Grace period duration (should match backend)
   const GRACE_PERIOD_MS = 60000; // 60 seconds
@@ -321,7 +321,7 @@ export const useWebRTCVoice = ({
           return { ...user, audioLevel: smoothed, isMuted };
         });
       });
-    }, 200); // Throttle to ~200ms
+    }, 200) as unknown as number; // Throttle to ~200ms
   }, [currentUserId, getRmsFromAnalyser]);
 
   // Stop audio level monitoring
@@ -868,7 +868,7 @@ export const useWebRTCVoice = ({
           localSourceRef.current = null;
 
           gracePeriodTimeoutRef.current = null;
-        }, GRACE_PERIOD_MS);
+        }, GRACE_PERIOD_MS) as unknown as number;
       }
     } else {
       // Socket is connected - clear any grace period timeout

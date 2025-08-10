@@ -44,7 +44,7 @@ export const useVirtualKeyboard = (
   >(new Map());
   // Track scheduled timeouts for arpeggio so they can be cancelled on release
   const [scheduledArpTimeouts, setScheduledArpTimeouts] = useState<
-    Map<number, NodeJS.Timeout[]>
+    Map<number, number[]>
   >(new Map());
 
   // Memoize white and black note arrays
@@ -259,7 +259,7 @@ export const useVirtualKeyboard = (
         }
       } else {
         // Schedule arpeggio low -> high
-        const timeouts: NodeJS.Timeout[] = [];
+        const timeouts: number[] = [];
         ordered.forEach((note, i) => {
           const timeout = setTimeout(() => {
             if (keyboardState) {
@@ -267,7 +267,7 @@ export const useVirtualKeyboard = (
             } else {
               onPlayNotes([note], velocity, true);
             }
-          }, i * arpeggioSpeed);
+          }, i * arpeggioSpeed) as unknown as number;
           timeouts.push(timeout);
         });
         setScheduledArpTimeouts((prev) => {

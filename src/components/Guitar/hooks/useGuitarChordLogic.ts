@@ -25,7 +25,7 @@ export const useGuitarChordLogic = (
   >(new Map());
   // Track scheduled timeouts for strumming to cancel them if needed
   const [scheduledTimeouts, setScheduledTimeouts] = useState<
-    Map<number, NodeJS.Timeout[]>
+    Map<number, number[]>
   >(new Map());
   const [strumConfig, setStrumConfig] = useState<StrumConfig>({
     speed: brushingSpeed,
@@ -150,11 +150,11 @@ export const useGuitarChordLogic = (
         }
       } else {
         // Use strum timing with delays when brush time is greater than 0ms
-        const timeouts: NodeJS.Timeout[] = [];
+        const timeouts: number[] = [];
         for (let i = 0; i < noteOrder.length; i++) {
           const timeout = setTimeout(async () => {
             await onPlayNotes([noteOrder[i]], strumVelocity, true);
-          }, i * strumConfig.speed);
+          }, i * strumConfig.speed) as unknown as number;
           timeouts.push(timeout);
         }
 
