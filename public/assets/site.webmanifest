@@ -3,7 +3,7 @@
   "short_name": "COLLAB",
   "description": "Collaborative music making app",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "any",
   "scope": "/",
   "start_url": "/",
   "icons": [
