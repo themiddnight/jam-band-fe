@@ -18,18 +18,33 @@ const ChatBox: React.FC<ChatBoxProps> = ({ currentUserId, onSendMessage }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Track processed message IDs to prevent duplicates
   const processedMessageIds = useRef<Set<string>>(new Set());
 
-  // Scroll to bottom when new messages arrive
+  // Scroll chat messages to bottom (without scrolling the whole page)
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
   }, []);
 
+  // Only auto-scroll if user is already at the bottom
+  const shouldAutoScroll = useRef(true);
+
   useEffect(() => {
-    scrollToBottom();
+    // Check if user is at the bottom of chat
+    if (messagesContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+      shouldAutoScroll.current = scrollTop + clientHeight >= scrollHeight - 10; // 10px tolerance
+    }
+
+    // Only auto-scroll if user was already at the bottom
+    if (shouldAutoScroll.current) {
+      scrollToBottom();
+    }
   }, [messages, scrollToBottom]);
 
   // Handle incoming chat messages from socket with deduplication
@@ -96,6 +111,10 @@ const ChatBox: React.FC<ChatBoxProps> = ({ currentUserId, onSendMessage }) => {
           "End",
           "PageUp",
           "PageDown",
+          "Shift",
+          "Control",
+          "Alt",
+          "Meta",
         ];
 
         // Allow typing keys (letters, numbers, symbols, space)
@@ -105,15 +124,39 @@ const ChatBox: React.FC<ChatBoxProps> = ({ currentUserId, onSendMessage }) => {
         if (!isTypingKey) {
           event.preventDefault();
           event.stopPropagation();
+          return false;
         }
       }
     };
 
-    window.addEventListener("keydown", handleGlobalKeyDown, true); // Use capture phase
+    const handleGlobalKeyUp = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      const isChatInput =
+        target.hasAttribute("data-chat-input") ||
+        target.closest("[data-chat-input]");
+
+      if (isChatInput) {
+        // Stop propagation for keyup events in chat input
+        event.stopPropagation();
+      }
+    };
+
+    // Use capture phase to intercept events before other handlers
+    window.addEventListener("keydown", handleGlobalKeyDown, true);
+    window.addEventListener("keyup", handleGlobalKeyUp, true);
 
     return () => {
       window.removeEventListener("keydown", handleGlobalKeyDown, true);
+      window.removeEventListener("keyup", handleGlobalKeyUp, true);
     };
+  }, []);
+
+  // Handle scroll events to detect if user manually scrolled
+  const handleScroll = useCallback(() => {
+    if (messagesContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+      shouldAutoScroll.current = scrollTop + clientHeight >= scrollHeight - 10;
+    }
   }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -121,6 +164,9 @@ const ChatBox: React.FC<ChatBoxProps> = ({ currentUserId, onSendMessage }) => {
     if (inputValue.trim()) {
       onSendMessage(inputValue.trim());
       setInputValue("");
+      // Force auto-scroll after sending message
+      shouldAutoScroll.current = true;
+      setTimeout(scrollToBottom, 100);
     }
   };
 
@@ -144,9 +190,13 @@ const ChatBox: React.FC<ChatBoxProps> = ({ currentUserId, onSendMessage }) => {
         <h3 className="card-title text-lg">Room Chat</h3>
 
         {/* Messages Container */}
-        <div className="flex-1 min-h-64 max-h-64 overflow-y-auto border border-base-300 rounded-lg p-2 bg-base-50">
+        <div 
+          ref={messagesContainerRef}
+          className="flex-1 min-h-64 max-h-64 overflow-y-auto border border-base-300 rounded-lg p-2 bg-base-50"
+          onScroll={handleScroll}
+        >
           {messages.length === 0 ? (
-            <div className="text-center text-base-content/50 py-8">
+            <div className="text-center text-base-content/50 py-16">
               <p>No messages yet</p>
               <p className="text-sm">Start the conversation!</p>
             </div>
@@ -218,3 +268,4 @@ const ChatBox: React.FC<ChatBoxProps> = ({ currentUserId, onSendMessage }) => {
 };
 
 export default ChatBox;
+

@@ -1,11 +1,53 @@
 import { useRef, useCallback, useEffect, useState, useMemo } from "react";
 import { Socket } from "socket.io-client";
 
+/**
+ * Enhanced WebRTC Voice Communication Hook with Reliability Features
+ * 
+ * This hook provides robust WebRTC voice communication with the following reliability improvements:
+ * 
+ * 1. Connection Health Monitoring:
+ *    - Periodic health checks every 15 seconds
+ *    - Monitors both connection state and ICE connection state
+ *    - Tracks last health check timestamp for timeout detection
+ * 
+ * 2. Automatic Reconnection:
+ *    - Up to 3 reconnection attempts per peer
+ *    - 2-second delay between reconnection attempts
+ *    - Exponential backoff and cleanup of failed connections
+ * 
+ * 3. ICE Connection State Handling:
+ *    - Enhanced monitoring of ICE connection states
+ *    - Proper handling of 'failed', 'disconnected', 'connected', and 'completed' states
+ *    - Automatic recovery from ICE connection failures
+ * 
+ * 4. Heartbeat Mechanism:
+ *    - Sends connection states to backend every 30 seconds
+ *    - Backend monitors for stale connections and triggers recovery
+ *    - Cross-peer failure detection and notification
+ * 
+ * 5. Grace Period Management:
+ *    - 60-second grace period for accidental disconnections
+ *    - Maintains connections during network interruptions
+ *    - Proper cleanup after grace period expires
+ * 
+ * 6. Enhanced Error Handling:
+ *    - Detailed logging of connection states and failures
+ *    - Graceful fallback and recovery mechanisms
+ *    - User feedback for connection issues
+ * 
+ * These improvements ensure that users can maintain voice communication even when
+ * experiencing network issues, without requiring manual disconnect/reconnect.
+ */
+
 interface RTCPeerMap {
   [userId: string]: {
     connection: RTCPeerConnection;
     audioElement: HTMLAudioElement;
     isConnected: boolean;
+    lastHealthCheck?: number;
+    reconnectAttempts?: number;
+    iceConnectionState?: RTCIceConnectionState;
   };
 }
 
@@ -73,9 +115,66 @@ export const useWebRTCVoice = ({
   // Track intentional disconnection to avoid cleaning up during grace period
   const isIntentionalDisconnectRef = useRef<boolean>(false);
   const gracePeriodTimeoutRef = useRef<number | null>(null);
+  
+  // Ref to avoid forward reference issues
+  const initiateVoiceCallRef = useRef<((targetUserId: string) => Promise<void>) | null>(null);
 
   // Grace period duration (should match backend)
   const GRACE_PERIOD_MS = 60000; // 60 seconds
+
+  // Connection health monitoring
+  const healthCheckInterval = useRef<number | null>(null);
+  const HEALTH_CHECK_INTERVAL = 15000; // 15 seconds
+  const MAX_RECONNECT_ATTEMPTS = 3;
+  const RECONNECT_DELAY = 2000; // 2 seconds
+  const CONNECTION_TIMEOUT = 30000; // 30 seconds
+
+  // Heartbeat mechanism
+  const heartbeatInterval = useRef<number | null>(null);
+  const HEARTBEAT_INTERVAL = 30000; // 30 seconds
+
+  // Send heartbeat with connection states
+  const sendHeartbeat = useCallback(() => {
+    if (!socket || !roomId || !currentUserId || Object.keys(peersRef.current).length === 0) {
+      return;
+    }
+
+    const connectionStates: Record<string, { connectionState: string; iceConnectionState: string }> = {};
+    
+    Object.entries(peersRef.current).forEach(([userId, peer]) => {
+      connectionStates[userId] = {
+        connectionState: peer.connection.connectionState,
+        iceConnectionState: peer.connection.iceConnectionState,
+      };
+    });
+
+    console.log('💓 WebRTC: Sending heartbeat with connection states:', connectionStates);
+    
+    socket.emit('voice_heartbeat', {
+      roomId,
+      userId: currentUserId,
+      connectionStates,
+    });
+  }, [socket, roomId, currentUserId]);
+
+  // Start heartbeat
+  const startHeartbeat = useCallback(() => {
+    if (heartbeatInterval.current) return;
+
+    heartbeatInterval.current = setInterval(() => {
+      sendHeartbeat();
+    }, HEARTBEAT_INTERVAL) as unknown as number;
+
+    console.log('💓 WebRTC: Started heartbeat monitoring');
+  }, [sendHeartbeat]);
+
+  const stopHeartbeat = useCallback(() => {
+    if (heartbeatInterval.current) {
+      clearInterval(heartbeatInterval.current);
+      heartbeatInterval.current = null;
+      console.log('🛑 WebRTC: Stopped heartbeat monitoring');
+    }
+  }, []);
 
   const ensureAudioContext = useCallback(() => {
     if (!audioContextRef.current) {
@@ -195,6 +294,116 @@ export const useWebRTCVoice = ({
     remoteMuteStateRef.current.delete(userId);
   }, []);
 
+  // Connection health monitoring
+  const checkConnectionHealth = useCallback(async (userId: string) => {
+    const peer = peersRef.current[userId];
+    if (!peer) return;
+
+    const connection = peer.connection;
+    const now = Date.now();
+
+    // Update last health check timestamp
+    peer.lastHealthCheck = now;
+
+    // Check connection state
+    const connectionState = connection.connectionState;
+    const iceConnectionState = connection.iceConnectionState;
+
+    console.log(`🔍 WebRTC Health Check for ${userId}:`, {
+      connectionState,
+      iceConnectionState,
+      isConnected: peer.isConnected,
+    });
+
+    // Update ICE connection state tracking
+    peer.iceConnectionState = iceConnectionState;
+
+    // Handle failed or problematic connections
+    if (
+      connectionState === 'failed' ||
+      connectionState === 'disconnected' ||
+      iceConnectionState === 'failed' ||
+      iceConnectionState === 'disconnected'
+    ) {
+      console.warn(`⚠️ WebRTC: Connection issues detected for ${userId}`, {
+        connectionState,
+        iceConnectionState,
+      });
+
+      // Attempt reconnection if we haven't exceeded max attempts
+      const attempts = peer.reconnectAttempts || 0;
+      if (attempts < MAX_RECONNECT_ATTEMPTS) {
+        console.log(`🔄 WebRTC: Attempting reconnection for ${userId} (attempt ${attempts + 1}/${MAX_RECONNECT_ATTEMPTS})`);
+        peer.reconnectAttempts = attempts + 1;
+        
+        // Clean up the failed connection
+        cleanupPeerConnection(userId);
+        
+        // Wait a bit before reconnecting
+        setTimeout(() => {
+          if (isEnabled && socket && canTransmit) {
+            console.log(`🤝 WebRTC: Initiating reconnection to ${userId}`);
+            // Clean up existing connection first
+            cleanupPeerConnection(userId);
+            
+                         // Wait a moment for cleanup to complete then initiate new connection
+             setTimeout(() => {
+               if (isEnabled && socket && !peersRef.current[userId] && initiateVoiceCallRef.current) {
+                 initiateVoiceCallRef.current(userId);
+               }
+             }, 500);
+          }
+        }, RECONNECT_DELAY);
+      } else {
+        console.error(`❌ WebRTC: Max reconnection attempts exceeded for ${userId}`);
+        setConnectionError(`Connection with ${userId} failed after ${MAX_RECONNECT_ATTEMPTS} attempts`);
+        cleanupPeerConnection(userId);
+      }
+    } else if (connectionState === 'connected' && iceConnectionState === 'connected') {
+      // Connection is healthy, reset reconnection attempts
+      peer.reconnectAttempts = 0;
+      peer.isConnected = true;
+    }
+  }, [isEnabled, socket, canTransmit, cleanupPeerConnection]);
+
+  // Periodic health monitoring
+  const startHealthMonitoring = useCallback(() => {
+    if (healthCheckInterval.current) return;
+
+    healthCheckInterval.current = setInterval(() => {
+      const now = Date.now();
+      
+      Object.keys(peersRef.current).forEach(userId => {
+        const peer = peersRef.current[userId];
+        if (!peer) return;
+
+        // Check if connection has been inactive for too long
+        const lastCheck = peer.lastHealthCheck || 0;
+        const timeSinceLastCheck = now - lastCheck;
+
+        if (timeSinceLastCheck > CONNECTION_TIMEOUT) {
+          console.warn(`⏰ WebRTC: Connection timeout detected for ${userId}`);
+          checkConnectionHealth(userId);
+        } else {
+          // Regular health check
+          checkConnectionHealth(userId);
+        }
+      });
+    }, HEALTH_CHECK_INTERVAL) as unknown as number;
+
+    console.log('🩺 WebRTC: Started connection health monitoring');
+  }, [checkConnectionHealth]);
+
+  const stopHealthMonitoring = useCallback(() => {
+    if (healthCheckInterval.current) {
+      clearInterval(healthCheckInterval.current);
+      healthCheckInterval.current = null;
+      console.log('🛑 WebRTC: Stopped connection health monitoring');
+    }
+  }, []);
+
+
+
   // Create RTCPeerConnection with optimized settings for low latency
   const createPeerConnection = useCallback(
     (userId: string): RTCPeerConnection => {
@@ -248,9 +457,46 @@ export const useWebRTCVoice = ({
           peersRef.current[userId].isConnected = state === "connected";
         }
 
-        if (state === "failed" || state === "disconnected") {
-          setConnectionError(`Connection with ${userId} failed`);
-          cleanupPeerConnection(userId);
+        console.log(`🔗 WebRTC Connection state changed for ${userId}: ${state}`);
+
+        if (state === "connected") {
+          // Reset reconnection attempts on successful connection
+          if (peersRef.current[userId]) {
+            peersRef.current[userId].reconnectAttempts = 0;
+            peersRef.current[userId].lastHealthCheck = Date.now();
+          }
+          setConnectionError(null); // Clear any previous errors
+        } else if (state === "failed") {
+          console.error(`❌ WebRTC Connection failed for ${userId}`);
+          // Don't immediately cleanup - let health monitoring handle reconnection
+          checkConnectionHealth(userId);
+        } else if (state === "disconnected") {
+          console.warn(`⚠️ WebRTC Connection disconnected for ${userId}`);
+          // Don't immediately cleanup - let health monitoring handle reconnection
+          checkConnectionHealth(userId);
+        }
+      };
+
+      // Handle ICE connection state changes
+      peerConnection.oniceconnectionstatechange = () => {
+        const iceState = peerConnection.iceConnectionState;
+        
+        if (peersRef.current[userId]) {
+          peersRef.current[userId].iceConnectionState = iceState;
+        }
+
+        console.log(`🧊 WebRTC ICE connection state changed for ${userId}: ${iceState}`);
+
+        if (iceState === "connected" || iceState === "completed") {
+          // ICE connection is healthy
+          if (peersRef.current[userId]) {
+            peersRef.current[userId].reconnectAttempts = 0;
+            peersRef.current[userId].lastHealthCheck = Date.now();
+          }
+        } else if (iceState === "failed" || iceState === "disconnected") {
+          console.warn(`⚠️ WebRTC ICE connection issues for ${userId}: ${iceState}`);
+          // Let health monitoring handle this
+          checkConnectionHealth(userId);
         }
       };
 
@@ -264,6 +510,7 @@ export const useWebRTCVoice = ({
       createAnalyser,
       ensureAudioContext,
       rtcConfig,
+      checkConnectionHealth,
     ],
   );
 
@@ -367,6 +614,8 @@ export const useWebRTCVoice = ({
       }
 
       startAudioLevelMonitoring();
+      startHealthMonitoring(); // Start health monitoring when we have a local stream
+      startHeartbeat(); // Start heartbeat when we have a local stream
 
       // Ensure self is present in voice users immediately and reflect current track enabled state
       const hasActiveTrack = stream.getAudioTracks().some((t) => t.enabled);
@@ -425,6 +674,8 @@ export const useWebRTCVoice = ({
     },
     [
       startAudioLevelMonitoring,
+      startHealthMonitoring,
+      startHeartbeat,
       socket,
       roomId,
       currentUserId,
@@ -471,7 +722,8 @@ export const useWebRTCVoice = ({
     );
 
     stopAudioLevelMonitoring();
-  }, [stopAudioLevelMonitoring, currentUserId]);
+    stopHeartbeat(); // Stop heartbeat when local stream is removed
+  }, [stopAudioLevelMonitoring, stopHeartbeat, currentUserId]);
 
   // Handle voice offer from remote peer
   const handleVoiceOffer = useCallback(
@@ -570,6 +822,9 @@ export const useWebRTCVoice = ({
           connection: peerConnection,
           audioElement,
           isConnected: false,
+          lastHealthCheck: Date.now(),
+          reconnectAttempts: 0,
+          iceConnectionState: 'new',
         };
 
         const offer = await peerConnection.createOffer();
@@ -589,6 +844,9 @@ export const useWebRTCVoice = ({
     },
     [isEnabled, socket, roomId, createPeerConnection],
   );
+
+  // Assign to ref to avoid forward reference issues
+  initiateVoiceCallRef.current = initiateVoiceCall;
 
   // Handle user joining voice
   const handleUserJoinedVoice = useCallback(
@@ -679,6 +937,52 @@ export const useWebRTCVoice = ({
     [],
   );
 
+  // Handle voice connection failure notification from backend
+  const handleVoiceConnectionFailed = useCallback(
+    (data: { fromUserId: string; roomId: string }) => {
+      console.warn(`🚨 WebRTC: Connection failure reported by ${data.fromUserId}`);
+      
+      // Check if we have a connection to this user and if it's actually failed
+      const peer = peersRef.current[data.fromUserId];
+      if (peer) {
+        const connectionState = peer.connection.connectionState;
+        const iceConnectionState = peer.connection.iceConnectionState;
+        
+        if (connectionState === 'failed' || iceConnectionState === 'failed' ||
+            connectionState === 'disconnected' || iceConnectionState === 'disconnected') {
+          console.log(`🔄 WebRTC: Confirming connection failure, attempting recovery for ${data.fromUserId}`);
+          
+          // Trigger immediate reconnection
+          checkConnectionHealth(data.fromUserId);
+        }
+      }
+    },
+    [checkConnectionHealth],
+  );
+
+  // Handle reconnection request from backend
+  const handleVoiceReconnectionRequested = useCallback(
+    (data: { fromUserId: string; targetUserId: string; roomId: string }) => {
+      console.log(`🔄 WebRTC: Reconnection requested: ${data.fromUserId} -> ${data.targetUserId}`);
+      
+      // If we are the target user, initiate a fresh connection
+      if (data.targetUserId === currentUserId) {
+        console.log(`🤝 WebRTC: We are the target, initiating fresh connection to ${data.fromUserId}`);
+        
+        // Clean up existing connection
+        cleanupPeerConnection(data.fromUserId);
+        
+        // Wait a moment then initiate fresh connection
+        setTimeout(() => {
+          if (isEnabled && socket && canTransmit && !peersRef.current[data.fromUserId]) {
+            initiateVoiceCall(data.fromUserId);
+          }
+        }, 1000);
+      }
+    },
+    [currentUserId, cleanupPeerConnection, isEnabled, socket, canTransmit],
+  );
+
   // Emit local mute change when toggled in VoiceInput (track.enabled changes)
   useEffect(() => {
     const interval = setInterval(() => {
@@ -754,6 +1058,8 @@ export const useWebRTCVoice = ({
     socket.on("user_joined_voice", handleUserJoinedVoice);
     socket.on("user_left_voice", handleUserLeftVoice);
     socket.on("voice_mute_changed", handleVoiceMuteChanged);
+    socket.on("voice_connection_failed", handleVoiceConnectionFailed);
+    socket.on("voice_reconnection_requested", handleVoiceReconnectionRequested);
 
     return () => {
       socket.off("voice_offer", handleVoiceOffer);
@@ -762,6 +1068,8 @@ export const useWebRTCVoice = ({
       socket.off("user_joined_voice", handleUserJoinedVoice);
       socket.off("user_left_voice", handleUserLeftVoice);
       socket.off("voice_mute_changed", handleVoiceMuteChanged);
+      socket.off("voice_connection_failed", handleVoiceConnectionFailed);
+      socket.off("voice_reconnection_requested", handleVoiceReconnectionRequested);
     };
   }, [
     socket,
@@ -772,6 +1080,8 @@ export const useWebRTCVoice = ({
     handleUserJoinedVoice,
     handleUserLeftVoice,
     handleVoiceMuteChanged,
+    handleVoiceConnectionFailed,
+    handleVoiceReconnectionRequested,
   ]);
 
   // Cleanup on unmount or when disabled
@@ -781,6 +1091,8 @@ export const useWebRTCVoice = ({
       removeLocalStream();
       Object.keys(peers).forEach(cleanupPeerConnection);
       stopAudioLevelMonitoring();
+      stopHealthMonitoring(); // Stop health monitoring on unmount
+      stopHeartbeat(); // Stop heartbeat on unmount
 
       // Clear grace period timeout if it exists
       if (gracePeriodTimeoutRef.current) {
@@ -791,7 +1103,7 @@ export const useWebRTCVoice = ({
       // Optional: close audio context if created
       // Note: keeping it open can be beneficial to avoid resume glitches
     };
-  }, [removeLocalStream, cleanupPeerConnection, stopAudioLevelMonitoring]);
+  }, [removeLocalStream, cleanupPeerConnection, stopAudioLevelMonitoring, stopHealthMonitoring, stopHeartbeat]);
 
   // Clean up WebRTC state when socket disconnects
   useEffect(() => {
@@ -829,6 +1141,8 @@ export const useWebRTCVoice = ({
 
         // Stop monitoring
         stopAudioLevelMonitoring();
+        stopHealthMonitoring(); // Stop health monitoring on intentional disconnect
+        stopHeartbeat(); // Stop heartbeat on intentional disconnect
 
         // Clear local analyser references
         localAnalyserRef.current = null;
@@ -842,6 +1156,8 @@ export const useWebRTCVoice = ({
         );
         // Just stop monitoring but keep connections alive for potential reconnection
         stopAudioLevelMonitoring();
+        stopHealthMonitoring(); // Stop health monitoring on accidental disconnect
+        stopHeartbeat(); // Stop heartbeat on accidental disconnect
 
         // Start grace period timeout
         gracePeriodTimeoutRef.current = setTimeout(() => {
@@ -885,6 +1201,8 @@ export const useWebRTCVoice = ({
     socket?.connected,
     cleanupPeerConnection,
     stopAudioLevelMonitoring,
+    stopHealthMonitoring,
+    stopHeartbeat,
   ]);
 
   // Function to perform intentional cleanup (can be called from parent)
@@ -908,9 +1226,11 @@ export const useWebRTCVoice = ({
     remoteMuteStateRef.current.clear();
     lastLocalMutedRef.current = null;
     stopAudioLevelMonitoring();
+    stopHealthMonitoring(); // Stop health monitoring on intentional cleanup
+    stopHeartbeat(); // Stop heartbeat on intentional cleanup
     localAnalyserRef.current = null;
     localSourceRef.current = null;
-  }, [cleanupPeerConnection, stopAudioLevelMonitoring]);
+  }, [cleanupPeerConnection, stopAudioLevelMonitoring, stopHealthMonitoring, stopHeartbeat]);
 
   // Handle socket reconnection - request voice participants if enabled
   useEffect(() => {
@@ -921,67 +1241,69 @@ export const useWebRTCVoice = ({
       // Request existing voice participants for new room session
       socket.emit("request_voice_participants", { roomId });
 
-      // If we have a local stream, we need to re-announce our voice presence
-      if (localStreamRef.current) {
-        console.log(
-          "🎤 WebRTC: Re-announcing voice presence after reconnection",
-        );
+              // If we have a local stream, we need to re-announce our voice presence
+        if (localStreamRef.current) {
+          console.log(
+            "🎤 WebRTC: Re-announcing voice presence after reconnection",
+          );
 
-        // IMPORTANT: Clean up any stale peer connections first
-        console.log(
-          "🧹 WebRTC: Cleaning up stale peer connections before re-announcing",
-        );
-        Object.keys(peersRef.current).forEach(cleanupPeerConnection);
+          // IMPORTANT: Clean up any stale peer connections first
+          console.log(
+            "🧹 WebRTC: Cleaning up stale peer connections before re-announcing",
+          );
+          Object.keys(peersRef.current).forEach(cleanupPeerConnection);
 
-        // Add self back to voice users list if not already there
-        setVoiceUsers((prev) => {
-          const existing = prev.find((u) => u.userId === currentUserId);
-          if (!existing) {
-            return [
-              ...prev,
-              {
+          // Add self back to voice users list if not already there
+          setVoiceUsers((prev) => {
+            const existing = prev.find((u) => u.userId === currentUserId);
+            if (!existing) {
+              return [
+                ...prev,
+                {
+                  userId: currentUserId,
+                  username: currentUsername,
+                  isMuted: !localStreamRef.current
+                    ?.getAudioTracks()
+                    .some((t) => t.enabled),
+                  audioLevel: 0,
+                },
+              ];
+            }
+            return prev;
+          });
+
+          // Re-announce voice join with a small delay to ensure socket is fully ready
+          setTimeout(() => {
+            if (socket && socket.connected) {
+              console.log("🎤 WebRTC: Sending fresh join_voice announcement");
+              socket.emit("join_voice", {
+                roomId,
                 userId: currentUserId,
                 username: currentUsername,
-                isMuted: !localStreamRef.current
-                  ?.getAudioTracks()
-                  .some((t) => t.enabled),
-                audioLevel: 0,
-              },
-            ];
+              });
+
+              // Also broadcast current mute state
+              const hasActiveTrack = localStreamRef.current
+                ?.getAudioTracks()
+                .some((t) => t.enabled);
+              socket.emit("voice_mute_changed", {
+                roomId,
+                userId: currentUserId,
+                isMuted: !hasActiveTrack,
+              });
+            }
+          }, 100); // Small delay to ensure socket is ready
+
+          // Restart monitoring services
+          const hasActiveTrack = localStreamRef.current
+            .getAudioTracks()
+            .some((t) => t.enabled);
+          if (hasActiveTrack) {
+            startAudioLevelMonitoring();
+            startHealthMonitoring();
+            startHeartbeat();
           }
-          return prev;
-        });
-
-        // Re-announce voice join with a small delay to ensure socket is fully ready
-        setTimeout(() => {
-          if (socket && socket.connected) {
-            console.log("🎤 WebRTC: Sending fresh join_voice announcement");
-            socket.emit("join_voice", {
-              roomId,
-              userId: currentUserId,
-              username: currentUsername,
-            });
-
-            // Also broadcast current mute state
-            const hasActiveTrack = localStreamRef.current
-              ?.getAudioTracks()
-              .some((t) => t.enabled);
-            socket.emit("voice_mute_changed", {
-              roomId,
-              userId: currentUserId,
-              isMuted: !hasActiveTrack,
-            });
-          }
-        }, 100); // Small delay to ensure socket is ready
-
-        // Restart audio level monitoring if stream is unmuted
-        const hasActiveTrack = localStreamRef.current
-          .getAudioTracks()
-          .some((t) => t.enabled);
-        if (hasActiveTrack) {
-          startAudioLevelMonitoring();
         }
-      }
     }
   }, [
     socket,

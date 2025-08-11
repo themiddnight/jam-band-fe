@@ -1,5 +1,6 @@
 import ChatBox from "../components/ChatBox";
 import InstrumentCategorySelector from "../components/InstrumentCategorySelector";
+import { Footer } from "../components/Footer";
 import {
   LazyKeyboardWrapper as Keyboard,
   LazyGuitarWrapper as Guitar,
@@ -341,8 +342,9 @@ const Room = memo(() => {
 
   // Render room interface
   return (
-    <div className="min-h-dvh bg-base-200 p-3">
-      <div className="flex flex-col items-center">
+    <div className="min-h-dvh bg-base-200 flex flex-col">
+      <div className="flex-1 p-3">
+        <div className="flex flex-col items-center">
         {/* Fallback Notification */}
         {fallbackNotification && (
           <div className="alert alert-info mb-4 w-full max-w-6xl">
@@ -624,7 +626,7 @@ const Room = memo(() => {
         )}
 
         {/* Room Members and Chat */}
-        <div className="flex flex-col-reverse md:flex-row gap-3 w-full max-w-6xl items-start">
+        <div className="flex flex-col-reverse md:flex-row gap-3 w-full max-w-6xl">
           <RoomMembers
             users={currentRoom?.users ?? []}
             pendingMembers={currentRoom?.pendingMembers ?? []}
@@ -639,6 +641,7 @@ const Room = memo(() => {
             currentUserId={currentUser?.id || ""}
             onSendMessage={sendChatMessage}
           />
+        </div>
         </div>
       </div>
 
@@ -655,6 +658,8 @@ const Room = memo(() => {
           Are you sure you want to leave the room? This action cannot be undone.
         </p>
       </Modal>
+      
+      <Footer />
     </div>
   );
 

@@ -840,8 +840,8 @@ export const useSocket = () => {
 
   // Send chat message
   const sendChatMessage = useCallback(
-    (message: string) => {
-      safeEmit("chat_message", { message });
+    (message: string, roomId: string) => {
+      safeEmit("chat_message", { message, roomId });
     },
     [safeEmit],
   );
