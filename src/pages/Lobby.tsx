@@ -1,5 +1,6 @@
 import { Modal } from "../components/shared/Modal";
 import { useLobby } from "../hooks/useLobby";
+import { Footer } from "../components/Footer";
 
 export default function Lobby() {
   const {
@@ -37,8 +38,9 @@ export default function Lobby() {
   } = useLobby();
 
   return (
-    <div className="min-h-dvh bg-base-200 p-3">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-dvh bg-base-200 flex flex-col">
+      <div className="flex-1 p-3">
+        <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-4xl font-bold text-primary">collab</h1>
@@ -270,7 +272,9 @@ export default function Lobby() {
         >
           <p className="text-base-content/70">{rejectionMessage}</p>
         </Modal>
+        </div>
       </div>
+      <Footer />
     </div>
   );
 }

@@ -135,6 +135,21 @@ export default function Bass({
     (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
 
+      // Check if the target is an input element (including chat input)
+      const target = event.target as HTMLElement;
+      const isInputElement =
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.contentEditable === "true" ||
+        target.closest('input, textarea, [contenteditable="true"]') ||
+        target.hasAttribute("data-chat-input") ||
+        target.closest("[data-chat-input]");
+
+      // Skip bass shortcuts if typing in an input element
+      if (isInputElement) {
+        return;
+      }
+
       if (Object.values(shortcuts).some((s: any) => s?.key?.includes?.(key))) {
         event.preventDefault();
       }

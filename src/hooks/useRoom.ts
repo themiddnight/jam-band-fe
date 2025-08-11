@@ -888,6 +888,16 @@ export const useRoom = () => {
     setFallbackNotification(null);
   }, []);
 
+  // Wrapper for sendChatMessage that includes roomId
+  const handleSendChatMessage = useCallback(
+    (message: string) => {
+      if (roomId) {
+        sendChatMessage(message, roomId);
+      }
+    },
+    [sendChatMessage, roomId],
+  );
+
   return {
     // Room state
     roomId,
@@ -937,7 +947,7 @@ export const useRoom = () => {
     handleLeaveRoomClick,
     handleLeaveRoomConfirm,
     clearFallbackNotification,
-    sendChatMessage,
+    sendChatMessage: handleSendChatMessage,
 
     // Instrument management
     handleInstrumentChange,
