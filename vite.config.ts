@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react-swc'
 import tailwindcss from '@tailwindcss/vite'
 import mkcert from 'vite-plugin-mkcert'
 import { VitePWA } from 'vite-plugin-pwa'
+import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -43,11 +44,11 @@ export default defineConfig({
       manifest: {
         name: 'COLLAB - Jam Band',
         short_name: 'COLLAB',
-        description: 'Collaborative music making app',
+        description: 'Collaborative music app',
         theme_color: '#aaa6e5',
         background_color: '#aaa6e5',
         display: 'standalone',
-        orientation: 'portrait',
+        orientation: 'any',
         scope: '/',
         start_url: '/',
         icons: [
@@ -67,4 +68,9 @@ export default defineConfig({
       }
     })
   ],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src')
+    }
+  }
 })

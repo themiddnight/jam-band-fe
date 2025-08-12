@@ -1,6 +1,6 @@
-import ChatBox from "../components/ChatBox";
-import InstrumentCategorySelector from "../components/InstrumentCategorySelector";
-import { Footer } from "../components/Footer";
+import { ChatBox } from "@/features/rooms";
+import { InstrumentCategorySelector } from "@/features/instruments";
+import { Footer } from "@/features/ui";
 import {
   LazyKeyboardWrapper as Keyboard,
   LazyGuitarWrapper as Guitar,
@@ -8,21 +8,20 @@ import {
   LazyDrumpadWrapper as Drumpad,
   LazyDrumsetWrapper as Drumset,
   LazySynthControlsWrapper as SynthControls,
-} from "../components/LazyComponents";
-import MidiStatus from "../components/MidiStatus";
-import RoomMembers from "../components/RoomMembers";
-import ScaleSlots from "../components/ScaleSlots";
-import VoiceInput from "../components/VoiceInput";
-import AnchoredPopup from "../components/shared/AnchoredPopup";
-import { Modal } from "../components/shared/Modal";
-import { InstrumentCategory } from "../constants/instruments";
-import { useRoom } from "../hooks/useRoom";
-import { useScaleSlotKeyboard } from "../hooks/useScaleSlotKeyboard";
-import { useWebRTCVoice } from "../hooks/useWebRTCVoice";
-import { useScaleSlotsStore } from "../stores/scaleSlotsStore";
-import { ControlType } from "../types";
-import { preloadCriticalComponents } from "../utils/componentPreloader";
-import { getSafariUserMessage } from "../utils/webkitCompat";
+} from "@/features/instruments";
+import { MidiStatus } from "@/features/audio";
+import { RoomMembers } from "@/features/rooms";
+import { ScaleSlots } from "@/features/ui";
+import { VoiceInput } from "@/features/audio";
+import { AnchoredPopup, Modal } from "@/features/ui";
+import { InstrumentCategory } from "@/shared/constants/instruments";
+import { useRoom } from "@/features/rooms";
+import { useScaleSlotKeyboard } from "@/features/ui";
+import { useWebRTCVoice } from "@/features/audio";
+import { useScaleSlotsStore } from "@/shared/stores/scaleSlotsStore";
+import { ControlType } from "@/shared/types";
+import { preloadCriticalComponents } from "@/shared/utils/componentPreloader";
+import { getSafariUserMessage } from "@/shared/utils/webkitCompat";
 import { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
 
 const Room = memo(() => {
@@ -473,13 +472,13 @@ const Room = memo(() => {
                               </div>
                               <div className="flex gap-1 pr-1">
                                 <button
-                                  className="btn btn-xs btn-success"
+                                  className="btn btn-sm btn-success"
                                   onClick={() => handleApproveMember(user.id)}
                                 >
                                   ✓
                                 </button>
                                 <button
-                                  className="btn btn-xs btn-error"
+                                  className="btn btn-sm btn-error"
                                   onClick={() => handleRejectMember(user.id)}
                                 >
                                   ✕
