@@ -339,24 +339,27 @@ export const useWebRTCVoice = ({
         // Clean up the failed connection
         cleanupPeerConnection(userId);
         
-        // Wait a bit before reconnecting
+        // Use exponential backoff to avoid rate limiting: 2s, 4s, 8s
+        const backoffDelay = Math.min(RECONNECT_DELAY * Math.pow(2, attempts), 8000);
+        console.log(`⏱️ WebRTC: Using backoff delay of ${backoffDelay}ms for reconnection attempt ${attempts + 1}`);
+        
         setTimeout(() => {
           if (isEnabled && socket && canTransmit) {
-            console.log(`🤝 WebRTC: Initiating reconnection to ${userId}`);
+            console.log(`🤝 WebRTC: Initiating reconnection to ${userId} after ${backoffDelay}ms delay`);
             // Clean up existing connection first
             cleanupPeerConnection(userId);
             
-                         // Wait a moment for cleanup to complete then initiate new connection
-             setTimeout(() => {
-               if (isEnabled && socket && !peersRef.current[userId] && initiateVoiceCallRef.current) {
-                 initiateVoiceCallRef.current(userId);
-               }
-             }, 500);
+            // Wait a moment for cleanup to complete then initiate new connection
+            setTimeout(() => {
+              if (isEnabled && socket && !peersRef.current[userId] && initiateVoiceCallRef.current) {
+                initiateVoiceCallRef.current(userId);
+              }
+            }, 500);
           }
-        }, RECONNECT_DELAY);
+        }, backoffDelay);
       } else {
         console.error(`❌ WebRTC: Max reconnection attempts exceeded for ${userId}`);
-        setConnectionError(`Connection with ${userId} failed after ${MAX_RECONNECT_ATTEMPTS} attempts`);
+        setConnectionError(`Connection with ${userId} failed after ${MAX_RECONNECT_ATTEMPTS} attempts. Please refresh the page or manually reconnect.`);
         cleanupPeerConnection(userId);
       }
     } else if (connectionState === 'connected' && iceConnectionState === 'connected') {
@@ -967,6 +970,42 @@ export const useWebRTCVoice = ({
     [checkConnectionHealth],
   );
 
+  // Handle socket errors (including rate limit errors)
+  const handleSocketError = useCallback((error: any) => {
+    console.error('🚨 WebRTC: Socket error received:', error);
+    
+    // Check if this is a rate limit error
+    if (error.message && error.message.includes('Rate limit exceeded')) {
+      const retryAfter = error.retryAfter || 15; // Default to 15 seconds
+      setConnectionError(`Rate limit exceeded. Please wait ${retryAfter} seconds before trying again.`);
+      
+      // Show countdown timer
+      let timeLeft = retryAfter;
+      const countdownInterval = setInterval(() => {
+        timeLeft--;
+        if (timeLeft > 0) {
+          setConnectionError(`Rate limit exceeded. Please wait ${timeLeft} seconds before trying again.`);
+        } else {
+          setConnectionError(null);
+          clearInterval(countdownInterval);
+        }
+      }, 1000);
+      
+      // Clear the error after the retry time
+      setTimeout(() => {
+        setConnectionError(null);
+        clearInterval(countdownInterval);
+      }, (retryAfter + 1) * 1000);
+      
+      console.log(`⏱️ WebRTC: Rate limit hit, will retry in ${retryAfter} seconds`);
+    } else if (error.message && error.message.includes('WebRTC validation failed')) {
+      setConnectionError('Voice connection validation failed. Please refresh the page.');
+      console.error('🚨 WebRTC: Validation failed:', error.details);
+    } else {
+      setConnectionError('Voice connection error. Please try refreshing the page.');
+    }
+  }, []);
+
   // Handle reconnection request from backend
   const handleVoiceReconnectionRequested = useCallback(
     (data: { fromUserId: string; targetUserId: string; roomId: string }) => {
@@ -1067,6 +1106,7 @@ export const useWebRTCVoice = ({
     socket.on("voice_mute_changed", handleVoiceMuteChanged);
     socket.on("voice_connection_failed", handleVoiceConnectionFailed);
     socket.on("voice_reconnection_requested", handleVoiceReconnectionRequested);
+    socket.on("error", handleSocketError);
 
     return () => {
       socket.off("voice_offer", handleVoiceOffer);
@@ -1077,6 +1117,7 @@ export const useWebRTCVoice = ({
       socket.off("voice_mute_changed", handleVoiceMuteChanged);
       socket.off("voice_connection_failed", handleVoiceConnectionFailed);
       socket.off("voice_reconnection_requested", handleVoiceReconnectionRequested);
+      socket.off("error", handleSocketError);
     };
   }, [
     socket,
@@ -1089,6 +1130,7 @@ export const useWebRTCVoice = ({
     handleVoiceMuteChanged,
     handleVoiceConnectionFailed,
     handleVoiceReconnectionRequested,
+    handleSocketError,
   ]);
 
   // Cleanup on unmount or when disabled
