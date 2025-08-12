@@ -1,8 +1,11 @@
-import { SCALE_SLOT_COUNT, getScaleSlotLabel } from "@/shared/constants/scaleSlots";
-import type { Scale } from "@/shared/types";
-import { useScaleSlotsStore } from "@/shared/stores/scaleSlotsStore";
 import ScaleSelector from "./ScaleSelector";
 import AnchoredPopup from "./shared/AnchoredPopup";
+import {
+  SCALE_SLOT_COUNT,
+  getScaleSlotLabel,
+} from "@/shared/constants/scaleSlots";
+import { useScaleSlotsStore } from "@/shared/stores/scaleSlotsStore";
+import type { Scale } from "@/shared/types";
 import { useRef, useState } from "react";
 import type {
   MouseEvent as ReactMouseEvent,

@@ -1,5 +1,5 @@
-import { Modal } from "@/features/ui";
 import type { SoundSelectionModalProps } from "../types/drumpad";
+import { Modal } from "@/features/ui";
 import React, { useState } from "react";
 
 export const SoundSelectionModal: React.FC<SoundSelectionModalProps> = ({

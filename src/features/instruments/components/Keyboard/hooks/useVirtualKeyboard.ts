@@ -1,3 +1,5 @@
+import type { Scale } from "../../../../ui";
+import { getChordFromDegree } from "../../../../ui";
 import { DEFAULT_KEYBOARD_SHORTCUTS } from "../../../index";
 import {
   chordRootKeys,
@@ -7,9 +9,7 @@ import {
   melodySimpleKeys,
   melodySimpleKeysUpper,
 } from "../../../index";
-import type { Scale } from "../../../../ui";
 import { useKeyboardStore } from "../../../stores/keyboardStore";
-import { getChordFromDegree } from "../../../../ui";
 import type { KeyboardKey } from "../types/keyboard";
 import { useState, useCallback, useMemo } from "react";
 

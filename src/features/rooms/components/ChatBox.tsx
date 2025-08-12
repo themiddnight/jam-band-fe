@@ -27,7 +27,8 @@ const ChatBox: React.FC<ChatBoxProps> = ({ currentUserId, onSendMessage }) => {
   // Scroll chat messages to bottom (without scrolling the whole page)
   const scrollToBottom = useCallback(() => {
     if (messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+      messagesContainerRef.current.scrollTop =
+        messagesContainerRef.current.scrollHeight;
     }
   }, []);
 
@@ -37,7 +38,8 @@ const ChatBox: React.FC<ChatBoxProps> = ({ currentUserId, onSendMessage }) => {
   useEffect(() => {
     // Check if user is at the bottom of chat
     if (messagesContainerRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+      const { scrollTop, scrollHeight, clientHeight } =
+        messagesContainerRef.current;
       shouldAutoScroll.current = scrollTop + clientHeight >= scrollHeight - 10; // 10px tolerance
     }
 
@@ -154,7 +156,8 @@ const ChatBox: React.FC<ChatBoxProps> = ({ currentUserId, onSendMessage }) => {
   // Handle scroll events to detect if user manually scrolled
   const handleScroll = useCallback(() => {
     if (messagesContainerRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+      const { scrollTop, scrollHeight, clientHeight } =
+        messagesContainerRef.current;
       shouldAutoScroll.current = scrollTop + clientHeight >= scrollHeight - 10;
     }
   }, []);
@@ -190,7 +193,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({ currentUserId, onSendMessage }) => {
         <h3 className="card-title text-lg">Room Chat</h3>
 
         {/* Messages Container */}
-        <div 
+        <div
           ref={messagesContainerRef}
           className="flex-1 min-h-64 max-h-64 overflow-y-auto border border-base-300 rounded-lg p-2 bg-base-50"
           onScroll={handleScroll}
@@ -268,4 +271,3 @@ const ChatBox: React.FC<ChatBoxProps> = ({ currentUserId, onSendMessage }) => {
 };
 
 export default ChatBox;
-

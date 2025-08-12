@@ -1,8 +1,13 @@
-import { ChordModifierType, type Scale, useTouchEvents, ChordModifierButton } from "@/features/ui";
-import { DEFAULT_KEYBOARD_SHORTCUTS } from "../../../index";
 import { chordTriadKeys } from "../../../constants/virtualKeyboardKeys";
-import { getChordName } from "@/features/ui";
+import { DEFAULT_KEYBOARD_SHORTCUTS } from "../../../index";
 import type { KeyboardKey } from "../types/keyboard";
+import {
+  ChordModifierType,
+  type Scale,
+  useTouchEvents,
+  ChordModifierButton,
+} from "@/features/ui";
+import { getChordName } from "@/features/ui";
 import { memo } from "react";
 
 // Memoized triad button component

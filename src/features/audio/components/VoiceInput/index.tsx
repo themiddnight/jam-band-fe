@@ -1,10 +1,10 @@
-import { AnchoredPopup, Modal } from "@/features/ui";
 import {
   useAudioStream,
   useInputLevelMonitoring,
   useVoiceControls,
 } from "./hooks";
 import { useVoiceStateStore } from "./stores/voiceStateStore";
+import { AnchoredPopup, Modal } from "@/features/ui";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 
 interface VoiceInputProps {

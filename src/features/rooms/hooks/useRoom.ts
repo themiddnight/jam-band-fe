@@ -1,11 +1,11 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { InstrumentCategory } from "@/shared/constants/instruments";
-import { useRoomQuery, useRoomStore } from "@/features/rooms";
-import { useUserStore } from "@/shared/stores/userStore";
-import { useInstrument } from "@/features/instruments/hooks/useInstrument";
 import { useMidiController } from "@/features/audio";
-import { useScaleState } from "@/features/ui";
 import { useSocket } from "@/features/audio/hooks/useSocket";
+import { useInstrument } from "@/features/instruments/hooks/useInstrument";
+import { useRoomQuery, useRoomStore } from "@/features/rooms";
+import { useScaleState } from "@/features/ui";
+import { InstrumentCategory } from "@/shared/constants/instruments";
+import { useUserStore } from "@/shared/stores/userStore";
 import { useEffect, useCallback, useRef, useState, useMemo } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 

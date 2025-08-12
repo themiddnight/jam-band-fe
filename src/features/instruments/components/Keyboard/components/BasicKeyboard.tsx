@@ -1,5 +1,5 @@
-import { useTouchEvents } from "@/features/ui";
 import type { KeyboardKey } from "../types/keyboard";
+import { useTouchEvents } from "@/features/ui";
 import { memo } from "react";
 
 interface BasicKeyboardProps {

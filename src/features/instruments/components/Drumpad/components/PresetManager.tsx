@@ -1,6 +1,6 @@
 import { useDrumpadPresetsStore } from "../../../stores/drumpadPresetsStore";
-import { Modal } from "@/features/ui";
 import type { PresetManagerProps } from "../types/drumpad";
+import { Modal } from "@/features/ui";
 import React, { useState } from "react";
 
 export const PresetManager: React.FC<PresetManagerProps> = ({

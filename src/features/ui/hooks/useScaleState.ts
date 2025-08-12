@@ -1,5 +1,5 @@
-import { NOTE_NAMES, SCALES } from "../utils/musicUtils";
 import type { Scale } from "../../../shared/types";
+import { NOTE_NAMES, SCALES } from "../utils/musicUtils";
 import { useState, useCallback } from "react";
 
 export const useScaleState = () => {

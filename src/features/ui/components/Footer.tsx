@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Modal } from './shared/Modal';
+import { Modal } from "./shared/Modal";
+import React, { useState } from "react";
 
 export const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
@@ -14,9 +14,9 @@ export const Footer: React.FC = () => {
               <span className="text-primary font-bold text-lg">collab</span>
               <span className="text-sm text-base-content/70">•</span>
               <span className="text-sm text-base-content/70">
-                © {currentYear} by{' '}
+                © {currentYear} by{" "}
                 <a
-                  href="https://github.com/themiddnight"
+                  href="http://themiddnight-resume.vercel.app/resumes/themiddnight-dev"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-primary transition-colors"
@@ -59,13 +59,18 @@ export const Footer: React.FC = () => {
         <div className="space-y-6 px-2">
           <div>
             <p className="text-base-content/80 leading-relaxed">
-              COLLAB is a Proof of Concept (POC) for my idea to create an application where users can jam together in real-time.
-              This collaborative music platform allows multiple users to play different instruments simultaneously, creating a virtual
-              band experience through the web.
+              COLLAB is a Proof of Concept (POC) for my idea to create an
+              application where users can jam together in real-time. This
+              collaborative music platform allows multiple users to play
+              different instruments simultaneously, creating a virtual band
+              experience through the web.
             </p>
             <div className="mt-3 p-3 bg-primary/10 rounded-lg border border-primary/20">
               <p className="text-xs text-primary leading-relaxed">
-                🎵 This is a <span className="font-bold">vibe-coding</span> project (Even this contents was generated with a little help from AI! 🤓📝) - built while jamming to music and exploring the creative intersection of coding and music production! 🤖✨ 
+                🎵 This is a <span className="font-bold">vibe-coding</span>{" "}
+                project (Even this contents was generated with a little help
+                from AI! 🤓📝) - built while jamming to music and exploring the
+                creative intersection of coding and music production! 🤖✨
               </p>
             </div>
           </div>
@@ -103,7 +108,9 @@ export const Footer: React.FC = () => {
                 </ul>
               </div>
               <div>
-                <h5 className="font-medium text-primary mb-2">Additional Features</h5>
+                <h5 className="font-medium text-primary mb-2">
+                  Additional Features
+                </h5>
                 <ul className="space-y-1 text-sm text-base-content/70">
                   <li>• PWA support</li>
                   <li>• WebRTC voice chat</li>
@@ -117,7 +124,10 @@ export const Footer: React.FC = () => {
           <div>
             <h4 className="font-semibold text-lg mb-2">Features</h4>
             <ul className="space-y-1 text-sm text-base-content/70">
-              <li>• Multiple virtual instruments (Guitar, Bass, Keyboard, Drums, Synthesizer)</li>
+              <li>
+                • Multiple virtual instruments (Guitar, Bass, Keyboard, Drums,
+                Synthesizer)
+              </li>
               <li>• Real-time collaborative jamming sessions</li>
               <li>• Voice input and chat capabilities</li>
               <li>• MIDI controller support</li>
@@ -130,21 +140,26 @@ export const Footer: React.FC = () => {
             <h4 className="font-semibold text-lg mb-2">Server Information</h4>
             <div className="p-3 bg-base-200 rounded-lg border border-base-300">
               <p className="text-sm text-base-content/80 leading-relaxed">
-                <span className="font-medium">🌏 Server Location:</span> Southeast Asia<br/>
-                <span className="font-medium">⚡ Latency Note:</span> Connection latency may vary depending on your geographical location. 
-                Users closer to Southeast Asia will experience lower latency for optimal real-time jamming experience.
+                <span className="font-medium">🌏 Server Location:</span>{" "}
+                Southeast Asia
+                <br />
+                <span className="font-medium">⚡ Latency Note:</span> Connection
+                latency may vary depending on your geographical location. Users
+                closer to Southeast Asia will experience lower latency for
+                optimal real-time jamming experience.
               </p>
             </div>
           </div>
 
           <div className="pt-4 border-t border-base-300">
             <p className="text-xs text-base-content/60 text-center">
-              This is a personal project by Pathompong Thitithan.
-              Built with modern web technologies to explore the possibilities of collaborative music creation online.
+              This is a personal project by Pathompong Thitithan. Built with
+              modern web technologies to explore the possibilities of
+              collaborative music creation online.
             </p>
           </div>
         </div>
       </Modal>
     </>
   );
-}; 
+};

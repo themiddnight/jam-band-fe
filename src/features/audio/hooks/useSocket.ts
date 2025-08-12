@@ -1,6 +1,6 @@
+import type { SynthState } from "@/features/instruments";
 import { useRoomStore } from "@/features/rooms";
 import { useUserStore } from "@/shared/stores/userStore";
-import type { SynthState } from "@/features/instruments";
 import { throttle } from "lodash";
 import { useRef, useCallback, useState, useMemo } from "react";
 import { io, Socket } from "socket.io-client";

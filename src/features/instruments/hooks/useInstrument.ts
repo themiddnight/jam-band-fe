@@ -1,15 +1,15 @@
+import { useInstrumentManager } from "./useInstrumentManager";
+import { useInstrumentPreferencesStore } from "@/features/audio";
+import type { SynthState } from "@/features/instruments";
+import { getCachedDrumMachines } from "@/features/instruments";
 import {
   SOUNDFONT_INSTRUMENTS,
   DRUM_MACHINES,
   SYNTHESIZER_INSTRUMENTS,
   InstrumentCategory,
 } from "@/shared/constants/instruments";
-import { useInstrumentPreferencesStore } from "@/features/audio";
 import { ControlType } from "@/shared/types";
-import type { SynthState } from "@/features/instruments";
-import { getCachedDrumMachines } from "@/features/instruments";
 import { isSafari } from "@/shared/utils/webkitCompat";
-import { useInstrumentManager } from "./useInstrumentManager";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 
 export interface UseInstrumentOptions {

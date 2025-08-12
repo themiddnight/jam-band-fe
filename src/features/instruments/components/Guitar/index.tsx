@@ -1,12 +1,12 @@
 import { DEFAULT_GUITAR_SHORTCUTS, getKeyDisplayName } from "../../index";
-import type { Scale } from "@/features/ui";
-import { useSustainSync } from "@/features/audio";
-import { BaseInstrument } from "@/features/ui";
 import { BasicFretboard } from "./components/BasicFretboard";
 import { SimpleChordKeys } from "./components/ChordGuitar";
 import { MelodyGuitar } from "./components/MelodyGuitar";
 import { useGuitarKeysController } from "./hooks/useGuitarKeysController";
 import { useGuitarState } from "./hooks/useGuitarState";
+import { useSustainSync } from "@/features/audio";
+import type { Scale } from "@/features/ui";
+import { BaseInstrument } from "@/features/ui";
 import { useMemo } from "react";
 
 export interface GuitarProps {

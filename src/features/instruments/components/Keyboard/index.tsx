@@ -1,14 +1,18 @@
-import { DEFAULT_KEYBOARD_SHORTCUTS, ARPEGGIO_TIME_STEPS, ARPEGGIO_TIME_LABELS } from "../../index";
 import { useInstrumentState } from "../../hooks/useInstrumentState";
-import type { Scale } from "@/features/ui";
-import { useSustainSync } from "@/features/audio";
+import {
+  DEFAULT_KEYBOARD_SHORTCUTS,
+  ARPEGGIO_TIME_STEPS,
+  ARPEGGIO_TIME_LABELS,
+} from "../../index";
 import { useKeyboardStore } from "../../stores/keyboardStore";
-import { BaseInstrument } from "@/features/ui";
 import { BasicKeyboard } from "./components/BasicKeyboard";
 import { ChordKeyboard } from "./components/ChordKeyboard";
 import { MelodyKeyboard } from "./components/MelodyKeyboard";
 import { useKeyboardKeysController } from "./hooks/useKeyboardKeysController";
 import { useVirtualKeyboard } from "./hooks/useVirtualKeyboard";
+import { useSustainSync } from "@/features/audio";
+import type { Scale } from "@/features/ui";
+import { BaseInstrument } from "@/features/ui";
 
 export interface Props {
   // Scale state - the core functionality
@@ -191,18 +195,14 @@ export default function Keyboard({
         className={`btn btn-sm join-item touch-manipulation ${mode === "simple-melody" ? "btn-primary" : "btn-outline"}`}
       >
         Melody {""}
-        <kbd className="kbd kbd-xs">
-          {shortcuts.toggleMode.key}
-        </kbd>
+        <kbd className="kbd kbd-xs">{shortcuts.toggleMode.key}</kbd>
       </button>
       <button
         onClick={() => setMode("simple-chord")}
         className={`btn btn-sm join-item touch-manipulation ${mode === "simple-chord" ? "btn-primary" : "btn-outline"}`}
       >
         Chord {""}
-        <kbd className="kbd kbd-xs">
-          {shortcuts.toggleMode.key}
-        </kbd>
+        <kbd className="kbd kbd-xs">{shortcuts.toggleMode.key}</kbd>
       </button>
       <button
         onClick={() => setMode("basic")}

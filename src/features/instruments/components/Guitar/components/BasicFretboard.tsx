@@ -3,10 +3,7 @@ import {
   getScaleNotes,
   type Scale,
 } from "../../../../ui";
-import {
-  FretboardBase,
-  type FretboardConfig,
-} from "../../../../ui";
+import { FretboardBase, type FretboardConfig } from "../../../../ui";
 import { useCallback, useMemo, useRef } from "react";
 
 interface BasicFretboardProps {

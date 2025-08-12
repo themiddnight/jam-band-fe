@@ -1,32 +1,32 @@
 // Instruments Feature Barrel Export
 
 // Components exports
-export { default as Guitar } from './components/Guitar';
-export { default as Bass } from './components/Bass';
-export { default as Keyboard } from './components/Keyboard';
-export { default as Drumpad } from './components/Drumpad';
-export { default as Drumset } from './components/Drumset';
+export { default as Guitar } from "./components/Guitar";
+export { default as Bass } from "./components/Bass";
+export { default as Keyboard } from "./components/Keyboard";
+export { default as Drumpad } from "./components/Drumpad";
+export { default as Drumset } from "./components/Drumset";
 // Synthesizer components are exported individually
-export { SynthControls } from './components/Synthesizer/SynthControls';
-export { LatencyControls } from './components/Synthesizer/LatencyControls';
-export { default as InstrumentCategorySelector } from './components/InstrumentCategorySelector';
-export * from './components/LazyComponents';
+export { SynthControls } from "./components/Synthesizer/SynthControls";
+export { LatencyControls } from "./components/Synthesizer/LatencyControls";
+export { default as InstrumentCategorySelector } from "./components/InstrumentCategorySelector";
+export * from "./components/LazyComponents";
 
 // Hooks exports
-export { usePresetManager } from './hooks/usePresetManager';
-export { useInstrumentState } from './hooks/useInstrumentState';
-export { useInstrumentManager } from './hooks/useInstrumentManager';
-export { useInstrument } from './hooks/useInstrument';
-export { useVelocityControl } from './hooks/useVelocityControl';
-export { useInstrumentKeyboard } from './hooks/useInstrumentKeyboard';
-export { useKeyboardHandler } from './hooks/useKeyboardHandler';
+export { usePresetManager } from "./hooks/usePresetManager";
+export { useInstrumentState } from "./hooks/useInstrumentState";
+export { useInstrumentManager } from "./hooks/useInstrumentManager";
+export { useInstrument } from "./hooks/useInstrument";
+export { useVelocityControl } from "./hooks/useVelocityControl";
+export { useInstrumentKeyboard } from "./hooks/useInstrumentKeyboard";
+export { useKeyboardHandler } from "./hooks/useKeyboardHandler";
 
 // Constants exports - using aliases to avoid naming conflicts
 export {
   DEFAULT_BASS_SHORTCUTS,
   getBassShortcutsByCategory,
   getBassKeyDisplayName,
-} from './constants/bassShortcuts';
+} from "./constants/bassShortcuts";
 
 export {
   DEFAULT_GUITAR_SHORTCUTS,
@@ -38,7 +38,7 @@ export {
   getGuitarKeyDisplayName,
   BRUSHING_TIME_STEPS,
   BRUSHING_TIME_LABELS,
-} from './constants/guitarShortcuts';
+} from "./constants/guitarShortcuts";
 
 export {
   DEFAULT_KEYBOARD_SHORTCUTS,
@@ -48,34 +48,37 @@ export {
   getChordModifierKeys as getKeyboardChordModifierKeys,
   getKeyboardShortcutsByCategory,
   getKeyboardKeyDisplayName,
-} from './constants/keyboardShortcuts';
+} from "./constants/keyboardShortcuts";
 
-export * from './constants/virtualKeyboardKeys';
+export * from "./constants/virtualKeyboardKeys";
 
 // Presets exports
-export * from './constants/presets/drumPresets';
-export * from './constants/presets/synthPresets';
+export * from "./constants/presets/drumPresets";
+export * from "./constants/presets/synthPresets";
 
 // Drumpad-specific exports
-export { DRUMPAD_SHORTCUTS, DRUMPAD_COLORS } from './constants/presets/drumPresets';
+export {
+  DRUMPAD_SHORTCUTS,
+  DRUMPAD_COLORS,
+} from "./constants/presets/drumPresets";
 
 // Utilities exports
-export * from './constants/utils/displayUtils';
+export * from "./constants/utils/displayUtils";
 
 // Utilities exports
-export * from './utils/drumMachineUtils';
-export * from './utils/guitarAudioUtils';
-export * from './utils/InstrumentEngine';
-export * from './utils/instrumentGrouping';
+export * from "./utils/drumMachineUtils";
+export * from "./utils/guitarAudioUtils";
+export * from "./utils/InstrumentEngine";
+export * from "./utils/instrumentGrouping";
 
 // Types exports
-export * from './types/presets';
-export * from './types/keyboard';
+export * from "./types/presets";
+export * from "./types/keyboard";
 
 // Store exports
-export { useGuitarStore } from './stores/guitarStore';
-export { useBassStore } from './stores/bassStore';
-export { useKeyboardStore } from './stores/keyboardStore';
-export { useDrumStore } from './stores/drumStore';
-export { useBaseInstrumentStore } from './stores/baseInstrumentStore';
-export { useDrumpadPresetsStore } from './stores/drumpadPresetsStore';
+export { useGuitarStore } from "./stores/guitarStore";
+export { useBassStore } from "./stores/bassStore";
+export { useKeyboardStore } from "./stores/keyboardStore";
+export { useDrumStore } from "./stores/drumStore";
+export { useBaseInstrumentStore } from "./stores/baseInstrumentStore";
+export { useDrumpadPresetsStore } from "./stores/drumpadPresetsStore";

@@ -1,6 +1,6 @@
+import Invite from "../../pages/Invite";
 import Lobby from "../../pages/Lobby";
 import Room from "../../pages/Room";
-import Invite from "../../pages/Invite";
 
 export const routes = [
   { path: "/", component: Lobby },
@@ -12,4 +12,4 @@ export const routes = [
 export type AppRoute = {
   path: string;
   component: React.ComponentType;
-}; 
+};

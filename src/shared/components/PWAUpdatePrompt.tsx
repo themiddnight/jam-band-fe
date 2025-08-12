@@ -1,9 +1,9 @@
-import { usePWA } from '../hooks/usePWA'
+import { usePWA } from "../hooks/usePWA";
 
 export function PWAUpdatePrompt() {
-  const { offlineReady, needRefresh, updateApp } = usePWA()
+  const { offlineReady, needRefresh, updateApp } = usePWA();
 
-  if (!offlineReady && !needRefresh) return null
+  if (!offlineReady && !needRefresh) return null;
 
   return (
     <div className="fixed bottom-4 right-4 z-50">
@@ -15,7 +15,7 @@ export function PWAUpdatePrompt() {
           </div>
         </div>
       )}
-      
+
       {needRefresh && (
         <div className="bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg">
           <div className="flex items-center gap-2">
@@ -31,5 +31,5 @@ export function PWAUpdatePrompt() {
         </div>
       )}
     </div>
-  )
-} 
+  );
+}

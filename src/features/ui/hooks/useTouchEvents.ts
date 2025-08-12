@@ -94,4 +94,4 @@ export const useTouchEvents = ({
   return {
     ref: elementRef,
   };
-}; 
+};

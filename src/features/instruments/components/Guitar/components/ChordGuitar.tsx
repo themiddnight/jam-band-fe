@@ -1,6 +1,14 @@
-import { ChordModifierType, type Scale, useTouchEvents, ChordModifierButton, InstrumentButton, getChordFromDegree, getChordName } from "@/features/ui";
 import { DEFAULT_GUITAR_SHORTCUTS, getKeyDisplayName } from "../../../index";
 import type { GuitarChord } from "../types/guitar";
+import {
+  ChordModifierType,
+  type Scale,
+  useTouchEvents,
+  ChordModifierButton,
+  InstrumentButton,
+  getChordFromDegree,
+  getChordName,
+} from "@/features/ui";
 import { useMemo, memo } from "react";
 
 interface SimpleChordKeysProps {

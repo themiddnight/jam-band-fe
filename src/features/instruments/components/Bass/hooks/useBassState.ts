@@ -1,5 +1,5 @@
-import { useInstrumentState } from "../../../index";
 import type { Scale } from "../../../../ui";
+import { useInstrumentState } from "../../../index";
 import { useBassStore } from "../../../stores/bassStore";
 import { useGuitarBasicMode } from "../../Guitar/hooks/useGuitarBasicMode";
 import { useGuitarStringBehavior } from "../../Guitar/hooks/useGuitarStringBehavior";

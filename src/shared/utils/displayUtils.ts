@@ -36,4 +36,4 @@ export const getKeyDisplayName = (key: string): string => {
     default:
       return key.toUpperCase();
   }
-}; 
+};

@@ -48,4 +48,4 @@ export const getScaleSlotByShortcut = (
   shortcut: string,
 ): ScaleSlot | undefined => {
   return DEFAULT_SCALE_SLOTS.find((slot) => slot.shortcut === shortcut);
-}; 
+};

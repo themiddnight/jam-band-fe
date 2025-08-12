@@ -1,5 +1,5 @@
-import { NoteKeys as SharedNoteKeys, type NoteKey } from "@/features/ui";
 import type { KeyboardKey } from "../types/keyboard";
+import { NoteKeys as SharedNoteKeys, type NoteKey } from "@/features/ui";
 import { memo } from "react";
 
 interface MelodyKeyboardProps {

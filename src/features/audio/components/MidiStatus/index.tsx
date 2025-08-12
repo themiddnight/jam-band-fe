@@ -1,6 +1,6 @@
 import type { MidiDevice } from "../../hooks/useMidiController";
-import { useState, useEffect, useRef, useCallback } from "react";
 import AnchoredPopup from "@/features/ui/components/shared/AnchoredPopup";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 interface MidiStatusProps {
   isConnected: boolean;

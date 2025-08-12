@@ -1,6 +1,6 @@
+import { useSocket } from "@/features/audio/hooks/useSocket";
 import { useRoomQuery, useRoomStore } from "@/features/rooms";
 import { useUserStore } from "@/shared/stores/userStore";
-import { useSocket } from "@/features/audio/hooks/useSocket";
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 
@@ -37,15 +37,15 @@ export function useLobby() {
       setShowUsernameModal(true);
     } else {
       // Check if there's a pending invite in sessionStorage (for when user refreshes after setting username)
-      const pendingInvite = sessionStorage.getItem('pendingInvite');
+      const pendingInvite = sessionStorage.getItem("pendingInvite");
       if (pendingInvite) {
         try {
           const { roomId, role } = JSON.parse(pendingInvite);
-          sessionStorage.removeItem('pendingInvite');
+          sessionStorage.removeItem("pendingInvite");
           navigate(`/room/${roomId}`, { state: { role } });
         } catch (error) {
-          console.error('Failed to parse pending invite:', error);
-          sessionStorage.removeItem('pendingInvite');
+          console.error("Failed to parse pending invite:", error);
+          sessionStorage.removeItem("pendingInvite");
         }
       }
     }

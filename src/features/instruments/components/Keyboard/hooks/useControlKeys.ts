@@ -3,11 +3,8 @@ import {
   ARPEGGIO_TIME_STEPS,
 } from "../../../index";
 import { useVelocityControl } from "../../../index";
+import type { KeyboardState, VirtualKeyboardState } from "../../../index";
 import { useKeyboardStore } from "../../../stores/keyboardStore";
-import type {
-  KeyboardState,
-  VirtualKeyboardState,
-} from "../../../index";
 import { useCallback } from "react";
 
 export const useControlKeys = (

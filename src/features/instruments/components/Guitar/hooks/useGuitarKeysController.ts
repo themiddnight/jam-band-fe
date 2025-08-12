@@ -1,8 +1,5 @@
-import {
-  DEFAULT_GUITAR_SHORTCUTS,
-  GUITAR_PLAY_BUTTONS,
-} from "../../../index";
 import type { Scale } from "../../../../ui";
+import { DEFAULT_GUITAR_SHORTCUTS, GUITAR_PLAY_BUTTONS } from "../../../index";
 import { useVelocityControl } from "../../../index";
 import { useGuitarStore } from "../../../stores/guitarStore";
 import type { GuitarState } from "../types/guitar";

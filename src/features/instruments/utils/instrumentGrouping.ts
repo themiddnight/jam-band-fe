@@ -1,9 +1,9 @@
-import type { GroupedOption } from "../../ui";
 import {
   SOUNDFONT_INSTRUMENTS,
   DRUM_MACHINES,
   SYNTHESIZER_INSTRUMENTS,
 } from "../../../shared/constants/instruments";
+import type { GroupedOption } from "../../ui";
 
 // Group soundfont instruments by category
 export const groupSoundfontInstruments = (): GroupedOption[] => {

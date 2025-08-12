@@ -1,7 +1,11 @@
-import { DEFAULT_GUITAR_SHORTCUTS, GUITAR_PLAY_BUTTONS, getKeyDisplayName } from "../../../index";
+import {
+  DEFAULT_GUITAR_SHORTCUTS,
+  GUITAR_PLAY_BUTTONS,
+  getKeyDisplayName,
+} from "../../../index";
+import type { GuitarNote, GuitarState } from "../types/guitar";
 import type { Scale } from "@/features/ui";
 import { useTouchEvents, NoteKeys as SharedNoteKeys } from "@/features/ui";
-import type { GuitarNote, GuitarState } from "../types/guitar";
 import { useMemo } from "react";
 
 interface MelodyGuitarProps {

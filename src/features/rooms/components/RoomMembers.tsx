@@ -1,5 +1,5 @@
-import type { RoomUser } from "@/shared/types";
 import PlayingIndicator from "./PlayingIndicator";
+import type { RoomUser } from "@/shared/types";
 import { memo } from "react";
 
 interface VoiceUser {

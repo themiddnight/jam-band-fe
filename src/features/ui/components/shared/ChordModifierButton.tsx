@@ -1,6 +1,10 @@
-import { ChordModifierType, getChordModifierDisplayName, getChordModifierColorClass } from "../../constants/chordModifierConfig";
-import { getKeyDisplayName } from "@/shared/utils/displayUtils";
+import {
+  ChordModifierType,
+  getChordModifierDisplayName,
+  getChordModifierColorClass,
+} from "../../constants/chordModifierConfig";
 import { useTouchEvents } from "../../hooks/useTouchEvents";
+import { getKeyDisplayName } from "@/shared/utils/displayUtils";
 
 interface ChordModifierButtonProps {
   modifier: ChordModifierType;

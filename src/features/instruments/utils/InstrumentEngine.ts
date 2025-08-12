@@ -1,4 +1,3 @@
-import { getOptimalAudioConfig } from "../../audio";
 import { InstrumentCategory } from "../../../shared/constants/instruments";
 import { throttle } from "../../../shared/utils/performanceUtils";
 import {
@@ -6,6 +5,7 @@ import {
   handleSafariAudioError,
   findNextCompatibleInstrument,
 } from "../../../shared/utils/webkitCompat";
+import { getOptimalAudioConfig } from "../../audio";
 import { Soundfont, DrumMachine } from "smplr";
 import * as Tone from "tone";
 
@@ -146,7 +146,9 @@ export class InstrumentEngine {
     size: number;
   }> {
     try {
-      const { getAudioBufferCacheStats } = await import("../../audio/utils/audioBufferCache");
+      const { getAudioBufferCacheStats } = await import(
+        "../../audio/utils/audioBufferCache"
+      );
       return getAudioBufferCacheStats();
     } catch {
       return { hits: 0, misses: 0, hitRate: 0, size: 0 };

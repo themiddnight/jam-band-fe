@@ -1,11 +1,11 @@
 import { DEFAULT_BASS_SHORTCUTS, getKeyDisplayName } from "../../index";
-import type { Scale } from "@/features/ui";
-import { useSustainSync } from "@/features/audio";
 import { useVelocityControl } from "../../index";
 import { BasicFretboard } from "../Guitar/components/BasicFretboard";
-import { BaseInstrument } from "@/features/ui";
 import { MelodyBass } from "./components/MelodyBass";
 import { useBassState } from "./hooks/useBassState";
+import { useSustainSync } from "@/features/audio";
+import type { Scale } from "@/features/ui";
+import { BaseInstrument } from "@/features/ui";
 import { useMemo, useCallback } from "react";
 
 export interface BassProps {

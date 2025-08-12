@@ -1,6 +1,9 @@
-import { InstrumentCategory, DRUM_MACHINES } from "@/shared/constants/instruments";
 import { getGroupedInstrumentsForCategory } from "../utils/instrumentGrouping";
 import { GroupedDropdown } from "@/features/ui";
+import {
+  InstrumentCategory,
+  DRUM_MACHINES,
+} from "@/shared/constants/instruments";
 
 export interface InstrumentCategorySelectorProps {
   currentCategory: InstrumentCategory;
