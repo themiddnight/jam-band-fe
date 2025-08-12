@@ -1,4 +1,4 @@
-import { SharedNoteKeys, type NoteKey } from "../../../../../components/shared/NoteKeys";
+import { NoteKeys as SharedNoteKeys, type NoteKey } from "@/features/ui";
 import type { KeyboardKey } from "../types/keyboard";
 import { memo } from "react";
 
@@ -32,7 +32,7 @@ export const MelodyKeyboard = memo<MelodyKeyboardProps>(
     return (
       <SharedNoteKeys
         noteKeys={noteKeys}
-        onKeyPress={(noteKey) => {
+        onKeyPress={(noteKey: NoteKey) => {
           const originalKey = virtualKeys.find(
             (k) =>
               k.note === noteKey.note && k.keyboardKey === noteKey.keyboardKey,
@@ -41,7 +41,7 @@ export const MelodyKeyboard = memo<MelodyKeyboardProps>(
             onKeyPress(originalKey);
           }
         }}
-        onKeyRelease={(noteKey) => {
+        onKeyRelease={(noteKey: NoteKey) => {
           const originalKey = virtualKeys.find(
             (k) =>
               k.note === noteKey.note && k.keyboardKey === noteKey.keyboardKey,

@@ -5,8 +5,15 @@
 export { useUserStore } from './stores/userStore';
 export { useScaleSlotsStore, type ScaleSlotsState } from './stores/scaleSlotsStore';
 
+// Hooks exports
+export { usePWA } from './hooks/usePWA';
+
+// Component exports
+export { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
+
 // Utility exports
 export * from './utils';
+export { preloadCriticalComponents, preloadInstrumentComponents } from './utils/componentPreloader';
 
 // Constants exports
 export * from './constants';

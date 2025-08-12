@@ -1,9 +1,9 @@
 import {
   DEFAULT_GUITAR_SHORTCUTS,
   GUITAR_PLAY_BUTTONS,
-} from "../../../../../constants/guitarShortcuts";
-import type { Scale } from "../../../../../hooks/useScaleState";
-import { useVelocityControl } from "../../../../../hooks/useVelocityControl";
+} from "../../../index";
+import type { Scale } from "../../../../ui";
+import { useVelocityControl } from "../../../index";
 import { useGuitarStore } from "../../../stores/guitarStore";
 import type { GuitarState } from "../types/guitar";
 import { useCallback } from "react";

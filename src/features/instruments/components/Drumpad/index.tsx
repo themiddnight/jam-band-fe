@@ -1,5 +1,5 @@
-import { DRUMPAD_SHORTCUTS } from "../../../../constants/presets/drumPresets";
-import { useKeyboardHandler } from "../../../../hooks/useKeyboardHandler";
+import { DRUMPAD_SHORTCUTS } from "../../index";
+import { useKeyboardHandler } from "../../index";
 import { PadButton } from "./components/PadButton";
 import { PresetManager } from "./components/PresetManager";
 import { SoundSelectionModal } from "./components/SoundSelectionModal";

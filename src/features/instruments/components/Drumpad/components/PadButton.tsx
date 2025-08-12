@@ -1,4 +1,4 @@
-import { useTouchEvents } from "../../../../../hooks/useTouchEvents";
+import { useTouchEvents } from "@/features/ui";
 import type { PadButtonProps } from "../types/drumpad";
 import React from "react";
 

@@ -1,5 +1,5 @@
 import { useDrumpadPresetsStore } from "../../../stores/drumpadPresetsStore";
-import { Modal } from "../../../../../components/shared/Modal";
+import { Modal } from "@/features/ui";
 import type { PresetManagerProps } from "../types/drumpad";
 import React, { useState } from "react";
 

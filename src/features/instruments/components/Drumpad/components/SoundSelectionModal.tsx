@@ -1,4 +1,4 @@
-import { Modal } from "../../../../../components/shared/Modal";
+import { Modal } from "@/features/ui";
 import type { SoundSelectionModalProps } from "../types/drumpad";
 import React, { useState } from "react";
 
@@ -33,7 +33,7 @@ export const SoundSelectionModal: React.FC<SoundSelectionModalProps> = ({
   return (
     <Modal
       open={isOpen}
-      setOpen={(open) => !open && handleClose()}
+      setOpen={(open: boolean) => !open && handleClose()}
       title={`Select Sound for Pad ${selectedPad?.replace("pad-", "")} (${padShortcut?.toUpperCase()})`}
       onOk={handleAssign}
       onCancel={handleClose}

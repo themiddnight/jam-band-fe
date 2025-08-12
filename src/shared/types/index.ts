@@ -26,5 +26,20 @@ export interface Room {
   createdAt: Date;
 }
 
-// Re-export Scale type from musicUtils for convenience
-export type { Scale } from "../utils/musicUtils";
+// Music-related types
+export type Scale = "major" | "minor";
+
+export interface ScaleSlot {
+  id: number;
+  rootNote: string;
+  scale: Scale;
+  shortcut: string;
+}
+
+export interface Instrument {
+  value: string;
+  label: string;
+  controlType: ControlType;
+  type?: string;
+  polyphony?: string;
+}

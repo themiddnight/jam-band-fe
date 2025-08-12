@@ -1,5 +1,5 @@
-import { AUDIO_CONFIG } from "../../../../constants/audioConfig";
-import { Modal } from "../../../../components/shared/Modal";
+import { AUDIO_CONFIG } from "@/features/audio";
+import { Modal } from "@/features/ui";
 import React, { useState, useEffect } from "react";
 
 interface LatencyControlsProps {

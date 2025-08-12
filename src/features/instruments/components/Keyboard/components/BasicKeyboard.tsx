@@ -1,4 +1,4 @@
-import { useTouchEvents } from "../../../../../hooks/useTouchEvents";
+import { useTouchEvents } from "@/features/ui";
 import type { KeyboardKey } from "../types/keyboard";
 import { memo } from "react";
 

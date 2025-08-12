@@ -1,10 +1,9 @@
-import { DEFAULT_BASS_SHORTCUTS } from "../../../../constants/bassShortcuts";
-import { getKeyDisplayName } from "../../../../constants/utils/displayUtils";
-import type { Scale } from "../../../../hooks/useScaleState";
-import { useSustainSync } from "../../../../hooks/useSustainSync";
-import { useVelocityControl } from "../../../../hooks/useVelocityControl";
+import { DEFAULT_BASS_SHORTCUTS, getKeyDisplayName } from "../../index";
+import type { Scale } from "@/features/ui";
+import { useSustainSync } from "@/features/audio";
+import { useVelocityControl } from "../../index";
 import { BasicFretboard } from "../Guitar/components/BasicFretboard";
-import BaseInstrument from "../../../../components/shared/BaseInstrument";
+import { BaseInstrument } from "@/features/ui";
 import { MelodyBass } from "./components/MelodyBass";
 import { useBassState } from "./hooks/useBassState";
 import { useMemo, useCallback } from "react";

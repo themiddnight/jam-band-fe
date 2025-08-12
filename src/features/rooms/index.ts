@@ -1,16 +1,21 @@
 // Rooms Feature Barrel Export
-// This file will be populated as components are migrated to this feature
 
-// Components exports will be added here
-// export { ChatBox } from './components/ChatBox';
-// export { RoomMembers } from './components/RoomMembers';
-// export { RoomItem } from './components/RoomItem';
+// Components exports
+export { default as ChatBox } from './components/ChatBox';
+export { default as RoomMembers } from './components/RoomMembers';
+export { default as RoomItem } from './components/RoomItem';
+export { default as PlayingIndicator } from './components/PlayingIndicator';
 
-// Services exports will be added here
-// export { useRooms } from './services/useRooms';
+// Hooks exports
+export { useRoom } from './hooks/useRoom';
+export { useLobby } from './hooks/useLobby';
 
-// Store exports will be added here
-// export { useRoomStore } from './stores/roomStore';
+// Services exports
+export { useRoomQuery, roomKeys } from './services/useRooms';
+export * from './services/api';
 
-// Type exports will be added here
-// export type { Room, RoomMember } from './types';
+// Store exports
+export { useRoomStore } from './stores/roomStore';
+
+// Constants exports
+export * from './constants/chat';

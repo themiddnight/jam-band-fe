@@ -1,18 +1,22 @@
 // Audio Feature Barrel Export
-// This file will be populated as components are migrated to this feature
 
-// Components exports will be added here
-// export { MidiStatus } from './components/MidiStatus';
-// export { VoiceInput } from './components/VoiceInput';
+// Components exports
+export { default as MidiStatus } from './components/MidiStatus';
+export { default as VoiceInput } from './components/VoiceInput';
 
-// Services exports will be added here
-// export { audioEngine } from './services/audioEngine';
+// Hooks exports
+export { useMidiController } from './hooks/useMidiController';
+export { useSustainSync } from './hooks/useSustainSync';
+export { useWebRTCVoice } from './hooks/useWebRTCVoice';
+export { useAudioContextManager } from './hooks/useAudioContextManager';
+export { useSocket } from './hooks/useSocket';
 
-// Store exports will be added here
-// export { useInstrumentPreferencesStore } from './stores/instrumentPreferencesStore';
+// Store exports
+export { useInstrumentPreferencesStore } from './stores/instrumentPreferencesStore';
 
-// Utilities exports will be added here
-// export { audioBufferCache } from './utils/audioBufferCache';
+// Utilities exports
+export { audioBufferCache } from './utils/audioBufferCache';
 
-// Type exports will be added here
-// export type { AudioConfig, MidiMessage } from './types';
+// Constants exports
+export * from './constants/audioConfig';
+export { getOptimalAudioConfig } from './constants/audioConfig';

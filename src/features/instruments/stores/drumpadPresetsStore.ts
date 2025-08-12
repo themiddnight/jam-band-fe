@@ -3,7 +3,7 @@ import {
   getDefaultPreset,
   createSmartAssignments,
   type DrumPreset,
-} from "../../../constants/presets/drumPresets";
+} from "../constants/presets/drumPresets";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 

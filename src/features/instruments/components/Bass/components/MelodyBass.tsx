@@ -1,8 +1,6 @@
-import { DEFAULT_BASS_SHORTCUTS } from "../../../../../constants/bassShortcuts";
-import { getKeyDisplayName } from "../../../../../constants/utils/displayUtils";
-import type { Scale } from "../../../../../hooks/useScaleState";
-import { useTouchEvents } from "../../../../../hooks/useTouchEvents";
-import { SharedNoteKeys } from "../../../../../components/shared/NoteKeys";
+import { DEFAULT_BASS_SHORTCUTS, getKeyDisplayName } from "../../../index";
+import type { Scale } from "@/features/ui";
+import { useTouchEvents, NoteKeys } from "@/features/ui";
 import { useMemo } from "react";
 
 interface MelodyBassProps {
@@ -196,7 +194,7 @@ export const MelodyBass: React.FC<MelodyBassProps> = ({
       <div className="flex flex-col gap-4">
         {/* Higher octave row (QWERTYUIOP[]) */}
         {noteKeys.higherKeys.length > 0 && (
-          <SharedNoteKeys
+          <NoteKeys
             noteKeys={noteKeys.higherKeys.map((nk) => ({
               note: nk.note,
               keyboardKey: nk.keyboardKey,
@@ -228,7 +226,7 @@ export const MelodyBass: React.FC<MelodyBassProps> = ({
 
         {/* Lower octave row (ASDFGHJKL;') */}
         {noteKeys.lowerKeys.length > 0 && (
-          <SharedNoteKeys
+          <NoteKeys
             noteKeys={noteKeys.lowerKeys.map((nk) => ({
               note: nk.note,
               keyboardKey: nk.keyboardKey,

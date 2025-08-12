@@ -1,14 +1,9 @@
-import {
-  DEFAULT_KEYBOARD_SHORTCUTS,
-  ARPEGGIO_TIME_STEPS,
-  ARPEGGIO_TIME_LABELS,
-} from "../../../../constants/keyboardShortcuts";
-import { getKeyDisplayName } from "../../../../constants/utils/displayUtils";
-import { useInstrumentState } from "../../../../hooks/useInstrumentState";
-import type { Scale } from "../../../../hooks/useScaleState";
-import { useSustainSync } from "../../../../hooks/useSustainSync";
+import { DEFAULT_KEYBOARD_SHORTCUTS, ARPEGGIO_TIME_STEPS, ARPEGGIO_TIME_LABELS } from "../../index";
+import { useInstrumentState } from "../../hooks/useInstrumentState";
+import type { Scale } from "@/features/ui";
+import { useSustainSync } from "@/features/audio";
 import { useKeyboardStore } from "../../stores/keyboardStore";
-import BaseInstrument from "../../../../components/shared/BaseInstrument";
+import { BaseInstrument } from "@/features/ui";
 import { BasicKeyboard } from "./components/BasicKeyboard";
 import { ChordKeyboard } from "./components/ChordKeyboard";
 import { MelodyKeyboard } from "./components/MelodyKeyboard";
@@ -197,7 +192,7 @@ export default function Keyboard({
       >
         Melody {""}
         <kbd className="kbd kbd-xs">
-          {getKeyDisplayName(shortcuts.toggleMode.key)}
+          {shortcuts.toggleMode.key}
         </kbd>
       </button>
       <button
@@ -206,7 +201,7 @@ export default function Keyboard({
       >
         Chord {""}
         <kbd className="kbd kbd-xs">
-          {getKeyDisplayName(shortcuts.toggleMode.key)}
+          {shortcuts.toggleMode.key}
         </kbd>
       </button>
       <button

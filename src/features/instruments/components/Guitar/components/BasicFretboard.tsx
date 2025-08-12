@@ -2,11 +2,11 @@ import {
   generateFretPositions,
   getScaleNotes,
   type Scale,
-} from "../../../../../shared/utils/musicUtils";
+} from "../../../../ui";
 import {
   FretboardBase,
   type FretboardConfig,
-} from "../../../../../components/shared/FretboardBase";
+} from "../../../../ui";
 import { useCallback, useMemo, useRef } from "react";
 
 interface BasicFretboardProps {

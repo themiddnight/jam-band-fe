@@ -1,5 +1,5 @@
-import { DEFAULT_BASS_SHORTCUTS } from "../../../../../constants/bassShortcuts";
-import type { Scale } from "../../../../../hooks/useScaleState";
+import { DEFAULT_BASS_SHORTCUTS } from "../../../index";
+import type { Scale } from "../../../../ui";
 import { useCallback } from "react";
 
 interface UseBassKeysControllerProps {

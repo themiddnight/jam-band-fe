@@ -2,8 +2,8 @@ import {
   DRUMPAD_SHORTCUTS,
   DRUMPAD_COLORS,
   validatePresetAssignments,
-} from "../../../../../constants/presets/drumPresets";
-import { useVelocityControl } from "../../../../../hooks/useVelocityControl";
+} from "../../../index";
+import { useVelocityControl } from "../../../index";
 import { useDrumpadPresetsStore } from "../../../stores/drumpadPresetsStore";
 import type {
   DrumPad,

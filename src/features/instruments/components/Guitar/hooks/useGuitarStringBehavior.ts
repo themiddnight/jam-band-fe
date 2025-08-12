@@ -1,4 +1,4 @@
-import { HAMMER_ON_PULL_OFF } from "../../../../../constants/guitarShortcuts";
+import { HAMMER_ON_PULL_OFF } from "../../../index";
 import type { GuitarString, HammerOnState } from "../types/guitar";
 import { useState, useCallback, useRef } from "react";
 

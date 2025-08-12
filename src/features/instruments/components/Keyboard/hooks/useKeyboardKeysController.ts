@@ -1,4 +1,4 @@
-import { DEFAULT_KEYBOARD_SHORTCUTS } from "../../../../../constants/keyboardShortcuts";
+import { DEFAULT_KEYBOARD_SHORTCUTS } from "../../../index";
 import {
   melodySimpleKeys,
   melodySimpleKeysUpper,
@@ -7,12 +7,12 @@ import {
   chordTriadKeys,
   chromaticWhiteKeyMapping,
   chromaticBlackKeyMapping,
-} from "../../../../../constants/virtualKeyboardKeys";
+} from "../../../index";
 import type {
   KeyboardState,
   ScaleState,
   VirtualKeyboardState,
-} from "../../../../../types/keyboard";
+} from "../../../index";
 import { useChordModifiers } from "./useChordModifiers";
 import { useControlKeys } from "./useControlKeys";
 import { useNotePlaying } from "./useNotePlaying";
@@ -118,6 +118,10 @@ export const useKeyboardKeysController = (
 
       // Handle control keys (sustain, velocity, octave, etc.)
       if (handleAllControlKeys(key)) {
+        // Prevent default for control keys to avoid browser behavior (e.g., spacebar scrolling)
+        if (controlKeys.has(key)) {
+          event.preventDefault();
+        }
         return;
       }
 

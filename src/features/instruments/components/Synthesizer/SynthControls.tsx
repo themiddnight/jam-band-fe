@@ -1,10 +1,9 @@
-import { SYNTHESIZER_INSTRUMENTS } from "../../../../shared/constants/instruments";
-import { DEFAULT_SYNTH_PRESETS } from "../../../../constants/presets/synthPresets";
-import { usePresetManager } from "../../../../hooks/usePresetManager";
-import type { SynthPreset } from "../../../../types/presets";
-import type { SynthState } from "../../../../utils/InstrumentEngine";
-import { Knob } from "../../../../components/shared/Knob";
-import { Modal } from "../../../../components/shared/Modal";
+import { SYNTHESIZER_INSTRUMENTS } from "@/shared/constants/instruments";
+import { DEFAULT_SYNTH_PRESETS } from "../../index";
+import { usePresetManager } from "../../hooks/usePresetManager";
+import type { SynthPreset } from "../../types/presets";
+import type { SynthState } from "../../utils/InstrumentEngine";
+import { Knob, Modal } from "@/features/ui";
 import { LatencyControls } from "./LatencyControls";
 import React, { useState } from "react";
 

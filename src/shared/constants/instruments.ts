@@ -1,4 +1,5 @@
 import { ControlType } from "../types";
+import type { Instrument } from "../types";
 
 // Instrument categories
 export enum InstrumentCategory {
@@ -8,7 +9,7 @@ export enum InstrumentCategory {
 }
 
 // Available drum machines from smplr
-export const DRUM_MACHINES = [
+export const DRUM_MACHINES: Instrument[] = [
   { value: "TR-808", label: "Roland TR-808", controlType: ControlType.Drumpad },
   { value: "LM-2", label: "LinnDrum LM-2", controlType: ControlType.Drumpad },
   { value: "Casio-RZ1", label: "Casio RZ-1", controlType: ControlType.Drumpad },
@@ -25,7 +26,7 @@ export const DRUM_MACHINES = [
 ];
 
 // Available synthesizer instruments using Tone.js
-export const SYNTHESIZER_INSTRUMENTS = [
+export const SYNTHESIZER_INSTRUMENTS: Instrument[] = [
   // Analog Synthesizers
   {
     value: "analog_mono",
@@ -60,7 +61,7 @@ export const SYNTHESIZER_INSTRUMENTS = [
 ];
 
 // List of available soundfont instruments
-export const SOUNDFONT_INSTRUMENTS = [
+export const SOUNDFONT_INSTRUMENTS: Instrument[] = [
   // Piano
   {
     value: "acoustic_grand_piano",

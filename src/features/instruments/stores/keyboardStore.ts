@@ -2,7 +2,7 @@ import type { KeyboardMode } from "../components/Keyboard/types/keyboard";
 import {
   ARPEGGIO_TIMES,
   type ArpeggioTime,
-} from "../../../constants/keyboardShortcuts";
+} from "../constants/keyboardShortcuts";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 

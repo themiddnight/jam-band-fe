@@ -1,4 +1,4 @@
-import type { DrumPreset } from "../../../../../constants/presets/drumPresets";
+import type { DrumPreset } from "../../../index";
 
 export interface DrumPad {
   id: string;

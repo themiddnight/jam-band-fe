@@ -1,5 +1,5 @@
-import type { Scale } from "../../../../hooks/useScaleState";
-import { useTouchEvents } from "../../../../hooks/useTouchEvents";
+import type { Scale } from "@/features/ui";
+import { useTouchEvents } from "@/features/ui";
 import { useState } from "react";
 
 export interface DrumsetProps {

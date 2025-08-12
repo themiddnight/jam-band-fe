@@ -1,8 +1,7 @@
-import { DEFAULT_GUITAR_SHORTCUTS } from "../../../../constants/guitarShortcuts";
-import { getKeyDisplayName } from "../../../../constants/utils/displayUtils";
-import type { Scale } from "../../../../hooks/useScaleState";
-import { useSustainSync } from "../../../../hooks/useSustainSync";
-import BaseInstrument from "../../../../components/shared/BaseInstrument";
+import { DEFAULT_GUITAR_SHORTCUTS, getKeyDisplayName } from "../../index";
+import type { Scale } from "@/features/ui";
+import { useSustainSync } from "@/features/audio";
+import { BaseInstrument } from "@/features/ui";
 import { BasicFretboard } from "./components/BasicFretboard";
 import { SimpleChordKeys } from "./components/ChordGuitar";
 import { MelodyGuitar } from "./components/MelodyGuitar";
@@ -90,7 +89,7 @@ export default function Guitar({
   // Convert pressedKeys to pressedFrets format for BasicFretboard
   const pressedFrets = useMemo(() => {
     const fretSet = new Set<string>();
-    unifiedState.pressedKeys.forEach((key) => {
+    unifiedState.pressedKeys.forEach((key: string) => {
       // Convert note to fret format if needed
       // For now, we'll use the key as-is since BasicFretboard expects string-fret format
       fretSet.add(key);

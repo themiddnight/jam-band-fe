@@ -1,6 +1,6 @@
-import { Modal } from "../components/shared/Modal";
-import { useLobby } from "../hooks/useLobby";
-import { Footer } from "../components/Footer";
+import { Modal } from "@/features/ui";
+import { useLobby } from "@/features/rooms";
+import { Footer } from "@/features/ui";
 
 export default function Lobby() {
   const {

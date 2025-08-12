@@ -1,11 +1,5 @@
-import { ChordModifierType } from "../../../../../constants/chordModifierConfig";
-import { DEFAULT_GUITAR_SHORTCUTS } from "../../../../../constants/guitarShortcuts";
-import { getKeyDisplayName } from "../../../../../constants/utils/displayUtils";
-import type { Scale } from "../../../../../hooks/useScaleState";
-import { useTouchEvents } from "../../../../../hooks/useTouchEvents";
-import { getChordFromDegree, getChordName } from "../../../../../shared/utils/musicUtils";
-import { ChordModifierButton } from "../../../../../components/shared/ChordModifierButton";
-import { InstrumentButton } from "../../../../../components/shared/InstrumentButton";
+import { ChordModifierType, type Scale, useTouchEvents, ChordModifierButton, InstrumentButton, getChordFromDegree, getChordName } from "@/features/ui";
+import { DEFAULT_GUITAR_SHORTCUTS, getKeyDisplayName } from "../../../index";
 import type { GuitarChord } from "../types/guitar";
 import { useMemo, memo } from "react";
 

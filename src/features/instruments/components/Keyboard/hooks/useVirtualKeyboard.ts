@@ -1,4 +1,4 @@
-import { DEFAULT_KEYBOARD_SHORTCUTS } from "../../../../../constants/keyboardShortcuts";
+import { DEFAULT_KEYBOARD_SHORTCUTS } from "../../../index";
 import {
   chordRootKeys,
   chordTriadKeys,
@@ -6,10 +6,10 @@ import {
   chromaticWhiteKeyMapping,
   melodySimpleKeys,
   melodySimpleKeysUpper,
-} from "../../../../../constants/virtualKeyboardKeys";
-import type { Scale } from "../../../../../hooks/useScaleState";
+} from "../../../index";
+import type { Scale } from "../../../../ui";
 import { useKeyboardStore } from "../../../stores/keyboardStore";
-import { getChordFromDegree } from "../../../../../shared/utils/musicUtils";
+import { getChordFromDegree } from "../../../../ui";
 import type { KeyboardKey } from "../types/keyboard";
 import { useState, useCallback, useMemo } from "react";
 

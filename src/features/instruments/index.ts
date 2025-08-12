@@ -10,6 +10,67 @@ export { default as Drumset } from './components/Drumset';
 export { SynthControls } from './components/Synthesizer/SynthControls';
 export { LatencyControls } from './components/Synthesizer/LatencyControls';
 export { default as InstrumentCategorySelector } from './components/InstrumentCategorySelector';
+export * from './components/LazyComponents';
+
+// Hooks exports
+export { usePresetManager } from './hooks/usePresetManager';
+export { useInstrumentState } from './hooks/useInstrumentState';
+export { useInstrumentManager } from './hooks/useInstrumentManager';
+export { useInstrument } from './hooks/useInstrument';
+export { useVelocityControl } from './hooks/useVelocityControl';
+export { useInstrumentKeyboard } from './hooks/useInstrumentKeyboard';
+export { useKeyboardHandler } from './hooks/useKeyboardHandler';
+
+// Constants exports - using aliases to avoid naming conflicts
+export {
+  DEFAULT_BASS_SHORTCUTS,
+  getBassShortcutsByCategory,
+  getBassKeyDisplayName,
+} from './constants/bassShortcuts';
+
+export {
+  DEFAULT_GUITAR_SHORTCUTS,
+  GUITAR_PLAY_BUTTONS,
+  GUITAR_STRUM,
+  HAMMER_ON_PULL_OFF,
+  getGuitarShortcutsByCategory,
+  getChordModifierKeys as getGuitarChordModifierKeys,
+  getGuitarKeyDisplayName,
+  BRUSHING_TIME_STEPS,
+  BRUSHING_TIME_LABELS,
+} from './constants/guitarShortcuts';
+
+export {
+  DEFAULT_KEYBOARD_SHORTCUTS,
+  ARPEGGIO_TIME_STEPS,
+  ARPEGGIO_TIME_LABELS,
+  getChordModifierKeys,
+  getChordModifierKeys as getKeyboardChordModifierKeys,
+  getKeyboardShortcutsByCategory,
+  getKeyboardKeyDisplayName,
+} from './constants/keyboardShortcuts';
+
+export * from './constants/virtualKeyboardKeys';
+
+// Presets exports
+export * from './constants/presets/drumPresets';
+export * from './constants/presets/synthPresets';
+
+// Drumpad-specific exports
+export { DRUMPAD_SHORTCUTS, DRUMPAD_COLORS } from './constants/presets/drumPresets';
+
+// Utilities exports
+export * from './constants/utils/displayUtils';
+
+// Utilities exports
+export * from './utils/drumMachineUtils';
+export * from './utils/guitarAudioUtils';
+export * from './utils/InstrumentEngine';
+export * from './utils/instrumentGrouping';
+
+// Types exports
+export * from './types/presets';
+export * from './types/keyboard';
 
 // Store exports
 export { useGuitarStore } from './stores/guitarStore';

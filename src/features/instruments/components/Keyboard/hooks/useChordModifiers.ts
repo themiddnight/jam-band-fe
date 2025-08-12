@@ -1,11 +1,11 @@
 import {
   getChordModifierKeys,
   DEFAULT_KEYBOARD_SHORTCUTS,
-} from "../../../../../constants/keyboardShortcuts";
+} from "../../../index";
 import type {
   KeyboardState,
   VirtualKeyboardState,
-} from "../../../../../types/keyboard";
+} from "@/shared/types/keyboard";
 import { useCallback } from "react";
 
 export const useChordModifiers = (

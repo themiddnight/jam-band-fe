@@ -1,13 +1,13 @@
 import {
   DEFAULT_KEYBOARD_SHORTCUTS,
   ARPEGGIO_TIME_STEPS,
-} from "../../../../../constants/keyboardShortcuts";
-import { useVelocityControl } from "../../../../../hooks/useVelocityControl";
+} from "../../../index";
+import { useVelocityControl } from "../../../index";
 import { useKeyboardStore } from "../../../stores/keyboardStore";
 import type {
   KeyboardState,
   VirtualKeyboardState,
-} from "../../../../../types/keyboard";
+} from "../../../index";
 import { useCallback } from "react";
 
 export const useControlKeys = (

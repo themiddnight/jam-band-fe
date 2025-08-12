@@ -1,7 +1,7 @@
 import {
   BRUSHING_TIMES,
   type BrushingTime,
-} from "../../../constants/guitarShortcuts";
+} from "../constants/guitarShortcuts";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 

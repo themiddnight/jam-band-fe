@@ -1,10 +1,7 @@
-import { ChordModifierType } from "../../../../../constants/chordModifierConfig";
-import { DEFAULT_KEYBOARD_SHORTCUTS } from "../../../../../constants/keyboardShortcuts";
-import { chordTriadKeys } from "../../../../../constants/virtualKeyboardKeys";
-import type { Scale } from "../../../../../hooks/useScaleState";
-import { useTouchEvents } from "../../../../../hooks/useTouchEvents";
-import { getChordName } from "../../../../../shared/utils/musicUtils";
-import { ChordModifierButton } from "../../../../../components/shared/ChordModifierButton";
+import { ChordModifierType, type Scale, useTouchEvents, ChordModifierButton } from "@/features/ui";
+import { DEFAULT_KEYBOARD_SHORTCUTS } from "../../../index";
+import { chordTriadKeys } from "../../../constants/virtualKeyboardKeys";
+import { getChordName } from "@/features/ui";
 import type { KeyboardKey } from "../types/keyboard";
 import { memo } from "react";
 

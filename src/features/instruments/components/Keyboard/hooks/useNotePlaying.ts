@@ -6,12 +6,12 @@ import {
   chordTriadKeys,
   chromaticWhiteKeyMapping,
   chromaticBlackKeyMapping,
-} from "../../../../../constants/virtualKeyboardKeys";
+} from "../../../index";
 import type {
   KeyboardState,
   ScaleState,
   VirtualKeyboardState,
-} from "../../../../../types/keyboard";
+} from "../../../index";
 import { useCallback } from "react";
 
 export const useNotePlaying = (

@@ -1,11 +1,6 @@
-import {
-  DEFAULT_GUITAR_SHORTCUTS,
-  GUITAR_PLAY_BUTTONS,
-} from "../../../../../constants/guitarShortcuts";
-import { getKeyDisplayName } from "../../../../../constants/utils/displayUtils";
-import type { Scale } from "../../../../../hooks/useScaleState";
-import { useTouchEvents } from "../../../../../hooks/useTouchEvents";
-import { SharedNoteKeys } from "../../../../../components/shared/NoteKeys";
+import { DEFAULT_GUITAR_SHORTCUTS, GUITAR_PLAY_BUTTONS, getKeyDisplayName } from "../../../index";
+import type { Scale } from "@/features/ui";
+import { useTouchEvents, NoteKeys as SharedNoteKeys } from "@/features/ui";
 import type { GuitarNote, GuitarState } from "../types/guitar";
 import { useMemo } from "react";
 
