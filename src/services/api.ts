@@ -1,5 +1,5 @@
-import axiosInstance from "../utils/axiosInstance";
-import { endpoints } from "../utils/endpoints";
+import axiosInstance from "../shared/utils/axiosInstance";
+import { endpoints } from "../shared/utils/endpoints";
 
 // Types for API responses
 export interface Room {

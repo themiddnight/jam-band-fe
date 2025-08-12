@@ -1,4 +1,4 @@
-import { SYNTHESIZER_INSTRUMENTS } from "../../constants/instruments";
+import { SYNTHESIZER_INSTRUMENTS } from "../../shared/constants/instruments";
 import { DEFAULT_SYNTH_PRESETS } from "../../constants/presets/synthPresets";
 import { usePresetManager } from "../../hooks/usePresetManager";
 import type { SynthPreset } from "../../types/presets";

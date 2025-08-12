@@ -1,10 +1,10 @@
-import { InstrumentCategory } from "../constants/instruments";
+import { InstrumentCategory } from "../shared/constants/instruments";
 import { InstrumentEngine } from "../utils/InstrumentEngine";
 import type {
   SynthState,
   InstrumentEngineConfig,
 } from "../utils/InstrumentEngine";
-import { createWebKitCompatibleAudioContext } from "../utils/webkitCompat";
+import { createWebKitCompatibleAudioContext } from "../shared/utils/webkitCompat";
 import { useRef, useCallback, useEffect } from "react";
 
 export interface UseInstrumentManagerReturn {

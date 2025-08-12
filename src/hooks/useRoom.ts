@@ -1,8 +1,8 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { InstrumentCategory } from "../constants/instruments";
+import { InstrumentCategory } from "../shared/constants/instruments";
 import { useRoomQuery } from "../services/useRooms";
 import { useRoomStore } from "../stores/roomStore";
-import { useUserStore } from "../stores/userStore";
+import { useUserStore } from "../shared/stores/userStore";
 import { useInstrument } from "./useInstrument";
 import { useMidiController } from "./useMidiController";
 import { useScaleState } from "./useScaleState";

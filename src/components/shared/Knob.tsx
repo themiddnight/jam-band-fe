@@ -1,4 +1,4 @@
-import { throttle } from "../../utils/performanceUtils";
+import { throttle } from "../../shared/utils/performanceUtils";
 import React, { useState, useMemo, useCallback } from "react";
 
 // Knob angle limits and visuals

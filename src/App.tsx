@@ -1,7 +1,7 @@
 import Lobby from "./pages/Lobby";
 import Room from "./pages/Room";
 import Invite from "./pages/Invite";
-import { useUserStore } from "./stores/userStore";
+import { useUserStore } from "./shared/stores/userStore";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useLayoutEffect } from "react";
 import { Routes, Route } from "react-router-dom";

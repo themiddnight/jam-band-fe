@@ -1,4 +1,4 @@
-import { InstrumentCategory } from "../constants/instruments";
+import { InstrumentCategory } from "../shared/constants/instruments";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 

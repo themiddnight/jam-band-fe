@@ -3,7 +3,7 @@ import { DEFAULT_KEYBOARD_SHORTCUTS } from "../../../constants/keyboardShortcuts
 import { chordTriadKeys } from "../../../constants/virtualKeyboardKeys";
 import type { Scale } from "../../../hooks/useScaleState";
 import { useTouchEvents } from "../../../hooks/useTouchEvents";
-import { getChordName } from "../../../utils/musicUtils";
+import { getChordName } from "../../../shared/utils/musicUtils";
 import { ChordModifierButton } from "../../shared/ChordModifierButton";
 import type { KeyboardKey } from "../types/keyboard";
 import { memo } from "react";

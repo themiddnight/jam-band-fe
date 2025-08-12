@@ -1,6 +1,6 @@
 import { useRoomQuery } from "../services/useRooms";
 import { useRoomStore } from "../stores/roomStore";
-import { useUserStore } from "../stores/userStore";
+import { useUserStore } from "../shared/stores/userStore";
 import { useSocket } from "./useSocket";
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";

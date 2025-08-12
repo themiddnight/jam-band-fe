@@ -1,4 +1,4 @@
-import { InstrumentCategory, DRUM_MACHINES } from "../constants/instruments";
+import { InstrumentCategory, DRUM_MACHINES } from "../shared/constants/instruments";
 import { getGroupedInstrumentsForCategory } from "../utils/instrumentGrouping";
 import GroupedDropdown from "./shared/GroupedDropdown";
 

@@ -3,7 +3,7 @@ import {
   SOUNDFONT_INSTRUMENTS,
   DRUM_MACHINES,
   SYNTHESIZER_INSTRUMENTS,
-} from "../constants/instruments";
+} from "../shared/constants/instruments";
 
 // Group soundfont instruments by category
 export const groupSoundfontInstruments = (): GroupedOption[] => {

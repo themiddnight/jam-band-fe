@@ -4,7 +4,7 @@
 export * from "./audioConfig";
 
 // Instruments & Sounds
-export * from "./instruments";
+// Note: instruments.ts moved to shared/constants/instruments.ts
 
 // Presets & Configurations
 export * from "./presets/synthPresets";
@@ -29,8 +29,8 @@ export * from "./utils/displayUtils";
 export type { KeyboardShortcuts, KeyboardShortcut } from "./keyboardShortcuts";
 export type { SynthPreset } from "../types/presets";
 export type { DrumPreset } from "./presets/drumPresets";
-export { InstrumentCategory } from "./instruments";
-export { ControlType } from "../types";
+export { InstrumentCategory } from "../shared/constants/instruments";
+export { ControlType } from "../shared/types";
 export { ChordModifierType } from "./chordModifierConfig";
 
 // Explicit exports to avoid naming conflicts

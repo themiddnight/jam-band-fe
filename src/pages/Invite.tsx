@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
-import { useUserStore } from "../stores/userStore";
+import { useUserStore } from "../shared/stores/userStore";
 
 export default function Invite() {
   const { roomId } = useParams<{ roomId: string }>();

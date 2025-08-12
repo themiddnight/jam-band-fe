@@ -1,5 +1,5 @@
 import ChatBox from "../components/ChatBox";
-import InstrumentCategorySelector from "../components/InstrumentCategorySelector";
+import InstrumentCategorySelector from "../features/instruments/components/InstrumentCategorySelector";
 import { Footer } from "../components/Footer";
 import {
   LazyKeyboardWrapper as Keyboard,
@@ -15,14 +15,14 @@ import ScaleSlots from "../components/ScaleSlots";
 import VoiceInput from "../components/VoiceInput";
 import AnchoredPopup from "../components/shared/AnchoredPopup";
 import { Modal } from "../components/shared/Modal";
-import { InstrumentCategory } from "../constants/instruments";
+import { InstrumentCategory } from "../shared/constants/instruments";
 import { useRoom } from "../hooks/useRoom";
 import { useScaleSlotKeyboard } from "../hooks/useScaleSlotKeyboard";
 import { useWebRTCVoice } from "../hooks/useWebRTCVoice";
-import { useScaleSlotsStore } from "../stores/scaleSlotsStore";
-import { ControlType } from "../types";
+import { useScaleSlotsStore } from "../shared/stores/scaleSlotsStore";
+import { ControlType } from "../shared/types";
 import { preloadCriticalComponents } from "../utils/componentPreloader";
-import { getSafariUserMessage } from "../utils/webkitCompat";
+import { getSafariUserMessage } from "../shared/utils/webkitCompat";
 import { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
 
 const Room = memo(() => {

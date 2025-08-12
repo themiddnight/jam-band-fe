@@ -1,6 +1,6 @@
 import { GUITAR_STRUM } from "../../../constants/guitarShortcuts";
 import type { Scale } from "../../../hooks/useScaleState";
-import { getChordFromDegree } from "../../../utils/musicUtils";
+import { getChordFromDegree } from "../../../shared/utils/musicUtils";
 import type { StrumConfig } from "../types/guitar";
 import { useState, useCallback, useEffect } from "react";
 

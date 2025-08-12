@@ -1,6 +1,6 @@
 import { SCALE_SLOT_COUNT, getScaleSlotLabel } from "../constants/scaleSlots";
 import type { Scale } from "../hooks/useScaleState";
-import { useScaleSlotsStore } from "../stores/scaleSlotsStore";
+import { useScaleSlotsStore } from "../shared/stores/scaleSlotsStore";
 import ScaleSelector from "./ScaleSelector";
 import AnchoredPopup from "./shared/AnchoredPopup";
 import { useRef, useState } from "react";

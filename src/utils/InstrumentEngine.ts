@@ -1,11 +1,11 @@
 import { getOptimalAudioConfig } from "../constants/audioConfig";
-import { InstrumentCategory } from "../constants/instruments";
-import { throttle } from "./performanceUtils";
+import { InstrumentCategory } from "../shared/constants/instruments";
+import { throttle } from "../shared/utils/performanceUtils";
 import {
   getSafariLoadTimeout,
   handleSafariAudioError,
   findNextCompatibleInstrument,
-} from "./webkitCompat";
+} from "../shared/utils/webkitCompat";
 import { Soundfont, DrumMachine } from "smplr";
 import * as Tone from "tone";
 

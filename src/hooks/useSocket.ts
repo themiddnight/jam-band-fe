@@ -1,5 +1,5 @@
 import { useRoomStore } from "../stores/roomStore";
-import { useUserStore } from "../stores/userStore";
+import { useUserStore } from "../shared/stores/userStore";
 import type { SynthState } from "../utils/InstrumentEngine";
 import { throttle } from "lodash";
 import { useRef, useCallback, useState, useMemo } from "react";

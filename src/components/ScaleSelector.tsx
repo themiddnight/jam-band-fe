@@ -1,6 +1,6 @@
 import type { Scale } from "../hooks/useScaleState";
-import { useScaleSlotsStore } from "../stores/scaleSlotsStore";
-import { NOTE_NAMES } from "../utils/musicUtils";
+import { useScaleSlotsStore } from "../shared/stores/scaleSlotsStore";
+import { NOTE_NAMES } from "../shared/utils/musicUtils";
 import { useEffect } from "react";
 
 export interface ScaleSelectorProps {

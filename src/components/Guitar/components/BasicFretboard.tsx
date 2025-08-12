@@ -2,7 +2,7 @@ import {
   generateFretPositions,
   getScaleNotes,
   type Scale,
-} from "../../../utils/musicUtils";
+} from "../../../shared/utils/musicUtils";
 import {
   FretboardBase,
   type FretboardConfig,

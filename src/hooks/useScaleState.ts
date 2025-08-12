@@ -1,4 +1,4 @@
-import { NOTE_NAMES, SCALES, type Scale } from "../utils/musicUtils";
+import { NOTE_NAMES, SCALES, type Scale } from "../shared/utils/musicUtils";
 import { useState, useCallback } from "react";
 
 // Re-export Scale type for backward compatibility

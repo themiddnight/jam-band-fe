@@ -1,6 +1,6 @@
 import { SCALE_SLOT_SHORTCUTS } from "../constants/scaleSlots";
 import type { Scale } from "../hooks/useScaleState";
-import { useScaleSlotsStore } from "../stores/scaleSlotsStore";
+import { useScaleSlotsStore } from "../shared/stores/scaleSlotsStore";
 import { useEffect } from "react";
 
 export const useScaleSlotKeyboard = (

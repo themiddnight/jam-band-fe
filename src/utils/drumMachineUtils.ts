@@ -1,4 +1,4 @@
-import { ControlType } from "../types";
+import { ControlType } from "../shared/types";
 import { getDrumMachineNames } from "smplr";
 
 export interface DrumMachineInfo {

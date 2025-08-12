@@ -1,13 +1,13 @@
 import { lazy, Suspense } from "react";
 
 // Lazy load heavy components
-const LazyKeyboard = lazy(() => import("./Keyboard"));
-const LazyGuitar = lazy(() => import("./Guitar"));
-const LazyBass = lazy(() => import("./Bass"));
-const LazyDrumpad = lazy(() => import("./Drumpad"));
-const LazyDrumset = lazy(() => import("./Drumset"));
+const LazyKeyboard = lazy(() => import("../features/instruments/components/Keyboard"));
+const LazyGuitar = lazy(() => import("../features/instruments/components/Guitar"));
+const LazyBass = lazy(() => import("../features/instruments/components/Bass"));
+const LazyDrumpad = lazy(() => import("../features/instruments/components/Drumpad"));
+const LazyDrumset = lazy(() => import("../features/instruments/components/Drumset"));
 const LazySynthControls = lazy(() =>
-  import("./Synthesizer/SynthControls").then((module) => ({
+  import("../features/instruments/components/Synthesizer/SynthControls").then((module) => ({
     default: module.SynthControls,
   })),
 );

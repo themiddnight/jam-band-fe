@@ -3,7 +3,7 @@ import { DEFAULT_GUITAR_SHORTCUTS } from "../../../constants/guitarShortcuts";
 import { getKeyDisplayName } from "../../../constants/utils/displayUtils";
 import type { Scale } from "../../../hooks/useScaleState";
 import { useTouchEvents } from "../../../hooks/useTouchEvents";
-import { getChordFromDegree, getChordName } from "../../../utils/musicUtils";
+import { getChordFromDegree, getChordName } from "../../../shared/utils/musicUtils";
 import { ChordModifierButton } from "../../shared/ChordModifierButton";
 import { InstrumentButton } from "../../shared/InstrumentButton";
 import type { GuitarChord } from "../types/guitar";

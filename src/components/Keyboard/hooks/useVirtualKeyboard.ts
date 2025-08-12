@@ -9,7 +9,7 @@ import {
 } from "../../../constants/virtualKeyboardKeys";
 import type { Scale } from "../../../hooks/useScaleState";
 import { useKeyboardStore } from "../../../stores/keyboardStore";
-import { getChordFromDegree } from "../../../utils/musicUtils";
+import { getChordFromDegree } from "../../../shared/utils/musicUtils";
 import type { KeyboardKey } from "../types/keyboard";
 import { useState, useCallback, useMemo } from "react";
 

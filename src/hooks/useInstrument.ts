@@ -3,12 +3,12 @@ import {
   DRUM_MACHINES,
   SYNTHESIZER_INSTRUMENTS,
   InstrumentCategory,
-} from "../constants/instruments";
+} from "../shared/constants/instruments";
 import { useInstrumentPreferencesStore } from "../stores/instrumentPreferencesStore";
-import { ControlType } from "../types";
+import { ControlType } from "../shared/types";
 import type { SynthState } from "../utils/InstrumentEngine";
 import { getCachedDrumMachines } from "../utils/drumMachineUtils";
-import { isSafari } from "../utils/webkitCompat";
+import { isSafari } from "../shared/utils/webkitCompat";
 import { useInstrumentManager } from "./useInstrumentManager";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 
