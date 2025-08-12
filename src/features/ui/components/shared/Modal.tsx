@@ -13,6 +13,7 @@ interface ModalProps {
   cancelText?: string;
   onOk?: () => void;
   onCancel?: () => void;
+  allowClose?: boolean;
   size?:
     | "sm"
     | "md"
@@ -39,6 +40,7 @@ export const Modal: React.FC<ModalProps> = ({
   cancelText = "Cancel",
   onOk,
   onCancel,
+  allowClose = true,
   size = "md",
 }) => {
   // Handle keyboard events
@@ -46,7 +48,7 @@ export const Modal: React.FC<ModalProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!open) return;
 
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && allowClose) {
         e.preventDefault();
         handleCancel();
       } else if (e.key === "Enter" && showOkButton && onOk) {
@@ -73,9 +75,10 @@ export const Modal: React.FC<ModalProps> = ({
       document.removeEventListener("keydown", handleKeyDown);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, showOkButton, onOk]);
+  }, [open, showOkButton, onOk, allowClose]);
 
   const handleClose = () => {
+    if (!allowClose) return;
     setOpen(false);
     onClose?.();
   };
@@ -91,7 +94,7 @@ export const Modal: React.FC<ModalProps> = ({
   };
 
   const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
+    if (e.target === e.currentTarget && allowClose) {
       handleClose();
     }
   };
@@ -106,13 +109,15 @@ export const Modal: React.FC<ModalProps> = ({
         {/* Header */}
         <div className="flex justify-between items-center mb-4">
           <h3 className="font-bold text-lg">{title}</h3>
-          <button
-            onClick={handleClose}
-            className="btn btn-sm btn-circle btn-ghost"
-            aria-label="Close modal"
-          >
-            ✕
-          </button>
+          {allowClose && (
+            <button
+              onClick={handleClose}
+              className="btn btn-sm btn-circle btn-ghost"
+              aria-label="Close modal"
+            >
+              ✕
+            </button>
+          )}
         </div>
 
         {/* Content */}

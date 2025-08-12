@@ -58,7 +58,7 @@ export default function Lobby() {
                 className="badge badge-primary cursor-pointer hover:badge-secondary transition-colors"
                 title="Click to change username"
               >
-                {username}
+                {username} ✎
               </button>
             </div>
           </div>
@@ -155,18 +155,26 @@ export default function Lobby() {
           <Modal
             open={showUsernameModal}
             setOpen={handleUsernameModalClose}
-            title={username ? "Change Username" : "Welcome to Jam Band!"}
+            title={username ? "Change Username" : "Welcome to COLLAB!"}
             onCancel={handleUsernameModalClose}
             onOk={handleUsernameSubmit}
             okText={username ? "Update" : "Continue"}
             cancelText="Cancel"
             showOkButton={!!tempUsername.trim()}
+            showCancelButton={!!username}
+            allowClose={!!username || !!tempUsername.trim()}
           >
             <div className="space-y-4">
               {!username && (
-                <p className="text-base-content/70">
-                  Please enter your username to continue
-                </p>
+                <>
+                  <p className="text-base-content/70 mb-0">
+                    Please enter your username to continue
+                  </p>
+                  <p className="text-base-content/30 text-xs">
+                    We don't store your username—it's only saved in your
+                    browser.
+                  </p>
+                </>
               )}
               <div className="form-control">
                 <label className="label" htmlFor="username">
