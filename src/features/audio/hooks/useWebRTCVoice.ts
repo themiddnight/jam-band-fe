@@ -79,6 +79,7 @@ interface UseWebRTCVoiceReturn {
   connectionError: string | null;
   canTransmit: boolean;
   isAudioEnabled: boolean;
+  peerConnections: Map<string, RTCPeerConnection>;
 }
 
 export const useWebRTCVoice = ({
@@ -96,6 +97,8 @@ export const useWebRTCVoice = ({
   const [isAudioEnabled, setIsAudioEnabled] = useState(false);
 
   const peersRef = useRef<RTCPeerMap>({});
+  // Buffer for remote ICE candidates that arrive before peer exists or before remote desc set
+  const pendingIceCandidatesRef = useRef<Record<string, RTCIceCandidateInit[]>>({});
   const localStreamRef = useRef<MediaStream | null>(null);
   const audioLevelInterval = useRef<number | null>(null);
 
@@ -545,6 +548,35 @@ export const useWebRTCVoice = ({
         }
       };
 
+      // Try to apply any buffered remote ICE candidates when we have a connection
+      const tryApplyPendingCandidates = async () => {
+        const pending = pendingIceCandidatesRef.current[userId] || [];
+        if (pending.length === 0) return;
+        for (const c of pending) {
+          try {
+            await peerConnection.addIceCandidate(c);
+          } catch {
+            // ignore errors adding candidates
+          }
+        }
+        pendingIceCandidatesRef.current[userId] = [];
+      };
+
+      // Attempt to apply any pending candidates periodically until empty
+      const pendingInterval = window.setInterval(() => {
+        tryApplyPendingCandidates();
+      }, 500);
+
+      // Clear pending interval on connection close
+      const cleanupPendingInterval = () => clearInterval(pendingInterval);
+
+      // Attach cleanup to peerConnection for finalization
+      peerConnection.addEventListener('connectionstatechange', () => {
+        if (peerConnection.connectionState === 'closed' || peerConnection.connectionState === 'failed') {
+          cleanupPendingInterval();
+        }
+      });
+
       // Handle connection state changes
       peerConnection.onconnectionstatechange = () => {
         const state = peerConnection.connectionState;
@@ -846,8 +878,16 @@ export const useWebRTCVoice = ({
     }) => {
       if (!isEnabled || !socket) return;
 
+      // Check if we already have a peer connection for this user
+      const existingPeer = peersRef.current[data.fromUserId];
+      if (existingPeer) {
+        console.log("🔄 WebRTC: Peer connection already exists, cleaning up before creating new one");
+        cleanupPeerConnection(data.fromUserId);
+      }
+
       try {
         setIsConnecting(true);
+        console.log("📞 WebRTC: Handling voice offer from", data.fromUsername);
 
         const peerConnection = createPeerConnection(data.fromUserId);
 
@@ -861,12 +901,19 @@ export const useWebRTCVoice = ({
           connection: peerConnection,
           audioElement,
           isConnected: false,
+          lastHealthCheck: Date.now(),
+          reconnectAttempts: 0,
+          iceConnectionState: "new",
         };
 
+        // Set remote description first
         await peerConnection.setRemoteDescription(data.offer);
+        
+        // Create and set local description (answer)
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
 
+        console.log("📤 WebRTC: Sending answer to", data.fromUsername);
         socket.emit("voice_answer", {
           answer: answer,
           targetUserId: data.fromUserId,
@@ -875,11 +922,14 @@ export const useWebRTCVoice = ({
       } catch (error) {
         console.error("Failed to handle voice offer:", error);
         setConnectionError("Failed to establish voice connection");
+        
+        // Clean up failed connection
+        cleanupPeerConnection(data.fromUserId);
       } finally {
         setIsConnecting(false);
       }
     },
-    [isEnabled, socket, roomId, createPeerConnection],
+    [isEnabled, socket, roomId, createPeerConnection, cleanupPeerConnection],
   );
 
   // Handle voice answer from remote peer
@@ -889,22 +939,64 @@ export const useWebRTCVoice = ({
       if (!peer) return;
 
       try {
+        // Check if the peer connection is in the correct state to receive an answer
+        if (peer.connection.signalingState !== "have-local-offer") {
+          console.warn(`⚠️ WebRTC: Cannot set remote answer, peer connection is in '${peer.connection.signalingState}' state, expected 'have-local-offer'`);
+          
+          // If the connection is stable, it might be due to a race condition
+          // Let's attempt to restart the negotiation
+          if (peer.connection.signalingState === "stable") {
+            console.log("🔄 WebRTC: Attempting to restart negotiation due to state mismatch");
+            // Clean up and restart connection after a short delay
+            setTimeout(async () => {
+              if (peer.connection.connectionState !== "connected") {
+                console.log("🔄 WebRTC: Restarting connection negotiation");
+                if (initiateVoiceCallRef.current) {
+                  await initiateVoiceCallRef.current(data.fromUserId);
+                }
+              }
+            }, 1000);
+          }
+          return;
+        }
+
         await peer.connection.setRemoteDescription(data.answer);
+        console.log("✅ WebRTC: Successfully set remote answer for", data.fromUserId);
       } catch (error) {
         console.error("Failed to handle voice answer:", error);
+        
+        // If this fails, try to restart the connection
+        console.log("🔄 WebRTC: Attempting to restart connection due to answer error");
+        setTimeout(async () => {
+          if (peer.connection.connectionState !== "connected") {
+            console.log("🔄 WebRTC: Restarting connection after answer error");
+            cleanupPeerConnection(data.fromUserId);
+            if (initiateVoiceCallRef.current) {
+              await initiateVoiceCallRef.current(data.fromUserId);
+            }
+          }
+        }, 2000);
       }
     },
-    [],
+    [cleanupPeerConnection],
   );
 
   // Handle ICE candidate from remote peer
   const handleVoiceIceCandidate = useCallback(
     async (data: { candidate: RTCIceCandidateInit; fromUserId: string }) => {
-      const peer = peersRef.current[data.fromUserId];
-      if (!peer) return;
+      const peerEntry = peersRef.current[data.fromUserId];
+      if (!peerEntry) {
+        // Buffer candidate until peer connection is created
+        pendingIceCandidatesRef.current[data.fromUserId] = pendingIceCandidatesRef.current[data.fromUserId] || [];
+        pendingIceCandidatesRef.current[data.fromUserId].push(data.candidate);
+        return;
+      }
 
       try {
-        await peer.connection.addIceCandidate(data.candidate);
+        // Only add candidate if connection isn't closed
+        if (peerEntry.connection.signalingState !== 'closed') {
+          await peerEntry.connection.addIceCandidate(data.candidate);
+        }
       } catch (error) {
         console.error("Failed to add ICE candidate:", error);
       }
@@ -915,12 +1007,28 @@ export const useWebRTCVoice = ({
   // Initiate voice call to a user
   const initiateVoiceCall = useCallback(
     async (targetUserId: string) => {
-      if (!isEnabled || !socket || peersRef.current[targetUserId]) {
+      if (!isEnabled || !socket) {
         return;
+      }
+
+      // Check if we already have a connection to this user
+      const existingPeer = peersRef.current[targetUserId];
+      if (existingPeer) {
+        // If connection is already established or connecting, don't create another
+        if (existingPeer.connection.connectionState === "connected" || 
+            existingPeer.connection.connectionState === "connecting" ||
+            existingPeer.connection.signalingState !== "stable") {
+          console.log("🔄 WebRTC: Connection already exists or in progress for", targetUserId);
+          return;
+        }
+        
+        console.log("🔄 WebRTC: Cleaning up existing failed connection before creating new one");
+        cleanupPeerConnection(targetUserId);
       }
 
       try {
         setIsConnecting(true);
+        console.log("📞 WebRTC: Initiating voice call to", targetUserId);
 
         const peerConnection = createPeerConnection(targetUserId);
 
@@ -939,9 +1047,11 @@ export const useWebRTCVoice = ({
           iceConnectionState: "new",
         };
 
+        // Create and set local description (offer)
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
 
+        console.log("📤 WebRTC: Sending offer to", targetUserId);
         socket.emit("voice_offer", {
           offer: offer,
           targetUserId,
@@ -950,11 +1060,14 @@ export const useWebRTCVoice = ({
       } catch (error) {
         console.error("❌ Failed to initiate voice call:", error);
         setConnectionError("Failed to initiate voice call");
+        
+        // Clean up failed connection
+        cleanupPeerConnection(targetUserId);
       } finally {
         setIsConnecting(false);
       }
     },
-    [isEnabled, socket, roomId, createPeerConnection],
+    [isEnabled, socket, roomId, createPeerConnection, cleanupPeerConnection],
   );
 
   // Assign to ref to avoid forward reference issues
@@ -993,14 +1106,27 @@ export const useWebRTCVoice = ({
           cleanupPeerConnection(data.userId);
         }
 
-        // Add a small delay to ensure the cleanup is complete
-        setTimeout(() => {
+        // Use a more deterministic approach to avoid race conditions
+        // Only initiate if we have a "lower" userId to prevent both sides from initiating
+        const shouldInitiate = currentUserId < data.userId;
+        
+        if (shouldInitiate) {
+          // Add a small delay to ensure the cleanup is complete and reduce race conditions
+          setTimeout(() => {
+            if (!peersRef.current[data.userId]) {
+              console.log(
+                "🤝 WebRTC: Initiating call to newly joined user (as initiator)",
+                data.userId,
+              );
+              initiateVoiceCall(data.userId);
+            }
+          }, 200 + Math.random() * 300); // Random delay to spread out connection attempts
+        } else {
           console.log(
-            "🤝 WebRTC: Initiating call to newly joined user",
+            "⏳ WebRTC: Waiting for user to initiate connection (we are receiver)",
             data.userId,
           );
-          initiateVoiceCall(data.userId);
-        }, 50);
+        }
       }
     },
     [
@@ -1870,5 +1996,6 @@ export const useWebRTCVoice = ({
     connectionError,
     canTransmit,
     isAudioEnabled,
+    peerConnections: new Map(Object.entries(peersRef.current).map(([userId, peer]) => [userId, peer.connection])),
   };
 };

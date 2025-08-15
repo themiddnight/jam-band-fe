@@ -177,6 +177,37 @@ export const useRoom = () => {
     }
   }, [error, navigate]);
 
+  // If the server sends an updated room state that no longer contains the current user
+  // (for example the user was removed or their session was cleared), ensure the client
+  // disconnects and navigates back to the lobby. This prevents a stale UI where a
+  // user remains in the room view after being removed on the server (owner->member edge case).
+  useEffect(() => {
+    if (!currentRoom || !currentUser) return;
+
+    try {
+      const stillPresent = currentRoom.users.some(
+        (u: any) => u.id === currentUser.id,
+      );
+
+      if (!stillPresent && !hasLeftRoom) {
+        // Mark that we have left to avoid re-triggering joins
+        setHasLeftRoom(true);
+
+        // Disconnect socket and navigate back to lobby
+        try {
+          disconnect();
+        } catch {
+          // ignore disconnect errors
+        }
+
+        navigate("/");
+      }
+    } catch {
+      // Defensive: if room shape unexpectedly changes, don't crash
+      console.warn("Failed to reconcile room state for current user");
+    }
+  }, [currentRoom, currentUser, hasLeftRoom, disconnect, navigate]);
+
   // Cleanup on component unmount
   useEffect(() => {
     return () => {

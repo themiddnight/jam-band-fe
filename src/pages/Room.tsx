@@ -1,6 +1,7 @@
 import { MidiStatus } from "@/features/audio";
 import { VoiceInput } from "@/features/audio";
 import { useWebRTCVoice } from "@/features/audio";
+import { PingDisplay, usePingMeasurement, useRTCLatencyMeasurement } from "@/features/audio";
 import { InstrumentCategorySelector } from "@/features/instruments";
 import {
   LazyKeyboardWrapper as Keyboard,
@@ -88,6 +89,12 @@ const Room = memo(() => {
     socketRef,
   } = useRoom();
 
+  // Ping measurement for room
+  const { currentPing } = usePingMeasurement({
+    socket: socketRef?.current,
+    enabled: isConnected,
+  });
+
   // Notification popup state
   const [isPendingPopupOpen, setIsPendingPopupOpen] = useState(false);
   const pendingBtnRef = useRef<HTMLButtonElement>(null);
@@ -116,9 +123,39 @@ const Room = memo(() => {
     enableAudioReception,
     canTransmit,
     isAudioEnabled,
+    peerConnections,
     // isConnecting: isVoiceConnecting,
     // connectionError: voiceConnectionError
   } = useWebRTCVoice(webRTCParams);
+
+  // RTC latency measurement
+  const { currentLatency, isActive: rtcLatencyActive, addPeerConnection, removePeerConnection } = useRTCLatencyMeasurement({
+    enabled: isVoiceEnabled,
+  });
+
+  // Track last seen peer ids to diff additions/removals
+  const lastSeenPeerIdsRef = useRef<Set<string>>(new Set());
+
+  // Sync peer connections with RTC latency measurement
+  useEffect(() => {
+    const currentIds = new Set<string>();
+
+    // Add or update current peer connections
+    peerConnections.forEach((connection, userId) => {
+      currentIds.add(userId);
+      addPeerConnection(userId, connection);
+    });
+
+    // Remove peers that were present before but not anymore
+    const lastSeen = lastSeenPeerIdsRef.current;
+    lastSeen.forEach((id) => {
+      if (!currentIds.has(id)) {
+        removePeerConnection(id);
+      }
+    });
+
+    lastSeenPeerIdsRef.current = currentIds;
+  }, [peerConnections, addPeerConnection, removePeerConnection]);
 
   // Override the leave room handler to include WebRTC cleanup
   const handleLeaveRoomConfirmWithCleanup = useCallback(async () => {
@@ -493,7 +530,7 @@ const Room = memo(() => {
                   </div>
                 )}
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
                   <div
                     className={`w-3 h-3 rounded-full ${
                       isConnected
@@ -503,6 +540,12 @@ const Room = memo(() => {
                           : "bg-error"
                     }`}
                   ></div>
+                  <PingDisplay 
+                    ping={currentPing} 
+                    isConnected={isConnected}
+                    variant="compact"
+                    showLabel={false}
+                  />
                 </div>
                 <button
                   onClick={handleLeaveRoomClick}
@@ -546,6 +589,8 @@ const Room = memo(() => {
                 isVisible={isVoiceEnabled}
                 onStreamReady={handleStreamReady}
                 onStreamRemoved={handleStreamRemoved}
+                rtcLatency={currentLatency}
+                rtcLatencyActive={rtcLatencyActive}
               />
             )}
 

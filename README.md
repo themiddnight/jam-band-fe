@@ -13,7 +13,15 @@ A real-time collaborative music-making web application built with React, TypeScr
 - **Scale & Chord Support**: Built-in music theory helpers
 - **Preset Management**: Save and load instrument configurations
 
-## 🏗️ System Architecture
+## � What's new (Aug 2025)
+
+- Network diagnostics and reliability improvements: frontend now measures round-trip ping and RTC latency and surfaces lightweight diagnostics in the UI.
+- Socket optimizations: message batching, note-event deduplication, and connection pooling reduce network chatter and improve responsiveness.
+- WebRTC reliability: health checks, automatic reconnection with backoff, ICE candidate buffering to avoid race conditions, and heartbeat/grace-period handling for smoother voice sessions.
+- State/store refactor: instrument stores were consolidated into a small `createInstrumentStore` factory (Zustand + persist) and the preset manager was rewritten to a reducer-based implementation for safer import/export behavior.
+
+
+## �🏗️ System Architecture
 
 The Jam Band frontend is built with a modular, feature-based architecture designed for real-time audio collaboration:
 

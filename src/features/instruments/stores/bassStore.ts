@@ -1,85 +1,64 @@
-import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+import { 
+  createInstrumentStore, 
+  createModeToggle, 
+  type BaseInstrumentState 
+} from "./createInstrumentStore";
 
-interface BassState {
-  // Main states
+// Bass-specific state interface
+interface BassSpecificState {
   mode: "basic" | "melody";
-  velocity: number;
-  currentOctave: number;
-  sustain: boolean;
-  sustainToggle: boolean;
   alwaysRoot: boolean;
+}
 
-  // Actions
+// Bass-specific actions interface
+interface BassSpecificActions {
   setMode: (mode: "basic" | "melody") => void;
-  setVelocity: (velocity: number) => void;
-  setCurrentOctave: (octave: number) => void;
-  setSustain: (sustain: boolean) => void;
-  setSustainToggle: (sustainToggle: boolean) => void;
   setAlwaysRoot: (alwaysRoot: boolean) => void;
-
-  // Utility actions
   toggleMode: () => void;
-  incrementOctave: () => void;
-  decrementOctave: () => void;
-  incrementVelocity: () => void;
-  decrementVelocity: () => void;
-  toggleSustain: () => void;
-  toggleSustainToggle: () => void;
   toggleAlwaysRoot: () => void;
 }
 
-export const useBassStore = create<BassState>()(
-  persist(
-    (set) => ({
-      // Initial state
-      mode: "basic",
-      velocity: 0.6,
-      currentOctave: 2,
-      sustain: false,
-      sustainToggle: false,
-      alwaysRoot: false,
+// Combined state type
+export type BassState = BaseInstrumentState & BassSpecificState & BassSpecificActions;
 
-      // Basic setters
-      setMode: (mode) => set({ mode }),
-      setVelocity: (velocity) =>
-        set({ velocity: Math.max(0.1, Math.min(1, velocity)) }),
-      setCurrentOctave: (octave) =>
-        set({ currentOctave: Math.max(0, Math.min(6, octave)) }),
-      setSustain: (sustain) => set({ sustain }),
-      setSustainToggle: (sustainToggle) => set({ sustainToggle }),
-      setAlwaysRoot: (alwaysRoot) => set({ alwaysRoot }),
+// Helper functions
+const bassModeToggle = createModeToggle(["basic", "melody"] as const);
 
-      // Toggle actions
-      toggleMode: () =>
-        set((state) => ({ mode: state.mode === "basic" ? "melody" : "basic" })),
-      toggleSustain: () => set((state) => ({ sustain: !state.sustain })),
-      toggleSustainToggle: () =>
-        set((state) => ({ sustainToggle: !state.sustainToggle })),
-      toggleAlwaysRoot: () =>
-        set((state) => ({ alwaysRoot: !state.alwaysRoot })),
+// Create the bass store using the factory
+export const useBassStore = createInstrumentStore<BassSpecificState & BassSpecificActions>({
+  initialState: {
+    // Override base defaults for bass
+    velocity: 0.6,
+    currentOctave: 2,
+    
+    // Bass-specific initial state
+    mode: "basic" as const,
+    alwaysRoot: false,
+    
+    // Placeholder actions (will be overridden)
+    setMode: () => {},
+    setAlwaysRoot: () => {},
+    toggleMode: () => {},
+    toggleAlwaysRoot: () => {},
+  },
+  
+  actions: (set) => ({
+    // Bass-specific setters
+    setMode: (mode: "basic" | "melody") => set({ mode } as any),
+    setAlwaysRoot: (alwaysRoot: boolean) => set({ alwaysRoot } as any),
 
-      // Increment/Decrement actions
-      incrementOctave: () =>
-        set((state) => ({
-          currentOctave: Math.min(6, state.currentOctave + 1),
-        })),
-      decrementOctave: () =>
-        set((state) => ({
-          currentOctave: Math.max(0, state.currentOctave - 1),
-        })),
-      incrementVelocity: () =>
-        set((state) => ({
-          velocity: Math.min(1, state.velocity + 0.1),
-        })),
-      decrementVelocity: () =>
-        set((state) => ({
-          velocity: Math.max(0.1, state.velocity - 0.1),
-        })),
-    }),
-    {
-      name: "bass-state",
-      storage: createJSONStorage(() => localStorage),
-    },
-  ),
-);
+    // Bass-specific toggle actions
+    toggleMode: () =>
+      set((state: any) => ({ mode: bassModeToggle(state.mode) })),
+    toggleAlwaysRoot: () =>
+      set((state: any) => ({ alwaysRoot: !state.alwaysRoot })),
+  }),
+  
+  bounds: {
+    // Bass has lower octave range
+    octave: { min: 0, max: 6 },
+    velocity: { min: 0.1, max: 1, step: 0.1 },
+  },
+  
+  persistKey: "bass-state",
+});

@@ -5,6 +5,7 @@ import {
 } from "./hooks";
 import { useVoiceStateStore } from "./stores/voiceStateStore";
 import { AnchoredPopup, Modal } from "@/features/ui";
+import { RTCLatencyDisplay } from "@/features/audio";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 
 interface VoiceInputProps {
@@ -12,6 +13,8 @@ interface VoiceInputProps {
   onVoiceStateChange?: (state: VoiceState) => void;
   onStreamReady?: (stream: MediaStream) => void;
   onStreamRemoved?: () => void;
+  rtcLatency?: number | null;
+  rtcLatencyActive?: boolean;
 }
 
 export interface VoiceState {
@@ -28,6 +31,8 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
   onVoiceStateChange,
   onStreamReady,
   onStreamRemoved,
+  rtcLatency = null,
+  rtcLatencyActive = false,
 }) => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [showHeadphoneModal, setShowHeadphoneModal] = useState(false);
@@ -249,6 +254,14 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
                 className={`w-2 h-2 rounded-full ${voiceState.isConnected ? "bg-green-500" : "bg-red-500"}`}
               />
             </div>
+
+            {/* RTC Latency Display */}
+            <RTCLatencyDisplay 
+              latency={rtcLatency}
+              isActive={rtcLatencyActive}
+              variant="compact"
+              showLabel={false}
+            />
 
             <div className="flex items-center gap-3">
               {/* Mute/Unmute Toggle */}

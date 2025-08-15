@@ -15,6 +15,7 @@ export function useLobby() {
     isConnecting,
     onRoomCreated,
     onRoomClosed,
+    socketRef,
   } = useSocket();
   const { currentRoom } = useRoomStore();
 
@@ -167,6 +168,9 @@ export function useLobby() {
     rejectionMessage,
     isConnected,
     isConnecting,
+
+    // Socket reference for ping measurement
+    socketRef,
 
     // Actions
     fetchRooms,

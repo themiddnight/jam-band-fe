@@ -32,8 +32,8 @@ export interface FretboardBaseProps {
   sustainToggle?: boolean;
 }
 
-// Separate component for fret button to use hooks properly
-const FretButton: React.FC<{
+// Memoized fret button component for performance
+const FretButton = React.memo<{
   stringIndex: number;
   fret: number;
   position: FretPosition;
@@ -42,7 +42,7 @@ const FretButton: React.FC<{
   showNoteNames?: boolean;
   sustain?: boolean;
   sustainToggle?: boolean;
-}> = ({
+}>(({
   stringIndex,
   fret,
   position,
@@ -90,9 +90,9 @@ const FretButton: React.FC<{
       )}
     </button>
   );
-};
+});
 
-export const FretboardBase: React.FC<FretboardBaseProps> = ({
+export const FretboardBase = React.memo<FretboardBaseProps>(({
   config,
   positions,
   onFretPress,
@@ -109,16 +109,18 @@ export const FretboardBase: React.FC<FretboardBaseProps> = ({
     highlightFrets = [],
   } = config;
 
-  const getFretPosition = (
+  // Memoize expensive computations
+  const getFretPosition = React.useCallback((
     stringIndex: number,
     fret: number,
   ): FretPosition | undefined => {
     return positions.find(
       (pos) => pos.string === stringIndex && pos.fret === fret,
     );
-  };
+  }, [positions]);
 
-  const renderFret = (stringIndex: number, fret: number) => {
+  // Memoize fret rendering to avoid unnecessary re-renders
+  const renderFret = React.useCallback((stringIndex: number, fret: number) => {
     const position = getFretPosition(stringIndex, fret);
     if (!position) return null;
 
@@ -135,9 +137,10 @@ export const FretboardBase: React.FC<FretboardBaseProps> = ({
         sustainToggle={sustainToggle}
       />
     );
-  };
+  }, [getFretPosition, onFretPress, onFretRelease, showNoteNames, sustain, sustainToggle]);
 
-  const renderFretNumbers = () => {
+  // Memoize fret numbers rendering
+  const renderFretNumbers = React.useMemo(() => {
     if (!showFretNumbers) return null;
 
     return (
@@ -153,17 +156,14 @@ export const FretboardBase: React.FC<FretboardBaseProps> = ({
         ))}
       </div>
     );
-  };
+  }, [showFretNumbers, frets, highlightFrets]);
 
   return (
     <div className={`fretboard-base mx-auto p-3 ${className}`}>
-      {renderFretNumbers()}
+      {renderFretNumbers}
       <div className="fretboard-grid">
         {strings.map((_stringName, stringIndex) => (
           <div key={stringIndex} className="flex items-center mb-1">
-            {/* <div className="w-2 text-right text-sm text-gray-600 mr-2">
-              {stringName}
-            </div> */}
             <div className="flex">
               {Array.from({ length: frets + 1 }, (_, fret) =>
                 renderFret(stringIndex, fret),
@@ -174,4 +174,4 @@ export const FretboardBase: React.FC<FretboardBaseProps> = ({
       </div>
     </div>
   );
-};
+});

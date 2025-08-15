@@ -1,6 +1,7 @@
 import { useLobby } from "@/features/rooms";
 import { Modal } from "@/features/ui";
 import { Footer } from "@/features/ui";
+import { PingDisplay, usePingMeasurement } from "@/features/audio";
 
 export default function Lobby() {
   const {
@@ -35,7 +36,16 @@ export default function Lobby() {
     setNewRoomName,
     setIsPrivate,
     setIsHidden,
+
+    // Socket for ping measurement
+    socketRef,
   } = useLobby();
+
+  // Ping measurement for lobby
+  const { currentPing } = usePingMeasurement({
+    socket: socketRef?.current,
+    enabled: isConnected,
+  });
 
   return (
     <div className="min-h-dvh bg-base-200 flex flex-col">
@@ -45,13 +55,16 @@ export default function Lobby() {
           <div className="flex justify-between items-center mb-8">
             <h1 className="text-4xl font-bold text-primary">collab</h1>
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <div
                   className={`w-3 h-3 rounded-full ${isConnected ? "bg-success" : isConnecting ? "bg-warning" : "bg-error"}`}
                 ></div>
-                {/* <span className="text-sm">
-                {isConnected ? 'Connected' : isConnecting ? 'Connecting...' : 'Disconnected'}
-              </span> */}
+                <PingDisplay 
+                  ping={currentPing} 
+                  isConnected={isConnected}
+                  variant="compact"
+                  showLabel={false}
+                />
               </div>
               <button
                 onClick={handleUsernameClick}

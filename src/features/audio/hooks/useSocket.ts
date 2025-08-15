@@ -500,6 +500,34 @@ export const useSocket = () => {
         "ownership_transferred",
         (data: { newOwner: any; oldOwner: any }) => {
           transferOwnership(data.newOwner.id);
+
+          // If this client was the old owner who was replaced, ensure they are
+          // removed from the room UI and redirected to the lobby. Some edge cases
+          // (race on reconnect / grace period) can leave the former owner visible
+          // as an audience member; force a disconnect + redirect to avoid that.
+          try {
+            const currentUserId = useUserStore.getState().userId;
+            if (currentUserId && data.oldOwner && currentUserId === data.oldOwner.id) {
+              // Clear room state and disconnect socket
+              clearRoom();
+              if (socketRef.current) {
+                socketRef.current.disconnect();
+                socketRef.current = null;
+              }
+
+              // Use a hard redirect to ensure we leave the room view immediately
+              // (we're inside a hook where navigation isn't directly available).
+              try {
+                window.location.href = "/";
+              } catch {
+                // fallback: set location via assign
+                window.location.assign("/");
+              }
+            }
+          } catch {
+            // swallow errors - best effort cleanup
+            console.warn('ownership_transferred cleanup failed');
+          }
         },
       );
 
