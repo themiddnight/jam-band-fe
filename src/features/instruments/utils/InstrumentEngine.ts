@@ -115,6 +115,7 @@ export class InstrumentEngine {
   >();
   private readonly PROCESSING_INTERVAL = 4; // Reduced from 8ms to 4ms for better responsiveness
   private processingTimeout: ReturnType<typeof setTimeout> | null = null;
+  private isWebRTCOptimized = false; // Track if we're in WebRTC optimization mode
 
   // Audio performance optimizations (future enhancement)
   // private audioBufferCache = new Map<string, AudioBuffer>();
@@ -523,6 +524,15 @@ export class InstrumentEngine {
   }
 
   private async loadTraditionalInstrument(): Promise<any> {
+    // Use separate audio context for instruments
+    const { AudioContextManager } = await import("../../audio/constants/audioConfig");
+    const instrumentContext = AudioContextManager.getInstrumentContext();
+    
+    // Update the audio context reference
+    if (this.audioContext !== instrumentContext) {
+      this.audioContext = instrumentContext;
+    }
+
     let newInstrument: any;
 
     if (this.config.category === InstrumentCategory.DrumBeat) {
@@ -572,11 +582,21 @@ export class InstrumentEngine {
     }
 
     try {
+      // Use separate audio context for instruments
+      const { AudioContextManager } = await import("../../audio/constants/audioConfig");
+      const instrumentContext = AudioContextManager.getInstrumentContext();
+      
+      // Set Tone.js to use the dedicated instrument context
+      Tone.setContext(instrumentContext);
       await Tone.start();
 
       const audioConfig = getOptimalAudioConfig();
       const context = Tone.getContext();
       context.lookAhead = audioConfig.TONE_CONTEXT.lookAhead;
+
+      // Adjust polyphony based on WebRTC state
+      const maxPolyphony = AudioContextManager.getMaxPolyphony();
+      console.log(`🎹 Instrument Engine: Using max polyphony of ${maxPolyphony} (WebRTC active: ${AudioContextManager.isWebRTCActive()})`);
 
       // Create audio chain: synth -> filter -> gain -> destination
       this.filterRef = new Tone.Filter({
@@ -612,7 +632,7 @@ export class InstrumentEngine {
       }
 
       console.log(
-        `Initialized Tone.js synthesizer ${this.config.instrumentName} for ${this.config.isLocalUser ? "local" : "remote"} user ${this.config.username}`,
+        `✅ Initialized Tone.js synthesizer ${this.config.instrumentName} for ${this.config.isLocalUser ? "local" : "remote"} user ${this.config.username} with dedicated audio context`,
       );
 
       // Ensure all current synth parameters are applied to the new synthesizer
@@ -942,6 +962,18 @@ export class InstrumentEngine {
     isKeyHeld: boolean,
   ): void {
     try {
+      // Check polyphony limit
+      const maxPolyphony = this.getMaxPolyphony();
+      if (this.activeNotes.size >= maxPolyphony) {
+        // Stop the oldest note to make room
+        const oldestNote = this.activeNotes.keys().next().value;
+        if (oldestNote) {
+          this.synthRef.triggerRelease(oldestNote, Tone.now());
+          this.activeNotes.delete(oldestNote);
+          this.sustainedNotes.delete(oldestNote);
+        }
+      }
+
       // Release existing note to avoid stacking
       if (this.activeNotes.has(note)) {
         this.synthRef.triggerRelease(note, Tone.now());
@@ -1379,6 +1411,32 @@ export class InstrumentEngine {
     this.filterRef = null;
     this.filterEnvelopeRef = null;
     this.gainRef = null;
+  }
+
+  // WebRTC performance optimization methods
+  setWebRTCOptimization(enabled: boolean): void {
+    this.isWebRTCOptimized = enabled;
+    
+    if (enabled) {
+      console.log(`🎵 InstrumentEngine: Enabling WebRTC optimization for ${this.config.username}`);
+      // Reduce update frequency for better performance
+      this.throttledParamUpdate = throttle((params: Partial<SynthState>) => {
+        this.updateSynthParamsInternal(params);
+      }, 16); // Slower updates when WebRTC is active
+    } else {
+      console.log(`🎵 InstrumentEngine: Disabling WebRTC optimization for ${this.config.username}`);
+      // Restore normal update frequency
+      this.throttledParamUpdate = throttle((params: Partial<SynthState>) => {
+        this.updateSynthParamsInternal(params);
+      }, 8); // Normal update speed
+    }
+  }
+
+  getMaxPolyphony(): number {
+    if (this.isWebRTCOptimized) {
+      return 16; // Reduced polyphony when WebRTC is active
+    }
+    return 32; // Normal polyphony
   }
 
   dispose(): void {

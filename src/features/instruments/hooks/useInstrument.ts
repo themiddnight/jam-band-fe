@@ -1,5 +1,6 @@
 import { useInstrumentManager } from "./useInstrumentManager";
 import { useInstrumentPreferencesStore } from "@/features/audio";
+import { usePerformanceOptimization } from "@/features/audio";
 import type { SynthState } from "@/features/instruments";
 import { getCachedDrumMachines } from "@/features/instruments";
 import {
@@ -128,6 +129,9 @@ export const useInstrument = (
 
   // Unified instrument manager
   const instrumentManager = useInstrumentManager();
+
+  // Performance optimization hook (initialize but don't assign to variable to avoid unused warning)
+  usePerformanceOptimization();
 
   // Local state
   const [isLoadingInstrument, setIsLoadingInstrument] =
@@ -825,6 +829,27 @@ export const useInstrument = (
     const machines = getCachedDrumMachines();
     setDynamicDrumMachines(machines);
   }, []);
+
+  // WebRTC performance optimization effect
+  useEffect(() => {
+    const handleWebRTCState = (event: CustomEvent<{ active: boolean }>) => {
+      const isWebRTCActive = event.detail.active;
+      console.log(`🎵 Instrument Hook: WebRTC state changed: ${isWebRTCActive}`);
+      
+      // Apply optimization to local engine
+      const localEngine = instrumentManager.getLocalEngine();
+      if (localEngine && typeof localEngine.setWebRTCOptimization === 'function') {
+        localEngine.setWebRTCOptimization(isWebRTCActive);
+      }
+    };
+
+    // Listen for WebRTC state changes
+    window.addEventListener('webrtc-active', handleWebRTCState as EventListener);
+    
+    return () => {
+      window.removeEventListener('webrtc-active', handleWebRTCState as EventListener);
+    };
+  }, [instrumentManager]);
 
   return {
     // Current instrument state

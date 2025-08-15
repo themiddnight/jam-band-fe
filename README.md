@@ -19,7 +19,13 @@ A real-time collaborative music-making web application built with React, TypeScr
 - Socket optimizations: message batching, note-event deduplication, and connection pooling reduce network chatter and improve responsiveness.
 - WebRTC reliability: health checks, automatic reconnection with backoff, ICE candidate buffering to avoid race conditions, and heartbeat/grace-period handling for smoother voice sessions.
 - State/store refactor: instrument stores were consolidated into a small `createInstrumentStore` factory (Zustand + persist) and the preset manager was rewritten to a reducer-based implementation for safer import/export behavior.
-
+- **Separated Audio Contexts**: Dedicated audio contexts for instruments and WebRTC to eliminate performance competition and improve voice quality during musical collaboration.
+- **Performance Optimization**: Dynamic polyphony reduction and CPU throttling when WebRTC is active to maintain smooth voice chat.
+- **Smart Resource Management**: Automatic context suspension/resumption and optimized sample rates (44.1kHz for instruments, 48kHz for WebRTC).
+- Network diagnostics and reliability improvements: frontend now measures round-trip ping and RTC latency and surfaces lightweight diagnostics in the UI.
+- Socket optimizations: message batching, note-event deduplication, and connection pooling reduce network chatter and improve responsiveness.
+- WebRTC reliability: health checks, automatic reconnection with backoff, ICE candidate buffering to avoid race conditions, and heartbeat/grace-period handling for smoother voice sessions.
+- State/store refactor: instrument stores were consolidated into a small `createInstrumentStore` factory (Zustand + persist) and the preset manager was rewritten to a reducer-based implementation for safer import/export behavior.A real-time collaborative music-making web application built with React, TypeScript, and modern web technologies. Create music together with friends in virtual jam sessions using various virtual instruments.
 
 ## �🏗️ System Architecture
 
@@ -53,11 +59,16 @@ graph TB
             M[Tone.js Synthesizers]
             N[Smplr Instruments]
             O[MIDI Controller Support]
-            P[Audio Context Manager]
+            P[Separated Audio Contexts]
+            Q[Performance Optimization]
         end
         
         G --> L
         G --> M
+        G --> N
+        G --> O
+        G --> P
+        G --> Q
         G --> N
         G --> O
         G --> P
@@ -169,23 +180,31 @@ sequenceDiagram
 
 ### Key Components
 
-#### 1. **Audio Context Manager** (`useAudioContextManager`)
+#### 1. **Separated Audio Contexts** (`AudioContextManager`)
+- **Instrument Context**: Dedicated 44.1kHz context optimized for music production with "interactive" latency
+- **WebRTC Context**: Dedicated 48kHz context optimized for voice communication with "balanced" latency
+- **Performance Monitoring**: Real-time WebRTC state detection for dynamic optimization
+- **Resource Management**: Automatic context suspension/resumption for CPU efficiency
+
+#### 2. **Audio Context Manager** (`useAudioContextManager`)
 - Manages Web Audio API context initialization
 - Handles browser-specific audio requirements
 - Optimizes audio latency and performance
 - Provides automatic context resume on user interaction
 
-#### 2. **Instrument Manager** (`useInstrumentManager`)
+#### 3. **Instrument Manager** (`useInstrumentManager`)
 - **Local Engine Management**: Handles the user's own instrument
 - **Remote Engine Management**: Creates and manages instruments for other users
 - **Dynamic Loading**: Loads instrument samples on-demand
 - **Memory Management**: Efficient cleanup when users leave
 
-#### 3. **Instrument Engine** (`InstrumentEngine`)
+#### 4. **Instrument Engine** (`InstrumentEngine`)
 - **Dual Audio Stack**:
   - **Traditional Instruments**: Uses Smplr library for realistic samples (guitar, piano, drums)
   - **Synthesizers**: Uses Tone.js for advanced synthesis (analog, FM, filters)
 - **Performance Optimizations**:
+  - Dynamic polyphony reduction (32 → 16 notes) when WebRTC is active
+  - Parameter update throttling (8ms → 16ms) during voice calls
   - Note deduplication to prevent audio flaming
   - Batched note processing for better performance
   - Audio buffer caching for faster loading
@@ -368,16 +387,18 @@ graph TB
         E --> R
         
         subgraph "Audio Processing"
-            S[Audio Context]
+            S[Dedicated WebRTC Audio Context]
             T[Analyser Nodes]
             U[Audio Level Detection]
             V[Mute State Management]
+            W[48kHz Sample Rate Optimization]
         end
         
         D --> S
         S --> T
         T --> U
         U --> V
+        S --> W
         
         subgraph "STUN/TURN Servers"
             W[Google STUN Servers]
@@ -431,7 +452,37 @@ graph TB
 - **Connection Status**: Clear feedback on connection health
 - **Automatic Recovery**: Seamless reconnection after network issues
 
-## 🎛️ User Join/Leave Handling
+## � Separated Audio Contexts Architecture
+
+The application now uses **separated audio contexts** to eliminate performance competition between instruments and voice communication:
+
+### 🎹 Instrument Audio Context
+- **Sample Rate**: 44.1kHz (optimal for music production)
+- **Latency Hint**: "interactive" (lowest latency for musical performance)
+- **Used by**: Tone.js synthesizers, Smplr instruments (guitar, piano, drums)
+- **Optimization**: Dedicated processing for musical instruments
+
+### 🎙️ WebRTC Audio Context  
+- **Sample Rate**: 48kHz (preferred by WebRTC standards)
+- **Latency Hint**: "balanced" (optimized for voice quality)
+- **Used by**: Voice chat, microphone input, remote audio streams
+- **Optimization**: Dedicated processing for voice communication
+
+### ⚡ Performance Benefits
+- **No Resource Competition**: Instruments and voice chat use separate processing threads
+- **Dynamic Polyphony**: Automatic reduction from 32 to 16 simultaneous notes during voice calls
+- **CPU Optimization**: Parameter update throttling (8ms → 16ms) when WebRTC is active
+- **Context Suspension**: Unused contexts automatically suspended to save resources
+- **Better Voice Quality**: WebRTC gets dedicated, properly configured audio processing
+
+### 🔧 Automatic Optimization
+The system automatically detects WebRTC usage and applies performance optimizations:
+- Reduces instrument polyphony to free CPU for voice processing
+- Throttles real-time synthesizer parameter updates
+- Suspends unused audio contexts to save system resources
+- Maintains high audio quality for both instruments and voice chat
+
+## �🎛️ User Join/Leave Handling
 
 ### When a New User Joins:
 1. **Room Connection**: User connects to Socket.IO room
@@ -606,11 +657,22 @@ VITE_SOCKET_URL=http://localhost:3000
 
 ## 🔊 Audio Performance
 
+### Separated Context Architecture
+- **Dual Audio Contexts**: Instruments (44.1kHz) and WebRTC (48kHz) use dedicated contexts
+- **Performance Isolation**: No resource competition between music and voice processing
+- **Dynamic Optimization**: Automatic performance scaling based on WebRTC activity
+
 ### Latency Optimization
 - **4ms Processing Intervals**: Ultra-low latency note processing
-- **Optimized Audio Context**: Configured for minimal latency
+- **Context-Specific Optimization**: Each context tuned for its use case (interactive vs balanced)
 - **Batch Processing**: Efficient handling of multiple audio events
 - **Hardware Acceleration**: Leverages Web Audio API optimizations
+
+### Smart Resource Management
+- **Dynamic Polyphony**: 32 notes normal, 16 notes during voice calls
+- **Parameter Throttling**: 8ms updates normal, 16ms during WebRTC calls
+- **Context Suspension**: Unused contexts automatically suspended to save CPU
+- **WebRTC-Aware Optimization**: Real-time performance adjustment based on voice chat activity
 
 ### Memory Management
 - **Dynamic Loading**: Instruments loaded on-demand

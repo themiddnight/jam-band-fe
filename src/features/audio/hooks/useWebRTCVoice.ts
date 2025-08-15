@@ -250,16 +250,25 @@ export const useWebRTCVoice = ({
     }
   }, []);
 
-  const ensureAudioContext = useCallback(() => {
+  const ensureAudioContext = useCallback(async () => {
     if (!audioContextRef.current) {
-      const AudioContextClass =
-        window.AudioContext || (window as any).webkitAudioContext;
-      audioContextRef.current = new AudioContextClass();
+      try {
+        // Use separate WebRTC audio context
+        const { AudioContextManager } = await import("../../audio/constants/audioConfig");
+        audioContextRef.current = AudioContextManager.getWebRTCContext();
+      } catch (error) {
+        console.warn("Failed to import AudioContextManager, using fallback", error);
+        // Fallback to standard AudioContext
+        const AudioContextClass =
+          window.AudioContext || (window as any).webkitAudioContext;
+        audioContextRef.current = new AudioContextClass({
+          sampleRate: 48000, // WebRTC preferred sample rate
+          latencyHint: "balanced" // Balanced for voice quality
+        });
+      }
     }
     if (audioContextRef.current!.state === "suspended") {
-      audioContextRef.current!.resume().catch(() => {
-        // resume may fail on some browsers without a user gesture
-      });
+      await audioContextRef.current!.resume();
     }
     return audioContextRef.current!;
   }, []);
@@ -292,7 +301,7 @@ export const useWebRTCVoice = ({
       setConnectionError(null);
 
       // Initialize AudioContext with user gesture
-      const context = ensureAudioContext();
+      const context = await ensureAudioContext();
       await context.resume();
 
       // Mark audio as enabled
@@ -516,7 +525,7 @@ export const useWebRTCVoice = ({
       }
 
       // Handle remote stream
-      peerConnection.ontrack = (event) => {
+      peerConnection.ontrack = async (event) => {
         const remoteStream = event.streams[0];
 
         if (peersRef.current[userId]) {
@@ -527,7 +536,7 @@ export const useWebRTCVoice = ({
 
         // Create analyser for remote stream
         try {
-          const context = ensureAudioContext();
+          const context = await ensureAudioContext();
           const source = context.createMediaStreamSource(remoteStream);
           const analyser = createAnalyser(context);
           source.connect(analyser);
@@ -714,13 +723,13 @@ export const useWebRTCVoice = ({
 
   // Add local stream to all peer connections
   const addLocalStream = useCallback(
-    (stream: MediaStream) => {
+    async (stream: MediaStream) => {
       localStreamRef.current = stream;
       setLocalStream(stream);
 
       // Create analyser for local stream
       try {
-        const context = ensureAudioContext();
+        const context = await ensureAudioContext();
         if (localSourceRef.current) {
           try {
             localSourceRef.current.disconnect();
