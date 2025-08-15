@@ -127,10 +127,10 @@ export const LatencyControls: React.FC<LatencyControlsProps> = ({
                 <span className="label-text text-sm">Latency Hint</span>
               </label>
               <select
-                value={config.AUDIO_CONTEXT.latencyHint}
+                value={config.INSTRUMENT_AUDIO_CONTEXT.latencyHint}
                 onChange={(e) =>
                   updateConfig(
-                    "AUDIO_CONTEXT",
+                    "INSTRUMENT_AUDIO_CONTEXT",
                     "latencyHint",
                     e.target.value as AudioContextLatencyCategory,
                   )

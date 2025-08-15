@@ -35,8 +35,8 @@ export const useAudioContextManager = () => {
 
       // Configure audio context for lower latency
       const contextOptions = {
-        sampleRate: audioConfig.AUDIO_CONTEXT.sampleRate,
-        latencyHint: audioConfig.AUDIO_CONTEXT.latencyHint,
+        sampleRate: audioConfig.INSTRUMENT_AUDIO_CONTEXT.sampleRate,
+        latencyHint: audioConfig.INSTRUMENT_AUDIO_CONTEXT.latencyHint,
       };
 
       contextRef.current = new AudioContextClass(contextOptions);
