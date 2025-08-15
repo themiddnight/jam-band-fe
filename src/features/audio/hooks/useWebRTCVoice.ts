@@ -256,6 +256,9 @@ export const useWebRTCVoice = ({
         // Use separate WebRTC audio context
         const { AudioContextManager } = await import("../../audio/constants/audioConfig");
         audioContextRef.current = AudioContextManager.getWebRTCContext();
+        
+        // Notify system that WebRTC is now active
+        AudioContextManager.setWebRTCActive(true);
       } catch (error) {
         console.warn("Failed to import AudioContextManager, using fallback", error);
         // Fallback to standard AudioContext
@@ -876,6 +879,15 @@ export const useWebRTCVoice = ({
     stopAudioLevelMonitoring();
     stopHeartbeat(); // Stop heartbeat when local stream is removed
     stopConnectionRetryMonitoring(); // Stop connection retry monitoring
+    
+    // Notify system that WebRTC is no longer active
+    try {
+      import("../../audio/constants/audioConfig").then(({ AudioContextManager }) => {
+        AudioContextManager.setWebRTCActive(false);
+      });
+    } catch (error) {
+      console.warn("Failed to notify WebRTC deactivation", error);
+    }
   }, [stopAudioLevelMonitoring, stopHeartbeat, stopConnectionRetryMonitoring, currentUserId]);
 
   // Handle voice offer from remote peer

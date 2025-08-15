@@ -9,6 +9,7 @@ export { default as RTCLatencyDisplay } from "./components/RTCLatencyDisplay";
 // Hooks exports
 export { useMidiController } from "./hooks/useMidiController";
 export { usePerformanceOptimization } from "./hooks/usePerformanceOptimization";
+export { useWebRTCStateListener } from "./hooks/useWebRTCStateListener";
 
 // Configuration exports
 export { AUDIO_CONFIG, getOptimalAudioConfig, AudioContextManager } from "./constants/audioConfig";

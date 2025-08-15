@@ -4,7 +4,8 @@ import type {
   InstrumentEngineConfig,
 } from "@/features/instruments";
 import { InstrumentCategory } from "@/shared/constants/instruments";
-import { createWebKitCompatibleAudioContext } from "@/shared/utils/webkitCompat";
+import { AudioContextManager } from "@/features/audio/constants/audioConfig";
+import { useWebRTCStateListener } from "@/features/audio/hooks/useWebRTCStateListener";
 import { useRef, useCallback, useEffect } from "react";
 
 export interface UseInstrumentManagerReturn {
@@ -112,6 +113,10 @@ export const useInstrumentManager = (): UseInstrumentManagerReturn => {
   const localEngine = useRef<InstrumentEngine | null>(null);
   const remoteEngines = useRef<Map<string, InstrumentEngine>>(new Map());
   const isInitialized = useRef<boolean>(false);
+  
+  // Listen for WebRTC state changes to optimize performance
+  const { isWebRTCActive, shouldReduceQuality } = useWebRTCStateListener();
+  
   // Track last known local config so we can lazy-initialize after hot reloads or resume
   const lastLocalConfig = useRef<Omit<
     InstrumentEngineConfig,
@@ -127,10 +132,11 @@ export const useInstrumentManager = (): UseInstrumentManagerReturn => {
     new Map(),
   );
 
-  // Initialize audio context
+  // Initialize audio context using separated instrument context
   const initializeAudioContext = useCallback(async () => {
     if (!audioContext.current) {
-      audioContext.current = await createWebKitCompatibleAudioContext();
+      // Use dedicated instrument audio context
+      audioContext.current = AudioContextManager.getInstrumentContext();
     }
 
     if (audioContext.current.state === "suspended") {
@@ -591,6 +597,34 @@ export const useInstrumentManager = (): UseInstrumentManagerReturn => {
     },
     [isReady, getRemoteEngine, addRemoteEngine],
   );
+
+  // Adjust instrument performance when WebRTC state changes
+  useEffect(() => {
+    if (isWebRTCActive && shouldReduceQuality) {
+      console.log('🎵 Optimizing instruments for WebRTC voice - reducing performance');
+      
+      // Apply WebRTC optimization to local engine
+      if (localEngine.current) {
+        localEngine.current.setWebRTCOptimization(true);
+      }
+      
+      // Apply WebRTC optimization to remote engines
+      remoteEngines.current.forEach((engine) => {
+        engine.setWebRTCOptimization(true);
+      });
+    } else if (!isWebRTCActive) {
+      console.log('🎵 WebRTC inactive - restoring full instrument performance');
+      
+      // Disable WebRTC optimization
+      if (localEngine.current) {
+        localEngine.current.setWebRTCOptimization(false);
+      }
+      
+      remoteEngines.current.forEach((engine) => {
+        engine.setWebRTCOptimization(false);
+      });
+    }
+  }, [isWebRTCActive, shouldReduceQuality]);
 
   // Cleanup on unmount
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { getOptimalAudioConfig } from "@/features/audio";
+import { AudioContextManager } from "@/features/audio";
 import { useRef, useCallback, useState, useEffect } from "react";
 
 interface AudioContextManagerState {
@@ -24,23 +24,8 @@ export const useAudioContextManager = () => {
     }
 
     try {
-      const AudioContextClass =
-        window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContextClass) {
-        throw new Error("Web Audio API not supported");
-      }
-
-      // Get optimal audio configuration for this device
-      const audioConfig = getOptimalAudioConfig();
-
-      // Configure audio context for lower latency
-      const contextOptions = {
-        sampleRate: audioConfig.INSTRUMENT_AUDIO_CONTEXT.sampleRate,
-        latencyHint: audioConfig.INSTRUMENT_AUDIO_CONTEXT.latencyHint,
-      };
-
-      contextRef.current = new AudioContextClass(contextOptions);
-
+      // Use separated instrument audio context
+      contextRef.current = AudioContextManager.getInstrumentContext();
       return contextRef.current;
     } catch (error) {
       const errorMessage =

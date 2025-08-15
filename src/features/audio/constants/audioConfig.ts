@@ -9,7 +9,7 @@ export const AUDIO_CONFIG = {
 
   // Web Audio API context settings for instruments
   INSTRUMENT_AUDIO_CONTEXT: {
-    sampleRate: 44100, // Standard sample rate
+    sampleRate: 48000, // Match WebRTC sample rate to avoid conversion overhead
     latencyHint: "interactive" as AudioContextLatencyCategory, // Optimized for low latency
   },
 
@@ -40,12 +40,32 @@ export const getOptimalAudioConfig = () => {
   const supportsLowLatency =
     "AudioContext" in window && typeof AudioContext !== "undefined";
 
+  // Check if device supports 48kHz sample rate (most modern devices do)
+  const supports48kHz = (() => {
+    try {
+      const testContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const supports = testContext.sampleRate >= 48000;
+      testContext.close();
+      return supports;
+    } catch {
+      return false;
+    }
+  })();
+
   if (!supportsLowLatency) {
     return {
       ...AUDIO_CONFIG,
       TONE_CONTEXT: {
         lookAhead: 0.05, // Higher latency for compatibility
         updateInterval: 0.025,
+      },
+      INSTRUMENT_AUDIO_CONTEXT: {
+        sampleRate: supports48kHz ? 48000 : 44100, // Fallback to 44.1kHz if needed
+        latencyHint: "balanced" as AudioContextLatencyCategory,
+      },
+      WEBRTC_AUDIO_CONTEXT: {
+        sampleRate: supports48kHz ? 48000 : 44100, // Keep both contexts in sync
+        latencyHint: "balanced" as AudioContextLatencyCategory,
       },
       SYNTHESIZER: {
         noteRetriggerDelay: 5,
@@ -54,19 +74,35 @@ export const getOptimalAudioConfig = () => {
     };
   }
 
-  return AUDIO_CONFIG;
+  return {
+    ...AUDIO_CONFIG,
+    INSTRUMENT_AUDIO_CONTEXT: {
+      ...AUDIO_CONFIG.INSTRUMENT_AUDIO_CONTEXT,
+      sampleRate: supports48kHz ? 48000 : 44100, // Ensure consistency
+    },
+    WEBRTC_AUDIO_CONTEXT: {
+      ...AUDIO_CONFIG.WEBRTC_AUDIO_CONTEXT,
+      sampleRate: supports48kHz ? 48000 : 44100, // Ensure consistency
+    },
+  };
 };
 
 // Audio Context Management for separated contexts
 export class AudioContextManager {
   private static instrumentContext: AudioContext | null = null;
   private static webrtcContext: AudioContext | null = null;
+  private static webrtcActive: boolean = false;
 
   // Get or create instrument audio context
   static getInstrumentContext(): AudioContext {
     if (!this.instrumentContext) {
       const config = getOptimalAudioConfig();
       this.instrumentContext = new AudioContext(config.INSTRUMENT_AUDIO_CONTEXT);
+      
+      console.log(`🎵 Instrument AudioContext created: ${this.instrumentContext.sampleRate}Hz`);
+      
+      // Add performance monitoring
+      this.setupPerformanceMonitoring();
     }
     
     if (this.instrumentContext.state === "suspended") {
@@ -81,6 +117,17 @@ export class AudioContextManager {
     if (!this.webrtcContext) {
       const config = getOptimalAudioConfig();
       this.webrtcContext = new AudioContext(config.WEBRTC_AUDIO_CONTEXT);
+      this.webrtcActive = true;
+      
+      console.log(`🎤 WebRTC AudioContext created: ${this.webrtcContext.sampleRate}Hz`);
+      
+      // Warn if sample rates don't match
+      if (this.instrumentContext && this.instrumentContext.sampleRate !== this.webrtcContext.sampleRate) {
+        console.warn(`⚠️ Sample rate mismatch! Instrument: ${this.instrumentContext.sampleRate}Hz, WebRTC: ${this.webrtcContext.sampleRate}Hz`);
+      }
+      
+      // Adjust instrument performance when WebRTC becomes active
+      this.notifyWebRTCStateChange();
     }
     
     if (this.webrtcContext.state === "suspended") {
@@ -92,7 +139,7 @@ export class AudioContextManager {
 
   // Check if WebRTC is active to adjust instrument performance
   static isWebRTCActive(): boolean {
-    return this.webrtcContext !== null && this.webrtcContext.state === "running";
+    return this.webrtcActive && this.webrtcContext !== null && this.webrtcContext.state === "running";
   }
 
   // Get adjusted polyphony based on WebRTC state
@@ -103,8 +150,43 @@ export class AudioContextManager {
       : config.PERFORMANCE.maxPolyphony;
   }
 
+  // Notify when WebRTC state changes to adjust instrument performance
+  static notifyWebRTCStateChange() {
+    // Dispatch custom event to notify instruments of WebRTC state change
+    const event = new CustomEvent('webrtc-state-change', {
+      detail: { isActive: this.isWebRTCActive() }
+    });
+    window.dispatchEvent(event);
+  }
+
+  // Set WebRTC active state
+  static setWebRTCActive(active: boolean) {
+    this.webrtcActive = active;
+    this.notifyWebRTCStateChange();
+  }
+
+  // Setup performance monitoring for audio contexts
+  private static setupPerformanceMonitoring() {
+    if (this.instrumentContext) {
+      // Monitor CPU usage and adjust buffer size if needed
+      setInterval(() => {
+        if (this.instrumentContext && this.instrumentContext.state === "running") {
+          const baseLatency = this.instrumentContext.baseLatency;
+          const outputLatency = this.instrumentContext.outputLatency;
+          
+          // If latency is getting high and WebRTC is active, log warning
+          if (this.isWebRTCActive() && (baseLatency + outputLatency) > 0.05) { // 50ms
+            console.warn(`High audio latency detected: ${((baseLatency + outputLatency) * 1000).toFixed(1)}ms - consider reducing polyphony`);
+          }
+        }
+      }, 5000); // Check every 5 seconds
+    }
+  }
+
   // Cleanup contexts
   static async cleanup() {
+    this.webrtcActive = false;
+    
     if (this.instrumentContext) {
       await this.instrumentContext.close();
       this.instrumentContext = null;
@@ -126,6 +208,17 @@ export class AudioContextManager {
   static async resumeInstrumentContext() {
     if (this.instrumentContext && this.instrumentContext.state === "suspended") {
       await this.instrumentContext.resume();
+    }
+  }
+
+  // Cleanup WebRTC context specifically
+  static async cleanupWebRTC() {
+    this.webrtcActive = false;
+    this.notifyWebRTCStateChange();
+    
+    if (this.webrtcContext) {
+      await this.webrtcContext.close();
+      this.webrtcContext = null;
     }
   }
 }
