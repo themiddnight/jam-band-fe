@@ -359,6 +359,24 @@ export const useWebRTCVoice = ({
     [],
   );
 
+  // Diagnostic function to check audio elements status
+  const logAudioElementsStatus = useCallback(() => {
+    const activeElements = document.querySelectorAll('audio[data-webrtc-role="remote-voice"]');
+    const peerCount = Object.keys(peersRef.current).length;
+    
+    console.log(`🔊 WebRTC Audio Elements Status:
+      - Peer connections: ${peerCount}
+      - Audio elements in DOM: ${activeElements.length}
+      - Active peers: ${Object.entries(peersRef.current).map(([id, peer]) => `${id}:${peer.isConnected ? 'connected' : 'disconnected'}`).join(', ')}`);
+    
+    // Check each audio element's playback status
+    activeElements.forEach((element, index) => {
+      const audioEl = element as HTMLAudioElement;
+      const userId = audioEl.getAttribute('data-webrtc-user');
+      console.log(`  Audio ${index + 1} (${userId}): paused=${audioEl.paused}, muted=${audioEl.muted}, volume=${audioEl.volume}, srcObject=${!!audioEl.srcObject}`);
+    });
+  }, []);
+
   // Cleanup peer connection
   const cleanupPeerConnection = useCallback((userId: string) => {
     if (peersRef.current[userId]) {
@@ -534,7 +552,32 @@ export const useWebRTCVoice = ({
         if (peersRef.current[userId]) {
           const audioElement = peersRef.current[userId].audioElement;
           audioElement.srcObject = remoteStream;
-          audioElement.play().catch(console.error);
+          
+          // Enhanced autoplay handling for multiple simultaneous streams
+          try {
+            // Ensure audio context is resumed for proper playback
+            const context = await ensureAudioContext();
+            if (context.state === 'suspended') {
+              await context.resume();
+            }
+            
+            // Set explicit volume and play the audio element
+            audioElement.volume = 1.0;
+            await audioElement.play();
+            console.log(`🔊 WebRTC: Successfully started playback for ${userId}`);
+          } catch (playError) {
+            console.error(`❌ WebRTC: Failed to start playback for ${userId}:`, playError);
+            
+            // Retry with user gesture fallback
+            setTimeout(async () => {
+              try {
+                await audioElement.play();
+                console.log(`🔊 WebRTC: Retry playback successful for ${userId}`);
+              } catch (retryError) {
+                console.error(`❌ WebRTC: Retry playback failed for ${userId}:`, retryError);
+              }
+            }, 100);
+          }
         }
 
         // Create analyser for remote stream
@@ -544,6 +587,8 @@ export const useWebRTCVoice = ({
           const analyser = createAnalyser(context);
           source.connect(analyser);
           remoteAnalysersRef.current.set(userId, { analyser, source });
+          
+          console.log(`🎙️ WebRTC: Created analyser for remote stream from ${userId}`);
         } catch (e) {
           console.warn("Failed to create remote analyser:", e);
         }
@@ -608,6 +653,10 @@ export const useWebRTCVoice = ({
             peersRef.current[userId].lastHealthCheck = Date.now();
           }
           setConnectionError(null); // Clear any previous errors
+          
+          // Log successful connection and current peer status
+          console.log(`✅ WebRTC: Successfully connected to ${userId}. Total active connections: ${Object.values(peersRef.current).filter(p => p.isConnected).length}`);
+          logAudioElementsStatus(); // Debug simultaneous connections
         } else if (state === "failed") {
           console.error(`❌ WebRTC Connection failed for ${userId}`);
           // Don't immediately cleanup - let health monitoring handle reconnection
@@ -656,6 +705,7 @@ export const useWebRTCVoice = ({
       ensureAudioContext,
       rtcConfig,
       checkConnectionHealth,
+      logAudioElementsStatus,
     ],
   );
 
@@ -713,8 +763,13 @@ export const useWebRTCVoice = ({
           return { ...user, audioLevel: smoothed, isMuted };
         });
       });
+      
+      // Log audio elements status every 5 seconds for debugging
+      if (Date.now() % 5000 < 200) {
+        logAudioElementsStatus();
+      }
     }, 200) as unknown as number; // Throttle to ~200ms
-  }, [currentUserId, getRmsFromAnalyser]);
+  }, [currentUserId, getRmsFromAnalyser, logAudioElementsStatus]);
 
   // Stop audio level monitoring
   const stopAudioLevelMonitoring = useCallback(() => {
@@ -912,10 +967,23 @@ export const useWebRTCVoice = ({
 
         const peerConnection = createPeerConnection(data.fromUserId);
 
-        // Create audio element for remote stream
+        // Create audio element for remote stream with enhanced attributes for simultaneous playback
         const audioElement = document.createElement("audio");
         audioElement.autoplay = true;
+        audioElement.setAttribute('playsinline', 'true'); // Important for mobile/iOS
         audioElement.volume = 1.0;
+        audioElement.muted = false;
+        audioElement.controls = false;
+        audioElement.preload = "none"; // Don't preload since it's a live stream
+        
+        // Add attributes to help with simultaneous playback
+        audioElement.setAttribute('data-webrtc-user', data.fromUserId);
+        audioElement.setAttribute('data-webrtc-role', 'remote-voice');
+        
+        // Ensure the element is properly configured for live streaming
+        audioElement.style.display = 'none'; // Hidden audio element
+        audioElement.crossOrigin = 'anonymous';
+        
         document.body.appendChild(audioElement);
 
         peersRef.current[data.fromUserId] = {
@@ -1053,10 +1121,23 @@ export const useWebRTCVoice = ({
 
         const peerConnection = createPeerConnection(targetUserId);
 
-        // Create audio element for remote stream
+        // Create audio element for remote stream with enhanced attributes for simultaneous playback
         const audioElement = document.createElement("audio");
         audioElement.autoplay = true;
+        audioElement.setAttribute('playsinline', 'true'); // Important for mobile/iOS
         audioElement.volume = 1.0;
+        audioElement.muted = false;
+        audioElement.controls = false;
+        audioElement.preload = "none"; // Don't preload since it's a live stream
+        
+        // Add attributes to help with simultaneous playback
+        audioElement.setAttribute('data-webrtc-user', targetUserId);
+        audioElement.setAttribute('data-webrtc-role', 'remote-voice');
+        
+        // Ensure the element is properly configured for live streaming
+        audioElement.style.display = 'none'; // Hidden audio element
+        audioElement.crossOrigin = 'anonymous';
+        
         document.body.appendChild(audioElement);
 
         peersRef.current[targetUserId] = {
