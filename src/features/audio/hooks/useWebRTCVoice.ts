@@ -122,14 +122,18 @@ export const useWebRTCVoice = ({
   >(null);
 
   // Grace period duration (should match backend) - reduced for faster recovery
-  const GRACE_PERIOD_MS = 30000; // Reduced from 60 seconds to 30 seconds
+  const GRACE_PERIOD_MS = 20000; // Reduced from 30 seconds to 20 seconds
 
   // Connection health monitoring
   const healthCheckInterval = useRef<number | null>(null);
-  const HEALTH_CHECK_INTERVAL = 15000; // 15 seconds
-  const MAX_RECONNECT_ATTEMPTS = 3;
-  const RECONNECT_DELAY = 2000; // 2 seconds
-  const CONNECTION_TIMEOUT = 30000; // 30 seconds
+  const HEALTH_CHECK_INTERVAL = 10000; // Reduced from 15 to 10 seconds
+  const MAX_RECONNECT_ATTEMPTS = 5; // Increased from 3 to 5 attempts
+  const RECONNECT_DELAY = 1500; // Reduced from 2000 to 1500ms
+  const CONNECTION_TIMEOUT = 25000; // Reduced from 30 to 25 seconds
+
+  // Reconnection retry mechanism
+  const reconnectionRetryInterval = useRef<number | null>(null);
+  const RECONNECTION_RETRY_INTERVAL = 5000; // Check every 5 seconds for missing connections
 
   // Heartbeat mechanism
   const heartbeatInterval = useRef<number | null>(null);
@@ -186,6 +190,60 @@ export const useWebRTCVoice = ({
       clearInterval(heartbeatInterval.current);
       heartbeatInterval.current = null;
       console.log("🛑 WebRTC: Stopped heartbeat monitoring");
+    }
+  }, []);
+
+  // Connection retry mechanism - continuously checks for missing connections
+  const checkForMissingConnections = useCallback(() => {
+    if (!socket || !isEnabled || !canTransmit || !roomId || !currentUserId) {
+      return;
+    }
+
+    // Get users who should have connections but don't
+    const voiceUserIds = voiceUsers
+      .map(user => user.userId)
+      .filter(userId => userId !== currentUserId); // Exclude self
+
+    const connectedUserIds = Object.keys(peersRef.current);
+    const missingConnections = voiceUserIds.filter(userId => 
+      !connectedUserIds.includes(userId)
+    );
+
+    if (missingConnections.length > 0) {
+      console.log("🔄 WebRTC: Found missing connections, attempting to re-establish:", missingConnections);
+      
+      missingConnections.forEach(userId => {
+        // Only attempt if we haven't reached max attempts recently
+        const existingPeer = peersRef.current[userId];
+        const shouldAttempt = !existingPeer || 
+          (existingPeer.reconnectAttempts || 0) < MAX_RECONNECT_ATTEMPTS;
+
+        if (shouldAttempt) {
+          console.log(`🤝 WebRTC: Attempting to reconnect to ${userId}`);
+          setTimeout(() => {
+            initiateVoiceCallRef.current?.(userId);
+          }, Math.random() * 1000); // Random delay to avoid thundering herd
+        }
+      });
+    }
+  }, [socket, isEnabled, canTransmit, roomId, currentUserId, voiceUsers]);
+
+  // Start connection retry monitoring
+  const startConnectionRetryMonitoring = useCallback(() => {
+    if (reconnectionRetryInterval.current) return;
+
+    reconnectionRetryInterval.current = setInterval(() => {
+      checkForMissingConnections();
+    }, RECONNECTION_RETRY_INTERVAL) as unknown as number;
+
+    console.log("🔄 WebRTC: Started connection retry monitoring");
+  }, [checkForMissingConnections]);
+
+  const stopConnectionRetryMonitoring = useCallback(() => {
+    if (reconnectionRetryInterval.current) {
+      clearInterval(reconnectionRetryInterval.current);
+      reconnectionRetryInterval.current = null;
+      console.log("🛑 WebRTC: Stopped connection retry monitoring");
     }
   }, []);
 
@@ -659,6 +717,7 @@ export const useWebRTCVoice = ({
       startAudioLevelMonitoring();
       startHealthMonitoring(); // Start health monitoring when we have a local stream
       startHeartbeat(); // Start heartbeat when we have a local stream
+      startConnectionRetryMonitoring(); // Start connection retry monitoring
 
       // Ensure self is present in voice users immediately and reflect current track enabled state
       const hasActiveTrack = stream.getAudioTracks().some((t) => t.enabled);
@@ -727,6 +786,7 @@ export const useWebRTCVoice = ({
       startAudioLevelMonitoring,
       startHealthMonitoring,
       startHeartbeat,
+      startConnectionRetryMonitoring,
       socket,
       roomId,
       currentUserId,
@@ -774,7 +834,8 @@ export const useWebRTCVoice = ({
 
     stopAudioLevelMonitoring();
     stopHeartbeat(); // Stop heartbeat when local stream is removed
-  }, [stopAudioLevelMonitoring, stopHeartbeat, currentUserId]);
+    stopConnectionRetryMonitoring(); // Stop connection retry monitoring
+  }, [stopAudioLevelMonitoring, stopHeartbeat, stopConnectionRetryMonitoring, currentUserId]);
 
   // Handle voice offer from remote peer
   const handleVoiceOffer = useCallback(
@@ -1151,6 +1212,7 @@ export const useWebRTCVoice = ({
       }>;
     }) => {
       const byId = new Map(payload.participants.map((p) => [p.userId, p]));
+      
       // merge/insert
       setVoiceUsers((prev) => {
         const next = new Map(prev.map((u) => [u.userId, u] as const));
@@ -1166,8 +1228,24 @@ export const useWebRTCVoice = ({
         }
         return Array.from(next.values());
       });
+      
       // cache explicit mute states
       byId.forEach((p) => remoteMuteStateRef.current.set(p.userId, p.isMuted));
+      
+      // Attempt to establish connections with users we don't have connections to
+      if (canTransmit && localStreamRef.current) {
+        payload.participants.forEach((participant) => {
+          if (participant.userId !== currentUserId && !peersRef.current[participant.userId]) {
+            console.log(`🤝 WebRTC: Attempting connection to existing participant ${participant.userId}`);
+            // Small delay to avoid overwhelming the system
+            setTimeout(() => {
+              if (initiateVoiceCallRef.current && !peersRef.current[participant.userId]) {
+                initiateVoiceCallRef.current(participant.userId);
+              }
+            }, Math.random() * 2000); // Random delay up to 2 seconds
+          }
+        });
+      }
     };
     socket.on("voice_participants", onParticipants);
     return () => {
@@ -1217,6 +1295,76 @@ export const useWebRTCVoice = ({
     handleSocketError,
   ]);
 
+  // Enhanced socket reconnection handler
+  useEffect(() => {
+    if (!socket || !isEnabled) return;
+
+    const handleSocketReconnection = () => {
+      console.log("🔄 WebRTC: Socket reconnected, attempting to restore voice connections");
+      
+      // Clear any grace period timeout since we're back online
+      if (gracePeriodTimeoutRef.current) {
+        clearTimeout(gracePeriodTimeoutRef.current);
+        gracePeriodTimeoutRef.current = null;
+      }
+
+      // Re-announce voice presence if we have a local stream
+      if (localStreamRef.current && currentUserId && currentUsername && roomId) {
+        console.log("📢 WebRTC: Re-announcing voice presence after socket reconnection");
+        socket.emit("join_voice", {
+          roomId,
+          userId: currentUserId,
+          username: currentUsername,
+        });
+
+        // Request current voice participants to restore connections
+        setTimeout(() => {
+          socket.emit("request_voice_participants", { roomId });
+        }, 1000); // Delay to ensure the join_voice is processed first
+      }
+    };
+
+    const handleSocketDisconnection = () => {
+      console.log("🔌 WebRTC: Socket disconnected");
+      // Don't immediately clean up - let the grace period handle it
+    };
+
+    socket.on("connect", handleSocketReconnection);
+    socket.on("disconnect", handleSocketDisconnection);
+
+    return () => {
+      socket.off("connect", handleSocketReconnection);
+      socket.off("disconnect", handleSocketDisconnection);
+    };
+  }, [socket, isEnabled, currentUserId, currentUsername, roomId]);
+
+  // Effect to aggressively restore voice connections when capability is restored
+  useEffect(() => {
+    if (!socket || !socket.connected || !isEnabled || !localStreamRef.current || !canTransmit) {
+      return;
+    }
+
+    // Check if we're missing connections to existing voice users
+    const missingConnections = voiceUsers.filter(user => 
+      user.userId !== currentUserId && !peersRef.current[user.userId]
+    );
+
+    if (missingConnections.length > 0) {
+      console.log("🔄 WebRTC: Capability restored, attempting to reconnect to users:", 
+        missingConnections.map(u => u.userId));
+      
+      // Attempt to reconnect with a delay spread to avoid overwhelming
+      missingConnections.forEach((user, index) => {
+        setTimeout(() => {
+          if (initiateVoiceCallRef.current && !peersRef.current[user.userId]) {
+            console.log(`🤝 WebRTC: Reconnecting to ${user.userId}`);
+            initiateVoiceCallRef.current(user.userId);
+          }
+        }, index * 500); // 500ms delay between each connection attempt
+      });
+    }
+  }, [socket, socket?.connected, isEnabled, canTransmit, voiceUsers, currentUserId]);
+
   // Cleanup on unmount or when disabled
   useEffect(() => {
     const peers = peersRef.current;
@@ -1226,6 +1374,7 @@ export const useWebRTCVoice = ({
       stopAudioLevelMonitoring();
       stopHealthMonitoring(); // Stop health monitoring on unmount
       stopHeartbeat(); // Stop heartbeat on unmount
+      stopConnectionRetryMonitoring(); // Stop connection retry monitoring on unmount
 
       // Clear grace period timeout if it exists
       if (gracePeriodTimeoutRef.current) {
@@ -1242,6 +1391,7 @@ export const useWebRTCVoice = ({
     stopAudioLevelMonitoring,
     stopHealthMonitoring,
     stopHeartbeat,
+    stopConnectionRetryMonitoring,
   ]);
 
   // Clean up WebRTC state when socket disconnects
@@ -1282,6 +1432,7 @@ export const useWebRTCVoice = ({
         stopAudioLevelMonitoring();
         stopHealthMonitoring(); // Stop health monitoring on intentional disconnect
         stopHeartbeat(); // Stop heartbeat on intentional disconnect
+        stopConnectionRetryMonitoring(); // Stop connection retry monitoring on intentional disconnect
 
         // Clear local analyser references
         localAnalyserRef.current = null;
@@ -1297,6 +1448,7 @@ export const useWebRTCVoice = ({
         stopAudioLevelMonitoring();
         stopHealthMonitoring(); // Stop health monitoring on accidental disconnect
         stopHeartbeat(); // Stop heartbeat on accidental disconnect
+        stopConnectionRetryMonitoring(); // Stop connection retry monitoring on accidental disconnect
 
         // Start grace period timeout - BUT only cleanup peer connections, preserve local stream
         gracePeriodTimeoutRef.current = setTimeout(() => {
@@ -1371,7 +1523,15 @@ export const useWebRTCVoice = ({
                   startAudioLevelMonitoring();
                   startHealthMonitoring();
                   startHeartbeat();
+                  startConnectionRetryMonitoring();
                 }
+
+                // Request participants to rebuild connections
+                setTimeout(() => {
+                  if (socket && socket.connected) {
+                    socket.emit("request_voice_participants", { roomId });
+                  }
+                }, 1500); // Additional delay to ensure join_voice is processed
               }
             }, 100); // Small delay to ensure cleanup is complete
           }
@@ -1394,12 +1554,14 @@ export const useWebRTCVoice = ({
     stopAudioLevelMonitoring,
     stopHealthMonitoring,
     stopHeartbeat,
+    stopConnectionRetryMonitoring,
     currentUserId,
     currentUsername,
     roomId,
     startAudioLevelMonitoring,
     startHealthMonitoring,
     startHeartbeat,
+    startConnectionRetryMonitoring,
   ]);
 
   // Function to perform intentional cleanup (can be called from parent)
