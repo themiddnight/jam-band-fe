@@ -1,12 +1,12 @@
 import { useCallback } from "react";
 
 interface UseVoiceControlsProps {
-  audioContext: AudioContext | null;
+  audioContext: AudioContext | null; // Keep for future use
   gainNode: GainNode | null;
   mediaStream: MediaStream | null;
   micPermission: boolean;
   isMuted: boolean;
-  isSelfMonitoring: boolean;
+  isSelfMonitoring: boolean; // Keep for future use
   initializeAudioStream: () => Promise<void>;
   startInputLevelMonitoring: () => void;
   stopInputLevelMonitoring: () => void;
@@ -19,12 +19,12 @@ interface UseVoiceControlsReturn {
 }
 
 export const useVoiceControls = ({
-  audioContext,
+  // audioContext, // Unused for now to maintain separation
   gainNode,
   mediaStream,
   micPermission,
   isMuted,
-  isSelfMonitoring,
+  // isSelfMonitoring, // Unused for now to maintain separation
   initializeAudioStream,
   startInputLevelMonitoring,
   stopInputLevelMonitoring,
@@ -77,12 +77,29 @@ export const useVoiceControls = ({
 
   // Handle self-monitoring toggle
   const handleSelfMonitorToggle = useCallback(() => {
+    // IMPORTANT: For WebRTC voice, self-monitoring should NOT connect to audioContext.destination
+    // because that would mix voice with instrument output and defeat the purpose of separated contexts.
+    // 
+    // Self-monitoring for WebRTC voice should be handled differently:
+    // 1. Either through WebRTC's echo cancellation
+    // 2. Or through a separate monitoring context
+    // 3. Or by adjusting microphone monitoring at OS level
+    
+    console.log("🎤 Self-monitoring toggle requested, but disabled to maintain audio separation");
+    console.log("💡 Use headphones or enable system microphone monitoring instead");
+    
+    // For now, we disable this feature to maintain clean audio separation
+    // If you need self-monitoring, consider implementing it through a separate audio path
+  }, []);
+
+  // Original implementation (commented out to prevent audio mixing):
+  /*
+  const handleSelfMonitorToggle = useCallback(() => {
     if (gainNode && audioContext) {
       if (!isSelfMonitoring) {
-        // Connect to speakers for self-monitoring
+        // This would mix voice with instruments - NOT ALLOWED in separated context mode
         gainNode.connect(audioContext.destination);
       } else {
-        // Disconnect from speakers
         try {
           gainNode.disconnect(audioContext.destination);
         } catch {
@@ -91,6 +108,7 @@ export const useVoiceControls = ({
       }
     }
   }, [gainNode, audioContext, isSelfMonitoring]);
+  */
 
   return {
     handleMuteToggle,

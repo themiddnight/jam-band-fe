@@ -44,61 +44,82 @@ export const useAudioStream = ({
         audioContextRef.current = null;
       }
 
-      // Request microphone permission
-      const stream = await navigator.mediaDevices.getUserMedia({
+      // Request microphone permission with optimized constraints for mixed instrument usage
+      const constraints: MediaStreamConstraints = {
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: false, // We'll handle gain manually
           sampleRate: 48000,
           channelCount: 1,
-        },
-      });
+          // Additional optimizations for Chrome/WebRTC (non-standard but widely supported)
+          ...(navigator.userAgent.includes('Chrome') && {
+            googEchoCancellation: true,
+            googNoiseSuppression: true,
+            googHighpassFilter: true,
+            googTypingNoiseDetection: false, // Disable to reduce processing
+            googAutoGainControl: false,
+            googNoiseSuppression2: false, // Disable advanced processing to reduce CPU
+          } as any),
+        } as MediaTrackConstraints,
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
       mediaStreamRef.current = stream;
       micPermissionRef.current = true;
 
-      // Create audio context for monitoring and gain control
-      audioContextRef.current = new (window.AudioContext ||
-        (window as any).webkitAudioContext)({
-        sampleRate: 48000,
-        latencyHint: "interactive",
-      });
+      // Use the separated WebRTC audio context instead of creating a new one
+      try {
+        const { AudioContextManager } = await import("../../../constants/audioConfig");
+        audioContextRef.current = AudioContextManager.getWebRTCContext();
+        console.log("🎤 VoiceInput: Using separated WebRTC AudioContext");
+      } catch (error) {
+        console.warn("Failed to get WebRTC AudioContext, creating fallback:", error);
+        // Fallback: create own context
+        audioContextRef.current = new (window.AudioContext ||
+          (window as any).webkitAudioContext)({
+          sampleRate: 48000,
+          latencyHint: "interactive", // Prioritize low latency for real-time voice
+        });
+      }
 
       const audioContext = audioContextRef.current;
+      
       const source = audioContext.createMediaStreamSource(stream);
 
-      // Create analyser for input level monitoring
+      // Create analyser with optimized settings for mixed usage
       analyserRef.current = audioContext.createAnalyser();
-      analyserRef.current.fftSize = 1024;
-      analyserRef.current.smoothingTimeConstant = 0.3; // More responsive
+      analyserRef.current.fftSize = 512; // Reduced from 1024 to lower CPU usage
+      analyserRef.current.smoothingTimeConstant = 0.8; // More stable, less reactive
 
       // Create gain node for input gain control
       gainNodeRef.current = audioContext.createGain();
       gainNodeRef.current.gain.value = gain;
 
-      // Connect audio graph: source -> gain -> analyser
+      // Simplified audio graph to reduce processing overhead
+      // Connect: source -> gain -> analyser (for monitoring only)
       source.connect(gainNodeRef.current);
       gainNodeRef.current.connect(analyserRef.current);
 
-      // Create a new stream with the gained audio for WebRTC
-      const gainedStream = audioContext.createMediaStreamDestination();
-      gainNodeRef.current.connect(gainedStream);
+      // For WebRTC, we'll use a more efficient approach
+      // Instead of creating a new stream, we'll apply gain directly to the original track
+      const audioTrack = stream.getAudioTracks()[0];
+      if (audioTrack) {
+        // Apply constraints directly to the track for better performance
+        audioTrack.applyConstraints({
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: false,
+        }).catch(console.warn);
+      }
 
-      // Replace the original stream with the gained stream
-      const gainedMediaStream = gainedStream.stream;
-
-      // Copy video tracks if any (shouldn't be any for audio-only)
-      stream.getVideoTracks().forEach((track) => {
-        gainedMediaStream.addTrack(track);
-      });
-
-      // Update the stream reference to use the gained stream
-      mediaStreamRef.current = gainedMediaStream;
+      // Use the original stream for WebRTC (more efficient)
+      mediaStreamRef.current = stream;
 
       // Default to muted: disable the audio track until user explicitly unmutes
       try {
-        const track = gainedMediaStream.getAudioTracks()[0];
+        const track = stream.getAudioTracks()[0];
         if (track) {
           track.enabled = false;
         }
@@ -106,10 +127,10 @@ export const useAudioStream = ({
         // ignore if no track available
       }
 
-      // Notify parent about the gained stream
-      onStreamReady?.(gainedMediaStream);
+      // Notify parent about the stream
+      onStreamReady?.(stream);
 
-      console.log("🎤 Voice input initialized successfully");
+      console.log("🎤 Voice input initialized successfully with optimized processing");
     } catch (error) {
       console.error("Failed to initialize voice input:", error);
       // Reset states on error
@@ -130,10 +151,11 @@ export const useAudioStream = ({
       mediaStreamRef.current = null;
       onStreamRemoved?.();
     }
-    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
-      console.log("🔌 Closing audio context");
-      audioContextRef.current.close().catch(console.error);
-    }
+    
+    // DON'T close the audioContext because it's shared via AudioContextManager
+    // The AudioContextManager will handle context lifecycle
+    console.log("🎤 Not closing shared WebRTC AudioContext (managed by AudioContextManager)");
+    
     // Reset all refs to null after cleanup
     audioContextRef.current = null;
     analyserRef.current = null;

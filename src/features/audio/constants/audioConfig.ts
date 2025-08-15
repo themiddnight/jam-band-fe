@@ -16,7 +16,7 @@ export const AUDIO_CONFIG = {
   // Web Audio API context settings for WebRTC
   WEBRTC_AUDIO_CONTEXT: {
     sampleRate: 48000, // WebRTC preferred sample rate
-    latencyHint: "balanced" as AudioContextLatencyCategory, // Balanced for voice quality
+    latencyHint: "interactive" as AudioContextLatencyCategory, // Changed to interactive for better real-time performance
   },
 
   // Synthesizer timing settings
@@ -30,7 +30,13 @@ export const AUDIO_CONFIG = {
     maxPolyphony: 32, // Maximum simultaneous notes
     cleanupInterval: 5000, // Cleanup stuck notes every 5 seconds
     // Reduce polyphony when WebRTC is active
-    maxPolyphonyWithWebRTC: 16, // Reduced polyphony during voice calls
+    maxPolyphonyWithWebRTC: 12, // Significantly reduced polyphony during voice calls
+    // Additional WebRTC optimizations
+    webrtcPriorityMode: {
+      maxPolyphony: 8, // Ultra-low polyphony for priority voice
+      reducedProcessing: true, // Enable simplified processing
+      fasterUpdates: true, // Reduce update intervals
+    },
   },
 };
 
@@ -92,6 +98,7 @@ export class AudioContextManager {
   private static instrumentContext: AudioContext | null = null;
   private static webrtcContext: AudioContext | null = null;
   private static webrtcActive: boolean = false;
+  private static webrtcPriorityMode: boolean = false; // Ultra-low latency mode for voice priority
 
   // Get or create instrument audio context
   static getInstrumentContext(): AudioContext {
@@ -145,16 +152,44 @@ export class AudioContextManager {
   // Get adjusted polyphony based on WebRTC state
   static getMaxPolyphony(): number {
     const config = getOptimalAudioConfig();
-    return this.isWebRTCActive() 
-      ? config.PERFORMANCE.maxPolyphonyWithWebRTC 
-      : config.PERFORMANCE.maxPolyphony;
+    
+    if (this.webrtcPriorityMode) {
+      return config.PERFORMANCE.webrtcPriorityMode.maxPolyphony;
+    } else if (this.isWebRTCActive()) {
+      return config.PERFORMANCE.maxPolyphonyWithWebRTC;
+    }
+    
+    return config.PERFORMANCE.maxPolyphony;
+  }
+
+  // Enable priority mode for WebRTC (ultra-low latency)
+  static enableWebRTCPriorityMode() {
+    this.webrtcPriorityMode = true;
+    console.log("🚨 WebRTC Priority Mode ENABLED - Ultra-low latency for voice");
+    this.notifyWebRTCStateChange();
+  }
+
+  // Disable priority mode
+  static disableWebRTCPriorityMode() {
+    this.webrtcPriorityMode = false;
+    console.log("✅ WebRTC Priority Mode DISABLED - Normal performance restored");
+    this.notifyWebRTCStateChange();
+  }
+
+  // Check if in priority mode
+  static isWebRTCPriorityMode(): boolean {
+    return this.webrtcPriorityMode;
   }
 
   // Notify when WebRTC state changes to adjust instrument performance
   static notifyWebRTCStateChange() {
     // Dispatch custom event to notify instruments of WebRTC state change
     const event = new CustomEvent('webrtc-state-change', {
-      detail: { isActive: this.isWebRTCActive() }
+      detail: { 
+        isActive: this.isWebRTCActive(),
+        isPriorityMode: this.webrtcPriorityMode,
+        maxPolyphony: this.getMaxPolyphony()
+      }
     });
     window.dispatchEvent(event);
   }
@@ -170,13 +205,28 @@ export class AudioContextManager {
     if (this.instrumentContext) {
       // Monitor CPU usage and adjust buffer size if needed
       setInterval(() => {
-        if (this.instrumentContext && this.instrumentContext.state === "running") {
+        if (this.instrumentContext && this.instrumentContext.state === "running" && this.webrtcContext) {
           const baseLatency = this.instrumentContext.baseLatency;
           const outputLatency = this.instrumentContext.outputLatency;
+          const totalLatency = baseLatency + outputLatency;
           
-          // If latency is getting high and WebRTC is active, log warning
-          if (this.isWebRTCActive() && (baseLatency + outputLatency) > 0.05) { // 50ms
-            console.warn(`High audio latency detected: ${((baseLatency + outputLatency) * 1000).toFixed(1)}ms - consider reducing polyphony`);
+          // If latency is getting high and WebRTC is active, warn and potentially optimize
+          if (this.isWebRTCActive() && totalLatency > 0.05) { // 50ms
+            console.warn(`🚨 High audio latency detected: ${(totalLatency * 1000).toFixed(1)}ms - WebRTC may experience dropouts`);
+            
+            // If latency is very high, suggest reducing instrument quality
+            if (totalLatency > 0.1) { // 100ms
+              console.warn("⚡ Consider reducing instrument polyphony or quality to improve WebRTC performance");
+              this.notifyWebRTCStateChange();
+            }
+          }
+          
+          // Monitor WebRTC context specifically
+          if (this.webrtcContext && this.webrtcContext.state === "running") {
+            const webrtcLatency = this.webrtcContext.baseLatency + this.webrtcContext.outputLatency;
+            if (webrtcLatency > 0.03) { // 30ms
+              console.warn(`🎤 WebRTC high latency: ${(webrtcLatency * 1000).toFixed(1)}ms`);
+            }
           }
         }
       }, 5000); // Check every 5 seconds
