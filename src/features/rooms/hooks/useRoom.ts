@@ -7,11 +7,10 @@ import { useScaleState } from "@/features/ui";
 import { InstrumentCategory } from "@/shared/constants/instruments";
 import { useUserStore } from "@/shared/stores/userStore";
 import { useEffect, useCallback, useRef, useState, useMemo } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 
 export const useRoom = () => {
   const { roomId } = useParams<{ roomId: string }>();
-  const navigate = useNavigate();
   const location = useLocation();
   const role = location.state?.role as "band_member" | "audience";
 
@@ -101,7 +100,7 @@ export const useRoom = () => {
   // Initialize room
   useEffect(() => {
     if (!roomId || !username || !userId) {
-      navigate("/");
+      window.location.href = "/";
       return;
     }
 
@@ -123,7 +122,6 @@ export const useRoom = () => {
     isConnected,
     isConnecting,
     setError,
-    navigate,
   ]);
 
   // Join room when socket is connected
@@ -162,20 +160,16 @@ export const useRoom = () => {
     if (error) {
       if (error.includes("Room not found")) {
         // If room not found, redirect back to lobby
-        navigate("/");
+        window.location.href = "/";
       } else if (
         error.includes("rejected") ||
         error.includes("Your request was rejected")
       ) {
         // If user was rejected, redirect to lobby immediately with rejection message
-        navigate("/", {
-          state: {
-            rejectionMessage: error,
-          },
-        });
+        window.location.href = "/";
       }
     }
-  }, [error, navigate]);
+  }, [error]);
 
   // If the server sends an updated room state that no longer contains the current user
   // (for example the user was removed or their session was cleared), ensure the client
@@ -200,13 +194,13 @@ export const useRoom = () => {
           // ignore disconnect errors
         }
 
-        navigate("/");
+        window.location.href = "/";
       }
     } catch {
       // Defensive: if room shape unexpectedly changes, don't crash
       console.warn("Failed to reconcile room state for current user");
     }
-  }, [currentRoom, currentUser, hasLeftRoom, disconnect, navigate]);
+  }, [currentRoom, currentUser, hasLeftRoom, disconnect]);
 
   // Cleanup on component unmount
   useEffect(() => {
@@ -865,8 +859,8 @@ export const useRoom = () => {
     // For canceling pending approval, we don't need to send intentional leave flag
     // since the user is not actually in the room yet
     disconnect();
-    navigate("/");
-  }, [disconnect, navigate]);
+    window.location.href = "/";
+  }, [disconnect]);
 
   // Get the leave room mutation
   const { roomLeaveMutate } = useRoomQuery();
@@ -877,7 +871,7 @@ export const useRoom = () => {
 
     if (!roomId || !userId) {
       console.error("Missing roomId or userId for leave room");
-      navigate("/");
+      window.location.href = "/";
       return;
     }
 
@@ -893,20 +887,20 @@ export const useRoom = () => {
         disconnect();
 
         // Immediately redirect to lobby
-        navigate("/");
+        window.location.href = "/";
       } else {
         console.error("Failed to leave room:", result.message);
         // Still navigate to lobby even if HTTP request failed
         disconnect();
-        navigate("/");
+        window.location.href = "/";
       }
     } catch (error) {
       console.error("Error during leave room process:", error);
       // Ensure we still navigate even if there's an error
       disconnect();
-      navigate("/");
+      window.location.href = "/";
     }
-  }, [roomLeaveMutate, roomId, userId, disconnect, navigate]);
+  }, [roomLeaveMutate, roomId, userId, disconnect]);
 
   // Handle leave room button click - shows confirmation modal
   const handleLeaveRoomClick = useCallback(() => {
