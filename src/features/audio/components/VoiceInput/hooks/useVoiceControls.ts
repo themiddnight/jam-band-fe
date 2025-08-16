@@ -1,12 +1,12 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 
 interface UseVoiceControlsProps {
-  audioContext: AudioContext | null; // Keep for future use
+  audioContext: AudioContext | null;
   gainNode: GainNode | null;
   mediaStream: MediaStream | null;
   micPermission: boolean;
   isMuted: boolean;
-  isSelfMonitoring: boolean; // Keep for future use
+  isSelfMonitoring: boolean;
   initializeAudioStream: () => Promise<void>;
   startInputLevelMonitoring: () => void;
   stopInputLevelMonitoring: () => void;
@@ -19,16 +19,19 @@ interface UseVoiceControlsReturn {
 }
 
 export const useVoiceControls = ({
-  // audioContext, // Unused for now to maintain separation
+  audioContext,
   gainNode,
   mediaStream,
   micPermission,
   isMuted,
-  // isSelfMonitoring, // Unused for now to maintain separation
+  isSelfMonitoring,
   initializeAudioStream,
   startInputLevelMonitoring,
   stopInputLevelMonitoring,
 }: UseVoiceControlsProps): UseVoiceControlsReturn => {
+  // Keep a reference to the monitoring connection
+  const monitoringConnectionRef = useRef<GainNode | null>(null);
+
   // Handle mute/unmute toggle
   const handleMuteToggle = useCallback(async () => {
     const newMutedState = !isMuted;
@@ -77,38 +80,50 @@ export const useVoiceControls = ({
 
   // Handle self-monitoring toggle
   const handleSelfMonitorToggle = useCallback(() => {
-    // IMPORTANT: For WebRTC voice, self-monitoring should NOT connect to audioContext.destination
-    // because that would mix voice with instrument output and defeat the purpose of separated contexts.
-    // 
-    // Self-monitoring for WebRTC voice should be handled differently:
-    // 1. Either through WebRTC's echo cancellation
-    // 2. Or through a separate monitoring context
-    // 3. Or by adjusting microphone monitoring at OS level
-    
-    console.log("🎤 Self-monitoring toggle requested, but disabled to maintain audio separation");
-    console.log("💡 Use headphones or enable system microphone monitoring instead");
-    
-    // For now, we disable this feature to maintain clean audio separation
-    // If you need self-monitoring, consider implementing it through a separate audio path
-  }, []);
+    if (!audioContext || !gainNode) {
+      console.log("🎤 Self-monitoring: No audio context or gain node available");
+      return;
+    }
 
-  // Original implementation (commented out to prevent audio mixing):
-  /*
-  const handleSelfMonitorToggle = useCallback(() => {
-    if (gainNode && audioContext) {
+    try {
       if (!isSelfMonitoring) {
-        // This would mix voice with instruments - NOT ALLOWED in separated context mode
-        gainNode.connect(audioContext.destination);
+        // Enable self-monitoring: add monitoring connection to speakers
+        console.log("🔊 Enabling self-monitoring");
+        
+        // Create a monitoring gain node to control self-monitoring volume
+        // This allows hearing yourself at the input gain level but with volume control
+        const monitoringGain = audioContext.createGain();
+        monitoringGain.gain.value = 0.6; // Quieter to prevent feedback, but audible
+        
+        // Connect gain node to monitoring gain, then to speakers
+        // This creates an additional path: gainNode -> monitoringGain -> destination (speakers)
+        // The original path (gainNode -> analyser + WebRTC destination) remains intact
+        gainNode.connect(monitoringGain);
+        monitoringGain.connect(audioContext.destination);
+        
+        // Store reference for cleanup
+        monitoringConnectionRef.current = monitoringGain;
+        
+        console.log("✅ Self-monitoring enabled - you can now hear your own voice");
       } else {
-        try {
-          gainNode.disconnect(audioContext.destination);
-        } catch {
-          // Already disconnected
+        // Disable self-monitoring: remove only the monitoring connection
+        console.log("🔇 Disabling self-monitoring");
+        
+        if (monitoringConnectionRef.current) {
+          // Only disconnect the monitoring path, keep WebRTC path intact
+          gainNode.disconnect(monitoringConnectionRef.current);
+          monitoringConnectionRef.current.disconnect(audioContext.destination);
+          monitoringConnectionRef.current = null;
+          
+          console.log("✅ Self-monitoring disabled - WebRTC path preserved");
+        } else {
+          console.log("⚠️  No monitoring connection found to disconnect");
         }
       }
+    } catch (error) {
+      console.error("❌ Error toggling self-monitoring:", error);
     }
-  }, [gainNode, audioContext, isSelfMonitoring]);
-  */
+  }, [audioContext, gainNode, isSelfMonitoring]);
 
   return {
     handleMuteToggle,

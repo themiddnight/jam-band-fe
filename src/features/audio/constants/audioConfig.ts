@@ -1,10 +1,10 @@
-// Audio configuration for latency optimization with separate contexts
+// Audio configuration for ultra-low latency optimization with separate contexts
 export const AUDIO_CONFIG = {
   // Tone.js context settings for instruments
   TONE_CONTEXT: {
-    // Lower values = lower latency but higher CPU usage
-    lookAhead: 0.01, // 10ms (default: 0.1s)
-    updateInterval: 0.01, // 10ms (default: 25ms)
+    // Ultra-low values for minimum latency
+    lookAhead: 0.005, // 5ms (reduced from 10ms)
+    updateInterval: 0.005, // 5ms (reduced from 10ms)
   },
 
   // Web Audio API context settings for instruments
@@ -13,29 +13,32 @@ export const AUDIO_CONFIG = {
     latencyHint: "interactive" as AudioContextLatencyCategory, // Optimized for low latency
   },
 
-  // Web Audio API context settings for WebRTC
+  // Web Audio API context settings for WebRTC - Ultra-low latency mode
   WEBRTC_AUDIO_CONTEXT: {
     sampleRate: 48000, // WebRTC preferred sample rate
-    latencyHint: "interactive" as AudioContextLatencyCategory, // Changed to interactive for better real-time performance
+    latencyHint: "interactive" as AudioContextLatencyCategory, // Interactive for real-time performance
   },
 
-  // Synthesizer timing settings
+  // Synthesizer timing settings - Ultra-responsive
   SYNTHESIZER: {
-    noteRetriggerDelay: 2, // Delay in ms when retriggering the same note
-    envelopeAttackMin: 0.001, // Minimum attack time for responsive feel
+    noteRetriggerDelay: 1, // Reduced delay from 2ms to 1ms
+    envelopeAttackMin: 0.0005, // Reduced from 0.001s for ultra-fast response
   },
 
-  // Performance settings
+  // Performance settings optimized for ultra-low latency WebRTC mesh
   PERFORMANCE: {
     maxPolyphony: 32, // Maximum simultaneous notes
-    cleanupInterval: 5000, // Cleanup stuck notes every 5 seconds
-    // Reduce polyphony when WebRTC is active
-    maxPolyphonyWithWebRTC: 12, // Significantly reduced polyphony during voice calls
-    // Additional WebRTC optimizations
+    cleanupInterval: 4000, // More frequent cleanup (reduced from 5000ms)
+    // Aggressive polyphony reduction when WebRTC is active
+    maxPolyphonyWithWebRTC: 10, // Further reduced from 12
+    // Ultra-low latency WebRTC priority mode
     webrtcPriorityMode: {
-      maxPolyphony: 8, // Ultra-low polyphony for priority voice
+      maxPolyphony: 6, // Ultra-low polyphony for priority voice (reduced from 8)
       reducedProcessing: true, // Enable simplified processing
       fasterUpdates: true, // Reduce update intervals
+      disableReverb: true, // Disable reverb for lower CPU usage
+      disableDelay: true, // Disable delay effects
+      prioritizeVoice: true, // Voice gets CPU priority over instruments
     },
   },
 };

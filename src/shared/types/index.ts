@@ -42,4 +42,5 @@ export interface Instrument {
   controlType: ControlType;
   type?: string;
   polyphony?: string;
+  icon?: string;
 }

@@ -4,6 +4,7 @@ export interface GroupedOption {
   value: string;
   label: string;
   group: string;
+  icon?: string;
   [key: string]: any;
 }
 
@@ -123,10 +124,17 @@ export default function GroupedDropdown({
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         disabled={disabled}
-        className="select select-bordered select-sm w-full text-left"
+        className="select select-bordered select-sm w-full text-left flex items-center gap-2"
         onKeyDown={handleKeyDown}
       >
-        {selectedOption ? selectedOption.label : placeholder}
+        {selectedOption ? (
+          <>
+            {selectedOption.icon && <span>{selectedOption.icon}</span>}
+            <span>{selectedOption.label}</span>
+          </>
+        ) : (
+          placeholder
+        )}
       </button>
 
       {/* Dropdown Menu */}
@@ -169,13 +177,14 @@ export default function GroupedDropdown({
                     key={option.value}
                     ref={option.value === value ? selectedOptionRef : null}
                     onClick={() => handleOptionSelect(option.value)}
-                    className={`px-5 py-2 text-xs cursor-pointer list-none hover:bg-base-200 transition-colors ${
+                    className={`px-5 py-2 text-xs cursor-pointer list-none hover:bg-base-200 transition-colors flex items-center gap-2 ${
                       option.value === value
                         ? "bg-primary text-primary-content"
                         : ""
                     }`}
                   >
-                    {option.label}
+                    {option.icon && <span>{option.icon}</span>}
+                    <span>{option.label}</span>
                   </li>
                 ))}
               </div>
