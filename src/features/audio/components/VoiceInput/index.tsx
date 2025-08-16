@@ -4,6 +4,7 @@ import {
   useVoiceControls,
 } from "./hooks";
 import { useVoiceStateStore } from "./stores/voiceStateStore";
+import { GainControl } from "./components";
 import { AnchoredPopup, Modal } from "@/features/ui";
 import { RTCLatencyDisplay } from "@/features/audio";
 import React, { useState, useRef, useEffect, useCallback } from "react";
@@ -320,23 +321,13 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
             <div className="p-4">
               <h4 className="font-semibold mb-5">Voice Settings</h4>
 
-              {/* Input Gain Control */}
-              <div className="flex items-center gap-2 mb-3">
-                <div className="text-sm shrink-0">Gain</div>
-                <input
-                  type="range"
-                  min={0}
-                  max={2}
-                  step={0.01}
-                  value={voiceState.gain}
-                  onChange={(e) =>
-                    handleGainChangeWithState(Number(e.target.value))
-                  }
-                  className="range range-xs w-full"
+              {/* Professional Input Gain Control */}
+              <div className="mb-4">
+                <GainControl
+                  gain={voiceState.gain}
+                  onGainChange={handleGainChangeWithState}
+                  disabled={!voiceState.isConnected}
                 />
-                <div className="text-xs mt-1 text-center">
-                  {voiceState.gain.toFixed(2)}
-                </div>
               </div>
 
               {/* Self-Monitor Toggle */}

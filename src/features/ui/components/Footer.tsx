@@ -129,6 +129,7 @@ export const Footer: React.FC = () => {
                 Synthesizer)
               </li>
               <li>• Real-time collaborative jamming sessions</li>
+              <li>• Synchronized metronome with tap tempo and personal controls</li>
               <li>• Voice input and chat capabilities</li>
               <li>• MIDI controller support</li>
               <li>• Preset management for instruments</li>

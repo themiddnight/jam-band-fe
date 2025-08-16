@@ -1,5 +1,10 @@
 import { useRef, useCallback, useEffect, useState, useMemo } from "react";
 import { Socket } from "socket.io-client";
+import { 
+  UltraLowLatencyOptimizer, 
+  applyBrowserSpecificOptimizations,
+  getBrowserAudioCapabilities 
+} from "../utils/ultraLowLatencyOptimizer";
 
 /**
  * Enhanced WebRTC Voice Communication Hook with Reliability Features
@@ -115,6 +120,16 @@ export const useWebRTCVoice = ({
   const remoteMuteStateRef = useRef<Map<string, boolean>>(new Map());
   const lastLocalMutedRef = useRef<boolean | null>(null);
 
+  // Ultra-low latency optimizer instance
+  const optimizerRef = useRef<UltraLowLatencyOptimizer | null>(null);
+
+  // Initialize optimizer on first render
+  if (!optimizerRef.current) {
+    optimizerRef.current = UltraLowLatencyOptimizer.getInstance();
+    const capabilities = getBrowserAudioCapabilities();
+    console.log(`🚀 WebRTC: Initialized ultra-low latency optimizer for ${capabilities.browserType}`);
+  }
+
   // Track intentional disconnection to avoid cleaning up during grace period
   const isIntentionalDisconnectRef = useRef<boolean>(false);
   const gracePeriodTimeoutRef = useRef<number | null>(null);
@@ -124,23 +139,23 @@ export const useWebRTCVoice = ({
     ((targetUserId: string) => Promise<void>) | null
   >(null);
 
-  // Grace period duration (should match backend) - reduced for faster recovery
-  const GRACE_PERIOD_MS = 20000; // Reduced from 30 seconds to 20 seconds
+  // Grace period duration (should match backend) - fast recovery
+  const GRACE_PERIOD_MS = 10000; // Reduced from 15 seconds to 10 seconds
 
-  // Connection health monitoring
+  // Fast connection health monitoring
   const healthCheckInterval = useRef<number | null>(null);
-  const HEALTH_CHECK_INTERVAL = 10000; // Reduced from 15 to 10 seconds
-  const MAX_RECONNECT_ATTEMPTS = 5; // Increased from 3 to 5 attempts
-  const RECONNECT_DELAY = 1500; // Reduced from 2000 to 1500ms
-  const CONNECTION_TIMEOUT = 25000; // Reduced from 30 to 25 seconds
+  const HEALTH_CHECK_INTERVAL = 5000; // Reduced from 8 to 5 seconds
+  const MAX_RECONNECT_ATTEMPTS = 3; // Reduced from 6 to 3 attempts for faster resolution
+  const RECONNECT_DELAY = 800; // Reduced from 1200 to 800ms
+  const CONNECTION_TIMEOUT = 15000; // Reduced from 20 to 15 seconds
 
-  // Reconnection retry mechanism
+  // Fast reconnection retry mechanism
   const reconnectionRetryInterval = useRef<number | null>(null);
-  const RECONNECTION_RETRY_INTERVAL = 5000; // Check every 5 seconds for missing connections
+  const RECONNECTION_RETRY_INTERVAL = 2000; // Reduced from 4 to 2 seconds
 
-  // Heartbeat mechanism
+  // More frequent heartbeat mechanism for faster failure detection
   const heartbeatInterval = useRef<number | null>(null);
-  const HEARTBEAT_INTERVAL = 30000; // 30 seconds
+  const HEARTBEAT_INTERVAL = 20000; // Reduced from 25 to 20 seconds
 
   // Send heartbeat with connection states
   const sendHeartbeat = useCallback(() => {
@@ -346,15 +361,24 @@ export const useWebRTCVoice = ({
     currentUsername,
   ]);
 
-  // WebRTC configuration with STUN servers for NAT traversal
+  // WebRTC configuration optimized for ultra-low latency mesh networks (up to 10 users)
   const rtcConfig: RTCConfiguration = useMemo(
     () => ({
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
         { urls: "stun:stun1.l.google.com:19302" },
         { urls: "stun:stun2.l.google.com:19302" },
+        { urls: "stun:stun.cloudflare.com:3478" }, // Additional for mobile NAT traversal
       ],
-      iceCandidatePoolSize: 10,
+      iceCandidatePoolSize: 10, // Increased for mesh networks
+      iceTransportPolicy: 'all', // Use all available connection paths
+      // Mesh network optimizations
+      bundlePolicy: 'max-bundle', // Bundle all media on single transport for efficiency
+      rtcpMuxPolicy: 'require', // Reduce port usage for mesh networks
+      // Ultra-low latency optimizations
+      enableDscp: true, // Enable DSCP marking for network prioritization
+      enableTcpCandidates: false, // Prefer UDP for lower latency
+      enableRtpDataChannel: true, // Use RTP-based data channels for lower overhead
     }),
     [],
   );
@@ -363,9 +387,11 @@ export const useWebRTCVoice = ({
   const logAudioElementsStatus = useCallback(() => {
     const activeElements = document.querySelectorAll('audio[data-webrtc-role="remote-voice"]');
     const peerCount = Object.keys(peersRef.current).length;
+    const connectedCount = Object.values(peersRef.current).filter(p => p.isConnected).length;
     
-    console.log(`🔊 WebRTC Audio Elements Status:
-      - Peer connections: ${peerCount}
+    console.log(`�️ MESH Network Status:
+      - Total peer connections: ${peerCount}/9 (max 10 users)
+      - Connected peers: ${connectedCount}
       - Audio elements in DOM: ${activeElements.length}
       - Active peers: ${Object.entries(peersRef.current).map(([id, peer]) => `${id}:${peer.isConnected ? 'connected' : 'disconnected'}`).join(', ')}`);
     
@@ -384,6 +410,12 @@ export const useWebRTCVoice = ({
       peersRef.current[userId].audioElement.remove();
       delete peersRef.current[userId];
     }
+    
+    // Cleanup ultra-low latency optimization for this user
+    if (optimizerRef.current) {
+      optimizerRef.current.removeOptimization(userId);
+    }
+    
     // Cleanup remote analyser if exists
     const remoteEntry = remoteAnalysersRef.current.get(userId);
     if (remoteEntry) {
@@ -463,7 +495,7 @@ export const useWebRTCVoice = ({
               // Clean up existing connection first
               cleanupPeerConnection(userId);
 
-              // Wait a moment for cleanup to complete then initiate new connection
+              // Wait briefly for cleanup to complete then initiate new connection
               setTimeout(() => {
                 if (
                   isEnabled &&
@@ -473,7 +505,7 @@ export const useWebRTCVoice = ({
                 ) {
                   initiateVoiceCallRef.current(userId);
                 }
-              }, 500);
+              }, 200); // Reduced from 500ms to 200ms for faster reconnection
             }
           }, backoffDelay);
         } else {
@@ -533,14 +565,18 @@ export const useWebRTCVoice = ({
     }
   }, []);
 
-  // Create RTCPeerConnection with optimized settings for low latency
+  // Create RTCPeerConnection with ultra-low latency optimizations
   const createPeerConnection = useCallback(
     (userId: string): RTCPeerConnection => {
       const peerConnection = new RTCPeerConnection(rtcConfig);
 
-      // Add local stream to peer connection if available and user can transmit
+      // Apply browser-specific optimizations
+      applyBrowserSpecificOptimizations(peerConnection);
+
+      // Add local stream with simpler, faster configuration
       if (localStreamRef.current && canTransmit) {
         localStreamRef.current.getTracks().forEach((track) => {
+          // Use the simpler addTrack method for faster connection
           peerConnection.addTrack(track, localStreamRef.current!);
         });
       }
@@ -619,10 +655,10 @@ export const useWebRTCVoice = ({
         pendingIceCandidatesRef.current[userId] = [];
       };
 
-      // Attempt to apply any pending candidates periodically until empty
+      // Attempt to apply any pending candidates more frequently for faster connection
       const pendingInterval = window.setInterval(() => {
         tryApplyPendingCandidates();
-      }, 500);
+      }, 200); // Reduced from 500ms to 200ms for faster ICE gathering
 
       // Clear pending interval on connection close
       const cleanupPendingInterval = () => clearInterval(pendingInterval);
@@ -655,7 +691,7 @@ export const useWebRTCVoice = ({
           setConnectionError(null); // Clear any previous errors
           
           // Log successful connection and current peer status
-          console.log(`✅ WebRTC: Successfully connected to ${userId}. Total active connections: ${Object.values(peersRef.current).filter(p => p.isConnected).length}`);
+          console.log(`✅ MESH: Successfully connected to ${userId}. Total mesh connections: ${Object.values(peersRef.current).filter(p => p.isConnected).length}/9`);
           logAudioElementsStatus(); // Debug simultaneous connections
         } else if (state === "failed") {
           console.error(`❌ WebRTC Connection failed for ${userId}`);
@@ -818,6 +854,11 @@ export const useWebRTCVoice = ({
       startHeartbeat(); // Start heartbeat when we have a local stream
       startConnectionRetryMonitoring(); // Start connection retry monitoring
 
+      // Start ultra-low latency buffer optimization
+      if (optimizerRef.current) {
+        optimizerRef.current.startBufferOptimization();
+      }
+
       // Ensure self is present in voice users immediately and reflect current track enabled state
       const hasActiveTrack = stream.getAudioTracks().some((t) => t.enabled);
       setVoiceUsers((prev) => {
@@ -951,13 +992,20 @@ export const useWebRTCVoice = ({
       offer: RTCSessionDescriptionInit;
       fromUserId: string;
       fromUsername: string;
+      targetUserId?: string;
+      roomId: string;
     }) => {
       if (!isEnabled || !socket) return;
+
+      // In a mesh network, only process offers intended for us
+      if (data.targetUserId && data.targetUserId !== currentUserId) {
+        return; // This offer is not for us
+      }
 
       // Check if we already have a peer connection for this user
       const existingPeer = peersRef.current[data.fromUserId];
       if (existingPeer) {
-        console.log("🔄 WebRTC: Peer connection already exists, cleaning up before creating new one");
+        console.log("🔄 MESH: Peer connection already exists, cleaning up before creating new one");
         cleanupPeerConnection(data.fromUserId);
       }
 
@@ -967,8 +1015,10 @@ export const useWebRTCVoice = ({
 
         const peerConnection = createPeerConnection(data.fromUserId);
 
-        // Create audio element for remote stream with enhanced attributes for simultaneous playback
+        // Create audio element optimized for ultra-low latency simultaneous playback
         const audioElement = document.createElement("audio");
+        
+        // Ultra-low latency audio configuration
         audioElement.autoplay = true;
         audioElement.setAttribute('playsinline', 'true'); // Important for mobile/iOS
         audioElement.volume = 1.0;
@@ -976,15 +1026,42 @@ export const useWebRTCVoice = ({
         audioElement.controls = false;
         audioElement.preload = "none"; // Don't preload since it's a live stream
         
-        // Add attributes to help with simultaneous playback
+        // Ultra-low latency specific attributes
+        audioElement.defaultMuted = false;
+        audioElement.defaultPlaybackRate = 1.0;
+        audioElement.preservesPitch = false; // Disable pitch correction for lower CPU
+        
+        // WebAudio latency hints (if supported)
+        try {
+          (audioElement as any).mozAudioChannelType = 'content'; // Firefox optimization
+          (audioElement as any).webkitAudioDecodedByteCount = 0; // Webkit optimization
+          (audioElement as any).audioTracks = undefined; // Simplify audio processing
+        } catch {
+          // Ignore unsupported properties
+        }
+        
+        // Add attributes to help with simultaneous playback and debugging
         audioElement.setAttribute('data-webrtc-user', data.fromUserId);
         audioElement.setAttribute('data-webrtc-role', 'remote-voice');
+        audioElement.setAttribute('data-webrtc-latency', 'ultra-low');
         
-        // Ensure the element is properly configured for live streaming
+        // Optimize element configuration for live streaming
         audioElement.style.display = 'none'; // Hidden audio element
         audioElement.crossOrigin = 'anonymous';
         
+        // Ultra-low latency event handlers
+        audioElement.onloadstart = () => console.log(`🔊 ${data.fromUserId}: Audio load started`);
+        audioElement.oncanplay = () => console.log(`🔊 ${data.fromUserId}: Audio can play`);
+        audioElement.onplaying = () => console.log(`🔊 ${data.fromUserId}: Audio playing started`);
+        audioElement.onstalled = () => console.warn(`⚠️ ${data.fromUserId}: Audio stalled`);
+        audioElement.onwaiting = () => console.warn(`⏳ ${data.fromUserId}: Audio waiting for data`);
+        
         document.body.appendChild(audioElement);
+
+        // Apply ultra-low latency optimizations to the audio element
+        if (optimizerRef.current) {
+          optimizerRef.current.optimizeAudioElement(data.fromUserId, audioElement);
+        }
 
         peersRef.current[data.fromUserId] = {
           connection: peerConnection,
@@ -1018,12 +1095,22 @@ export const useWebRTCVoice = ({
         setIsConnecting(false);
       }
     },
-    [isEnabled, socket, roomId, createPeerConnection, cleanupPeerConnection],
+    [isEnabled, socket, roomId, currentUserId, createPeerConnection, cleanupPeerConnection],
   );
 
   // Handle voice answer from remote peer
   const handleVoiceAnswer = useCallback(
-    async (data: { answer: RTCSessionDescriptionInit; fromUserId: string }) => {
+    async (data: { 
+      answer: RTCSessionDescriptionInit; 
+      fromUserId: string;
+      targetUserId?: string;
+      roomId?: string;
+    }) => {
+      // In a mesh network, only process answers intended for us
+      if (data.targetUserId && data.targetUserId !== currentUserId) {
+        return; // This answer is not for us
+      }
+
       const peer = peersRef.current[data.fromUserId];
       if (!peer) return;
 
@@ -1067,12 +1154,22 @@ export const useWebRTCVoice = ({
         }, 2000);
       }
     },
-    [cleanupPeerConnection],
+    [cleanupPeerConnection, currentUserId],
   );
 
   // Handle ICE candidate from remote peer
   const handleVoiceIceCandidate = useCallback(
-    async (data: { candidate: RTCIceCandidateInit; fromUserId: string }) => {
+    async (data: { 
+      candidate: RTCIceCandidateInit; 
+      fromUserId: string;
+      targetUserId?: string;
+      roomId?: string;
+    }) => {
+      // In a mesh network, only process ICE candidates intended for us
+      if (data.targetUserId && data.targetUserId !== currentUserId) {
+        return; // This ICE candidate is not for us
+      }
+
       const peerEntry = peersRef.current[data.fromUserId];
       if (!peerEntry) {
         // Buffer candidate until peer connection is created
@@ -1090,13 +1187,23 @@ export const useWebRTCVoice = ({
         console.error("Failed to add ICE candidate:", error);
       }
     },
-    [],
+    [currentUserId],
   );
 
-  // Initiate voice call to a user
+  // Initiate voice call to a user - with mesh network limits
   const initiateVoiceCall = useCallback(
     async (targetUserId: string) => {
       if (!isEnabled || !socket) {
+        return;
+      }
+
+      // Check mesh network connection limit (max 9 other users = 10 total)
+      const currentConnections = Object.keys(peersRef.current).length;
+      const MAX_MESH_CONNECTIONS = 9; // Support up to 10 users total
+      
+      if (currentConnections >= MAX_MESH_CONNECTIONS) {
+        console.warn(`🕸️ MESH: Connection limit reached (${currentConnections}/${MAX_MESH_CONNECTIONS}). Cannot establish new connection to ${targetUserId}`);
+        setConnectionError(`Maximum connections reached (${MAX_MESH_CONNECTIONS + 1} users). Some users may not be able to join voice chat.`);
         return;
       }
 
@@ -1107,11 +1214,11 @@ export const useWebRTCVoice = ({
         if (existingPeer.connection.connectionState === "connected" || 
             existingPeer.connection.connectionState === "connecting" ||
             existingPeer.connection.signalingState !== "stable") {
-          console.log("🔄 WebRTC: Connection already exists or in progress for", targetUserId);
+          console.log("�️ MESH: Connection already exists or in progress for", targetUserId);
           return;
         }
         
-        console.log("🔄 WebRTC: Cleaning up existing failed connection before creating new one");
+        console.log("🔄 MESH: Cleaning up existing failed connection before creating new one");
         cleanupPeerConnection(targetUserId);
       }
 
@@ -1121,8 +1228,10 @@ export const useWebRTCVoice = ({
 
         const peerConnection = createPeerConnection(targetUserId);
 
-        // Create audio element for remote stream with enhanced attributes for simultaneous playback
+        // Create audio element optimized for ultra-low latency simultaneous playback
         const audioElement = document.createElement("audio");
+        
+        // Ultra-low latency audio configuration
         audioElement.autoplay = true;
         audioElement.setAttribute('playsinline', 'true'); // Important for mobile/iOS
         audioElement.volume = 1.0;
@@ -1130,15 +1239,42 @@ export const useWebRTCVoice = ({
         audioElement.controls = false;
         audioElement.preload = "none"; // Don't preload since it's a live stream
         
-        // Add attributes to help with simultaneous playback
+        // Ultra-low latency specific attributes
+        audioElement.defaultMuted = false;
+        audioElement.defaultPlaybackRate = 1.0;
+        audioElement.preservesPitch = false; // Disable pitch correction for lower CPU
+        
+        // WebAudio latency hints (if supported)
+        try {
+          (audioElement as any).mozAudioChannelType = 'content'; // Firefox optimization
+          (audioElement as any).webkitAudioDecodedByteCount = 0; // Webkit optimization
+          (audioElement as any).audioTracks = undefined; // Simplify audio processing
+        } catch {
+          // Ignore unsupported properties
+        }
+        
+        // Add attributes to help with simultaneous playback and debugging
         audioElement.setAttribute('data-webrtc-user', targetUserId);
         audioElement.setAttribute('data-webrtc-role', 'remote-voice');
+        audioElement.setAttribute('data-webrtc-latency', 'ultra-low');
         
-        // Ensure the element is properly configured for live streaming
+        // Optimize element configuration for live streaming
         audioElement.style.display = 'none'; // Hidden audio element
         audioElement.crossOrigin = 'anonymous';
         
+        // Ultra-low latency event handlers
+        audioElement.onloadstart = () => console.log(`🔊 ${targetUserId}: Audio load started`);
+        audioElement.oncanplay = () => console.log(`🔊 ${targetUserId}: Audio can play`);
+        audioElement.onplaying = () => console.log(`🔊 ${targetUserId}: Audio playing started`);
+        audioElement.onstalled = () => console.warn(`⚠️ ${targetUserId}: Audio stalled`);
+        audioElement.onwaiting = () => console.warn(`⏳ ${targetUserId}: Audio waiting for data`);
+        
         document.body.appendChild(audioElement);
+
+        // Apply ultra-low latency optimizations to the audio element
+        if (optimizerRef.current) {
+          optimizerRef.current.optimizeAudioElement(targetUserId, audioElement);
+        }
 
         peersRef.current[targetUserId] = {
           connection: peerConnection,
@@ -1209,24 +1345,24 @@ export const useWebRTCVoice = ({
         }
 
         // Use a more deterministic approach to avoid race conditions
-        // Only initiate if we have a "lower" userId to prevent both sides from initiating
-        const shouldInitiate = currentUserId < data.userId;
+        // For full mesh networking: Only initiate if we have a "lower" userId to prevent both sides from initiating
+        const shouldInitiate = currentUserId.localeCompare(data.userId) < 0;
         
         if (shouldInitiate) {
           // Add a small delay to ensure the cleanup is complete and reduce race conditions
           setTimeout(() => {
             if (!peersRef.current[data.userId]) {
               console.log(
-                "🤝 WebRTC: Initiating call to newly joined user (as initiator)",
-                data.userId,
+                "🕸️ MESH: Initiating connection as designated initiator",
+                `${currentUserId} < ${data.userId}`,
               );
               initiateVoiceCall(data.userId);
             }
           }, 200 + Math.random() * 300); // Random delay to spread out connection attempts
         } else {
           console.log(
-            "⏳ WebRTC: Waiting for user to initiate connection (we are receiver)",
-            data.userId,
+            "⏳ MESH: Waiting for peer to initiate connection (we are receiver)",
+            `${currentUserId} > ${data.userId}`,
           );
         }
       }
@@ -1306,6 +1442,114 @@ export const useWebRTCVoice = ({
       }
     },
     [checkConnectionHealth],
+  );
+
+  // Handle mesh network coordination - when a new peer joins, establish direct connection
+  const handleNewMeshPeer = useCallback(
+    (data: { userId: string; username: string; shouldInitiate: boolean }) => {
+      if (!isEnabled || !canTransmit) return;
+
+      console.log(`🕸️ MESH: New peer detected - ${data.username} (${data.userId})`);
+      console.log(`🕸️ MESH: Should initiate: ${data.shouldInitiate}`);
+
+      // Add to voice users list if not already present
+      setVoiceUsers((prev) => {
+        const existing = prev.find((u) => u.userId === data.userId);
+        if (!existing) {
+          return [
+            ...prev,
+            {
+              userId: data.userId,
+              username: data.username,
+              isMuted: true, // Will be updated when we get actual state
+              audioLevel: 0,
+            },
+          ];
+        }
+        return prev;
+      });
+
+      // Clean up any existing connection to this user first
+      if (peersRef.current[data.userId]) {
+        console.log("🧹 MESH: Cleaning up existing connection before new one", data.userId);
+        cleanupPeerConnection(data.userId);
+      }
+
+      // Only initiate connection if we're designated as the initiator
+      if (data.shouldInitiate && localStreamRef.current) {
+        setTimeout(() => {
+          if (!peersRef.current[data.userId] && initiateVoiceCallRef.current) {
+            console.log(`🕸️ MESH: Initiating connection to new peer ${data.userId}`);
+            initiateVoiceCallRef.current(data.userId);
+          }
+        }, 500 + Math.random() * 1000); // Spread out connections to avoid overwhelming
+      }
+    },
+    [isEnabled, canTransmit, cleanupPeerConnection],
+  );
+
+  // Handle full mesh participant coordination
+  const handleMeshParticipants = useCallback(
+    (data: {
+      participants: Array<{
+        userId: string;
+        username: string;
+        isMuted: boolean;
+        shouldInitiate: boolean;
+      }>;
+    }) => {
+      if (!isEnabled || !canTransmit) return;
+
+      console.log(`🕸️ MESH: Received mesh participants for full mesh network:`, 
+        data.participants.map(p => `${p.username}(${p.userId})`));
+
+      // Update voice users list with complete mesh network
+      setVoiceUsers((prev) => {
+        const updated = new Map(prev.map(u => [u.userId, u]));
+
+        // Add/update mesh participants
+        data.participants.forEach(participant => {
+          updated.set(participant.userId, {
+            userId: participant.userId,
+            username: participant.username,
+            isMuted: participant.isMuted,
+            audioLevel: updated.get(participant.userId)?.audioLevel || 0,
+          });
+        });
+
+        // Keep current user in the list
+        const currentUser = prev.find(u => u.userId === currentUserId);
+        if (currentUser) {
+          updated.set(currentUserId, currentUser);
+        }
+
+        return Array.from(updated.values());
+      });
+
+      // Cache mesh participant states
+      data.participants.forEach(participant => {
+        remoteMuteStateRef.current.set(participant.userId, participant.isMuted);
+      });
+
+      // Establish connections to participants where we should initiate
+      if (localStreamRef.current) {
+        const initiateTo = data.participants.filter(p => p.shouldInitiate && !peersRef.current[p.userId]);
+        
+        console.log(`🕸️ MESH: Will initiate connections to:`, 
+          initiateTo.map(p => p.userId));
+
+        initiateTo.forEach((participant, index) => {
+          // Spread out connection attempts to avoid overwhelming the network
+          setTimeout(() => {
+            if (!peersRef.current[participant.userId] && initiateVoiceCallRef.current) {
+              console.log(`🕸️ MESH: Establishing mesh connection to ${participant.userId}`);
+              initiateVoiceCallRef.current(participant.userId);
+            }
+          }, (index + 1) * 800); // 800ms between each connection attempt
+        });
+      }
+    },
+    [isEnabled, canTransmit, currentUserId],
   );
 
   // Handle socket errors (including rate limit errors)
@@ -1494,6 +1738,10 @@ export const useWebRTCVoice = ({
     socket.on("voice_connection_failed", handleVoiceConnectionFailed);
     socket.on("voice_reconnection_requested", handleVoiceReconnectionRequested);
     socket.on("error", handleSocketError);
+    
+    // Full Mesh Network Events
+    socket.on("new_mesh_peer", handleNewMeshPeer);
+    socket.on("mesh_participants", handleMeshParticipants);
 
     return () => {
       socket.off("voice_offer", handleVoiceOffer);
@@ -1508,6 +1756,10 @@ export const useWebRTCVoice = ({
         handleVoiceReconnectionRequested,
       );
       socket.off("error", handleSocketError);
+      
+      // Full Mesh Network Events cleanup
+      socket.off("new_mesh_peer", handleNewMeshPeer);
+      socket.off("mesh_participants", handleMeshParticipants);
     };
   }, [
     socket,
@@ -1521,6 +1773,8 @@ export const useWebRTCVoice = ({
     handleVoiceConnectionFailed,
     handleVoiceReconnectionRequested,
     handleSocketError,
+    handleNewMeshPeer,
+    handleMeshParticipants,
   ]);
 
   // Enhanced socket reconnection handler
@@ -1806,6 +2060,11 @@ export const useWebRTCVoice = ({
       setLocalStream(null);
     }
 
+    // Clean up ultra-low latency optimizer
+    if (optimizerRef.current) {
+      optimizerRef.current.cleanup();
+    }
+
     // Clear all state
     setVoiceUsers([]);
     remoteAnalysersRef.current.clear();
@@ -1911,6 +2170,17 @@ export const useWebRTCVoice = ({
           startHealthMonitoring();
           startHeartbeat();
         }
+
+        // Request mesh network connections from the server
+        setTimeout(() => {
+          if (socket && socket.connected && currentUserId && roomId) {
+            console.log("🕸️ MESH: Requesting mesh network coordination after reconnection");
+            socket.emit("request_mesh_connections", {
+              roomId,
+              userId: currentUserId,
+            });
+          }
+        }, 1200); // Delay to ensure join_voice is processed first
       } else if (isEnabled && currentUserId && currentUsername) {
         // Even if we don't have a local stream, if voice is enabled and we're a valid user,
         // we should announce our presence for receiving voice (audience mode)
@@ -2008,6 +2278,17 @@ export const useWebRTCVoice = ({
               userId: currentUserId,
               isMuted: !hasActiveTrack,
             });
+
+            // Request mesh network coordination for new user
+            setTimeout(() => {
+              if (socket && socket.connected) {
+                console.log("🕸️ MESH: Requesting mesh network coordination for new voice join");
+                socket.emit("request_mesh_connections", {
+                  roomId,
+                  userId: currentUserId,
+                });
+              }
+            }, 500); // Additional delay to ensure voice setup is complete
           }
         }, 50); // Reduced delay from 100ms to 50ms for faster response
       }

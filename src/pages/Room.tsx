@@ -14,6 +14,7 @@ import {
 import { ChatBox } from "@/features/rooms";
 import { RoomMembers } from "@/features/rooms";
 import { useRoom } from "@/features/rooms";
+import { MetronomeControls } from "@/features/metronome";
 import { Footer } from "@/features/ui";
 import { ScaleSlots } from "@/features/ui";
 import { AnchoredPopup, Modal } from "@/features/ui";
@@ -163,6 +164,7 @@ const Room = memo(() => {
     performIntentionalCleanup();
     // Call the original leave room handler
     await handleLeaveRoomConfirm();
+    window.location.href = "/";
   }, [performIntentionalCleanup, handleLeaveRoomConfirm]);
 
   // Memoize VoiceInput callbacks to prevent component recreation
@@ -611,6 +613,12 @@ const Room = memo(() => {
                   onInstrumentChange={handleInstrumentChange}
                   isLoading={isLoadingInstrument}
                   dynamicDrumMachines={dynamicDrumMachines}
+                />
+
+                {/* Metronome Controls */}
+                <MetronomeControls
+                  socket={socketRef?.current || null}
+                  canEdit={currentUser?.role === 'room_owner' || currentUser?.role === 'band_member'}
                 />
 
                 {/* Synthesizer Controls */}

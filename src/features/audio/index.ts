@@ -25,6 +25,7 @@ export { useInstrumentPreferencesStore } from "./stores/instrumentPreferencesSto
 
 // Utilities exports
 export { audioBufferCache } from "./utils/audioBufferCache";
+export * from "./utils/audioUtils";
 
 // Constants exports
 export * from "./constants/audioConfig";

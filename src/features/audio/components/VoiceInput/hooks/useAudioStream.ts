@@ -22,6 +22,7 @@ export const useAudioStream = ({
   onStreamRemoved,
 }: UseAudioStreamProps): UseAudioStreamReturn => {
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const originalStreamRef = useRef<MediaStream | null>(null); // Keep reference to original stream
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
@@ -35,6 +36,11 @@ export const useAudioStream = ({
         mediaStreamRef.current.getTracks().forEach((track) => track.stop());
         mediaStreamRef.current = null;
       }
+      
+      if (originalStreamRef.current) {
+        originalStreamRef.current.getTracks().forEach((track) => track.stop());
+        originalStreamRef.current = null;
+      }
 
       if (
         audioContextRef.current &&
@@ -44,29 +50,40 @@ export const useAudioStream = ({
         audioContextRef.current = null;
       }
 
-      // Request microphone permission with optimized constraints for mixed instrument usage
+      // Request microphone with ultra-low latency constraints optimized for music
       const constraints: MediaStreamConstraints = {
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
+          echoCancellation: false,
+          noiseSuppression: false,
           autoGainControl: false, // We'll handle gain manually
-          sampleRate: 48000,
-          channelCount: 1,
-          // Additional optimizations for Chrome/WebRTC (non-standard but widely supported)
+          sampleRate: 48000,      // Match WebRTC optimal sample rate
+          channelCount: 1,        // Mono for lower latency
+          latency: 0.01,          // Request 10ms latency (hardware dependent)
+          // Ultra-low latency advanced constraints
           ...(navigator.userAgent.includes('Chrome') && {
-            googEchoCancellation: true,
-            googNoiseSuppression: true,
-            googHighpassFilter: true,
-            googTypingNoiseDetection: false, // Disable to reduce processing
+            // Chrome-specific optimizations for music production
+            googEchoCancellation: false,
+            googNoiseSuppression: false,
+            googHighpassFilter: false,
+            googTypingNoiseDetection: false,
             googAutoGainControl: false,
-            googNoiseSuppression2: false, // Disable advanced processing to reduce CPU
+            googNoiseSuppression2: false,
+            googAudioMirroring: false,          // Disable audio mirroring
+            googDAEchoCancellation: false,      // Disable delay agnostic echo cancellation
+            googBeamforming: false,             // Disable beamforming for single source
+            googArrayGeometry: false,           // Disable array geometry processing
+            googAudioProcessing: false,         // Disable all audio processing
+            googExperimentalEchoCancellation: false, // Disable experimental features
+            googExperimentalNoiseSuppression: false,
+            googExperimentalAutoGainControl: false,
           } as any),
         } as MediaTrackConstraints,
       };
       
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
-      mediaStreamRef.current = stream;
+      // Store the original stream for cleanup
+      originalStreamRef.current = stream;
       micPermissionRef.current = true;
 
       // Use the separated WebRTC audio context instead of creating a new one
@@ -97,38 +114,47 @@ export const useAudioStream = ({
       gainNodeRef.current = audioContext.createGain();
       gainNodeRef.current.gain.value = gain;
 
-      // Simplified audio graph to reduce processing overhead
-      // Connect: source -> gain -> analyser (for monitoring only)
+      // Create a destination node to capture the processed audio
+      const destination = audioContext.createMediaStreamDestination();
+
+      // Connect the audio graph: source -> gain -> analyser -> destination
       source.connect(gainNodeRef.current);
       gainNodeRef.current.connect(analyserRef.current);
+      gainNodeRef.current.connect(destination); // Also route to destination for WebRTC
 
-      // For WebRTC, we'll use a more efficient approach
-      // Instead of creating a new stream, we'll apply gain directly to the original track
-      const audioTrack = stream.getAudioTracks()[0];
-      if (audioTrack) {
+      // Use the processed stream for WebRTC (includes gain processing)
+      const processedStream = destination.stream;
+      
+      // Copy video tracks if any (shouldn't be any for audio-only, but just in case)
+      const videoTracks = stream.getVideoTracks();
+      videoTracks.forEach(track => processedStream.addTrack(track));
+
+      // Store the processed stream instead of the raw stream
+      mediaStreamRef.current = processedStream;
+
+      // Apply track constraints to the original stream's audio track for consistency
+      const originalAudioTrack = stream.getAudioTracks()[0];
+      if (originalAudioTrack) {
         // Apply constraints directly to the track for better performance
-        audioTrack.applyConstraints({
-          echoCancellation: true,
-          noiseSuppression: true,
+        originalAudioTrack.applyConstraints({
+          echoCancellation: false,
+          noiseSuppression: false,
           autoGainControl: false,
         }).catch(console.warn);
       }
 
-      // Use the original stream for WebRTC (more efficient)
-      mediaStreamRef.current = stream;
-
-      // Default to muted: disable the audio track until user explicitly unmutes
+      // Default to muted: disable the processed audio track until user explicitly unmutes
       try {
-        const track = stream.getAudioTracks()[0];
-        if (track) {
-          track.enabled = false;
+        const processedTrack = processedStream.getAudioTracks()[0];
+        if (processedTrack) {
+          processedTrack.enabled = false;
         }
       } catch {
         // ignore if no track available
       }
 
-      // Notify parent about the stream
-      onStreamReady?.(stream);
+      // Notify parent about the processed stream (this is what gets sent to other users)
+      onStreamReady?.(processedStream);
 
       console.log("🎤 Voice input initialized successfully with optimized processing");
     } catch (error) {
@@ -146,10 +172,16 @@ export const useAudioStream = ({
   const cleanup = useCallback(() => {
     console.log("🧹 AudioStream hook cleaning up");
     if (mediaStreamRef.current) {
-      console.log("🛑 Stopping media stream tracks");
+      console.log("🛑 Stopping processed media stream tracks");
       mediaStreamRef.current.getTracks().forEach((track) => track.stop());
       mediaStreamRef.current = null;
       onStreamRemoved?.();
+    }
+    
+    if (originalStreamRef.current) {
+      console.log("🛑 Stopping original media stream tracks");
+      originalStreamRef.current.getTracks().forEach((track) => track.stop());
+      originalStreamRef.current = null;
     }
     
     // DON'T close the audioContext because it's shared via AudioContextManager

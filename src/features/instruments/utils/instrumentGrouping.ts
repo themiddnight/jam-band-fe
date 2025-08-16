@@ -146,6 +146,7 @@ export const groupSoundfontInstruments = (): GroupedOption[] => {
         label: instrument.label,
         group: group,
         controlType: instrument.controlType,
+        icon: instrument.icon,
       });
     }
   });
@@ -172,6 +173,7 @@ export const groupSynthesizerInstruments = (): GroupedOption[] => {
       controlType: instrument.controlType,
       type: instrument.type,
       polyphony: instrument.polyphony,
+      icon: instrument.icon,
     });
   });
 
@@ -189,6 +191,7 @@ export const groupDrumMachines = (
     label: instrument.label,
     group: "Drum Machines",
     controlType: instrument.controlType,
+    icon: instrument.icon,
   }));
 };
 

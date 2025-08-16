@@ -7,6 +7,7 @@ A real-time collaborative music-making web application built with React, TypeScr
 - **Virtual Instruments**: Guitar, Bass, Keyboard, Drums, Synthesizer, and more
 - **Real-time Collaboration**: Join rooms and jam with other musicians
 - **WebRTC Voice Chat**: Communicate with band members during sessions
+- **Synchronized Metronome**: Keep time together with room-wide metronome synchronization
 - **MIDI Controller Support**: Use external MIDI devices for enhanced control
 - **Responsive Design**: Works on desktop and mobile devices
 - **PWA Support**: Install as a progressive web app for offline access
@@ -22,6 +23,7 @@ A real-time collaborative music-making web application built with React, TypeScr
 - **Separated Audio Contexts**: Dedicated audio contexts for instruments and WebRTC to eliminate performance competition and improve voice quality during musical collaboration.
 - **Performance Optimization**: Dynamic polyphony reduction and CPU throttling when WebRTC is active to maintain smooth voice chat.
 - **Smart Resource Management**: Automatic context suspension/resumption and optimized sample rates (44.1kHz for instruments, 48kHz for WebRTC).
+- **Synchronized Metronome System**: Room-wide metronome with real-time BPM synchronization, tap tempo functionality, and personal volume/mute controls.
 - Network diagnostics and reliability improvements: frontend now measures round-trip ping and RTC latency and surfaces lightweight diagnostics in the UI.
 - Socket optimizations: message batching, note-event deduplication, and connection pooling reduce network chatter and improve responsiveness.
 - WebRTC reliability: health checks, automatic reconnection with backoff, ICE candidate buffering to avoid race conditions, and heartbeat/grace-period handling for smoother voice sessions.
@@ -46,6 +48,7 @@ graph TB
             I[WebRTC Voice]
             J[Socket.IO Client]
             K[Room Management]
+            L[Metronome System]
         end
         
         E --> G
@@ -53,6 +56,7 @@ graph TB
         E --> I
         E --> J
         E --> K
+        E --> L
         
         subgraph "Audio Stack"
             L[Web Audio API]
@@ -89,25 +93,28 @@ graph TB
         U[Room Service]
         V[WebRTC Signaling]
         W[Chat Service]
+        X[Metronome Service]
     end
     
     J <--> T
     I <--> V
     K <--> U
+    L <--> X
     
     subgraph "External Services"
-        X[STUN Servers]
-        Y[Audio Sample CDNs]
+        Y[STUN Servers]
+        Z[Audio Sample CDNs]
     end
     
-    I <--> X
-    N --> Y
+    I <--> Y
+    N --> Z
     
     style A fill:#e1f5fe
     style B fill:#f3e5f5
     style G fill:#fff3e0
     style H fill:#fff3e0
     style I fill:#e8f5e8
+    style L fill:#fff8e1
     style T fill:#fce4ec
 ```
 
@@ -452,6 +459,166 @@ graph TB
 - **Connection Status**: Clear feedback on connection health
 - **Automatic Recovery**: Seamless reconnection after network issues
 
+## 🥁 Synchronized Metronome System
+
+The metronome feature keeps all band members in perfect sync with a room-wide tempo that's synchronized across all connected users:
+
+```mermaid
+graph TB
+    subgraph "Metronome System Architecture"
+        A[Metronome Controls UI] --> B[useMetronome Hook]
+        
+        subgraph "Personal Settings (Local)"
+            C[Volume Control]
+            D[Mute/Unmute Toggle]
+            E[Zustand Persistent Store]
+        end
+        
+        A --> C
+        A --> D
+        C --> E
+        D --> E
+        
+        subgraph "Room-Wide Settings (Synchronized)"
+            F[BPM Control]
+            G[Tap Tempo Calculator]
+            H[Real-time BPM Updates]
+        end
+        
+        A --> F
+        F --> G
+        F --> H
+        
+        subgraph "Audio Generation"
+            I[MetronomeSoundService]
+            J[Audio Buffer/Oscillator]
+            K[Dedicated Audio Context]
+            L[Smart Fallback System]
+        end
+        
+        B --> I
+        I --> J
+        I --> K
+        I --> L
+        
+        subgraph "Backend Synchronization"
+            M[MetronomeService]
+            N[Room State Management]
+            O[Tick Broadcasting]
+            P[Interval Management]
+        end
+        
+        H --> M
+        M --> N
+        M --> O
+        M --> P
+        
+        subgraph "Socket.IO Communication"
+            Q[update_metronome Event]
+            R[metronome_tick Event]
+            S[metronome_state Event]
+            T[request_metronome_state Event]
+        end
+        
+        F --> Q
+        O --> R
+        N --> S
+        B --> T
+        
+        R --> I
+        S --> B
+        Q --> M
+        T --> M
+    end
+    
+    style A fill:#e1f5fe
+    style I fill:#fff3e0
+    style M fill:#fce4ec
+    style E fill:#f3e5f5
+```
+
+### Key Features
+
+#### **Room-Wide Synchronization**
+- **Shared BPM**: All users hear the same tempo, synchronized via Socket.IO
+- **Real-time Updates**: BPM changes instantly propagate to all band members
+- **Permission System**: Only room owners and band members can adjust tempo
+- **State Persistence**: Current BPM is maintained across user joins/leaves
+
+#### **Advanced Tempo Controls**
+- **Manual BPM Input**: Direct numeric input with validation (1-1000 BPM)
+- **Tap Tempo**: Calculate BPM by tapping rhythm (up to 8 taps for accuracy)
+- **Real-time Preview**: Live tempo updates while typing or tapping
+- **BPM Range Validation**: Automatic clamping to valid range with user feedback
+
+#### **Personal Audio Preferences**
+- **Individual Volume Control**: Each user controls their own metronome volume
+- **Personal Mute**: Mute/unmute without affecting other users
+- **Persistent Settings**: Volume and mute preferences saved locally
+- **Visual Feedback**: Clear UI indicators for mute state and permissions
+
+#### **High-Quality Audio**
+- **Dual Sound System**: 
+  - Primary: High-quality audio file (`/public/sounds/metronome-tick.wav`)
+  - Fallback: Generated oscillator sound for immediate functionality
+- **Smart Audio Loading**: Automatic detection and fallback system
+- **Performance Optimized**: Efficient audio generation with minimal CPU impact
+- **Browser Compatibility**: Works across all modern browsers
+
+### Technical Implementation
+
+#### **Sound Generation**
+```typescript
+// Smart audio system with fallback
+class MetronomeSoundService {
+  // Attempts to load high-quality audio file
+  loadTickSound() // metronome-tick.wav
+  
+  // Falls back to oscillator if file unavailable
+  playOscillatorTick() // 800Hz square wave
+  
+  // Handles audio context management
+  initializeAudioContext() // Separate context for metronome
+}
+```
+
+#### **Tap Tempo Algorithm**
+- **Sliding Window**: Maintains up to 8 recent tap timestamps
+- **Average Calculation**: Uses mean interval for stable BPM detection
+- **Range Clamping**: Automatically constrains to valid BPM range
+- **Reset Functionality**: Clear taps to start fresh measurement
+
+#### **Backend Synchronization**
+- **Singleton Service**: Single `MetronomeService` instance per server
+- **Interval Management**: Precise timing with `setInterval` cleanup
+- **Room State**: Each room maintains independent metronome state
+- **Broadcasting**: Efficient tick distribution to all room members
+
+### User Experience
+
+#### **Permission-Based Controls**
+- **Room Owner**: Full control over metronome settings
+- **Band Members**: Can adjust BPM and use tap tempo
+- **Audience**: Listen-only mode with personal volume/mute controls
+- **Visual Indicators**: Clear UI feedback for permission levels
+
+#### **Smart UI Design**
+- **Compact Layout**: Space-efficient controls that don't clutter the interface
+- **Responsive Design**: Works seamlessly on desktop and mobile
+- **Popup Settings**: Advanced controls in an elegant popup interface
+- **Real-time Feedback**: Live updates and validation messages
+
+### Setup Instructions
+
+To enable high-quality metronome sound:
+
+1. **Add Audio File**: Place `metronome-tick.wav` in `/public/sounds/`
+2. **File Format**: WAV format recommended for best quality
+3. **Fallback Available**: System works immediately even without the file
+4. **Indicator**: Yellow dot shows when using fallback sound
+
+The metronome automatically starts when rooms are created and maintains synchronization throughout the entire jam session.
+
 ## � Separated Audio Contexts Architecture
 
 The application now uses **separated audio contexts** to eliminate performance competition between instruments and voice communication:
@@ -626,6 +793,12 @@ src/
 - **Real-time Control**: Live parameter tweaking
 - **Filter System**: Advanced filtering capabilities
 - **Preset Management**: Save and load custom sounds
+
+### Metronome
+- **Synchronized Timing**: Room-wide BPM synchronization for all band members
+- **Tap Tempo**: Calculate BPM by tapping rhythm
+- **Personal Controls**: Individual volume and mute settings
+- **High-Quality Sound**: Premium tick sound with smart fallback system
 
 ## 🔧 Configuration
 
