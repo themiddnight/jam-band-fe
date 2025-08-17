@@ -509,7 +509,7 @@ const Room = memo(() => {
                                     {user.username}
                                   </span>
                                 </div>
-                                <div className="flex gap-1 pr-1">
+                                <div className="flex gap-2">
                                   <button
                                     className="btn btn-sm btn-success"
                                     onClick={() => handleApproveMember(user.id)}
@@ -600,12 +600,19 @@ const Room = memo(() => {
             {(currentUser?.role === "room_owner" ||
               currentUser?.role === "band_member") && (
               <>
+                {/* Metronome Controls */}
+                <MetronomeControls
+                  socket={socketRef?.current || null}
+                  canEdit={currentUser?.role === 'room_owner' || currentUser?.role === 'band_member'}
+                />
+                
                 <ScaleSlots
                   onSlotSelect={(rootNote, scale) => {
                     scaleState.setRootNote(rootNote);
                     scaleState.setScale(scale);
                   }}
                 />
+                
                 <InstrumentCategorySelector
                   currentCategory={currentCategory}
                   currentInstrument={currentInstrument}
@@ -613,12 +620,6 @@ const Room = memo(() => {
                   onInstrumentChange={handleInstrumentChange}
                   isLoading={isLoadingInstrument}
                   dynamicDrumMachines={dynamicDrumMachines}
-                />
-
-                {/* Metronome Controls */}
-                <MetronomeControls
-                  socket={socketRef?.current || null}
-                  canEdit={currentUser?.role === 'room_owner' || currentUser?.role === 'band_member'}
                 />
 
                 {/* Synthesizer Controls */}

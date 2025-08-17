@@ -42,7 +42,7 @@ export default function ScaleSelector({
         <button
           onClick={() => onScaleChange("major")}
           className={`btn btn-sm join-item ${
-            scale === "major" ? "btn-primary" : "btn-outline"
+            scale === "major" ? "btn-accent" : "btn-outline"
           }`}
         >
           Major
@@ -50,7 +50,7 @@ export default function ScaleSelector({
         <button
           onClick={() => onScaleChange("minor")}
           className={`btn btn-sm join-item ${
-            scale === "minor" ? "btn-primary" : "btn-outline"
+            scale === "minor" ? "btn-accent" : "btn-outline"
           }`}
         >
           Minor

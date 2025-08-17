@@ -16,6 +16,9 @@ interface UseMetronomeOptions {
 export const useMetronome = ({ socket, canEdit }: UseMetronomeOptions) => {
   // Metronome state (synced across room)
   const [bpm, setBpm] = useState<number>(METRONOME_CONFIG.DEFAULT_BPM);
+  
+  // Beat indicator state
+  const [isOnBeat, setIsOnBeat] = useState<boolean>(false);
 
   // Personal settings from Zustand store
   const { 
@@ -60,6 +63,15 @@ export const useMetronome = ({ socket, canEdit }: UseMetronomeOptions) => {
 
     // Listen for metronome ticks
     socketService.onMetronomeTick(() => {
+      // Set beat indicator
+      setIsOnBeat(true);
+      
+      // Reset beat indicator after a brief flash
+      const flashDuration = Math.min(100, (60 / bpm) * 1000 * 0.2); // 20% of beat duration or 100ms max
+      setTimeout(() => {
+        setIsOnBeat(false);
+      }, flashDuration);
+      
       // Only play sound if not muted and metronome is playing
       if (!isMuted && soundServiceRef.current) {
         soundServiceRef.current.playTick(volume);
@@ -77,7 +89,7 @@ export const useMetronome = ({ socket, canEdit }: UseMetronomeOptions) => {
     return () => {
       socketService.removeListeners();
     };
-  }, [isMuted, volume]);
+  }, [isMuted, volume, bpm]);
 
   // Handle BPM change
   const handleBpmChange = useCallback((newBpm: number) => {
@@ -123,6 +135,7 @@ export const useMetronome = ({ socket, canEdit }: UseMetronomeOptions) => {
     isMuted,
     volume,
     canEdit,
+    isOnBeat,
 
     // Actions
     handleBpmChange,

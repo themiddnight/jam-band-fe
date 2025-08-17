@@ -90,7 +90,7 @@ export default function BaseInstrument({
   }, [handleKeyDown, handleKeyUp]);
 
   return (
-    <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
+    <div className="card bg-base-100 shadow-lg w-full max-w-6xl">
       <div className="card-body p-3">
         <div className="flex justify-between items-center mb-1">
           <div className="flex items-center gap-2">
@@ -100,7 +100,7 @@ export default function BaseInstrument({
           <div className="flex gap-3 flex-wrap justify-end">{modeControls}</div>
         </div>
 
-        <div className="bg-neutral p-4 rounded-lg shadow-2xl overflow-auto">
+        <div className="bg-neutral p-4 rounded-lg overflow-auto">
           {children}
         </div>
 

@@ -320,10 +320,10 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
 
         {/* Keys - exactly like Keyboard */}
         <div className="flex flex-col gap-4">
-          {/* Triads */}
+          {/* Chords */}
           <div className="text-center">
             <p className="text-white text-sm mb-2">
-              {powerChordMode ? "Power Chords" : "Triads"}
+              {powerChordMode ? "Power Chords" : "Chords"}
             </p>
             <div className="flex justify-center gap-1">
               {chordKeys.map((chordKey, index) => (

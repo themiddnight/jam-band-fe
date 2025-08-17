@@ -3,7 +3,7 @@ import {
   DEFAULT_KEYBOARD_SHORTCUTS,
   ARPEGGIO_TIME_STEPS,
   ARPEGGIO_TIME_LABELS,
-} from "../../index";
+} from "../../constants/keyboardShortcuts";
 import { useKeyboardStore } from "../../stores/keyboardStore";
 import { BasicKeyboard } from "./components/BasicKeyboard";
 import { ChordKeyboard } from "./components/ChordKeyboard";
@@ -266,7 +266,7 @@ export default function Keyboard({
             }}
             className="btn btn-sm btn-outline join-item touch-manipulation"
           >
-            -
+            - <kbd className="kbd kbd-xs">{DEFAULT_KEYBOARD_SHORTCUTS.arpeggioSpeedDown.key.toUpperCase()}</kbd>
           </button>
           <button
             onClick={() => {
@@ -280,7 +280,7 @@ export default function Keyboard({
             }}
             className="btn btn-sm btn-outline join-item touch-manipulation"
           >
-            +
+            + <kbd className="kbd kbd-xs">{DEFAULT_KEYBOARD_SHORTCUTS.arpeggioSpeedUp.key.toUpperCase()}</kbd>
           </button>
         </div>
       </div>

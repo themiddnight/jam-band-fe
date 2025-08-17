@@ -117,7 +117,7 @@ export default function ScaleSlots({ onSlotSelect }: ScaleSlotsProps) {
                     onDoubleClick={(e) => handleSlotDoubleClick(slotId, e)}
                     onTouchEnd={(e) => handleSlotTouch(slotId, e)}
                     className={`btn btn-xs lg:btn-sm join-item ${
-                      isSelected ? "btn-primary" : "btn-outline"
+                      isSelected ? "btn-accent" : "btn-outline"
                     }`}
                     title={`Slot ${slotId}: ${slot ? getScaleSlotLabel(slot.rootNote, slot.scale) : ""} (Press ${slotId}, Double-click/tap to edit)`}
                   >
