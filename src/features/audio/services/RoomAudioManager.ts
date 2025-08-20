@@ -118,7 +118,7 @@ export class RoomAudioManager {
       this.audioContext = null;
       
       // Retry initialization
-      this.audioContext = AudioContextManager.getInstrumentContext();
+      this.audioContext = await AudioContextManager.getInstrumentContext();
       
       if (this.audioContext.state === "suspended") {
         await this.audioContext.resume();
@@ -194,7 +194,7 @@ export class RoomAudioManager {
       
       // Initialize the dedicated instrument audio context with error handling
       try {
-        this.audioContext = AudioContextManager.getInstrumentContext();
+        this.audioContext = await AudioContextManager.getInstrumentContext();
       } catch (error) {
         console.error("❌ RoomAudioManager: Failed to get instrument context:", error);
         
@@ -368,7 +368,7 @@ export class RoomAudioManager {
         this.preloadedInstruments.add(instrumentKey);
         console.log(`✅ RoomAudioManager: Successfully preloaded ${instrument.instrument} for ${instrument.username}`);
       });
-    } catch (error) {
+    } catch {
       console.warn(`⚠️ RoomAudioManager: Batch preload failed, trying individual preloads with fallback`);
       
       // If batch fails, try individual preloads with fallback handling
@@ -409,7 +409,7 @@ export class RoomAudioManager {
     
     try {
       // Try to find a compatible fallback instrument
-      const fallbackInstrument = await this.findFallbackInstrument(instrument.instrument, instrument.category);
+      const fallbackInstrument = await this.findFallbackInstrument(instrument.instrument, instrument.category as InstrumentCategory);
       
       if (fallbackInstrument) {
         console.log(`🔄 RoomAudioManager: Using fallback instrument ${fallbackInstrument} for ${instrument.username}`);

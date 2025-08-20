@@ -340,10 +340,20 @@ export class AudioContextManager {
   private static masterBus: MasterAudioBus | null = null;
 
   // Get or create instrument audio context
-  static getInstrumentContext(): AudioContext {
+  static async getInstrumentContext(): Promise<AudioContext> {
     if (!this.instrumentContext || this.instrumentContext.state === "closed") {
       const config = getOptimalAudioConfig();
-      this.instrumentContext = new AudioContext(config.INSTRUMENT_AUDIO_CONTEXT);
+      
+      // Use Safari-compatible audio context creation for Safari browsers
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      
+      if (isSafari) {
+        // Import Safari compatibility utility
+        const { createWebKitCompatibleAudioContext } = await import("../../../shared/utils/webkitCompat");
+        this.instrumentContext = await createWebKitCompatibleAudioContext();
+      } else {
+        this.instrumentContext = new AudioContext(config.INSTRUMENT_AUDIO_CONTEXT);
+      }
       
       // Initialize node pool and master bus
       this.instrumentNodePool = new AudioNodePool(this.instrumentContext);
@@ -375,10 +385,20 @@ export class AudioContextManager {
   }
 
   // Get or create WebRTC audio context
-  static getWebRTCContext(): AudioContext {
+  static async getWebRTCContext(): Promise<AudioContext> {
     if (!this.webrtcContext || this.webrtcContext.state === "closed") {
       const config = getOptimalAudioConfig();
-      this.webrtcContext = new AudioContext(config.WEBRTC_AUDIO_CONTEXT);
+      
+      // Use Safari-compatible audio context creation for Safari browsers
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      
+      if (isSafari) {
+        // Import Safari compatibility utility
+        const { createWebKitCompatibleAudioContext } = await import("../../../shared/utils/webkitCompat");
+        this.webrtcContext = await createWebKitCompatibleAudioContext();
+      } else {
+        this.webrtcContext = new AudioContext(config.WEBRTC_AUDIO_CONTEXT);
+      }
       this.webrtcActive = true;
       
       console.log(`🎤 WebRTC AudioContext created: ${this.webrtcContext.sampleRate}Hz`);

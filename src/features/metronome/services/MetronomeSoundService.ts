@@ -13,7 +13,7 @@ export class MetronomeSoundService {
   private async initializeAudioResources() {
     try {
       // Ensure the shared instrument AudioContext is available
-      AudioContextManager.getInstrumentContext();
+      await AudioContextManager.getInstrumentContext();
       this.isInitialized = true;
       console.log('🎼 MetronomeSoundService: Initialized with shared AudioContext (oscillator mode)');
     } catch (error) {
@@ -26,7 +26,7 @@ export class MetronomeSoundService {
       await this.initializeAudioResources();
     }
     
-    const audioContext = AudioContextManager.getInstrumentContext();
+    const audioContext = await AudioContextManager.getInstrumentContext();
     if (!audioContext) {
       console.warn('AudioContext not available');
       return;
@@ -41,7 +41,7 @@ export class MetronomeSoundService {
   async playTick(volume: number = 0.5): Promise<void> {
     await this.ensureInitialized();
     
-    const audioContext = AudioContextManager.getInstrumentContext();
+    const audioContext = await AudioContextManager.getInstrumentContext();
     if (!audioContext) return;
 
     // Always use oscillator-based tick sound
@@ -49,7 +49,7 @@ export class MetronomeSoundService {
   }
 
   private async playTickDirect(volume: number): Promise<void> {
-    const audioContext = AudioContextManager.getInstrumentContext();
+    const audioContext = await AudioContextManager.getInstrumentContext();
     if (!audioContext) return;
 
     const oscillator = audioContext.createOscillator();

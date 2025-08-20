@@ -136,7 +136,7 @@ export const useInstrumentManager = (): UseInstrumentManagerReturn => {
   const initializeAudioContext = useCallback(async () => {
     if (!audioContext.current) {
       // Use dedicated instrument audio context
-      audioContext.current = AudioContextManager.getInstrumentContext();
+      audioContext.current = await AudioContextManager.getInstrumentContext();
     }
 
     if (audioContext.current.state === "suspended") {

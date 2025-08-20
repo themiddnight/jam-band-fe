@@ -270,7 +270,7 @@ export const useWebRTCVoice = ({
       try {
         // Use separate WebRTC audio context
         const { AudioContextManager } = await import("../../audio/constants/audioConfig");
-        audioContextRef.current = AudioContextManager.getWebRTCContext();
+        audioContextRef.current = await AudioContextManager.getWebRTCContext();
         
         // Notify system that WebRTC is now active
         AudioContextManager.setWebRTCActive(true);

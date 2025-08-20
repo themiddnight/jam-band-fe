@@ -526,7 +526,7 @@ export class InstrumentEngine {
   private async loadTraditionalInstrument(): Promise<any> {
     // Use separate audio context for instruments
     const { AudioContextManager } = await import("../../audio/constants/audioConfig");
-    const instrumentContext = AudioContextManager.getInstrumentContext();
+    const instrumentContext = await AudioContextManager.getInstrumentContext();
     
     // Update the audio context reference
     if (this.audioContext !== instrumentContext) {
@@ -584,7 +584,7 @@ export class InstrumentEngine {
     try {
       // Use separate audio context for instruments
       const { AudioContextManager } = await import("../../audio/constants/audioConfig");
-      const instrumentContext = AudioContextManager.getInstrumentContext();
+      const instrumentContext = await AudioContextManager.getInstrumentContext();
       
       // Set Tone.js to use the dedicated instrument context
       Tone.setContext(instrumentContext);

@@ -20,9 +20,9 @@ export function useCombinedLatency(options: UseCombinedLatencyOptions = {}) {
   const rtcLatencyHook = useRTCLatencyMeasurement(options);
   
   // Measure browser audio processing latency
-  const measureBrowserAudioLatency = useCallback(() => {
+  const measureBrowserAudioLatency = useCallback(async () => {
     try {
-      const webrtcContext = AudioContextManager.getWebRTCContext();
+      const webrtcContext = await AudioContextManager.getWebRTCContext();
       if (webrtcContext && webrtcContext.state === 'running') {
         // Get browser audio processing latency (baseLatency + outputLatency)
         const baseLatency = webrtcContext.baseLatency || 0;

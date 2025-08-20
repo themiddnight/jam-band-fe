@@ -89,7 +89,7 @@ export const useAudioStream = ({
       // Use the separated WebRTC audio context instead of creating a new one
       try {
         const { AudioContextManager } = await import("../../../constants/audioConfig");
-        audioContextRef.current = AudioContextManager.getWebRTCContext();
+        audioContextRef.current = await AudioContextManager.getWebRTCContext();
         console.log("🎤 VoiceInput: Using separated WebRTC AudioContext");
       } catch (error) {
         console.warn("Failed to get WebRTC AudioContext, creating fallback:", error);
