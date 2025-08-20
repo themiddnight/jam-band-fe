@@ -6,7 +6,7 @@ import {
 import { useVoiceStateStore } from "./stores/voiceStateStore";
 import { GainControl } from "./components";
 import { AnchoredPopup, Modal } from "@/features/ui";
-import { RTCLatencyDisplay } from "@/features/audio";
+import { RTCLatencyDisplay, AdaptiveAudioStatus } from "@/features/audio";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 
 interface VoiceInputProps {
@@ -16,6 +16,11 @@ interface VoiceInputProps {
   onStreamRemoved?: () => void;
   rtcLatency?: number | null;
   rtcLatencyActive?: boolean;
+  userCount?: number;
+  // New props for combined latency display
+  browserAudioLatency?: number;
+  meshLatency?: number | null;
+  showLatencyBreakdown?: boolean;
 }
 
 export interface VoiceState {
@@ -34,10 +39,19 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
   onStreamRemoved,
   rtcLatency = null,
   rtcLatencyActive = false,
+  userCount = 1,
+  // New props for combined latency display
+  browserAudioLatency,
+  meshLatency,
+  showLatencyBreakdown = true,
 }) => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [showHeadphoneModal, setShowHeadphoneModal] = useState(false);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
+  const infoButtonRef = useRef<HTMLButtonElement>(null);
+
+
 
   // Use custom hooks for state and logic
   const {
@@ -260,8 +274,10 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
             <RTCLatencyDisplay 
               latency={rtcLatency}
               isActive={rtcLatencyActive}
-              variant="compact"
               showLabel={false}
+              browserAudioLatency={browserAudioLatency}
+              meshLatency={meshLatency}
+              showBreakdown={showLatencyBreakdown}
             />
 
             <div className="flex items-center gap-3">
@@ -280,7 +296,7 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
             <div className="flex items-center max-w-36 grow">
               {/* Input Level Indicator */}
               <div className="flex-1">
-                <div className="text-xs mb-1">Input Level</div>
+                <div className="text-xs mb-1">Input Lv</div>
                 <div className="w-full bg-base-300 rounded-full h-2">
                   <div
                     className={`h-2 rounded-full ${getInputLevelColor(inputLevel)}`}
@@ -299,15 +315,27 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
               </div>
             </div>
 
-            {/* Settings Button */}
-            <button
-              ref={settingsButtonRef}
-              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              className="btn btn-sm btn-ghost"
-              title="Voice settings"
-            >
-              ⚙️
-            </button>
+            <div className="flex items-center gap-1">
+              {/* Info Button */}
+              <button
+                ref={infoButtonRef}
+                onClick={() => setIsInfoOpen(!isInfoOpen)}
+                className="btn btn-sm btn-ghost hover:btn-info"
+                title="Audio performance info"
+              >
+                ℹ️
+              </button>
+
+              {/* Settings Button */}
+              <button
+                ref={settingsButtonRef}
+                onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                className="btn btn-sm btn-ghost"
+                title="Voice settings"
+              >
+                ⚙️
+              </button>
+            </div>
           </div>
 
           {/* Settings Popup */}
@@ -369,6 +397,28 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
                   </label>
                 </div>
               </div>
+            </div>
+          </AnchoredPopup>
+
+          {/* Info Popup */}
+          <AnchoredPopup
+            open={isInfoOpen}
+            onClose={() => setIsInfoOpen(false)}
+            anchorRef={infoButtonRef}
+            placement="bottom"
+            className="w-96"
+          >
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="font-semibold">🎵 Audio Performance</h4>
+                <span className="text-xs text-base-content/60">Real-time monitoring</span>
+              </div>
+              <AdaptiveAudioStatus
+                userCount={userCount}
+                currentLatency={rtcLatency}
+                variant="compact"
+                showRecommendations={true}
+              />
             </div>
           </AnchoredPopup>
         </div>

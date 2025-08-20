@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { useMidiController } from "@/features/audio";
 import { useRoomSocket } from "@/features/audio/hooks/useRoomSocket";
@@ -8,6 +8,7 @@ import { useScaleState } from "@/features/ui";
 import { useUserStore } from "@/shared/stores/userStore";
 import { ConnectionState } from "@/features/audio/types/connectionState";
 import { InstrumentCategory } from "@/shared/constants/instruments";
+import type { Socket } from "socket.io-client";
 
 /**
  * Room hook using the RoomSocketManager for namespace-based connections
@@ -36,7 +37,6 @@ export const useRoom = () => {
     handleCategoryChange,
     getCurrentInstrumentControlType,
     updateSynthParams: instrumentUpdateSynthParams, // Local synth params update
-    loadPresetParams,
     stopSustainedNotes,
     initializeAudioContext,
     playNote: playLocalNote,
@@ -92,6 +92,17 @@ export const useRoom = () => {
 
   // Scale state
   const scaleState = useScaleState();
+
+  // Socket ref for ping measurement - needs to be updated when active socket changes
+  const socketRef = useRef<Socket | null>(getActiveSocket());
+
+  // Update socket ref when active socket changes
+  useEffect(() => {
+    const newSocket = getActiveSocket();
+    if (socketRef.current !== newSocket) {
+      socketRef.current = newSocket;
+    }
+  }, [getActiveSocket, connectionState]);
 
   // Initialize room connection
   useEffect(() => {
@@ -384,7 +395,8 @@ export const useRoom = () => {
       const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
       const octave = Math.floor(note / 12) - 1;
       const noteName = noteNames[note % 12] + octave;
-      handlePlayNote([noteName], velocity / 127, "note_on", true);
+      // velocity is already normalized (0-1) from useMidiController, don't divide by 127 again
+      handlePlayNote([noteName], velocity, "note_on", true);
     },
     onNoteOff: (note: number) => {
       // Convert MIDI note number to note name and call handleStopNote
@@ -485,6 +497,16 @@ export const useRoom = () => {
     }
   }, [instrumentUpdateSynthParams, isConnected, updateSynthParams]);
 
+  // Broadcast full preset parameters as well
+  const loadPresetParamsWrapper = useCallback((params: any) => {
+    console.log('🎛️ loadPresetParamsWrapper called with params:', params);
+    instrumentUpdateSynthParams(params);
+    if (isConnected) {
+      console.log('🎛️ Connected - broadcasting preset synth params to remote users');
+      updateSynthParams(params);
+    }
+  }, [instrumentUpdateSynthParams, isConnected, updateSynthParams]);
+
   // Chat message handler
   const handleSendChatMessage = useCallback((message: string) => {
     if (!currentRoom?.id) return;
@@ -558,13 +580,14 @@ export const useRoom = () => {
     handleCategoryChange: handleCategoryChangeWrapper,
     getCurrentInstrumentControlType,
     updateSynthParams: updateSynthParamsWrapper,
-    loadPresetParams,
+    loadPresetParams: loadPresetParamsWrapper,
 
     // Audio management
     stopSustainedNotes,
     initializeAudioContext,
 
     // Socket connection
-    socketRef: { current: getActiveSocket() },
+    socketRef,
+    getActiveSocket,
   };
 };

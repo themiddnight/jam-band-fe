@@ -855,10 +855,11 @@ export class RoomSocketManager {
    * Set up lobby-specific event handlers
    */
   private setupLobbyEventHandlers(socket: Socket): void {
-    // Lobby only handles ping/pong for latency measurement
-    socket.on('ping_response', () => {
-      // This will be handled by the ping measurement hook
-    });
+    // Reference socket to satisfy no-unused-vars without disabling linting
+    void socket;
+    // Lobby handles ping/pong for latency measurement
+    // The ping_response event is automatically handled by the usePingMeasurement hook
+    // when it attaches its own listeners to the socket, so we don't need to handle it here
   }
 
   /**

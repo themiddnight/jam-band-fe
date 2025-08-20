@@ -69,6 +69,48 @@ export const AUDIO_CONFIG = {
   },
 };
 
+// Adaptive audio configuration based on mesh size
+export const ADAPTIVE_AUDIO_CONFIG = {
+  // Small mesh (1-3 users): Ultra-low latency priority
+  SMALL_MESH: {
+    maxUsers: 3,
+    sampleSize: 128,
+    bufferSize: 128,
+    lookAhead: 0.002, // 2ms
+    updateInterval: 0.002, // 2ms
+    quality: 'ultra-low-latency',
+    description: 'Ultra-low latency mode for small groups',
+    latencyTarget: '5-8ms',
+    cpuTarget: '20-40%'
+  },
+
+  // Medium mesh (4-6 users): Balanced approach
+  MEDIUM_MESH: {
+    maxUsers: 6,
+    sampleSize: 256,
+    bufferSize: 256,
+    lookAhead: 0.003, // 3ms
+    updateInterval: 0.003, // 3ms
+    quality: 'balanced',
+    description: 'Balanced latency and quality for medium groups',
+    latencyTarget: '8-12ms',
+    cpuTarget: '40-60%'
+  },
+
+  // Large mesh (7-10 users): Stability priority
+  LARGE_MESH: {
+    maxUsers: 10,
+    sampleSize: 512,
+    bufferSize: 512,
+    lookAhead: 0.004, // 4ms
+    updateInterval: 0.004, // 4ms
+    quality: 'stable',
+    description: 'Stable performance for large groups',
+    latencyTarget: '12-18ms',
+    cpuTarget: '60-80%'
+  }
+};
+
 // Helper function to get optimal settings based on device capability
 export const getOptimalAudioConfig = () => {
   // Check if device supports low latency
@@ -98,27 +140,60 @@ export const getOptimalAudioConfig = () => {
         sampleRate: supports48kHz ? 48000 : 44100, // Fallback to 44.1kHz if needed
         latencyHint: "balanced" as AudioContextLatencyCategory,
       },
-      WEBRTC_AUDIO_CONTEXT: {
-        sampleRate: supports48kHz ? 48000 : 44100, // Keep both contexts in sync
-        latencyHint: "balanced" as AudioContextLatencyCategory,
-      },
-      SYNTHESIZER: {
-        noteRetriggerDelay: 5,
-        envelopeAttackMin: 0.01,
-      },
     };
   }
 
+  // Return optimal configuration for modern devices
   return {
     ...AUDIO_CONFIG,
     INSTRUMENT_AUDIO_CONTEXT: {
-      ...AUDIO_CONFIG.INSTRUMENT_AUDIO_CONTEXT,
-      sampleRate: supports48kHz ? 48000 : 44100, // Ensure consistency
+      sampleRate: supports48kHz ? 48000 : 44100,
+      latencyHint: "interactive" as AudioContextLatencyCategory,
     },
-    WEBRTC_AUDIO_CONTEXT: {
-      ...AUDIO_CONFIG.WEBRTC_AUDIO_CONTEXT,
-      sampleRate: supports48kHz ? 48000 : 44100, // Ensure consistency
+  };
+};
+
+// Helper function to get adaptive audio configuration based on mesh size
+export const getAdaptiveAudioConfig = (userCount: number) => {
+  if (userCount <= ADAPTIVE_AUDIO_CONFIG.SMALL_MESH.maxUsers) {
+    return ADAPTIVE_AUDIO_CONFIG.SMALL_MESH;
+  } else if (userCount <= ADAPTIVE_AUDIO_CONFIG.MEDIUM_MESH.maxUsers) {
+    return ADAPTIVE_AUDIO_CONFIG.MEDIUM_MESH;
+  } else {
+    return ADAPTIVE_AUDIO_CONFIG.LARGE_MESH;
+  }
+};
+
+// Helper function to check if quality should be reduced
+export const shouldReduceQuality = (userCount: number, currentLatency: number, cpuUsage?: number) => {
+  const config = getAdaptiveAudioConfig(userCount);
+  
+  // If latency exceeds thresholds for current mesh size, reduce quality
+  if (currentLatency > parseFloat(config.latencyTarget.split('-')[1])) {
+    return true;
+  }
+  
+  // If CPU usage is high, reduce quality
+  if (cpuUsage && cpuUsage > 80) {
+    return true;
+  }
+  
+  return false;
+};
+
+// Helper function to get performance metrics
+export const getPerformanceMetrics = () => {
+  return {
+    timestamp: Date.now(),
+    userAgent: navigator.userAgent,
+    audioContext: {
+      supported: 'AudioContext' in window || 'webkitAudioContext' in window,
+      workletSupported: 'audioWorklet' in (window.AudioContext || (window as any).webkitAudioContext || {}),
     },
+    hardware: {
+      cores: navigator.hardwareConcurrency || 'unknown',
+      memory: (navigator as any).deviceMemory || 'unknown',
+    }
   };
 };
 
@@ -402,10 +477,13 @@ export class AudioContextManager {
           }
           
           // Monitor WebRTC context specifically
+          // NOTE: This measures Web Audio API context latency (browser audio processing overhead),
+          // NOT the actual WebRTC network round-trip time. For network latency, see the
+          // useRTCLatencyMeasurement hook which measures actual peer connection RTT.
           if (this.webrtcContext && this.webrtcContext.state === "running") {
             const webrtcLatency = this.webrtcContext.baseLatency + this.webrtcContext.outputLatency;
-            if (webrtcLatency > 0.03) { // 30ms
-              console.warn(`🎤 WebRTC high latency: ${(webrtcLatency * 1000).toFixed(1)}ms`);
+            if (webrtcLatency > 0.05) { // Increased threshold to 50ms to reduce false warnings
+              console.warn(`🎤 Web Audio API context latency: ${(webrtcLatency * 1000).toFixed(1)}ms (this is browser audio processing, not network latency)`);
             }
           }
         }

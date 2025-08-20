@@ -4,7 +4,7 @@ import { useWebRTCVoice } from "@/features/audio";
 import {
   PingDisplay,
   usePingMeasurement,
-  useRTCLatencyMeasurement,
+  useCombinedLatency,
 } from "@/features/audio";
 import { InstrumentCategorySelector } from "@/features/instruments";
 import {
@@ -98,13 +98,18 @@ const Room = memo(() => {
 
     // Socket connection
     socketRef,
+    getActiveSocket,
   } = useRoom();
 
-  // All hooks must be called before any early returns
+  // All hooks must be called before any early returns  
+  // Get the current active socket directly instead of using a ref
+  const activeSocket = getActiveSocket();
   const { currentPing } = usePingMeasurement({
-    socket: socketRef?.current,
+    socket: activeSocket,
     enabled: isConnected,
   });
+
+
 
   // Notification popup state
   const [isPendingPopupOpen, setIsPendingPopupOpen] = useState(false);
@@ -138,13 +143,18 @@ const Room = memo(() => {
 
   // RTC latency measurement
   const {
-    currentLatency,
+    totalLatency: currentLatency,
+    browserAudioLatency,
+    meshLatency,
     isActive: rtcLatencyActive,
     addPeerConnection,
     removePeerConnection,
-  } = useRTCLatencyMeasurement({
+  } = useCombinedLatency({
     enabled: isVoiceEnabled,
   });
+
+
+
 
   // Track last seen peer ids to diff additions/removals
   const lastSeenPeerIdsRef = useRef<Set<string>>(new Set());
@@ -604,8 +614,13 @@ const Room = memo(() => {
                 onStreamRemoved={handleStreamRemoved}
                 rtcLatency={currentLatency}
                 rtcLatencyActive={rtcLatencyActive}
+                userCount={currentRoom?.users?.length || 0}
+                browserAudioLatency={browserAudioLatency}
+                meshLatency={meshLatency}
               />
             )}
+
+
 
             {/* Instrument Controls */}
             {(currentUser?.role === "room_owner" ||
