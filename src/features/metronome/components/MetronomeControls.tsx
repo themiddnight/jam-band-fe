@@ -25,7 +25,6 @@ export const MetronomeControls: React.FC<MetronomeControlsProps> = ({
     handleTapTempo,
     resetTapTempo,
     getTapCount,
-    hasAudioFile,
   } = useMetronome({ socket, canEdit });
 
   const [isPopupOpen, setIsPopupOpen] = useState(false);
@@ -124,17 +123,15 @@ export const MetronomeControls: React.FC<MetronomeControlsProps> = ({
           />
         </div>
 
-        {/* Sound file status indicator */}
-        {!hasAudioFile && (
-          <div 
-            className={`w-2 h-2 rounded-full transition-all duration-75 ${
-              isOnBeat 
-                ? 'bg-warning scale-110 shadow-lg shadow-warning/50' 
-                : 'bg-warning/60 scale-100'
-            }`}
-            title="Using fallback sound - place metronome-tick.wav in /public/sounds/ for better sound"
-          />
-        )}
+        {/* Beat indicator */}
+        <div 
+          className={`w-2 h-2 rounded-full transition-all duration-75 ${
+            isOnBeat 
+              ? 'bg-primary scale-110 shadow-lg shadow-primary/50' 
+              : 'bg-primary/60 scale-100'
+          }`}
+          title="Beat indicator"
+        />
 
         {/* BPM Settings Popup */}
         <AnchoredPopup

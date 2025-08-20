@@ -1,107 +1,80 @@
 // Metronome Sound Service
 
-import { METRONOME_CONFIG, METRONOME_SOUND_PATH } from '../constants';
+import { METRONOME_CONFIG } from '../constants';
+import { AudioContextManager } from '../../audio/constants/audioConfig';
 
 export class MetronomeSoundService {
-  private audioContext: AudioContext | null = null;
-  private tickSound: AudioBuffer | null = null;
-  private isAudioFileLoaded = false;
+  private isInitialized = false;
 
   constructor() {
-    this.initializeAudioContext();
-    this.loadTickSound();
+    this.initializeAudioResources();
   }
 
-  private async initializeAudioContext() {
+  private async initializeAudioResources() {
     try {
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      // Ensure the shared instrument AudioContext is available
+      AudioContextManager.getInstrumentContext();
+      this.isInitialized = true;
+      console.log('🎼 MetronomeSoundService: Initialized with shared AudioContext (oscillator mode)');
     } catch (error) {
-      console.warn('Failed to initialize AudioContext:', error);
+      console.warn('Failed to initialize metronome audio resources:', error);
     }
   }
 
-  private async loadTickSound() {
-    if (!this.audioContext) return;
-
-    try {
-      const response = await fetch(METRONOME_SOUND_PATH);
-      if (!response.ok) {
-        throw new Error(`Failed to load tick sound: ${response.status}`);
-      }
-      
-      const arrayBuffer = await response.arrayBuffer();
-      this.tickSound = await this.audioContext.decodeAudioData(arrayBuffer);
-      this.isAudioFileLoaded = true;
-      console.log('Metronome tick sound loaded successfully');
-    } catch (error) {
-      console.warn('Failed to load tick sound file, will use oscillator fallback:', error);
-      this.isAudioFileLoaded = false;
+  async ensureInitialized(): Promise<void> {
+    if (!this.isInitialized) {
+      await this.initializeAudioResources();
     }
-  }
-
-  playTick(volume: number = METRONOME_CONFIG.DEFAULT_VOLUME) {
-    if (!this.audioContext) {
+    
+    const audioContext = AudioContextManager.getInstrumentContext();
+    if (!audioContext) {
       console.warn('AudioContext not available');
       return;
     }
 
     // Resume AudioContext if it's suspended
-    if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
-    }
-
-    try {
-      if (this.isAudioFileLoaded && this.tickSound) {
-        this.playAudioBufferTick(volume);
-      } else {
-        this.playOscillatorTick(volume);
-      }
-    } catch (error) {
-      console.warn('Failed to play tick sound:', error);
+    if (audioContext.state === 'suspended') {
+      audioContext.resume();
     }
   }
 
-  private playAudioBufferTick(volume: number) {
-    if (!this.audioContext || !this.tickSound) return;
+  async playTick(volume: number = 0.5): Promise<void> {
+    await this.ensureInitialized();
+    
+    const audioContext = AudioContextManager.getInstrumentContext();
+    if (!audioContext) return;
 
-    const source = this.audioContext.createBufferSource();
-    const gainNode = this.audioContext.createGain();
-
-    source.buffer = this.tickSound;
-    source.connect(gainNode);
-    gainNode.connect(this.audioContext.destination);
-
-    gainNode.gain.setValueAtTime(volume, this.audioContext.currentTime);
-    source.start(0);
+    // Always use oscillator-based tick sound
+    this.playTickDirect(volume);
   }
 
-  private playOscillatorTick(volume: number) {
-    if (!this.audioContext) return;
+  private async playTickDirect(volume: number): Promise<void> {
+    const audioContext = AudioContextManager.getInstrumentContext();
+    if (!audioContext) return;
 
-    const oscillator = this.audioContext.createOscillator();
-    const gainNode = this.audioContext.createGain();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    const masterBus = AudioContextManager.getMasterBus();
 
     oscillator.connect(gainNode);
-    gainNode.connect(this.audioContext.destination);
+    if (masterBus) {
+      masterBus.routeToMaster(gainNode);
+    } else {
+      gainNode.connect(audioContext.destination);
+    }
 
+    oscillator.frequency.setValueAtTime(METRONOME_CONFIG.TICK_FREQUENCY, audioContext.currentTime);
     oscillator.type = 'square';
-    oscillator.frequency.setValueAtTime(METRONOME_CONFIG.TICK_FREQUENCY, this.audioContext.currentTime);
-    
-    gainNode.gain.setValueAtTime(0, this.audioContext.currentTime);
-    gainNode.gain.linearRampToValueAtTime(volume, this.audioContext.currentTime + 0.01);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + METRONOME_CONFIG.TICK_DURATION);
+    gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+    gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.01);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + METRONOME_CONFIG.TICK_DURATION);
 
-    oscillator.start(this.audioContext.currentTime);
-    oscillator.stop(this.audioContext.currentTime + METRONOME_CONFIG.TICK_DURATION);
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + METRONOME_CONFIG.TICK_DURATION);
   }
 
-  // Test if sound file is available
-  get hasAudioFile(): boolean {
-    return this.isAudioFileLoaded;
-  }
-
-  // Retry loading the sound file
-  async reloadSound(): Promise<void> {
-    await this.loadTickSound();
+  // No cleanup needed since we're using shared resources
+  cleanup(): void {
+    this.isInitialized = false;
   }
 }

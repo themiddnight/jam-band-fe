@@ -944,6 +944,11 @@ export class InstrumentEngine {
   ): Promise<void> {
     if (!this.synthRef) return;
 
+    if (!Array.isArray(notes)) {
+      console.error('playSynthNotes received non-array notes:', notes);
+      notes = [notes as string];
+    }
+
     notes.forEach((note) => {
       // Clear pending releases/stops
       this.clearPendingNote(note);
@@ -1076,6 +1081,11 @@ export class InstrumentEngine {
   ): Promise<void> {
     if (!this.instrument) return;
 
+    if (!Array.isArray(notes)) {
+      console.error('playTraditionalNotes received non-array notes:', notes);
+      notes = [notes as string];
+    }
+
     notes.forEach((note) => {
       // Stop existing note
       const existingNote = this.activeNotes.get(note);
@@ -1145,6 +1155,11 @@ export class InstrumentEngine {
   }
 
   private async stopSynthNotes(notes: string[]): Promise<void> {
+    if (!Array.isArray(notes)) {
+      console.error('stopSynthNotes received non-array notes:', notes);
+      notes = [notes as string];
+    }
+    
     notes.forEach((note) => {
       const isKeyHeld = this.keyHeldNotes.has(note);
 
@@ -1174,6 +1189,12 @@ export class InstrumentEngine {
   }
 
   private async stopTraditionalNotes(notes: string[]): Promise<void> {
+    // Safety check: ensure notes is an array
+    if (!Array.isArray(notes)) {
+      console.error('stopTraditionalNotes received non-array:', notes, 'Converting to array');
+      notes = [notes as string];
+    }
+    
     notes.forEach((note) => {
       const activeNote = this.activeNotes.get(note);
       if (activeNote) {

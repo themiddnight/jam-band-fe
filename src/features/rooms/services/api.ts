@@ -47,6 +47,24 @@ export async function getRoomList(): Promise<RoomListResponse> {
   return response.data;
 }
 
+// Create room endpoint
+export async function createRoom(
+  name: string,
+  username: string,
+  userId: string,
+  isPrivate: boolean = false,
+  isHidden: boolean = false,
+): Promise<{ success: boolean; room: Room; user: User }> {
+  const response = await axiosInstance.post(endpoints.createRoom, {
+    name,
+    username,
+    userId,
+    isPrivate,
+    isHidden,
+  });
+  return response.data;
+}
+
 // Leave room endpoint
 export async function leaveRoom(
   roomId: string,

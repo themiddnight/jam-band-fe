@@ -62,6 +62,8 @@ export function usePingMeasurement({
 
   // Handle ping response
   const handlePingResponse = useCallback((data: { pingId: string; timestamp: number }) => {
+    if (!data || !data.pingId) return;
+    
     const sendTime = pendingPingsRef.current.get(data.pingId);
     if (!sendTime) return;
 

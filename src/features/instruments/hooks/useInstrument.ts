@@ -26,6 +26,7 @@ export interface UseInstrumentReturn {
   isLoadingInstrument: boolean;
   isAudioContextReady: boolean;
   audioContextError: string | null;
+  needsUserGesture: boolean;
   availableSamples: string[];
   dynamicDrumMachines: typeof DRUM_MACHINES;
 
@@ -105,6 +106,9 @@ export interface UseInstrumentReturn {
       category: string;
     }>,
   ) => Promise<void>;
+
+  // Instrument manager for room audio integration - Requirements: 10.1, 10.2, 10.3, 10.4, 10.5
+  instrumentManager: any;
 }
 
 export const useInstrument = (
@@ -141,6 +145,7 @@ export const useInstrument = (
   const [audioContextError, setAudioContextError] = useState<string | null>(
     null,
   );
+  const [needsUserGesture, setNeedsUserGesture] = useState<boolean>(false);
   const [availableSamples, setAvailableSamples] = useState<string[]>([]);
   const [dynamicDrumMachines, setDynamicDrumMachines] = useState(DRUM_MACHINES);
 
@@ -311,6 +316,7 @@ export const useInstrument = (
   const initializeAudioContext = useCallback(async () => {
     try {
       setAudioContextError(null);
+      setNeedsUserGesture(false);
 
       if (!instrumentManager.isReady()) {
         // Validate the category before initializing to ensure consistency
@@ -381,11 +387,25 @@ export const useInstrument = (
       setIsAudioContextReady(true);
     } catch (error) {
       console.error("Failed to initialize audio context:", error);
-      setAudioContextError(
-        error instanceof Error
-          ? error.message
-          : "AudioContext initialization failed",
-      );
+      
+      // Check if this is a user gesture error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const isUserGestureError = errorMessage.includes('AudioContext state is closed') ||
+                                errorMessage.includes('user gesture') ||
+                                errorMessage.includes('suspended') ||
+                                errorMessage.includes('interact');
+                                
+      if (isUserGestureError) {
+        console.log('🎵 AudioContext requires user gesture, showing enable button');
+        setNeedsUserGesture(true);
+        setAudioContextError('Audio requires user interaction to initialize');
+      } else {
+        setAudioContextError(
+          error instanceof Error
+            ? error.message
+            : "AudioContext initialization failed",
+        );
+      }
       throw error;
     }
   }, [
@@ -614,6 +634,10 @@ export const useInstrument = (
   const playNote = useCallback(
     async (notes: string[], velocity: number, isKeyHeld: boolean = false) => {
       try {
+        if (!Array.isArray(notes)) {
+          console.error('useInstrument playNote received non-array notes:', notes);
+          notes = [notes as string];
+        }
         if (!instrumentManager.isReady()) {
           await initializeAudioContext();
         }
@@ -628,6 +652,10 @@ export const useInstrument = (
   const stopNotes = useCallback(
     async (notes: string[]) => {
       try {
+        if (!Array.isArray(notes)) {
+          console.error('useInstrument stopNotes received non-array notes:', notes);
+          notes = [notes as string];
+        }
         await instrumentManager.stopLocalNotes(notes);
       } catch (error) {
         console.error("Failed to stop local notes:", error);
@@ -752,17 +780,26 @@ export const useInstrument = (
       category: InstrumentCategory,
     ) => {
       try {
+        console.log(`🎵 updateRemoteUserInstrument: Starting update for ${username} - ${instrumentName} (${category})`);
         await instrumentManager.updateRemoteInstrument(
           userId,
           username,
           instrumentName,
           category,
         );
+        console.log(`✅ updateRemoteUserInstrument: Successfully updated ${username} to ${instrumentName} (${category})`);
       } catch (error) {
         console.error(
-          `Failed to update remote instrument for user ${username}:`,
+          `❌ updateRemoteUserInstrument: Failed to update remote instrument for user ${username}:`,
           error,
         );
+        console.error(`❌ updateRemoteUserInstrument: Error details for ${username}:`, {
+          userId,
+          username,
+          instrumentName,
+          category,
+          error
+        });
 
         // For remote users, we don't automatically try fallbacks
         // The fallback will be handled by the remote user's own device
@@ -830,6 +867,24 @@ export const useInstrument = (
     setDynamicDrumMachines(machines);
   }, []);
 
+  // Auto-initialize audio context when component mounts
+  useEffect(() => {
+    const autoInit = async () => {
+      // Only try to auto-initialize once, and not if we already know we need user gesture
+      if (!isAudioContextReady && !isCurrentlyLoading.current && !needsUserGesture && !audioContextError) {
+        console.log('🎵 Attempting auto-initialization of audio context');
+        try {
+          await initializeAudioContext();
+        } catch {
+          // Error is already handled in initializeAudioContext
+          // Don't log again to avoid spam
+        }
+      }
+    };
+    
+    autoInit();
+  }, [initializeAudioContext, isAudioContextReady, needsUserGesture, audioContextError]);
+
   // WebRTC performance optimization effect
   useEffect(() => {
     const handleWebRTCState = (event: CustomEvent<{ active: boolean }>) => {
@@ -858,6 +913,7 @@ export const useInstrument = (
     isLoadingInstrument,
     isAudioContextReady,
     audioContextError,
+    needsUserGesture,
     availableSamples,
     dynamicDrumMachines,
 
@@ -897,5 +953,8 @@ export const useInstrument = (
     updateRemoteUserSynthParams,
     cleanupRemoteUser,
     preloadRoomInstruments,
+
+    // Instrument manager for room audio integration - Requirements: 10.1, 10.2, 10.3, 10.4, 10.5
+    instrumentManager,
   };
 };

@@ -16,9 +16,20 @@ export { AUDIO_CONFIG, getOptimalAudioConfig, AudioContextManager } from "./cons
 export { useSustainSync } from "./hooks/useSustainSync";
 export { useWebRTCVoice } from "./hooks/useWebRTCVoice";
 export { useAudioContextManager } from "./hooks/useAudioContextManager";
-export { useSocket } from "./hooks/useSocket";
+export { useRoomSocket } from "./hooks/useRoomSocket";
 export { usePingMeasurement } from "./hooks/usePingMeasurement";
 export { useRTCLatencyMeasurement } from "./hooks/useRTCLatencyMeasurement";
+export { useRoomAudio } from "./hooks/useRoomAudio";
+export type { UseRoomAudioOptions, UseRoomAudioReturn } from "./hooks/useRoomAudio";
+
+// Types
+export { ConnectionState, ConnectionEvent } from "./types/connectionState";
+export type { ConnectionConfig, ApprovalRequest } from "./types/connectionState";
+
+// Services
+export { RoomSocketManager } from "./services/RoomSocketManager";
+export { RoomAudioManager } from "./services/RoomAudioManager";
+export type { RoomUser, InstrumentPreloadData } from "./services/RoomAudioManager";
 
 // Store exports
 export { useInstrumentPreferencesStore } from "./stores/instrumentPreferencesStore";

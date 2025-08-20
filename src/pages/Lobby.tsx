@@ -2,7 +2,11 @@ import { useLobby } from "@/features/rooms";
 import { Modal } from "@/features/ui";
 import { Footer } from "@/features/ui";
 import { PingDisplay, usePingMeasurement } from "@/features/audio";
+import { ConnectionState } from "@/features/audio/types/connectionState";
 
+/**
+ * Lobby page using the RoomSocketManager for namespace-based connections
+ */
 export default function Lobby() {
   const {
     // State
@@ -19,6 +23,7 @@ export default function Lobby() {
     isConnecting,
     isPrivate,
     isHidden,
+    connectionState,
 
     // Actions
     fetchRooms,
@@ -37,13 +42,13 @@ export default function Lobby() {
     setIsPrivate,
     setIsHidden,
 
-    // Socket for ping measurement
-    socketRef,
+  // Socket for ping measurement
+  activeSocket,
   } = useLobby();
 
   // Ping measurement for lobby
   const { currentPing } = usePingMeasurement({
-    socket: socketRef?.current,
+    socket: activeSocket,
     enabled: isConnected,
   });
 
@@ -57,7 +62,13 @@ export default function Lobby() {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-3">
                 <div
-                  className={`w-3 h-3 rounded-full ${isConnected ? "bg-success" : isConnecting ? "bg-warning" : "bg-error"}`}
+                  className={`w-3 h-3 rounded-full ${
+                    connectionState === ConnectionState.LOBBY
+                      ? "bg-success"
+                      : isConnecting
+                        ? "bg-warning"
+                        : "bg-error"
+                  }`}
                 ></div>
                 <PingDisplay 
                   ping={currentPing} 
@@ -75,6 +86,20 @@ export default function Lobby() {
               </button>
             </div>
           </div>
+
+          {/* Connection Status */}
+          {connectionState !== ConnectionState.LOBBY && connectionState !== ConnectionState.DISCONNECTED && (
+            <div className="alert alert-info mb-4">
+              <div>
+                <h4 className="font-bold">Connection Status</h4>
+                <p className="text-sm">
+                  {connectionState === ConnectionState.REQUESTING && "Waiting for room approval..."}
+                  {connectionState === ConnectionState.IN_ROOM && "Connected to room"}
+                  {isConnecting && "Connecting..."}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Card */}
           <div className="card bg-base-100 shadow-xl h-full">
@@ -107,7 +132,7 @@ export default function Lobby() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {rooms.map((room) => (
+                    {rooms.map((room: any) => (
                       <div key={room.id} className="card bg-base-200">
                         <div className="card-body p-4">
                           <div className="flex justify-between items-start">
@@ -129,9 +154,6 @@ export default function Lobby() {
                                 {room.userCount} member
                                 {room.userCount !== 1 ? "s" : ""}
                               </p>
-                              {/* <p className="text-xs text-base-content/50">
-                              Created {new Date(room.createdAt).toLocaleDateString()}
-                            </p> */}
                             </div>
                             <div className="flex items-center gap-2 flex-wrap justify-end">
                               <span className="text-xs text-base-content/70">
@@ -142,6 +164,7 @@ export default function Lobby() {
                                   handleJoinRoom(room.id, "band_member")
                                 }
                                 className="btn btn-xs btn-primary"
+                                disabled={isConnecting || connectionState === ConnectionState.REQUESTING}
                               >
                                 Band Member
                               </button>
@@ -150,6 +173,7 @@ export default function Lobby() {
                                   handleJoinRoom(room.id, "audience")
                                 }
                                 className="btn btn-xs btn-outline"
+                                disabled={isConnecting || connectionState === ConnectionState.REQUESTING}
                               >
                                 Audience
                               </button>

@@ -144,9 +144,5 @@ export const useMetronome = ({ socket, canEdit }: UseMetronomeOptions) => {
     handleTapTempo,
     resetTapTempo,
     getTapCount,
-
-    // Utilities
-    hasAudioFile: soundServiceRef.current?.hasAudioFile ?? false,
-    reloadSound: soundServiceRef.current?.reloadSound.bind(soundServiceRef.current),
   };
 };

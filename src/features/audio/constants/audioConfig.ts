@@ -41,6 +41,32 @@ export const AUDIO_CONFIG = {
       prioritizeVoice: true, // Voice gets CPU priority over instruments
     },
   },
+
+  // Enhanced audio node pooling configuration
+  NODE_POOL: {
+    maxGainNodes: 50,
+    maxOscillatorNodes: 20,
+    maxAnalyserNodes: 10,
+    maxBufferSourceNodes: 30,
+    cleanupInterval: 10000, // Clean unused nodes every 10s
+  },
+
+  // Master audio bus configuration for future effects/mixer
+  MASTER_BUS: {
+    enabled: true,
+    masterGainLevel: 0.8,
+    busRouting: {
+      instruments: 'master',
+      metronome: 'master', 
+      voice: 'direct', // WebRTC bypasses master bus for lowest latency
+    },
+    effects: {
+      // Future effects configuration
+      reverb: { enabled: false, wetLevel: 0.3 },
+      delay: { enabled: false, time: 0.25, feedback: 0.3 },
+      compressor: { enabled: false, threshold: -24, ratio: 4 },
+    },
+  },
 };
 
 // Helper function to get optimal settings based on device capability
@@ -96,18 +122,159 @@ export const getOptimalAudioConfig = () => {
   };
 };
 
+// Audio Node Pool for efficient node reuse
+class AudioNodePool {
+  private gainNodes: GainNode[] = [];
+  private analyserNodes: AnalyserNode[] = [];
+  private bufferSourceNodes: AudioBufferSourceNode[] = [];
+  private context: AudioContext;
+  private cleanupTimer: NodeJS.Timeout | null = null;
+
+  constructor(context: AudioContext) {
+    this.context = context;
+    this.startCleanupTimer();
+  }
+
+  // Get a reusable gain node
+  getGainNode(): GainNode {
+    if (this.gainNodes.length > 0) {
+      return this.gainNodes.pop()!;
+    }
+    return this.context.createGain();
+  }
+
+  // Return gain node to pool
+  releaseGainNode(node: GainNode): void {
+    if (this.gainNodes.length < AUDIO_CONFIG.NODE_POOL.maxGainNodes) {
+      // Reset node properties
+      node.gain.value = 1;
+      node.disconnect();
+      this.gainNodes.push(node);
+    }
+  }
+
+  // Get a reusable oscillator (note: oscillators can only be used once)
+  getOscillator(): OscillatorNode {
+    return this.context.createOscillator();
+  }
+
+  // Get a reusable analyser node
+  getAnalyserNode(): AnalyserNode {
+    if (this.analyserNodes.length > 0) {
+      return this.analyserNodes.pop()!;
+    }
+    return this.context.createAnalyser();
+  }
+
+  // Return analyser node to pool
+  releaseAnalyserNode(node: AnalyserNode): void {
+    if (this.analyserNodes.length < AUDIO_CONFIG.NODE_POOL.maxAnalyserNodes) {
+      node.disconnect();
+      this.analyserNodes.push(node);
+    }
+  }
+
+  // Get a reusable buffer source node
+  getBufferSourceNode(): AudioBufferSourceNode {
+    if (this.bufferSourceNodes.length > 0) {
+      return this.bufferSourceNodes.pop()!;
+    }
+    return this.context.createBufferSource();
+  }
+
+  // Return buffer source node to pool (note: buffer sources can only be used once)
+  releaseBufferSourceNode(node: AudioBufferSourceNode): void {
+    // Buffer sources cannot be reused, but we track them for cleanup
+    node.disconnect();
+  }
+
+  private startCleanupTimer(): void {
+    this.cleanupTimer = setInterval(() => {
+      // Keep pool sizes reasonable
+      const config = AUDIO_CONFIG.NODE_POOL;
+      if (this.gainNodes.length > config.maxGainNodes) {
+        this.gainNodes.splice(config.maxGainNodes);
+      }
+      if (this.analyserNodes.length > config.maxAnalyserNodes) {
+        this.analyserNodes.splice(config.maxAnalyserNodes);
+      }
+    }, AUDIO_CONFIG.NODE_POOL.cleanupInterval);
+  }
+
+  cleanup(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+    // Disconnect all pooled nodes
+    [...this.gainNodes, ...this.analyserNodes].forEach(node => node.disconnect());
+    this.gainNodes = [];
+    this.analyserNodes = [];
+    this.bufferSourceNodes = [];
+  }
+}
+
+// Master Audio Bus for routing and future effects
+class MasterAudioBus {
+  private masterGain: GainNode;
+  private context: AudioContext;
+  private effectsChain: GainNode[] = [];
+
+  constructor(context: AudioContext) {
+    this.context = context;
+    this.masterGain = context.createGain();
+    this.masterGain.gain.value = AUDIO_CONFIG.MASTER_BUS.masterGainLevel;
+    this.masterGain.connect(context.destination);
+    console.log('🎛️ Master Audio Bus initialized');
+  }
+
+  // Get the master gain node for routing
+  getMasterGain(): GainNode {
+    return this.masterGain;
+  }
+
+  // Route an audio node through the master bus
+  routeToMaster(sourceNode: AudioNode): void {
+    sourceNode.connect(this.masterGain);
+  }
+
+  // Set master volume
+  setMasterVolume(volume: number): void {
+    this.masterGain.gain.setValueAtTime(volume, this.context.currentTime);
+  }
+
+  // Future: Add effects to the chain
+  addEffect(effectNode: AudioNode): void {
+    // Implementation for future effects
+    this.effectsChain.push(effectNode as GainNode);
+  }
+
+  cleanup(): void {
+    this.masterGain.disconnect();
+    this.effectsChain.forEach(effect => effect.disconnect());
+  }
+}
+
 // Audio Context Management for separated contexts
 export class AudioContextManager {
   private static instrumentContext: AudioContext | null = null;
   private static webrtcContext: AudioContext | null = null;
   private static webrtcActive: boolean = false;
   private static webrtcPriorityMode: boolean = false; // Ultra-low latency mode for voice priority
+  private static instrumentNodePool: AudioNodePool | null = null;
+  private static masterBus: MasterAudioBus | null = null;
 
   // Get or create instrument audio context
   static getInstrumentContext(): AudioContext {
-    if (!this.instrumentContext) {
+    if (!this.instrumentContext || this.instrumentContext.state === "closed") {
       const config = getOptimalAudioConfig();
       this.instrumentContext = new AudioContext(config.INSTRUMENT_AUDIO_CONTEXT);
+      
+      // Initialize node pool and master bus
+      this.instrumentNodePool = new AudioNodePool(this.instrumentContext);
+      if (config.MASTER_BUS.enabled) {
+        this.masterBus = new MasterAudioBus(this.instrumentContext);
+      }
       
       console.log(`🎵 Instrument AudioContext created: ${this.instrumentContext.sampleRate}Hz`);
       
@@ -122,9 +289,19 @@ export class AudioContextManager {
     return this.instrumentContext;
   }
 
+  // Get the audio node pool for efficient node reuse
+  static getNodePool(): AudioNodePool | null {
+    return this.instrumentNodePool;
+  }
+
+  // Get the master audio bus for routing
+  static getMasterBus(): MasterAudioBus | null {
+    return this.masterBus;
+  }
+
   // Get or create WebRTC audio context
   static getWebRTCContext(): AudioContext {
-    if (!this.webrtcContext) {
+    if (!this.webrtcContext || this.webrtcContext.state === "closed") {
       const config = getOptimalAudioConfig();
       this.webrtcContext = new AudioContext(config.WEBRTC_AUDIO_CONTEXT);
       this.webrtcActive = true;
@@ -239,6 +416,16 @@ export class AudioContextManager {
   // Cleanup contexts
   static async cleanup() {
     this.webrtcActive = false;
+    
+    // Cleanup node pool and master bus
+    if (this.instrumentNodePool) {
+      this.instrumentNodePool.cleanup();
+      this.instrumentNodePool = null;
+    }
+    if (this.masterBus) {
+      this.masterBus.cleanup();
+      this.masterBus = null;
+    }
     
     if (this.instrumentContext) {
       await this.instrumentContext.close();

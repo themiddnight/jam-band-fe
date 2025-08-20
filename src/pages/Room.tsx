@@ -1,7 +1,11 @@
 import { MidiStatus } from "@/features/audio";
 import { VoiceInput } from "@/features/audio";
 import { useWebRTCVoice } from "@/features/audio";
-import { PingDisplay, usePingMeasurement, useRTCLatencyMeasurement } from "@/features/audio";
+import {
+  PingDisplay,
+  usePingMeasurement,
+  useRTCLatencyMeasurement,
+} from "@/features/audio";
 import { InstrumentCategorySelector } from "@/features/instruments";
 import {
   LazyKeyboardWrapper as Keyboard,
@@ -11,7 +15,7 @@ import {
   LazyDrumsetWrapper as Drumset,
   LazySynthControlsWrapper as SynthControls,
 } from "@/features/instruments";
-import { ChatBox } from "@/features/rooms";
+import { ChatBox, ApprovalWaiting } from "@/features/rooms";
 import { RoomMembers } from "@/features/rooms";
 import { useRoom } from "@/features/rooms";
 import { MetronomeControls } from "@/features/metronome";
@@ -25,18 +29,23 @@ import { ControlType } from "@/shared/types";
 import { preloadCriticalComponents } from "@/shared/utils/componentPreloader";
 import { getSafariUserMessage } from "@/shared/utils/webkitCompat";
 import { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { ConnectionState } from "@/features/audio/types/connectionState";
 
+/**
+ * Room page using the RoomSocketManager for namespace-based connections
+ */
 const Room = memo(() => {
   const {
     // Room state
     currentRoom,
     currentUser,
-    pendingApproval,
+
     error,
 
     // Connection state
     isConnected,
     isConnecting,
+    connectionState,
 
     // UI state
     playingIndicators,
@@ -52,6 +61,7 @@ const Room = memo(() => {
     isLoadingInstrument,
     isAudioContextReady,
     audioContextError,
+    needsUserGesture,
     synthState,
     isSynthesizerLoaded,
 
@@ -84,13 +94,13 @@ const Room = memo(() => {
 
     // Audio management
     stopSustainedNotes,
-    playNotes,
+    initializeAudioContext,
 
     // Socket connection
     socketRef,
   } = useRoom();
 
-  // Ping measurement for room
+  // All hooks must be called before any early returns
   const { currentPing } = usePingMeasurement({
     socket: socketRef?.current,
     enabled: isConnected,
@@ -99,7 +109,6 @@ const Room = memo(() => {
   // Notification popup state
   const [isPendingPopupOpen, setIsPendingPopupOpen] = useState(false);
   const pendingBtnRef = useRef<HTMLButtonElement>(null);
-  const pendingCount = currentRoom?.pendingMembers?.length ?? 0;
 
   // WebRTC Voice Communication - allow all users (including audience) to participate
   const isVoiceEnabled = !!currentUser?.role;
@@ -125,17 +134,27 @@ const Room = memo(() => {
     canTransmit,
     isAudioEnabled,
     peerConnections,
-    // isConnecting: isVoiceConnecting,
-    // connectionError: voiceConnectionError
   } = useWebRTCVoice(webRTCParams);
 
   // RTC latency measurement
-  const { currentLatency, isActive: rtcLatencyActive, addPeerConnection, removePeerConnection } = useRTCLatencyMeasurement({
+  const {
+    currentLatency,
+    isActive: rtcLatencyActive,
+    addPeerConnection,
+    removePeerConnection,
+  } = useRTCLatencyMeasurement({
     enabled: isVoiceEnabled,
   });
 
   // Track last seen peer ids to diff additions/removals
   const lastSeenPeerIdsRef = useRef<Set<string>>(new Set());
+
+  // Copy room URL to clipboard with role selection
+  const [isInvitePopupOpen, setIsInvitePopupOpen] = useState(false);
+  const inviteBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Initialize scale slots store and apply selected slot
+  const { initialize, getSelectedSlot } = useScaleSlotsStore();
 
   // Sync peer connections with RTC latency measurement
   useEffect(() => {
@@ -164,7 +183,6 @@ const Room = memo(() => {
     performIntentionalCleanup();
     // Call the original leave room handler
     await handleLeaveRoomConfirm();
-    window.location.href = "/";
   }, [performIntentionalCleanup, handleLeaveRoomConfirm]);
 
   // Memoize VoiceInput callbacks to prevent component recreation
@@ -172,12 +190,28 @@ const Room = memo(() => {
     (stream: MediaStream) => {
       addLocalStream(stream);
     },
-    [addLocalStream],
+    [addLocalStream]
   );
 
   const handleStreamRemoved = useCallback(() => {
     removeLocalStream();
   }, [removeLocalStream]);
+
+  // Wrapper function to adapt onPlayNotes signature to handlePlayNote
+  const handlePlayNotesWrapper = useCallback(
+    (notes: string[], velocity: number, isKeyHeld: boolean) => {
+      handlePlayNote(notes, velocity, "note_on", isKeyHeld);
+    },
+    [handlePlayNote]
+  );
+
+  // Wrapper function for note stop
+  const handleStopNotesWrapper = useCallback(
+    (notes: string[]) => {
+      handleStopNote(notes);
+    },
+    [handleStopNote]
+  );
 
   // Memoize commonProps to prevent child component re-renders
   const commonProps = useMemo(
@@ -187,8 +221,8 @@ const Room = memo(() => {
         scale: scaleState.scale,
         getScaleNotes: scaleState.getScaleNotes,
       },
-      onPlayNotes: handlePlayNote,
-      onStopNotes: handleStopNote,
+      onPlayNotes: handlePlayNotesWrapper,
+      onStopNotes: handleStopNotesWrapper,
       onStopSustainedNotes: stopSustainedNotes,
       onReleaseKeyHeldNote: handleReleaseKeyHeldNote,
       onSustainChange: handleSustainChange,
@@ -198,13 +232,13 @@ const Room = memo(() => {
       scaleState.rootNote,
       scaleState.scale,
       scaleState.getScaleNotes,
-      handlePlayNote,
-      handleStopNote,
+      handlePlayNotesWrapper,
+      handleStopNotesWrapper,
       stopSustainedNotes,
       handleReleaseKeyHeldNote,
       handleSustainChange,
       handleSustainToggleChange,
-    ],
+    ]
   );
 
   // Preload critical components when component mounts
@@ -226,7 +260,7 @@ const Room = memo(() => {
         enableAudioReception().catch((error) => {
           console.log(
             "🎧 Auto audio enable failed (user gesture required):",
-            error,
+            error
           );
           // This is expected on mobile - user will need to click the button
         });
@@ -241,9 +275,6 @@ const Room = memo(() => {
     currentRoom,
     enableAudioReception,
   ]);
-
-  // Initialize scale slots store and apply selected slot
-  const { initialize, getSelectedSlot } = useScaleSlotsStore();
 
   // Initialize scale slots on first load
   useEffect(() => {
@@ -267,9 +298,19 @@ const Room = memo(() => {
     scaleState.setScale(scale);
   });
 
-  // Copy room URL to clipboard with role selection
-  const [isInvitePopupOpen, setIsInvitePopupOpen] = useState(false);
-  const inviteBtnRef = useRef<HTMLButtonElement>(null);
+  // Computed values
+  const pendingCount = currentRoom?.pendingMembers?.length ?? 0;
+
+  // Show approval waiting screen if in requesting state
+  if (connectionState === ConnectionState.REQUESTING) {
+    return (
+      <ApprovalWaiting
+        connectionState={connectionState}
+        onCancel={handleLeaveRoom}
+        roomName={currentRoom?.name}
+      />
+    );
+  }
 
   const handleCopyInviteUrl = async (role: "band_member" | "audience") => {
     try {
@@ -300,36 +341,6 @@ const Room = memo(() => {
       document.body.removeChild(textArea);
     }
   };
-
-  // Render pending approval modal
-  if (
-    pendingApproval ||
-    (currentRoom &&
-      currentUser &&
-      currentRoom.pendingMembers.some((member) => member.id === currentUser.id))
-  ) {
-    return (
-      <div className="min-h-dvh bg-base-200 flex items-center justify-center p-4">
-        <div className="card bg-base-100 shadow-xl w-full max-w-md">
-          <div className="card-body text-center flex flex-col items-center justify-center">
-            <h2 className="card-title justify-center text-xl">
-              Waiting for Approval
-            </h2>
-            <p className="text-base-content/70 mb-4">
-              Your request to join as a band member is pending approval from the
-              room owner.
-            </p>
-            <div className="loading loading-spinner mx-auto loading-lg text-primary"></div>
-            <div className="card-actions justify-center mt-4">
-              <button onClick={handleLeaveRoom} className="btn btn-outline">
-                Cancel Request
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // Render connecting state
   if (isConnecting || (!isConnected && !currentRoom)) {
@@ -542,8 +553,8 @@ const Room = memo(() => {
                           : "bg-error"
                     }`}
                   ></div>
-                  <PingDisplay 
-                    ping={currentPing} 
+                  <PingDisplay
+                    ping={currentPing}
                     isConnected={isConnected}
                     variant="compact"
                     showLabel={false}
@@ -603,16 +614,19 @@ const Room = memo(() => {
                 {/* Metronome Controls */}
                 <MetronomeControls
                   socket={socketRef?.current || null}
-                  canEdit={currentUser?.role === 'room_owner' || currentUser?.role === 'band_member'}
+                  canEdit={
+                    currentUser?.role === "room_owner" ||
+                    currentUser?.role === "band_member"
+                  }
                 />
-                
+
                 <ScaleSlots
                   onSlotSelect={(rootNote, scale) => {
                     scaleState.setRootNote(rootNote);
                     scaleState.setScale(scale);
                   }}
                 />
-                
+
                 <InstrumentCategorySelector
                   currentCategory={currentCategory}
                   currentInstrument={currentInstrument}
@@ -721,6 +735,31 @@ const Room = memo(() => {
 
     // Show loading indicator while audio context is initializing
     if (!isAudioContextReady) {
+      // If user gesture is needed, show initialization button
+      if (needsUserGesture) {
+        return (
+          <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
+            <div className="card-body text-center">
+              <h3 className="card-title justify-center text-xl">
+                Audio Setup Required
+              </h3>
+              <p className="text-base-content/70 mt-4">
+                Click the button below to initialize the audio system for your jam session.
+              </p>
+              <div className="card-actions justify-center mt-6">
+                <button
+                  onClick={initializeAudioContext}
+                  className="btn btn-primary btn-lg"
+                >
+                  Initialize Audio
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // Otherwise show loading spinner
       return (
         <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
           <div className="card-body text-center">
@@ -798,7 +837,7 @@ const Room = memo(() => {
             {...commonProps}
             availableSamples={availableSamples}
             currentInstrument={currentInstrument}
-            onPlayNotesLocal={playNotes}
+            onPlayNotesLocal={undefined}
           />
         );
       case ControlType.Drumset:

@@ -11,12 +11,19 @@ interface UseRTCLatencyMeasurementOptions {
   enabled?: boolean;
   interval?: number;
   maxHistory?: number;
+  // New option to use WebRTC mesh manager for latency measurement
+  useWebRTCMeshManager?: boolean;
+  webRTCMeshManager?: {
+    getWebRTCLatencyStats: () => Array<{ userId: string; currentLatency: number | null; averageLatency: number | null }>;
+  };
 }
 
 export function useRTCLatencyMeasurement({
   enabled = true,
   interval = RTC_MEASURE_INTERVAL_MS,
-  maxHistory = 5
+  maxHistory = 5,
+  useWebRTCMeshManager = false,
+  webRTCMeshManager
 }: UseRTCLatencyMeasurementOptions = {}) {
   const [currentLatency, setCurrentLatency] = useState<number | null>(null);
   const [averageLatency, setAverageLatency] = useState<number | null>(null);
@@ -38,18 +45,70 @@ export function useRTCLatencyMeasurement({
     return Math.round(sum / history.length);
   }, []);
 
-  // Measure RTC latency using RTCPeerConnection stats
+  // Measure RTC latency using RTCPeerConnection stats or WebRTC mesh manager
   const measureRTCLatency = useCallback(async () => {
-  if (!enabled || peersRef.current.size === 0) return;
+    if (!enabled) return;
+
+    // Use WebRTC mesh manager if available and enabled
+    if (useWebRTCMeshManager && webRTCMeshManager) {
+      const stats = webRTCMeshManager.getWebRTCLatencyStats();
+      
+      if (stats.length === 0) {
+        setIsActive(false);
+        return;
+      }
+
+      // Calculate average latency from all connected users
+      const validLatencies = stats
+        .map(stat => stat.currentLatency)
+        .filter((latency): latency is number => latency !== null);
+
+      if (validLatencies.length > 0) {
+        const avgLatency = Math.round(validLatencies.reduce((sum, latency) => sum + latency, 0) / validLatencies.length);
+
+        // Store measurements for history
+        stats.forEach(stat => {
+          if (stat.currentLatency !== null) {
+            const measurement: RTCLatencyMeasurement = {
+              latency: stat.currentLatency,
+              timestamp: Date.now(),
+              userId: stat.userId,
+            };
+            latencyHistoryRef.current.push(measurement);
+          }
+        });
+
+        // Buffer UI updates to avoid frequent re-renders
+        bufferedLatencyRef.current = avgLatency;
+        if (!updateTimerRef.current) {
+          updateTimerRef.current = window.setTimeout(() => {
+            setCurrentLatency(bufferedLatencyRef.current);
+            // Keep only recent measurements
+            if (latencyHistoryRef.current.length > maxHistory) {
+              latencyHistoryRef.current = latencyHistoryRef.current.slice(-maxHistory);
+            }
+            setAverageLatency(calculateAverageLatency());
+            setIsActive(true);
+            updateTimerRef.current = null;
+          }, UI_THROTTLE);
+        }
+      } else {
+        setIsActive(false);
+      }
+      return;
+    }
+
+    // Fallback to direct peer connection measurement
+    if (peersRef.current.size === 0) return;
 
     let totalLatency = 0;
     let validMeasurements = 0;
 
     for (const [userId, peerConnection] of peersRef.current.entries()) {
       try {
-  // Accept RTCPeerConnection as connected when either connectionState is 'connected'
-  // or ICE connection state is 'completed' (some browsers report completed via iceConnectionState)
-  if (peerConnection.connectionState !== 'connected' && peerConnection.iceConnectionState !== 'completed') continue;
+        // Accept RTCPeerConnection as connected when either connectionState is 'connected'
+        // or ICE connection state is 'completed' (some browsers report completed via iceConnectionState)
+        if (peerConnection.connectionState !== 'connected' && peerConnection.iceConnectionState !== 'completed') continue;
 
         const stats = await peerConnection.getStats();
         
@@ -105,7 +164,7 @@ export function useRTCLatencyMeasurement({
     } else {
       setIsActive(false);
     }
-  }, [enabled, maxHistory, calculateAverageLatency, UI_THROTTLE]);
+  }, [enabled, maxHistory, calculateAverageLatency, UI_THROTTLE, useWebRTCMeshManager, webRTCMeshManager]);
 
   // Start latency measurements
   const startLatencyMeasurement = useCallback(() => {
