@@ -115,6 +115,18 @@ export class RoomSocketManager {
       role
     });
 
+    // Emit the approval request on the approval namespace
+    if (this.approvalSocket) {
+      const emitRequest = () => {
+        this.approvalSocket!.emit('request_approval', approvalRequest);
+      };
+      if (this.approvalSocket.connected) {
+        emitRequest();
+      } else {
+        this.approvalSocket.once('connect', emitRequest);
+      }
+    }
+
     // Set approval timeout (30 seconds)
     this.approvalTimeoutId = setTimeout(() => {
       this.handleApprovalTimeout();
@@ -866,7 +878,7 @@ export class RoomSocketManager {
    * Set up approval-specific event handlers
    */
   private setupApprovalEventHandlers(socket: Socket, config: ConnectionConfig): void {
-  socket.on('approval_granted', async () => {
+    socket.on('approval_granted', async () => {
       // Clear approval timeout
       if (this.approvalTimeoutId) {
         clearTimeout(this.approvalTimeoutId);
@@ -877,6 +889,18 @@ export class RoomSocketManager {
       this.currentApprovalRequest = null;
 
       // Transition to room
+      if (config.roomId && config.role) {
+        await this.connectToRoom(config.roomId, config.role);
+      }
+    });
+
+    // Support legacy event name used by owner actions
+    socket.on('member_approved', async () => {
+      if (this.approvalTimeoutId) {
+        clearTimeout(this.approvalTimeoutId);
+        this.approvalTimeoutId = null;
+      }
+      this.currentApprovalRequest = null;
       if (config.roomId && config.role) {
         await this.connectToRoom(config.roomId, config.role);
       }
@@ -897,8 +921,24 @@ export class RoomSocketManager {
       await this.connectToLobby();
     });
 
+    // Support legacy event name used by owner actions
+    socket.on('member_rejected', async (data: { message: string }) => {
+      if (this.approvalTimeoutId) {
+        clearTimeout(this.approvalTimeoutId);
+        this.approvalTimeoutId = null;
+      }
+      this.currentApprovalRequest = null;
+      this.notifyError(data.message || 'Your request was rejected');
+      await this.connectToLobby();
+    });
+
     socket.on('approval_timeout', async () => {
       await this.handleApprovalTimeout();
+    });
+
+    // Optional: informational only
+    socket.on('approval_pending', () => {
+      // No-op: UI already reflects REQUESTING state
     });
   }
 

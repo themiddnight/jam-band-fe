@@ -24,6 +24,7 @@ export const useLobby = () => {
     connectToLobby,
     connectToRoom,
     requestRoomApproval,
+    cancelApprovalRequest,
     getActiveSocket,
     onRoomCreated,
     onRoomClosed,
@@ -61,6 +62,12 @@ export const useLobby = () => {
   const [isPrivate, setIsPrivate] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
 
+  // Track pending room intent while waiting for approval
+  const [pendingRoomIntent, setPendingRoomIntent] = useState<{
+    roomId: string;
+    role: "band_member" | "audience";
+  } | null>(null);
+
   // Define handleJoinRoom first
   const handleJoinRoom = useCallback(async (roomId: string, role: "band_member" | "audience") => {
     if (!username || !userId) {
@@ -78,6 +85,7 @@ export const useLobby = () => {
     try {
       if (isPrivateRoom && role === "band_member") {
         // For private rooms, band members need approval
+        setPendingRoomIntent({ roomId, role });
         await requestRoomApproval(roomId, userId, username, role);
         // Stay on lobby page during approval process
       } else {
@@ -144,6 +152,23 @@ export const useLobby = () => {
       }
     }
   }, [error]);
+
+  // Navigate to the room after approval (when socket transitions to IN_ROOM)
+  useEffect(() => {
+    if (connectionState === ConnectionState.IN_ROOM && pendingRoomIntent) {
+      navigate(`/room/${pendingRoomIntent.roomId}`, { state: { role: pendingRoomIntent.role } });
+      setPendingRoomIntent(null);
+    }
+  }, [connectionState, pendingRoomIntent, navigate]);
+
+  // Expose cancel approval action for UI
+  const cancelApproval = useCallback(async () => {
+    try {
+      await cancelApprovalRequest();
+    } finally {
+      setPendingRoomIntent(null);
+    }
+  }, [cancelApprovalRequest]);
 
   // Username management
   const handleUsernameClick = useCallback(() => {
@@ -248,6 +273,7 @@ export const useLobby = () => {
     handleRejectionModalClose,
     handleCreateRoomSubmit,
     handleCreateRoomButtonClick,
+    cancelApproval,
 
     // Setters
     setTempUsername,

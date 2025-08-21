@@ -410,6 +410,11 @@ export const useRoomSocket = (instrumentManager?: any) => {
                 addPendingMember(data.user);
             });
 
+            // New: handle approval requests for private rooms (owner notification)
+            on("approval_request", (data: { user: any; requestedAt?: string }) => {
+                addPendingMember(data.user);
+            });
+
             on("member_approved", (data: { user?: any; room?: any }) => {
                 if (data.user) {
                     removePendingMember(data.user.id);

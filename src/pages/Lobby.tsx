@@ -35,6 +35,7 @@ export default function Lobby() {
     handleRejectionModalClose,
     handleCreateRoomSubmit,
     handleCreateRoomButtonClick,
+    cancelApproval,
 
     // Setters
     setTempUsername,
@@ -87,19 +88,30 @@ export default function Lobby() {
             </div>
           </div>
 
-          {/* Connection Status */}
-          {connectionState !== ConnectionState.LOBBY && connectionState !== ConnectionState.DISCONNECTED && (
-            <div className="alert alert-info mb-4">
-              <div>
-                <h4 className="font-bold">Connection Status</h4>
-                <p className="text-sm">
-                  {connectionState === ConnectionState.REQUESTING && "Waiting for room approval..."}
-                  {connectionState === ConnectionState.IN_ROOM && "Connected to room"}
-                  {isConnecting && "Connecting..."}
-                </p>
+          {/* Waiting for approval modal */}
+          <Modal
+            open={connectionState === ConnectionState.REQUESTING}
+            setOpen={() => {}}
+            title="Waiting for Approval"
+            showOkButton={false}
+            showCancelButton={true}
+            cancelText="Cancel Request"
+            onCancel={cancelApproval}
+            allowClose={false}
+            size="md"
+          >
+            <div className="space-y-4">
+              <p className="text-base-content/70">
+                Your request to join the private room as a band member is pending owner approval.
+              </p>
+              <div className="flex justify-center">
+                <div className="loading loading-spinner mx-auto loading-lg text-primary"></div>
+              </div>
+              <div className="text-xs text-base-content/50 mt-2">
+                Request will timeout automatically after 30 seconds
               </div>
             </div>
-          )}
+          </Modal>
 
           {/* Card */}
           <div className="card bg-base-100 shadow-xl h-full">
