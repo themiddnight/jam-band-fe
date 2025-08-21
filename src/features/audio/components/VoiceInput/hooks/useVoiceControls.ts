@@ -81,7 +81,9 @@ export const useVoiceControls = ({
   // Handle self-monitoring toggle
   const handleSelfMonitorToggle = useCallback(() => {
     if (!audioContext || !gainNode) {
-      console.log("🎤 Self-monitoring: No audio context or gain node available");
+      console.log(
+        "🎤 Self-monitoring: No audio context or gain node available",
+      );
       return;
     }
 
@@ -89,32 +91,34 @@ export const useVoiceControls = ({
       if (!isSelfMonitoring) {
         // Enable self-monitoring: add monitoring connection to speakers
         console.log("🔊 Enabling self-monitoring");
-        
+
         // Create a monitoring gain node to control self-monitoring volume
         // This allows hearing yourself at the input gain level but with volume control
         const monitoringGain = audioContext.createGain();
         monitoringGain.gain.value = 0.6; // Quieter to prevent feedback, but audible
-        
+
         // Connect gain node to monitoring gain, then to speakers
         // This creates an additional path: gainNode -> monitoringGain -> destination (speakers)
         // The original path (gainNode -> analyser + WebRTC destination) remains intact
         gainNode.connect(monitoringGain);
         monitoringGain.connect(audioContext.destination);
-        
+
         // Store reference for cleanup
         monitoringConnectionRef.current = monitoringGain;
-        
-        console.log("✅ Self-monitoring enabled - you can now hear your own voice");
+
+        console.log(
+          "✅ Self-monitoring enabled - you can now hear your own voice",
+        );
       } else {
         // Disable self-monitoring: remove only the monitoring connection
         console.log("🔇 Disabling self-monitoring");
-        
+
         if (monitoringConnectionRef.current) {
           // Only disconnect the monitoring path, keep WebRTC path intact
           gainNode.disconnect(monitoringConnectionRef.current);
           monitoringConnectionRef.current.disconnect(audioContext.destination);
           monitoringConnectionRef.current = null;
-          
+
           console.log("✅ Self-monitoring disabled - WebRTC path preserved");
         } else {
           console.log("⚠️  No monitoring connection found to disconnect");

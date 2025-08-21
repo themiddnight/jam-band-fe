@@ -6,6 +6,7 @@ import {
   usePingMeasurement,
   useCombinedLatency,
 } from "@/features/audio";
+import { ConnectionState } from "@/features/audio/types/connectionState";
 import { InstrumentCategorySelector } from "@/features/instruments";
 import {
   LazyKeyboardWrapper as Keyboard,
@@ -15,10 +16,10 @@ import {
   LazyDrumsetWrapper as Drumset,
   LazySynthControlsWrapper as SynthControls,
 } from "@/features/instruments";
+import { MetronomeControls } from "@/features/metronome";
 import { ChatBox, ApprovalWaiting } from "@/features/rooms";
 import { RoomMembers } from "@/features/rooms";
 import { useRoom } from "@/features/rooms";
-import { MetronomeControls } from "@/features/metronome";
 import { Footer } from "@/features/ui";
 import { ScaleSlots } from "@/features/ui";
 import { AnchoredPopup, Modal } from "@/features/ui";
@@ -29,7 +30,6 @@ import { ControlType } from "@/shared/types";
 import { preloadCriticalComponents } from "@/shared/utils/componentPreloader";
 import { getSafariUserMessage } from "@/shared/utils/webkitCompat";
 import { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { ConnectionState } from "@/features/audio/types/connectionState";
 
 /**
  * Room page using the RoomSocketManager for namespace-based connections
@@ -97,19 +97,16 @@ const Room = memo(() => {
     initializeAudioContext,
 
     // Socket connection
-    socketRef,
     getActiveSocket,
   } = useRoom();
 
-  // All hooks must be called before any early returns  
+  // All hooks must be called before any early returns
   // Get the current active socket directly instead of using a ref
   const activeSocket = getActiveSocket();
   const { currentPing } = usePingMeasurement({
     socket: activeSocket,
     enabled: isConnected,
   });
-
-
 
   // Notification popup state
   const [isPendingPopupOpen, setIsPendingPopupOpen] = useState(false);
@@ -122,7 +119,7 @@ const Room = memo(() => {
 
   // WebRTC hook parameters
   const webRTCParams = {
-    socket: socketRef.current,
+    socket: activeSocket,
     currentUserId: currentUser?.id || "",
     currentUsername: currentUser?.username || "",
     roomId: currentRoom?.id || "",
@@ -152,9 +149,6 @@ const Room = memo(() => {
   } = useCombinedLatency({
     enabled: isVoiceEnabled,
   });
-
-
-
 
   // Track last seen peer ids to diff additions/removals
   const lastSeenPeerIdsRef = useRef<Set<string>>(new Set());
@@ -200,7 +194,7 @@ const Room = memo(() => {
     (stream: MediaStream) => {
       addLocalStream(stream);
     },
-    [addLocalStream]
+    [addLocalStream],
   );
 
   const handleStreamRemoved = useCallback(() => {
@@ -212,7 +206,7 @@ const Room = memo(() => {
     (notes: string[], velocity: number, isKeyHeld: boolean) => {
       handlePlayNote(notes, velocity, "note_on", isKeyHeld);
     },
-    [handlePlayNote]
+    [handlePlayNote],
   );
 
   // Wrapper function for note stop
@@ -220,7 +214,7 @@ const Room = memo(() => {
     (notes: string[]) => {
       handleStopNote(notes);
     },
-    [handleStopNote]
+    [handleStopNote],
   );
 
   // Memoize commonProps to prevent child component re-renders
@@ -248,7 +242,7 @@ const Room = memo(() => {
       handleReleaseKeyHeldNote,
       handleSustainChange,
       handleSustainToggleChange,
-    ]
+    ],
   );
 
   // Preload critical components when component mounts
@@ -270,7 +264,7 @@ const Room = memo(() => {
         enableAudioReception().catch((error) => {
           console.log(
             "🎧 Auto audio enable failed (user gesture required):",
-            error
+            error,
           );
           // This is expected on mobile - user will need to click the button
         });
@@ -623,15 +617,13 @@ const Room = memo(() => {
               />
             )}
 
-
-
             {/* Instrument Controls */}
             {(currentUser?.role === "room_owner" ||
               currentUser?.role === "band_member") && (
               <>
                 {/* Metronome Controls */}
                 <MetronomeControls
-                  socket={socketRef?.current || null}
+                  socket={activeSocket}
                   canEdit={
                     currentUser?.role === "room_owner" ||
                     currentUser?.role === "band_member"
@@ -685,6 +677,39 @@ const Room = memo(() => {
                   </p>
                   {isVoiceEnabled && (
                     <div className="mt-4 space-y-3">
+                      {/* WebRTC Connection Status Indicator */}
+                      <div className="flex items-center justify-center gap-2 text-sm">
+                        <span className="font-medium">Voice Chat Status:</span>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`w-3 h-3 rounded-full ${
+                              peerConnections.size > 0
+                                ? "bg-success"
+                                : isConnecting
+                                  ? "bg-warning"
+                                  : "bg-error"
+                            }`}
+                          ></div>
+                          <span
+                            className={
+                              peerConnections.size > 0
+                                ? "text-success"
+                                : isConnecting
+                                  ? "text-warning"
+                                  : "text-error"
+                            }
+                          >
+                            {peerConnections.size > 0
+                              ? `Connected (${peerConnections.size} peer${
+                                  peerConnections.size === 1 ? "" : "s"
+                                })`
+                              : isConnecting
+                                ? "Connecting..."
+                                : "Not Connected"}
+                          </span>
+                        </div>
+                      </div>
+
                       {!isAudioEnabled ? (
                         <div className="space-y-2">
                           <p className="text-sm text-base-content/80">
@@ -762,7 +787,8 @@ const Room = memo(() => {
                 Audio Setup Required
               </h3>
               <p className="text-base-content/70 mt-4">
-                Click the button below to initialize the audio system for your jam session.
+                Click the button below to initialize the audio system for your
+                jam session.
               </p>
               <div className="card-actions justify-center mt-6">
                 <button

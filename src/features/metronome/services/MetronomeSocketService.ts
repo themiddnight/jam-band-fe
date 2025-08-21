@@ -1,7 +1,6 @@
 // Metronome Socket Service - Updated for namespace-based connections
-
-import { Socket } from 'socket.io-client';
-import type { MetronomeTickData, UpdateMetronomeData } from '../types';
+import type { MetronomeTickData, UpdateMetronomeData } from "../types";
+import { Socket } from "socket.io-client";
 
 type MetronomeEventHandler =
   | ((data: { bpm: number; lastTickTimestamp: number }) => void)
@@ -20,7 +19,7 @@ export class MetronomeSocketService {
   // Request current metronome state when joining room
   requestMetronomeState() {
     if (!this.socket?.connected) return;
-    this.socket.emit('request_metronome_state');
+    this.socket.emit("request_metronome_state");
   }
 
   // Update metronome BPM (only room owner and band members)
@@ -28,57 +27,61 @@ export class MetronomeSocketService {
     if (!this.socket?.connected) return;
 
     const data: UpdateMetronomeData = { bpm };
-    this.socket.emit('update_metronome', data);
+    this.socket.emit("update_metronome", data);
   }
 
   // Listen for metronome state updates
-  onMetronomeUpdated(callback: (data: { bpm: number; lastTickTimestamp: number }) => void) {
-    if (!this.socket) return () => { };
+  onMetronomeUpdated(
+    callback: (data: { bpm: number; lastTickTimestamp: number }) => void,
+  ) {
+    if (!this.socket) return () => {};
 
     // Remove existing handler if any
-    this.removeHandler('metronome_updated');
+    this.removeHandler("metronome_updated");
 
     // Add new handler
-    this.socket.on('metronome_updated', callback);
-    this.eventHandlers.set('metronome_updated', callback);
+    this.socket.on("metronome_updated", callback);
+    this.eventHandlers.set("metronome_updated", callback);
 
     // Return cleanup function
     return () => {
-      this.removeHandler('metronome_updated');
+      this.removeHandler("metronome_updated");
     };
   }
 
   // Listen for metronome ticks
   onMetronomeTick(callback: (data: MetronomeTickData) => void) {
-    if (!this.socket) return () => { };
+    if (!this.socket) return () => {};
 
     // Remove existing handler if any
-    this.removeHandler('metronome_tick');
+    this.removeHandler("metronome_tick");
 
     // Add new handler
-    this.socket.on('metronome_tick', callback);
-    this.eventHandlers.set('metronome_tick', callback);
+    this.socket.on("metronome_tick", callback);
+    this.eventHandlers.set("metronome_tick", callback);
 
     // Return cleanup function
     return () => {
-      this.removeHandler('metronome_tick');
+      this.removeHandler("metronome_tick");
     };
   }
 
   // Listen for initial metronome state
-  onMetronomeState(callback: (data: { bpm: number; lastTickTimestamp: number }) => void) {
-    if (!this.socket) return () => { };
+  onMetronomeState(
+    callback: (data: { bpm: number; lastTickTimestamp: number }) => void,
+  ) {
+    if (!this.socket) return () => {};
 
     // Remove existing handler if any
-    this.removeHandler('metronome_state');
+    this.removeHandler("metronome_state");
 
     // Add new handler
-    this.socket.on('metronome_state', callback);
-    this.eventHandlers.set('metronome_state', callback);
+    this.socket.on("metronome_state", callback);
+    this.eventHandlers.set("metronome_state", callback);
 
     // Return cleanup function
     return () => {
-      this.removeHandler('metronome_state');
+      this.removeHandler("metronome_state");
     };
   }
 

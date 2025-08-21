@@ -1,8 +1,8 @@
+import { PingDisplay, usePingMeasurement } from "@/features/audio";
+import { ConnectionState } from "@/features/audio/types/connectionState";
 import { useLobby } from "@/features/rooms";
 import { Modal } from "@/features/ui";
 import { Footer } from "@/features/ui";
-import { PingDisplay, usePingMeasurement } from "@/features/audio";
-import { ConnectionState } from "@/features/audio/types/connectionState";
 
 /**
  * Lobby page using the RoomSocketManager for namespace-based connections
@@ -43,8 +43,8 @@ export default function Lobby() {
     setIsPrivate,
     setIsHidden,
 
-  // Socket for ping measurement
-  activeSocket,
+    // Socket for ping measurement
+    activeSocket,
   } = useLobby();
 
   // Ping measurement for lobby
@@ -71,8 +71,8 @@ export default function Lobby() {
                         : "bg-error"
                   }`}
                 ></div>
-                <PingDisplay 
-                  ping={currentPing} 
+                <PingDisplay
+                  ping={currentPing}
                   isConnected={isConnected}
                   variant="compact"
                   showLabel={false}
@@ -102,7 +102,8 @@ export default function Lobby() {
           >
             <div className="space-y-4">
               <p className="text-base-content/70">
-                Your request to join the private room as a band member is pending owner approval.
+                Your request to join the private room as a band member is
+                pending owner approval.
               </p>
               <div className="flex justify-center">
                 <div className="loading loading-spinner mx-auto loading-lg text-primary"></div>
@@ -176,7 +177,10 @@ export default function Lobby() {
                                   handleJoinRoom(room.id, "band_member")
                                 }
                                 className="btn btn-xs btn-primary"
-                                disabled={isConnecting || connectionState === ConnectionState.REQUESTING}
+                                disabled={
+                                  isConnecting ||
+                                  connectionState === ConnectionState.REQUESTING
+                                }
                               >
                                 Band Member
                               </button>
@@ -185,7 +189,10 @@ export default function Lobby() {
                                   handleJoinRoom(room.id, "audience")
                                 }
                                 className="btn btn-xs btn-outline"
-                                disabled={isConnecting || connectionState === ConnectionState.REQUESTING}
+                                disabled={
+                                  isConnecting ||
+                                  connectionState === ConnectionState.REQUESTING
+                                }
                               >
                                 Audience
                               </button>

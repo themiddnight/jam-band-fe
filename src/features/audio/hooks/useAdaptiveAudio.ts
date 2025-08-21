@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { adaptiveAudioManager } from '../services/AdaptiveAudioManager';
-import type { AdaptiveAudioState } from '../services/AdaptiveAudioManager';
-import { ADAPTIVE_AUDIO_CONFIG } from '../constants/audioConfig';
+import { ADAPTIVE_AUDIO_CONFIG } from "../constants/audioConfig";
+import { adaptiveAudioManager } from "../services/AdaptiveAudioManager";
+import type { AdaptiveAudioState } from "../services/AdaptiveAudioManager";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 interface UseAdaptiveAudioOptions {
   audioContext?: AudioContext | null;
@@ -14,9 +14,11 @@ export function useAdaptiveAudio({
   audioContext,
   userCount = 0,
   currentLatency = null,
-  onConfigChange
+  onConfigChange,
 }: UseAdaptiveAudioOptions = {}) {
-  const [state, setState] = useState<AdaptiveAudioState>(adaptiveAudioManager.getCurrentState());
+  const [state, setState] = useState<AdaptiveAudioState>(
+    adaptiveAudioManager.getCurrentState(),
+  );
   const [recommendations, setRecommendations] = useState<string[]>([]);
   const [performanceMetrics, setPerformanceMetrics] = useState<any>(null);
   const initializedRef = useRef(false);
@@ -27,15 +29,15 @@ export function useAdaptiveAudio({
       adaptiveAudioManager.initialize(audioContext, (config) => {
         // Update local state when configuration changes
         setState(adaptiveAudioManager.getCurrentState());
-        
+
         // Call external callback if provided
         if (onConfigChange) {
           onConfigChange(config);
         }
-        
-        console.log('🎵 Adaptive audio configuration changed:', config);
+
+        console.log("🎵 Adaptive audio configuration changed:", config);
       });
-      
+
       initializedRef.current = true;
     }
   }, [audioContext, onConfigChange]);
@@ -84,7 +86,7 @@ export function useAdaptiveAudio({
   const forceQualityReduction = useCallback(() => {
     // This would trigger the quality reduction logic
     // In a real implementation, you might want to simulate poor performance
-    console.log('🧪 Force quality reduction triggered');
+    console.log("🧪 Force quality reduction triggered");
   }, []);
 
   // Get configuration summary
@@ -98,7 +100,7 @@ export function useAdaptiveAudio({
       sampleSize: config.sampleSize,
       bufferSize: config.bufferSize,
       lookAhead: `${(config.lookAhead * 1000).toFixed(1)}ms`,
-      updateInterval: `${(config.updateInterval * 1000).toFixed(1)}ms`
+      updateInterval: `${(config.updateInterval * 1000).toFixed(1)}ms`,
     };
   }, [getCurrentConfig]);
 
@@ -127,25 +129,25 @@ export function useAdaptiveAudio({
     state,
     recommendations,
     performanceMetrics,
-    
+
     // Configuration
     currentConfig: getCurrentConfig(),
     configSummary: getConfigSummary(),
-    
+
     // Actions
     getCurrentConfig,
     getCurrentState,
     getPerformanceMetrics,
     getRecommendations,
     forceQualityReduction,
-    
+
     // Helper properties
-    isUltraLowLatency: state.quality === 'ultra-low-latency',
-    isBalanced: state.quality === 'balanced',
-    isStable: state.quality === 'stable',
+    isUltraLowLatency: state.quality === "ultra-low-latency",
+    isBalanced: state.quality === "balanced",
+    isStable: state.quality === "stable",
     qualityLevel: state.quality,
     userCount: state.userCount,
     currentLatency: state.currentLatency,
-    lastAdjustment: state.lastAdjustment
+    lastAdjustment: state.lastAdjustment,
   };
-} 
+}

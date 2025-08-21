@@ -1,5 +1,5 @@
-import { useCallback } from "react";
 import { ConnectionState } from "@/features/audio/types/connectionState";
+import { useCallback } from "react";
 
 interface ApprovalWaitingProps {
   connectionState: ConnectionState;
@@ -13,7 +13,7 @@ interface ApprovalWaitingProps {
 export const ApprovalWaiting: React.FC<ApprovalWaitingProps> = ({
   connectionState,
   onCancel,
-  roomName
+  roomName,
 }) => {
   const handleCancel = useCallback(() => {
     onCancel();
@@ -31,12 +31,13 @@ export const ApprovalWaiting: React.FC<ApprovalWaitingProps> = ({
             Waiting for Approval
           </h2>
           <p className="text-base-content/70 mb-4">
-            Your request to join {roomName ? `"${roomName}"` : "the room"} as a band member is pending approval from the room owner.
+            Your request to join {roomName ? `"${roomName}"` : "the room"} as a
+            band member is pending approval from the room owner.
           </p>
           <div className="loading loading-spinner mx-auto loading-lg text-primary"></div>
           <div className="card-actions justify-center mt-4">
-            <button 
-              onClick={handleCancel} 
+            <button
+              onClick={handleCancel}
               className="btn btn-outline"
               title="Cancel your join request and return to lobby"
             >

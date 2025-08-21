@@ -20,7 +20,9 @@ export default function Invite() {
     // Validate role parameter
     if (!role || !["band_member", "audience"].includes(role)) {
       // Default to audience if no valid role specified
-      console.log(`🎭 Invalid role parameter "${role}", defaulting to audience`);
+      console.log(
+        `🎭 Invalid role parameter "${role}", defaulting to audience`,
+      );
       navigate(`/room/${roomId}`, { state: { role: "audience" } });
       return;
     }

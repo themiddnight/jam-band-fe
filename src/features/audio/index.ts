@@ -20,20 +20,33 @@ export { useRTCLatencyMeasurement } from "./hooks/useRTCLatencyMeasurement";
 export { useCombinedLatency } from "./hooks/useCombinedLatency";
 export { useRoomAudio } from "./hooks/useRoomAudio";
 export { useAdaptiveAudio } from "./hooks/useAdaptiveAudio";
-export type { UseRoomAudioOptions, UseRoomAudioReturn } from "./hooks/useRoomAudio";
+export type {
+  UseRoomAudioOptions,
+  UseRoomAudioReturn,
+} from "./hooks/useRoomAudio";
 
 // Configuration exports
-export { AUDIO_CONFIG, getOptimalAudioConfig, AudioContextManager } from "./constants/audioConfig";
+export {
+  AUDIO_CONFIG,
+  getOptimalAudioConfig,
+  AudioContextManager,
+} from "./constants/audioConfig";
 
 // Types
 export { ConnectionState, ConnectionEvent } from "./types/connectionState";
-export type { ConnectionConfig, ApprovalRequest } from "./types/connectionState";
+export type {
+  ConnectionConfig,
+  ApprovalRequest,
+} from "./types/connectionState";
 
 // Services
 export { RoomSocketManager } from "./services/RoomSocketManager";
 export { RoomAudioManager } from "./services/RoomAudioManager";
 export { adaptiveAudioManager } from "./services/AdaptiveAudioManager";
-export type { RoomUser, InstrumentPreloadData } from "./services/RoomAudioManager";
+export type {
+  RoomUser,
+  InstrumentPreloadData,
+} from "./services/RoomAudioManager";
 
 // Store exports
 export { useInstrumentPreferencesStore } from "./stores/instrumentPreferencesStore";

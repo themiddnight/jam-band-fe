@@ -1,10 +1,10 @@
+import {
+  UltraLowLatencyOptimizer,
+  applyBrowserSpecificOptimizations,
+  getBrowserAudioCapabilities,
+} from "../utils/ultraLowLatencyOptimizer";
 import { useRef, useCallback, useEffect, useState, useMemo } from "react";
 import { Socket } from "socket.io-client";
-import { 
-  UltraLowLatencyOptimizer, 
-  applyBrowserSpecificOptimizations,
-  getBrowserAudioCapabilities 
-} from "../utils/ultraLowLatencyOptimizer";
 
 /**
  * Enhanced WebRTC Voice Communication Hook with Reliability Features
@@ -103,7 +103,9 @@ export const useWebRTCVoice = ({
 
   const peersRef = useRef<RTCPeerMap>({});
   // Buffer for remote ICE candidates that arrive before peer exists or before remote desc set
-  const pendingIceCandidatesRef = useRef<Record<string, RTCIceCandidateInit[]>>({});
+  const pendingIceCandidatesRef = useRef<Record<string, RTCIceCandidateInit[]>>(
+    {},
+  );
   const localStreamRef = useRef<MediaStream | null>(null);
   const audioLevelInterval = useRef<number | null>(null);
 
@@ -127,7 +129,9 @@ export const useWebRTCVoice = ({
   if (!optimizerRef.current) {
     optimizerRef.current = UltraLowLatencyOptimizer.getInstance();
     const capabilities = getBrowserAudioCapabilities();
-    console.log(`🚀 WebRTC: Initialized ultra-low latency optimizer for ${capabilities.browserType}`);
+    console.log(
+      `🚀 WebRTC: Initialized ultra-low latency optimizer for ${capabilities.browserType}`,
+    );
   }
 
   // Track intentional disconnection to avoid cleaning up during grace period
@@ -219,21 +223,25 @@ export const useWebRTCVoice = ({
 
     // Get users who should have connections but don't
     const voiceUserIds = voiceUsers
-      .map(user => user.userId)
-      .filter(userId => userId !== currentUserId); // Exclude self
+      .map((user) => user.userId)
+      .filter((userId) => userId !== currentUserId); // Exclude self
 
     const connectedUserIds = Object.keys(peersRef.current);
-    const missingConnections = voiceUserIds.filter(userId => 
-      !connectedUserIds.includes(userId)
+    const missingConnections = voiceUserIds.filter(
+      (userId) => !connectedUserIds.includes(userId),
     );
 
     if (missingConnections.length > 0) {
-      console.log("🔄 WebRTC: Found missing connections, attempting to re-establish:", missingConnections);
-      
-      missingConnections.forEach(userId => {
+      console.log(
+        "🔄 WebRTC: Found missing connections, attempting to re-establish:",
+        missingConnections,
+      );
+
+      missingConnections.forEach((userId) => {
         // Only attempt if we haven't reached max attempts recently
         const existingPeer = peersRef.current[userId];
-        const shouldAttempt = !existingPeer || 
+        const shouldAttempt =
+          !existingPeer ||
           (existingPeer.reconnectAttempts || 0) < MAX_RECONNECT_ATTEMPTS;
 
         if (shouldAttempt) {
@@ -269,19 +277,24 @@ export const useWebRTCVoice = ({
     if (!audioContextRef.current) {
       try {
         // Use separate WebRTC audio context
-        const { AudioContextManager } = await import("../../audio/constants/audioConfig");
+        const { AudioContextManager } = await import(
+          "../../audio/constants/audioConfig"
+        );
         audioContextRef.current = await AudioContextManager.getWebRTCContext();
-        
+
         // Notify system that WebRTC is now active
         AudioContextManager.setWebRTCActive(true);
       } catch (error) {
-        console.warn("Failed to import AudioContextManager, using fallback", error);
+        console.warn(
+          "Failed to import AudioContextManager, using fallback",
+          error,
+        );
         // Fallback to standard AudioContext
         const AudioContextClass =
           window.AudioContext || (window as any).webkitAudioContext;
         audioContextRef.current = new AudioContextClass({
           sampleRate: 48000, // WebRTC preferred sample rate
-          latencyHint: "balanced" // Balanced for voice quality
+          latencyHint: "balanced", // Balanced for voice quality
         });
       }
     }
@@ -371,10 +384,10 @@ export const useWebRTCVoice = ({
         { urls: "stun:stun.cloudflare.com:3478" }, // Additional for mobile NAT traversal
       ],
       iceCandidatePoolSize: 10, // Increased for mesh networks
-      iceTransportPolicy: 'all', // Use all available connection paths
+      iceTransportPolicy: "all", // Use all available connection paths
       // Mesh network optimizations
-      bundlePolicy: 'max-bundle', // Bundle all media on single transport for efficiency
-      rtcpMuxPolicy: 'require', // Reduce port usage for mesh networks
+      bundlePolicy: "max-bundle", // Bundle all media on single transport for efficiency
+      rtcpMuxPolicy: "require", // Reduce port usage for mesh networks
       // Ultra-low latency optimizations
       enableDscp: true, // Enable DSCP marking for network prioritization
       enableTcpCandidates: false, // Prefer UDP for lower latency
@@ -385,21 +398,32 @@ export const useWebRTCVoice = ({
 
   // Diagnostic function to check audio elements status
   const logAudioElementsStatus = useCallback(() => {
-    const activeElements = document.querySelectorAll('audio[data-webrtc-role="remote-voice"]');
+    const activeElements = document.querySelectorAll(
+      'audio[data-webrtc-role="remote-voice"]',
+    );
     const peerCount = Object.keys(peersRef.current).length;
-    const connectedCount = Object.values(peersRef.current).filter(p => p.isConnected).length;
-    
+    const connectedCount = Object.values(peersRef.current).filter(
+      (p) => p.isConnected,
+    ).length;
+
     console.log(`�️ MESH Network Status:
       - Total peer connections: ${peerCount}/9 (max 10 users)
       - Connected peers: ${connectedCount}
       - Audio elements in DOM: ${activeElements.length}
-      - Active peers: ${Object.entries(peersRef.current).map(([id, peer]) => `${id}:${peer.isConnected ? 'connected' : 'disconnected'}`).join(', ')}`);
-    
+      - Active peers: ${Object.entries(peersRef.current)
+        .map(
+          ([id, peer]) =>
+            `${id}:${peer.isConnected ? "connected" : "disconnected"}`,
+        )
+        .join(", ")}`);
+
     // Check each audio element's playback status
     activeElements.forEach((element, index) => {
       const audioEl = element as HTMLAudioElement;
-      const userId = audioEl.getAttribute('data-webrtc-user');
-      console.log(`  Audio ${index + 1} (${userId}): paused=${audioEl.paused}, muted=${audioEl.muted}, volume=${audioEl.volume}, srcObject=${!!audioEl.srcObject}`);
+      const userId = audioEl.getAttribute("data-webrtc-user");
+      console.log(
+        `  Audio ${index + 1} (${userId}): paused=${audioEl.paused}, muted=${audioEl.muted}, volume=${audioEl.volume}, srcObject=${!!audioEl.srcObject}`,
+      );
     });
   }, []);
 
@@ -410,12 +434,12 @@ export const useWebRTCVoice = ({
       peersRef.current[userId].audioElement.remove();
       delete peersRef.current[userId];
     }
-    
+
     // Cleanup ultra-low latency optimization for this user
     if (optimizerRef.current) {
       optimizerRef.current.removeOptimization(userId);
     }
-    
+
     // Cleanup remote analyser if exists
     const remoteEntry = remoteAnalysersRef.current.get(userId);
     if (remoteEntry) {
@@ -588,29 +612,39 @@ export const useWebRTCVoice = ({
         if (peersRef.current[userId]) {
           const audioElement = peersRef.current[userId].audioElement;
           audioElement.srcObject = remoteStream;
-          
+
           // Enhanced autoplay handling for multiple simultaneous streams
           try {
             // Ensure audio context is resumed for proper playback
             const context = await ensureAudioContext();
-            if (context.state === 'suspended') {
+            if (context.state === "suspended") {
               await context.resume();
             }
-            
+
             // Set explicit volume and play the audio element
             audioElement.volume = 1.0;
             await audioElement.play();
-            console.log(`🔊 WebRTC: Successfully started playback for ${userId}`);
+            console.log(
+              `🔊 WebRTC: Successfully started playback for ${userId}`,
+            );
           } catch (playError) {
-            console.error(`❌ WebRTC: Failed to start playback for ${userId}:`, playError);
-            
+            console.error(
+              `❌ WebRTC: Failed to start playback for ${userId}:`,
+              playError,
+            );
+
             // Retry with user gesture fallback
             setTimeout(async () => {
               try {
                 await audioElement.play();
-                console.log(`🔊 WebRTC: Retry playback successful for ${userId}`);
+                console.log(
+                  `🔊 WebRTC: Retry playback successful for ${userId}`,
+                );
               } catch (retryError) {
-                console.error(`❌ WebRTC: Retry playback failed for ${userId}:`, retryError);
+                console.error(
+                  `❌ WebRTC: Retry playback failed for ${userId}:`,
+                  retryError,
+                );
               }
             }, 100);
           }
@@ -623,8 +657,10 @@ export const useWebRTCVoice = ({
           const analyser = createAnalyser(context);
           source.connect(analyser);
           remoteAnalysersRef.current.set(userId, { analyser, source });
-          
-          console.log(`🎙️ WebRTC: Created analyser for remote stream from ${userId}`);
+
+          console.log(
+            `🎙️ WebRTC: Created analyser for remote stream from ${userId}`,
+          );
         } catch (e) {
           console.warn("Failed to create remote analyser:", e);
         }
@@ -664,8 +700,11 @@ export const useWebRTCVoice = ({
       const cleanupPendingInterval = () => clearInterval(pendingInterval);
 
       // Attach cleanup to peerConnection for finalization
-      peerConnection.addEventListener('connectionstatechange', () => {
-        if (peerConnection.connectionState === 'closed' || peerConnection.connectionState === 'failed') {
+      peerConnection.addEventListener("connectionstatechange", () => {
+        if (
+          peerConnection.connectionState === "closed" ||
+          peerConnection.connectionState === "failed"
+        ) {
           cleanupPendingInterval();
         }
       });
@@ -689,9 +728,11 @@ export const useWebRTCVoice = ({
             peersRef.current[userId].lastHealthCheck = Date.now();
           }
           setConnectionError(null); // Clear any previous errors
-          
+
           // Log successful connection and current peer status
-          console.log(`✅ MESH: Successfully connected to ${userId}. Total mesh connections: ${Object.values(peersRef.current).filter(p => p.isConnected).length}/9`);
+          console.log(
+            `✅ MESH: Successfully connected to ${userId}. Total mesh connections: ${Object.values(peersRef.current).filter((p) => p.isConnected).length}/9`,
+          );
           logAudioElementsStatus(); // Debug simultaneous connections
         } else if (state === "failed") {
           console.error(`❌ WebRTC Connection failed for ${userId}`);
@@ -799,7 +840,7 @@ export const useWebRTCVoice = ({
           return { ...user, audioLevel: smoothed, isMuted };
         });
       });
-      
+
       // Log audio elements status every 5 seconds for debugging
       if (Date.now() % 5000 < 200) {
         logAudioElementsStatus();
@@ -975,16 +1016,23 @@ export const useWebRTCVoice = ({
     stopAudioLevelMonitoring();
     stopHeartbeat(); // Stop heartbeat when local stream is removed
     stopConnectionRetryMonitoring(); // Stop connection retry monitoring
-    
+
     // Notify system that WebRTC is no longer active
     try {
-      import("../../audio/constants/audioConfig").then(({ AudioContextManager }) => {
-        AudioContextManager.setWebRTCActive(false);
-      });
+      import("../../audio/constants/audioConfig").then(
+        ({ AudioContextManager }) => {
+          AudioContextManager.setWebRTCActive(false);
+        },
+      );
     } catch (error) {
       console.warn("Failed to notify WebRTC deactivation", error);
     }
-  }, [stopAudioLevelMonitoring, stopHeartbeat, stopConnectionRetryMonitoring, currentUserId]);
+  }, [
+    stopAudioLevelMonitoring,
+    stopHeartbeat,
+    stopConnectionRetryMonitoring,
+    currentUserId,
+  ]);
 
   // Handle voice offer from remote peer
   const handleVoiceOffer = useCallback(
@@ -1005,7 +1053,9 @@ export const useWebRTCVoice = ({
       // Check if we already have a peer connection for this user
       const existingPeer = peersRef.current[data.fromUserId];
       if (existingPeer) {
-        console.log("🔄 MESH: Peer connection already exists, cleaning up before creating new one");
+        console.log(
+          "🔄 MESH: Peer connection already exists, cleaning up before creating new one",
+        );
         cleanupPeerConnection(data.fromUserId);
       }
 
@@ -1017,50 +1067,58 @@ export const useWebRTCVoice = ({
 
         // Create audio element optimized for ultra-low latency simultaneous playback
         const audioElement = document.createElement("audio");
-        
+
         // Ultra-low latency audio configuration
         audioElement.autoplay = true;
-        audioElement.setAttribute('playsinline', 'true'); // Important for mobile/iOS
+        audioElement.setAttribute("playsinline", "true"); // Important for mobile/iOS
         audioElement.volume = 1.0;
         audioElement.muted = false;
         audioElement.controls = false;
         audioElement.preload = "none"; // Don't preload since it's a live stream
-        
+
         // Ultra-low latency specific attributes
         audioElement.defaultMuted = false;
         audioElement.defaultPlaybackRate = 1.0;
         audioElement.preservesPitch = false; // Disable pitch correction for lower CPU
-        
+
         // WebAudio latency hints (if supported)
         try {
-          (audioElement as any).mozAudioChannelType = 'content'; // Firefox optimization
+          (audioElement as any).mozAudioChannelType = "content"; // Firefox optimization
           (audioElement as any).webkitAudioDecodedByteCount = 0; // Webkit optimization
           (audioElement as any).audioTracks = undefined; // Simplify audio processing
         } catch {
           // Ignore unsupported properties
         }
-        
+
         // Add attributes to help with simultaneous playback and debugging
-        audioElement.setAttribute('data-webrtc-user', data.fromUserId);
-        audioElement.setAttribute('data-webrtc-role', 'remote-voice');
-        audioElement.setAttribute('data-webrtc-latency', 'ultra-low');
-        
+        audioElement.setAttribute("data-webrtc-user", data.fromUserId);
+        audioElement.setAttribute("data-webrtc-role", "remote-voice");
+        audioElement.setAttribute("data-webrtc-latency", "ultra-low");
+
         // Optimize element configuration for live streaming
-        audioElement.style.display = 'none'; // Hidden audio element
-        audioElement.crossOrigin = 'anonymous';
-        
+        audioElement.style.display = "none"; // Hidden audio element
+        audioElement.crossOrigin = "anonymous";
+
         // Ultra-low latency event handlers
-        audioElement.onloadstart = () => console.log(`🔊 ${data.fromUserId}: Audio load started`);
-        audioElement.oncanplay = () => console.log(`🔊 ${data.fromUserId}: Audio can play`);
-        audioElement.onplaying = () => console.log(`🔊 ${data.fromUserId}: Audio playing started`);
-        audioElement.onstalled = () => console.warn(`⚠️ ${data.fromUserId}: Audio stalled`);
-        audioElement.onwaiting = () => console.warn(`⏳ ${data.fromUserId}: Audio waiting for data`);
-        
+        audioElement.onloadstart = () =>
+          console.log(`🔊 ${data.fromUserId}: Audio load started`);
+        audioElement.oncanplay = () =>
+          console.log(`🔊 ${data.fromUserId}: Audio can play`);
+        audioElement.onplaying = () =>
+          console.log(`🔊 ${data.fromUserId}: Audio playing started`);
+        audioElement.onstalled = () =>
+          console.warn(`⚠️ ${data.fromUserId}: Audio stalled`);
+        audioElement.onwaiting = () =>
+          console.warn(`⏳ ${data.fromUserId}: Audio waiting for data`);
+
         document.body.appendChild(audioElement);
 
         // Apply ultra-low latency optimizations to the audio element
         if (optimizerRef.current) {
-          optimizerRef.current.optimizeAudioElement(data.fromUserId, audioElement);
+          optimizerRef.current.optimizeAudioElement(
+            data.fromUserId,
+            audioElement,
+          );
         }
 
         peersRef.current[data.fromUserId] = {
@@ -1074,7 +1132,7 @@ export const useWebRTCVoice = ({
 
         // Set remote description first
         await peerConnection.setRemoteDescription(data.offer);
-        
+
         // Create and set local description (answer)
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
@@ -1088,20 +1146,27 @@ export const useWebRTCVoice = ({
       } catch (error) {
         console.error("Failed to handle voice offer:", error);
         setConnectionError("Failed to establish voice connection");
-        
+
         // Clean up failed connection
         cleanupPeerConnection(data.fromUserId);
       } finally {
         setIsConnecting(false);
       }
     },
-    [isEnabled, socket, roomId, currentUserId, createPeerConnection, cleanupPeerConnection],
+    [
+      isEnabled,
+      socket,
+      roomId,
+      currentUserId,
+      createPeerConnection,
+      cleanupPeerConnection,
+    ],
   );
 
   // Handle voice answer from remote peer
   const handleVoiceAnswer = useCallback(
-    async (data: { 
-      answer: RTCSessionDescriptionInit; 
+    async (data: {
+      answer: RTCSessionDescriptionInit;
       fromUserId: string;
       targetUserId?: string;
       roomId?: string;
@@ -1117,12 +1182,16 @@ export const useWebRTCVoice = ({
       try {
         // Check if the peer connection is in the correct state to receive an answer
         if (peer.connection.signalingState !== "have-local-offer") {
-          console.warn(`⚠️ WebRTC: Cannot set remote answer, peer connection is in '${peer.connection.signalingState}' state, expected 'have-local-offer'`);
-          
+          console.warn(
+            `⚠️ WebRTC: Cannot set remote answer, peer connection is in '${peer.connection.signalingState}' state, expected 'have-local-offer'`,
+          );
+
           // If the connection is stable, it might be due to a race condition
           // Let's attempt to restart the negotiation
           if (peer.connection.signalingState === "stable") {
-            console.log("🔄 WebRTC: Attempting to restart negotiation due to state mismatch");
+            console.log(
+              "🔄 WebRTC: Attempting to restart negotiation due to state mismatch",
+            );
             // Clean up and restart connection after a short delay
             setTimeout(async () => {
               if (peer.connection.connectionState !== "connected") {
@@ -1137,12 +1206,17 @@ export const useWebRTCVoice = ({
         }
 
         await peer.connection.setRemoteDescription(data.answer);
-        console.log("✅ WebRTC: Successfully set remote answer for", data.fromUserId);
+        console.log(
+          "✅ WebRTC: Successfully set remote answer for",
+          data.fromUserId,
+        );
       } catch (error) {
         console.error("Failed to handle voice answer:", error);
-        
+
         // If this fails, try to restart the connection
-        console.log("🔄 WebRTC: Attempting to restart connection due to answer error");
+        console.log(
+          "🔄 WebRTC: Attempting to restart connection due to answer error",
+        );
         setTimeout(async () => {
           if (peer.connection.connectionState !== "connected") {
             console.log("🔄 WebRTC: Restarting connection after answer error");
@@ -1159,8 +1233,8 @@ export const useWebRTCVoice = ({
 
   // Handle ICE candidate from remote peer
   const handleVoiceIceCandidate = useCallback(
-    async (data: { 
-      candidate: RTCIceCandidateInit; 
+    async (data: {
+      candidate: RTCIceCandidateInit;
       fromUserId: string;
       targetUserId?: string;
       roomId?: string;
@@ -1173,14 +1247,15 @@ export const useWebRTCVoice = ({
       const peerEntry = peersRef.current[data.fromUserId];
       if (!peerEntry) {
         // Buffer candidate until peer connection is created
-        pendingIceCandidatesRef.current[data.fromUserId] = pendingIceCandidatesRef.current[data.fromUserId] || [];
+        pendingIceCandidatesRef.current[data.fromUserId] =
+          pendingIceCandidatesRef.current[data.fromUserId] || [];
         pendingIceCandidatesRef.current[data.fromUserId].push(data.candidate);
         return;
       }
 
       try {
         // Only add candidate if connection isn't closed
-        if (peerEntry.connection.signalingState !== 'closed') {
+        if (peerEntry.connection.signalingState !== "closed") {
           await peerEntry.connection.addIceCandidate(data.candidate);
         }
       } catch (error) {
@@ -1200,10 +1275,14 @@ export const useWebRTCVoice = ({
       // Check mesh network connection limit (max 9 other users = 10 total)
       const currentConnections = Object.keys(peersRef.current).length;
       const MAX_MESH_CONNECTIONS = 9; // Support up to 10 users total
-      
+
       if (currentConnections >= MAX_MESH_CONNECTIONS) {
-        console.warn(`🕸️ MESH: Connection limit reached (${currentConnections}/${MAX_MESH_CONNECTIONS}). Cannot establish new connection to ${targetUserId}`);
-        setConnectionError(`Maximum connections reached (${MAX_MESH_CONNECTIONS + 1} users). Some users may not be able to join voice chat.`);
+        console.warn(
+          `🕸️ MESH: Connection limit reached (${currentConnections}/${MAX_MESH_CONNECTIONS}). Cannot establish new connection to ${targetUserId}`,
+        );
+        setConnectionError(
+          `Maximum connections reached (${MAX_MESH_CONNECTIONS + 1} users). Some users may not be able to join voice chat.`,
+        );
         return;
       }
 
@@ -1211,14 +1290,21 @@ export const useWebRTCVoice = ({
       const existingPeer = peersRef.current[targetUserId];
       if (existingPeer) {
         // If connection is already established or connecting, don't create another
-        if (existingPeer.connection.connectionState === "connected" || 
-            existingPeer.connection.connectionState === "connecting" ||
-            existingPeer.connection.signalingState !== "stable") {
-          console.log("�️ MESH: Connection already exists or in progress for", targetUserId);
+        if (
+          existingPeer.connection.connectionState === "connected" ||
+          existingPeer.connection.connectionState === "connecting" ||
+          existingPeer.connection.signalingState !== "stable"
+        ) {
+          console.log(
+            "�️ MESH: Connection already exists or in progress for",
+            targetUserId,
+          );
           return;
         }
-        
-        console.log("🔄 MESH: Cleaning up existing failed connection before creating new one");
+
+        console.log(
+          "🔄 MESH: Cleaning up existing failed connection before creating new one",
+        );
         cleanupPeerConnection(targetUserId);
       }
 
@@ -1230,45 +1316,50 @@ export const useWebRTCVoice = ({
 
         // Create audio element optimized for ultra-low latency simultaneous playback
         const audioElement = document.createElement("audio");
-        
+
         // Ultra-low latency audio configuration
         audioElement.autoplay = true;
-        audioElement.setAttribute('playsinline', 'true'); // Important for mobile/iOS
+        audioElement.setAttribute("playsinline", "true"); // Important for mobile/iOS
         audioElement.volume = 1.0;
         audioElement.muted = false;
         audioElement.controls = false;
         audioElement.preload = "none"; // Don't preload since it's a live stream
-        
+
         // Ultra-low latency specific attributes
         audioElement.defaultMuted = false;
         audioElement.defaultPlaybackRate = 1.0;
         audioElement.preservesPitch = false; // Disable pitch correction for lower CPU
-        
+
         // WebAudio latency hints (if supported)
         try {
-          (audioElement as any).mozAudioChannelType = 'content'; // Firefox optimization
+          (audioElement as any).mozAudioChannelType = "content"; // Firefox optimization
           (audioElement as any).webkitAudioDecodedByteCount = 0; // Webkit optimization
           (audioElement as any).audioTracks = undefined; // Simplify audio processing
         } catch {
           // Ignore unsupported properties
         }
-        
+
         // Add attributes to help with simultaneous playback and debugging
-        audioElement.setAttribute('data-webrtc-user', targetUserId);
-        audioElement.setAttribute('data-webrtc-role', 'remote-voice');
-        audioElement.setAttribute('data-webrtc-latency', 'ultra-low');
-        
+        audioElement.setAttribute("data-webrtc-user", targetUserId);
+        audioElement.setAttribute("data-webrtc-role", "remote-voice");
+        audioElement.setAttribute("data-webrtc-latency", "ultra-low");
+
         // Optimize element configuration for live streaming
-        audioElement.style.display = 'none'; // Hidden audio element
-        audioElement.crossOrigin = 'anonymous';
-        
+        audioElement.style.display = "none"; // Hidden audio element
+        audioElement.crossOrigin = "anonymous";
+
         // Ultra-low latency event handlers
-        audioElement.onloadstart = () => console.log(`🔊 ${targetUserId}: Audio load started`);
-        audioElement.oncanplay = () => console.log(`🔊 ${targetUserId}: Audio can play`);
-        audioElement.onplaying = () => console.log(`🔊 ${targetUserId}: Audio playing started`);
-        audioElement.onstalled = () => console.warn(`⚠️ ${targetUserId}: Audio stalled`);
-        audioElement.onwaiting = () => console.warn(`⏳ ${targetUserId}: Audio waiting for data`);
-        
+        audioElement.onloadstart = () =>
+          console.log(`🔊 ${targetUserId}: Audio load started`);
+        audioElement.oncanplay = () =>
+          console.log(`🔊 ${targetUserId}: Audio can play`);
+        audioElement.onplaying = () =>
+          console.log(`🔊 ${targetUserId}: Audio playing started`);
+        audioElement.onstalled = () =>
+          console.warn(`⚠️ ${targetUserId}: Audio stalled`);
+        audioElement.onwaiting = () =>
+          console.warn(`⏳ ${targetUserId}: Audio waiting for data`);
+
         document.body.appendChild(audioElement);
 
         // Apply ultra-low latency optimizations to the audio element
@@ -1298,7 +1389,7 @@ export const useWebRTCVoice = ({
       } catch (error) {
         console.error("❌ Failed to initiate voice call:", error);
         setConnectionError("Failed to initiate voice call");
-        
+
         // Clean up failed connection
         cleanupPeerConnection(targetUserId);
       } finally {
@@ -1347,18 +1438,21 @@ export const useWebRTCVoice = ({
         // Use a more deterministic approach to avoid race conditions
         // For full mesh networking: Only initiate if we have a "lower" userId to prevent both sides from initiating
         const shouldInitiate = currentUserId.localeCompare(data.userId) < 0;
-        
+
         if (shouldInitiate) {
           // Add a small delay to ensure the cleanup is complete and reduce race conditions
-          setTimeout(() => {
-            if (!peersRef.current[data.userId]) {
-              console.log(
-                "🕸️ MESH: Initiating connection as designated initiator",
-                `${currentUserId} < ${data.userId}`,
-              );
-              initiateVoiceCall(data.userId);
-            }
-          }, 200 + Math.random() * 300); // Random delay to spread out connection attempts
+          setTimeout(
+            () => {
+              if (!peersRef.current[data.userId]) {
+                console.log(
+                  "🕸️ MESH: Initiating connection as designated initiator",
+                  `${currentUserId} < ${data.userId}`,
+                );
+                initiateVoiceCall(data.userId);
+              }
+            },
+            200 + Math.random() * 300,
+          ); // Random delay to spread out connection attempts
         } else {
           console.log(
             "⏳ MESH: Waiting for peer to initiate connection (we are receiver)",
@@ -1449,7 +1543,9 @@ export const useWebRTCVoice = ({
     (data: { userId: string; username: string; shouldInitiate: boolean }) => {
       if (!isEnabled || !canTransmit) return;
 
-      console.log(`🕸️ MESH: New peer detected - ${data.username} (${data.userId})`);
+      console.log(
+        `🕸️ MESH: New peer detected - ${data.username} (${data.userId})`,
+      );
       console.log(`🕸️ MESH: Should initiate: ${data.shouldInitiate}`);
 
       // Add to voice users list if not already present
@@ -1471,18 +1567,29 @@ export const useWebRTCVoice = ({
 
       // Clean up any existing connection to this user first
       if (peersRef.current[data.userId]) {
-        console.log("🧹 MESH: Cleaning up existing connection before new one", data.userId);
+        console.log(
+          "🧹 MESH: Cleaning up existing connection before new one",
+          data.userId,
+        );
         cleanupPeerConnection(data.userId);
       }
 
       // Only initiate connection if we're designated as the initiator
       if (data.shouldInitiate && localStreamRef.current) {
-        setTimeout(() => {
-          if (!peersRef.current[data.userId] && initiateVoiceCallRef.current) {
-            console.log(`🕸️ MESH: Initiating connection to new peer ${data.userId}`);
-            initiateVoiceCallRef.current(data.userId);
-          }
-        }, 500 + Math.random() * 1000); // Spread out connections to avoid overwhelming
+        setTimeout(
+          () => {
+            if (
+              !peersRef.current[data.userId] &&
+              initiateVoiceCallRef.current
+            ) {
+              console.log(
+                `🕸️ MESH: Initiating connection to new peer ${data.userId}`,
+              );
+              initiateVoiceCallRef.current(data.userId);
+            }
+          },
+          500 + Math.random() * 1000,
+        ); // Spread out connections to avoid overwhelming
       }
     },
     [isEnabled, canTransmit, cleanupPeerConnection],
@@ -1500,15 +1607,17 @@ export const useWebRTCVoice = ({
     }) => {
       if (!isEnabled || !canTransmit) return;
 
-      console.log(`🕸️ MESH: Received mesh participants for full mesh network:`, 
-        data.participants.map(p => `${p.username}(${p.userId})`));
+      console.log(
+        `🕸️ MESH: Received mesh participants for full mesh network:`,
+        data.participants.map((p) => `${p.username}(${p.userId})`),
+      );
 
       // Update voice users list with complete mesh network
       setVoiceUsers((prev) => {
-        const updated = new Map(prev.map(u => [u.userId, u]));
+        const updated = new Map(prev.map((u) => [u.userId, u]));
 
         // Add/update mesh participants
-        data.participants.forEach(participant => {
+        data.participants.forEach((participant) => {
           updated.set(participant.userId, {
             userId: participant.userId,
             username: participant.username,
@@ -1518,7 +1627,7 @@ export const useWebRTCVoice = ({
         });
 
         // Keep current user in the list
-        const currentUser = prev.find(u => u.userId === currentUserId);
+        const currentUser = prev.find((u) => u.userId === currentUserId);
         if (currentUser) {
           updated.set(currentUserId, currentUser);
         }
@@ -1527,25 +1636,37 @@ export const useWebRTCVoice = ({
       });
 
       // Cache mesh participant states
-      data.participants.forEach(participant => {
+      data.participants.forEach((participant) => {
         remoteMuteStateRef.current.set(participant.userId, participant.isMuted);
       });
 
       // Establish connections to participants where we should initiate
       if (localStreamRef.current) {
-        const initiateTo = data.participants.filter(p => p.shouldInitiate && !peersRef.current[p.userId]);
-        
-        console.log(`🕸️ MESH: Will initiate connections to:`, 
-          initiateTo.map(p => p.userId));
+        const initiateTo = data.participants.filter(
+          (p) => p.shouldInitiate && !peersRef.current[p.userId],
+        );
+
+        console.log(
+          `🕸️ MESH: Will initiate connections to:`,
+          initiateTo.map((p) => p.userId),
+        );
 
         initiateTo.forEach((participant, index) => {
           // Spread out connection attempts to avoid overwhelming the network
-          setTimeout(() => {
-            if (!peersRef.current[participant.userId] && initiateVoiceCallRef.current) {
-              console.log(`🕸️ MESH: Establishing mesh connection to ${participant.userId}`);
-              initiateVoiceCallRef.current(participant.userId);
-            }
-          }, (index + 1) * 800); // 800ms between each connection attempt
+          setTimeout(
+            () => {
+              if (
+                !peersRef.current[participant.userId] &&
+                initiateVoiceCallRef.current
+              ) {
+                console.log(
+                  `🕸️ MESH: Establishing mesh connection to ${participant.userId}`,
+                );
+                initiateVoiceCallRef.current(participant.userId);
+              }
+            },
+            (index + 1) * 800,
+          ); // 800ms between each connection attempt
         });
       }
     },
@@ -1684,7 +1805,7 @@ export const useWebRTCVoice = ({
       }>;
     }) => {
       const byId = new Map(payload.participants.map((p) => [p.userId, p]));
-      
+
       // merge/insert
       setVoiceUsers((prev) => {
         const next = new Map(prev.map((u) => [u.userId, u] as const));
@@ -1700,18 +1821,26 @@ export const useWebRTCVoice = ({
         }
         return Array.from(next.values());
       });
-      
+
       // cache explicit mute states
       byId.forEach((p) => remoteMuteStateRef.current.set(p.userId, p.isMuted));
-      
+
       // Attempt to establish connections with users we don't have connections to
       if (canTransmit && localStreamRef.current) {
         payload.participants.forEach((participant) => {
-          if (participant.userId !== currentUserId && !peersRef.current[participant.userId]) {
-            console.log(`🤝 WebRTC: Attempting connection to existing participant ${participant.userId}`);
+          if (
+            participant.userId !== currentUserId &&
+            !peersRef.current[participant.userId]
+          ) {
+            console.log(
+              `🤝 WebRTC: Attempting connection to existing participant ${participant.userId}`,
+            );
             // Small delay to avoid overwhelming the system
             setTimeout(() => {
-              if (initiateVoiceCallRef.current && !peersRef.current[participant.userId]) {
+              if (
+                initiateVoiceCallRef.current &&
+                !peersRef.current[participant.userId]
+              ) {
                 initiateVoiceCallRef.current(participant.userId);
               }
             }, Math.random() * 2000); // Random delay up to 2 seconds
@@ -1738,7 +1867,7 @@ export const useWebRTCVoice = ({
     socket.on("voice_connection_failed", handleVoiceConnectionFailed);
     socket.on("voice_reconnection_requested", handleVoiceReconnectionRequested);
     socket.on("error", handleSocketError);
-    
+
     // Full Mesh Network Events
     socket.on("new_mesh_peer", handleNewMeshPeer);
     socket.on("mesh_participants", handleMeshParticipants);
@@ -1756,7 +1885,7 @@ export const useWebRTCVoice = ({
         handleVoiceReconnectionRequested,
       );
       socket.off("error", handleSocketError);
-      
+
       // Full Mesh Network Events cleanup
       socket.off("new_mesh_peer", handleNewMeshPeer);
       socket.off("mesh_participants", handleMeshParticipants);
@@ -1782,8 +1911,10 @@ export const useWebRTCVoice = ({
     if (!socket || !isEnabled) return;
 
     const handleSocketReconnection = () => {
-      console.log("🔄 WebRTC: Socket reconnected, attempting to restore voice connections");
-      
+      console.log(
+        "🔄 WebRTC: Socket reconnected, attempting to restore voice connections",
+      );
+
       // Clear any grace period timeout since we're back online
       if (gracePeriodTimeoutRef.current) {
         clearTimeout(gracePeriodTimeoutRef.current);
@@ -1791,8 +1922,15 @@ export const useWebRTCVoice = ({
       }
 
       // Re-announce voice presence if we have a local stream
-      if (localStreamRef.current && currentUserId && currentUsername && roomId) {
-        console.log("📢 WebRTC: Re-announcing voice presence after socket reconnection");
+      if (
+        localStreamRef.current &&
+        currentUserId &&
+        currentUsername &&
+        roomId
+      ) {
+        console.log(
+          "📢 WebRTC: Re-announcing voice presence after socket reconnection",
+        );
         socket.emit("join_voice", {
           roomId,
           userId: currentUserId,
@@ -1822,19 +1960,27 @@ export const useWebRTCVoice = ({
 
   // Effect to aggressively restore voice connections when capability is restored
   useEffect(() => {
-    if (!socket || !socket.connected || !isEnabled || !localStreamRef.current || !canTransmit) {
+    if (
+      !socket ||
+      !socket.connected ||
+      !isEnabled ||
+      !localStreamRef.current ||
+      !canTransmit
+    ) {
       return;
     }
 
     // Check if we're missing connections to existing voice users
-    const missingConnections = voiceUsers.filter(user => 
-      user.userId !== currentUserId && !peersRef.current[user.userId]
+    const missingConnections = voiceUsers.filter(
+      (user) => user.userId !== currentUserId && !peersRef.current[user.userId],
     );
 
     if (missingConnections.length > 0) {
-      console.log("🔄 WebRTC: Capability restored, attempting to reconnect to users:", 
-        missingConnections.map(u => u.userId));
-      
+      console.log(
+        "🔄 WebRTC: Capability restored, attempting to reconnect to users:",
+        missingConnections.map((u) => u.userId),
+      );
+
       // Attempt to reconnect with a delay spread to avoid overwhelming
       missingConnections.forEach((user, index) => {
         setTimeout(() => {
@@ -1845,7 +1991,14 @@ export const useWebRTCVoice = ({
         }, index * 500); // 500ms delay between each connection attempt
       });
     }
-  }, [socket, socket?.connected, isEnabled, canTransmit, voiceUsers, currentUserId]);
+  }, [
+    socket,
+    socket?.connected,
+    isEnabled,
+    canTransmit,
+    voiceUsers,
+    currentUserId,
+  ]);
 
   // Cleanup on unmount or when disabled
   useEffect(() => {
@@ -2174,7 +2327,9 @@ export const useWebRTCVoice = ({
         // Request mesh network connections from the server
         setTimeout(() => {
           if (socket && socket.connected && currentUserId && roomId) {
-            console.log("🕸️ MESH: Requesting mesh network coordination after reconnection");
+            console.log(
+              "🕸️ MESH: Requesting mesh network coordination after reconnection",
+            );
             socket.emit("request_mesh_connections", {
               roomId,
               userId: currentUserId,
@@ -2282,7 +2437,9 @@ export const useWebRTCVoice = ({
             // Request mesh network coordination for new user
             setTimeout(() => {
               if (socket && socket.connected) {
-                console.log("🕸️ MESH: Requesting mesh network coordination for new voice join");
+                console.log(
+                  "🕸️ MESH: Requesting mesh network coordination for new voice join",
+                );
                 socket.emit("request_mesh_connections", {
                   roomId,
                   userId: currentUserId,
@@ -2379,6 +2536,11 @@ export const useWebRTCVoice = ({
     connectionError,
     canTransmit,
     isAudioEnabled,
-    peerConnections: new Map(Object.entries(peersRef.current).map(([userId, peer]) => [userId, peer.connection])),
+    peerConnections: new Map(
+      Object.entries(peersRef.current).map(([userId, peer]) => [
+        userId,
+        peer.connection,
+      ]),
+    ),
   };
 };

@@ -1,6 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Socket } from 'socket.io-client';
-import { PING_MEASURE_INTERVAL_MS, PING_UI_THROTTLE_MS } from '@/features/audio/constants/intervals';
+import {
+  PING_MEASURE_INTERVAL_MS,
+  PING_UI_THROTTLE_MS,
+} from "@/features/audio/constants/intervals";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Socket } from "socket.io-client";
 
 interface PingMeasurement {
   ping: number;
@@ -18,12 +21,12 @@ export function usePingMeasurement({
   socket,
   enabled = true,
   interval = PING_MEASURE_INTERVAL_MS, // default from constants
-  maxHistory = 10
+  maxHistory = 10,
 }: UsePingMeasurementOptions) {
   const [currentPing, setCurrentPing] = useState<number | null>(null);
   const [averagePing, setAveragePing] = useState<number | null>(null);
   const [isConnected, setIsConnected] = useState<boolean>(false);
-  
+
   const pingHistoryRef = useRef<PingMeasurement[]>([]);
   const pendingPingsRef = useRef<Map<string, number>>(new Map());
   const intervalRef = useRef<number | null>(null);
@@ -36,7 +39,7 @@ export function usePingMeasurement({
   const calculateAveragePing = useCallback(() => {
     const history = pingHistoryRef.current;
     if (history.length === 0) return null;
-    
+
     const sum = history.reduce((acc, measurement) => acc + measurement.ping, 0);
     return Math.round(sum / history.length);
   }, []);
@@ -47,9 +50,9 @@ export function usePingMeasurement({
 
     const pingId = `ping_${Date.now()}_${Math.random()}`;
     const timestamp = Date.now();
-    
+
     pendingPingsRef.current.set(pingId, timestamp);
-    socket.emit('ping_measurement', { pingId, timestamp });
+    socket.emit("ping_measurement", { pingId, timestamp });
 
     // Clean up old pending pings (older than 30 seconds)
     const cutoffTime = timestamp - 30000;
@@ -61,54 +64,57 @@ export function usePingMeasurement({
   }, [socket, enabled]);
 
   // Handle ping response
-  const handlePingResponse = useCallback((data: { pingId: string; timestamp: number }) => {
-    if (!data || !data.pingId) return;
-    
-    const sendTime = pendingPingsRef.current.get(data.pingId);
-    if (!sendTime) return;
+  const handlePingResponse = useCallback(
+    (data: { pingId: string; timestamp: number }) => {
+      if (!data || !data.pingId) return;
 
-    const now = Date.now();
-    const pingTime = now - sendTime;
-    
-    // Remove from pending
-    pendingPingsRef.current.delete(data.pingId);
-    
-    // Buffer update (throttle UI updates to ~500ms)
-    bufferedPingRef.current = pingTime;
-    if (!updateTimerRef.current) {
-      updateTimerRef.current = window.setTimeout(() => {
-        setCurrentPing(bufferedPingRef.current);
-        setAveragePing(calculateAveragePing());
-        updateTimerRef.current = null;
-      }, UI_THROTTLE);
-    }
+      const sendTime = pendingPingsRef.current.get(data.pingId);
+      if (!sendTime) return;
 
-    // Add to history
-    const newMeasurement: PingMeasurement = {
-      ping: pingTime,
-      timestamp: now
-    };
-    
-    pingHistoryRef.current.push(newMeasurement);
-    
-    // Keep only recent measurements
-    if (pingHistoryRef.current.length > maxHistory) {
-      pingHistoryRef.current = pingHistoryRef.current.slice(-maxHistory);
-    }
-    
-    // Update average
-    setAveragePing(calculateAveragePing());
-  }, [maxHistory, calculateAveragePing, UI_THROTTLE]);
+      const now = Date.now();
+      const pingTime = now - sendTime;
+
+      // Remove from pending
+      pendingPingsRef.current.delete(data.pingId);
+
+      // Buffer update (throttle UI updates to ~500ms)
+      bufferedPingRef.current = pingTime;
+      if (!updateTimerRef.current) {
+        updateTimerRef.current = window.setTimeout(() => {
+          setCurrentPing(bufferedPingRef.current);
+          setAveragePing(calculateAveragePing());
+          updateTimerRef.current = null;
+        }, UI_THROTTLE);
+      }
+
+      // Add to history
+      const newMeasurement: PingMeasurement = {
+        ping: pingTime,
+        timestamp: now,
+      };
+
+      pingHistoryRef.current.push(newMeasurement);
+
+      // Keep only recent measurements
+      if (pingHistoryRef.current.length > maxHistory) {
+        pingHistoryRef.current = pingHistoryRef.current.slice(-maxHistory);
+      }
+
+      // Update average
+      setAveragePing(calculateAveragePing());
+    },
+    [maxHistory, calculateAveragePing, UI_THROTTLE],
+  );
 
   // Start ping measurements
   const startPingMeasurement = useCallback(() => {
-  if (intervalRef.current) return;
+    if (intervalRef.current) return;
 
-  // Send initial ping
-  sendPing();
+    // Send initial ping
+    sendPing();
 
-  // Set up interval
-  intervalRef.current = window.setInterval(sendPing, interval);
+    // Set up interval
+    intervalRef.current = window.setInterval(sendPing, interval);
   }, [sendPing, interval]);
 
   // Stop ping measurements
@@ -159,9 +165,9 @@ export function usePingMeasurement({
     };
 
     // Add listeners
-    socket.on('connect', handleConnect);
-    socket.on('disconnect', handleDisconnect);
-    socket.on('ping_response', handleSocketPingResponse);
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+    socket.on("ping_response", handleSocketPingResponse);
 
     // Check current connection state
     if (socket.connected) {
@@ -169,12 +175,19 @@ export function usePingMeasurement({
     }
 
     return () => {
-      socket.off('connect', handleConnect);
-      socket.off('disconnect', handleDisconnect);
-      socket.off('ping_response', handleSocketPingResponse);
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+      socket.off("ping_response", handleSocketPingResponse);
       stopPingMeasurement();
     };
-  }, [socket, enabled, startPingMeasurement, stopPingMeasurement, resetPingMeasurement, handlePingResponse]);
+  }, [
+    socket,
+    enabled,
+    startPingMeasurement,
+    stopPingMeasurement,
+    resetPingMeasurement,
+    handlePingResponse,
+  ]);
 
   // Handle enabled state changes
   useEffect(() => {
@@ -184,7 +197,13 @@ export function usePingMeasurement({
     } else if (socket?.connected) {
       startPingMeasurement();
     }
-  }, [enabled, socket?.connected, startPingMeasurement, stopPingMeasurement, resetPingMeasurement]);
+  }, [
+    enabled,
+    socket?.connected,
+    startPingMeasurement,
+    stopPingMeasurement,
+    resetPingMeasurement,
+  ]);
 
   return {
     currentPing,
@@ -192,6 +211,6 @@ export function usePingMeasurement({
     isConnected,
     isEnabled: enabled,
     resetPingMeasurement,
-    sendPing
+    sendPing,
   };
 }

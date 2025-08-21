@@ -53,16 +53,16 @@ class EnhancedAudioBufferCache {
    */
   set(key: string, buffer: AudioBuffer, compressed: boolean = false): void {
     const bufferSize = this.calculateBufferSize(buffer);
-    
+
     // Check if we need to free memory
     this.ensureMemoryAvailable(bufferSize);
-    
+
     const cached: CachedBuffer = {
       buffer,
       lastAccessed: Date.now(),
       accessCount: 1,
       size: bufferSize,
-      compressed
+      compressed,
     };
 
     // Remove existing entry if updating
@@ -74,27 +74,31 @@ class EnhancedAudioBufferCache {
     this.cache.set(key, cached);
     this.currentMemoryUsage += bufferSize;
 
-    console.log(`🎵 AudioCache: Cached ${key} (${(bufferSize / 1024 / 1024).toFixed(1)}MB, compressed: ${compressed})`);
+    console.log(
+      `🎵 AudioCache: Cached ${key} (${(bufferSize / 1024 / 1024).toFixed(1)}MB, compressed: ${compressed})`,
+    );
   }
 
   /**
    * Preload multiple buffers with priority and streaming support
    */
   async preloadBuffers(
-    urls: { url: string; priority: number }[], 
+    urls: { url: string; priority: number }[],
     audioContext: AudioContext,
-    onProgress?: (loaded: number, total: number) => void
+    onProgress?: (loaded: number, total: number) => void,
   ): Promise<void> {
     // Sort by priority (higher priority first)
     const sortedUrls = urls.sort((a, b) => b.priority - a.priority);
-    
+
     let loaded = 0;
     const total = urls.length;
 
     // Load high priority items first (priority >= 8)
-    const highPriority = sortedUrls.filter(item => item.priority >= 8);
-    const mediumPriority = sortedUrls.filter(item => item.priority >= 5 && item.priority < 8);
-    const lowPriority = sortedUrls.filter(item => item.priority < 5);
+    const highPriority = sortedUrls.filter((item) => item.priority >= 8);
+    const mediumPriority = sortedUrls.filter(
+      (item) => item.priority >= 5 && item.priority < 8,
+    );
+    const lowPriority = sortedUrls.filter((item) => item.priority < 5);
 
     // Load high priority items immediately
     await Promise.all(
@@ -106,7 +110,7 @@ class EnhancedAudioBufferCache {
         } catch (error) {
           console.warn(`Failed to preload high priority buffer: ${url}`, error);
         }
-      })
+      }),
     );
 
     // Load medium priority with slight delay
@@ -118,9 +122,12 @@ class EnhancedAudioBufferCache {
             loaded++;
             onProgress?.(loaded, total);
           } catch (error) {
-            console.warn(`Failed to preload medium priority buffer: ${url}`, error);
+            console.warn(
+              `Failed to preload medium priority buffer: ${url}`,
+              error,
+            );
           }
-        })
+        }),
       );
     }, 100);
 
@@ -133,9 +140,12 @@ class EnhancedAudioBufferCache {
             loaded++;
             onProgress?.(loaded, total);
           } catch (error) {
-            console.warn(`Failed to preload low priority buffer: ${url}`, error);
+            console.warn(
+              `Failed to preload low priority buffer: ${url}`,
+              error,
+            );
           }
-        })
+        }),
       );
     }, 500);
   }
@@ -146,7 +156,7 @@ class EnhancedAudioBufferCache {
   private async loadAudioBufferWithCache(
     url: string,
     audioContext: AudioContext,
-    enableCompression: boolean = false
+    enableCompression: boolean = false,
   ): Promise<AudioBuffer> {
     // Check cache first
     const cached = this.get(url);
@@ -157,12 +167,16 @@ class EnhancedAudioBufferCache {
     try {
       const response = await fetch(url);
       const arrayBuffer = await response.arrayBuffer();
-      
+
       let audioBuffer: AudioBuffer;
-      
-      if (enableCompression && arrayBuffer.byteLength > 1024 * 1024) { // 1MB threshold
+
+      if (enableCompression && arrayBuffer.byteLength > 1024 * 1024) {
+        // 1MB threshold
         // For large files, consider using compressed audio formats or chunked loading
-        audioBuffer = await this.decodeWithOptimization(arrayBuffer, audioContext);
+        audioBuffer = await this.decodeWithOptimization(
+          arrayBuffer,
+          audioContext,
+        );
       } else {
         audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
       }
@@ -179,7 +193,10 @@ class EnhancedAudioBufferCache {
   /**
    * Decode audio with optimization for large files
    */
-  private async decodeWithOptimization(arrayBuffer: ArrayBuffer, audioContext: AudioContext): Promise<AudioBuffer> {
+  private async decodeWithOptimization(
+    arrayBuffer: ArrayBuffer,
+    audioContext: AudioContext,
+  ): Promise<AudioBuffer> {
     // For future implementation: could add audio compression or streaming
     // For now, use standard decoding
     return await audioContext.decodeAudioData(arrayBuffer);
@@ -197,10 +214,10 @@ class EnhancedAudioBufferCache {
    */
   private ensureMemoryAvailable(requiredSize: number): void {
     const maxMemoryBytes = this.maxMemoryMB * 1024 * 1024;
-    
+
     while (
-      (this.currentMemoryUsage + requiredSize > maxMemoryBytes || 
-       this.cache.size >= this.maxSize) &&
+      (this.currentMemoryUsage + requiredSize > maxMemoryBytes ||
+        this.cache.size >= this.maxSize) &&
       this.cache.size > 0
     ) {
       this.evictLeastRecentlyUsed();
@@ -227,7 +244,9 @@ class EnhancedAudioBufferCache {
       const evicted = this.cache.get(oldestKey)!;
       this.currentMemoryUsage -= evicted.size;
       this.cache.delete(oldestKey);
-      console.log(`🗑️ AudioCache: Evicted ${oldestKey} (${(evicted.size / 1024 / 1024).toFixed(1)}MB)`);
+      console.log(
+        `🗑️ AudioCache: Evicted ${oldestKey} (${(evicted.size / 1024 / 1024).toFixed(1)}MB)`,
+      );
     }
   }
 
@@ -259,7 +278,8 @@ class EnhancedAudioBufferCache {
   /**
    * Remove expired entries (older than specified time)
    */
-  cleanupExpired(maxAgeMs: number = 30 * 60 * 1000): void { // 30 minutes default
+  cleanupExpired(maxAgeMs: number = 30 * 60 * 1000): void {
+    // 30 minutes default
     const now = Date.now();
     const toDelete: string[] = [];
 
@@ -269,14 +289,16 @@ class EnhancedAudioBufferCache {
       }
     }
 
-    toDelete.forEach(key => {
+    toDelete.forEach((key) => {
       const cached = this.cache.get(key)!;
       this.currentMemoryUsage -= cached.size;
       this.cache.delete(key);
     });
 
     if (toDelete.length > 0) {
-      console.log(`🧹 AudioCache: Cleaned up ${toDelete.length} expired entries`);
+      console.log(
+        `🧹 AudioCache: Cleaned up ${toDelete.length} expired entries`,
+      );
     }
   }
 }
@@ -291,7 +313,10 @@ export const loadAudioBufferWithCache = async (
   url: string,
   audioContext: AudioContext,
 ): Promise<AudioBuffer> => {
-  return await (audioBufferCache as any).loadAudioBufferWithCache(url, audioContext);
+  return await (audioBufferCache as any).loadAudioBufferWithCache(
+    url,
+    audioContext,
+  );
 };
 
 /**
@@ -300,14 +325,18 @@ export const loadAudioBufferWithCache = async (
 export const preloadAudioBuffers = async (
   urls: string[] | { url: string; priority: number }[],
   audioContext: AudioContext,
-  onProgress?: (loaded: number, total: number) => void
+  onProgress?: (loaded: number, total: number) => void,
 ): Promise<void> => {
   // Convert simple string array to priority array
-  const urlsWithPriority = urls.map(item => 
-    typeof item === 'string' ? { url: item, priority: 5 } : item
+  const urlsWithPriority = urls.map((item) =>
+    typeof item === "string" ? { url: item, priority: 5 } : item,
   );
-  
-  await audioBufferCache.preloadBuffers(urlsWithPriority, audioContext, onProgress);
+
+  await audioBufferCache.preloadBuffers(
+    urlsWithPriority,
+    audioContext,
+    onProgress,
+  );
 };
 
 /**
@@ -327,7 +356,9 @@ export const clearAudioBufferCache = (): void => {
 /**
  * Start automatic cache cleanup
  */
-export const startCacheCleanup = (intervalMs: number = 5 * 60 * 1000): NodeJS.Timeout => {
+export const startCacheCleanup = (
+  intervalMs: number = 5 * 60 * 1000,
+): NodeJS.Timeout => {
   return setInterval(() => {
     audioBufferCache.cleanupExpired();
   }, intervalMs);

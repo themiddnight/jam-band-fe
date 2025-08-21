@@ -1,9 +1,9 @@
 /**
  * Effects and Mixer Architecture for Jam Band
- * 
+ *
  * This file provides the architectural foundation for implementing audio effects
  * and per-user mixing capabilities while maintaining ultra-low latency for WebRTC.
- * 
+ *
  * Key Design Principles:
  * 1. Separate effects processing from WebRTC voice (voice stays direct for lowest latency)
  * 2. Per-user effect chains with individual bypass controls
@@ -11,19 +11,18 @@
  * 4. Efficient CPU usage through effect pooling and dynamic loading
  * 5. Real-time parameter automation support
  */
-
-import { AudioContextManager } from '../constants/audioConfig';
+import { AudioContextManager } from "../constants/audioConfig";
 
 // Effect Types
 export enum EffectType {
-  REVERB = 'reverb',
-  DELAY = 'delay',
-  CHORUS = 'chorus',
-  COMPRESSOR = 'compressor',
-  FILTER = 'filter',
-  DISTORTION = 'distortion',
-  EQUALIZER = 'equalizer',
-  LIMITER = 'limiter'
+  REVERB = "reverb",
+  DELAY = "delay",
+  CHORUS = "chorus",
+  COMPRESSOR = "compressor",
+  FILTER = "filter",
+  DISTORTION = "distortion",
+  EQUALIZER = "equalizer",
+  LIMITER = "limiter",
 }
 
 // Effect Parameter Interface
@@ -34,7 +33,7 @@ export interface EffectParameter {
   max: number;
   step?: number;
   unit?: string;
-  curve?: 'linear' | 'exponential' | 'logarithmic';
+  curve?: "linear" | "exponential" | "logarithmic";
 }
 
 // Base Effect Interface
@@ -49,7 +48,7 @@ export interface AudioEffect {
   wetGainNode: GainNode;
   dryGainNode: GainNode;
   bypass: boolean;
-  
+
   // Methods
   process(inputNode: AudioNode): AudioNode;
   setParameter(name: string, value: number): void;
@@ -74,7 +73,7 @@ export interface UserChannel {
   panNode?: StereoPannerNode;
 }
 
-// Aux Bus Interface  
+// Aux Bus Interface
 export interface AuxBus {
   id: string;
   name: string;
@@ -140,9 +139,10 @@ export class EffectsFactory {
   static releaseEffect(effect: AudioEffect): void {
     effect.cleanup();
     effect.enabled = false;
-    
+
     const pool = this.effectPool.get(effect.type) || [];
-    if (pool.length < 5) { // Limit pool size
+    if (pool.length < 5) {
+      // Limit pool size
       pool.push(effect);
       this.effectPool.set(effect.type, pool);
     }
@@ -151,7 +151,7 @@ export class EffectsFactory {
   private static createReverbEffect(id?: string): AudioEffect {
     const context = this.context!;
     const nodePool = AudioContextManager.getNodePool();
-    
+
     // Create convolution reverb
     const convolver = context.createConvolver();
     const inputGain = nodePool?.getGainNode() || context.createGain();
@@ -162,11 +162,12 @@ export class EffectsFactory {
     // Create impulse response (simple room simulation)
     const impulseLength = context.sampleRate * 2; // 2 seconds
     const impulse = context.createBuffer(2, impulseLength, context.sampleRate);
-    
+
     for (let channel = 0; channel < 2; channel++) {
       const channelData = impulse.getChannelData(channel);
       for (let i = 0; i < impulseLength; i++) {
-        channelData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / impulseLength, 2);
+        channelData[i] =
+          (Math.random() * 2 - 1) * Math.pow(1 - i / impulseLength, 2);
       }
     }
     convolver.buffer = impulse;
@@ -179,13 +180,25 @@ export class EffectsFactory {
     wetGain.connect(outputGain);
 
     const parameters = new Map<string, EffectParameter>();
-    parameters.set('wetLevel', { name: 'Wet Level', value: 0.3, min: 0, max: 1, unit: '%' });
-    parameters.set('dryLevel', { name: 'Dry Level', value: 0.7, min: 0, max: 1, unit: '%' });
+    parameters.set("wetLevel", {
+      name: "Wet Level",
+      value: 0.3,
+      min: 0,
+      max: 1,
+      unit: "%",
+    });
+    parameters.set("dryLevel", {
+      name: "Dry Level",
+      value: 0.7,
+      min: 0,
+      max: 1,
+      unit: "%",
+    });
 
     return {
       id: id || `reverb_${Date.now()}`,
       type: EffectType.REVERB,
-      name: 'Reverb',
+      name: "Reverb",
       enabled: true,
       parameters,
       inputNode: inputGain,
@@ -193,56 +206,56 @@ export class EffectsFactory {
       wetGainNode: wetGain,
       dryGainNode: dryGain,
       bypass: false,
-      
+
       process(input: AudioNode): AudioNode {
         input.connect(this.inputNode);
         return this.outputNode;
       },
-      
+
       setParameter(name: string, value: number): void {
         const param = this.parameters.get(name);
         if (!param) return;
-        
+
         param.value = Math.max(param.min, Math.min(param.max, value));
-        
+
         switch (name) {
-          case 'wetLevel':
+          case "wetLevel":
             this.wetGainNode.gain.setValueAtTime(value, context.currentTime);
             break;
-          case 'dryLevel':
+          case "dryLevel":
             this.dryGainNode.gain.setValueAtTime(value, context.currentTime);
             break;
         }
       },
-      
+
       getParameter(name: string): number | undefined {
         return this.parameters.get(name)?.value;
       },
-      
+
       enable(): void {
         this.enabled = true;
         this.outputNode.gain.setValueAtTime(1, context.currentTime);
       },
-      
+
       disable(): void {
         this.enabled = false;
         this.outputNode.gain.setValueAtTime(0, context.currentTime);
       },
-      
+
       cleanup(): void {
         this.inputNode.disconnect();
         this.outputNode.disconnect();
         this.wetGainNode.disconnect();
         this.dryGainNode.disconnect();
         convolver.disconnect();
-      }
+      },
     };
   }
 
   private static createDelayEffect(id?: string): AudioEffect {
     const context = this.context!;
     const nodePool = AudioContextManager.getNodePool();
-    
+
     const delay = context.createDelay(1.0); // Max 1 second delay
     const feedback = nodePool?.getGainNode() || context.createGain();
     const inputGain = nodePool?.getGainNode() || context.createGain();
@@ -266,14 +279,32 @@ export class EffectsFactory {
     dryGain.gain.value = 0.7;
 
     const parameters = new Map<string, EffectParameter>();
-    parameters.set('delayTime', { name: 'Delay Time', value: 0.25, min: 0.01, max: 1.0, unit: 's' });
-    parameters.set('feedback', { name: 'Feedback', value: 0.3, min: 0, max: 0.9, unit: '%' });
-    parameters.set('wetLevel', { name: 'Wet Level', value: 0.3, min: 0, max: 1, unit: '%' });
+    parameters.set("delayTime", {
+      name: "Delay Time",
+      value: 0.25,
+      min: 0.01,
+      max: 1.0,
+      unit: "s",
+    });
+    parameters.set("feedback", {
+      name: "Feedback",
+      value: 0.3,
+      min: 0,
+      max: 0.9,
+      unit: "%",
+    });
+    parameters.set("wetLevel", {
+      name: "Wet Level",
+      value: 0.3,
+      min: 0,
+      max: 1,
+      unit: "%",
+    });
 
     return {
       id: id || `delay_${Date.now()}`,
       type: EffectType.DELAY,
-      name: 'Delay',
+      name: "Delay",
       enabled: true,
       parameters,
       inputNode: inputGain,
@@ -281,45 +312,45 @@ export class EffectsFactory {
       wetGainNode: wetGain,
       dryGainNode: dryGain,
       bypass: false,
-      
+
       process(input: AudioNode): AudioNode {
         input.connect(this.inputNode);
         return this.outputNode;
       },
-      
+
       setParameter(name: string, value: number): void {
         const param = this.parameters.get(name);
         if (!param) return;
-        
+
         param.value = Math.max(param.min, Math.min(param.max, value));
-        
+
         switch (name) {
-          case 'delayTime':
+          case "delayTime":
             delay.delayTime.setValueAtTime(value, context.currentTime);
             break;
-          case 'feedback':
+          case "feedback":
             feedback.gain.setValueAtTime(value, context.currentTime);
             break;
-          case 'wetLevel':
+          case "wetLevel":
             this.wetGainNode.gain.setValueAtTime(value, context.currentTime);
             break;
         }
       },
-      
+
       getParameter(name: string): number | undefined {
         return this.parameters.get(name)?.value;
       },
-      
+
       enable(): void {
         this.enabled = true;
         this.outputNode.gain.setValueAtTime(1, context.currentTime);
       },
-      
+
       disable(): void {
         this.enabled = false;
         this.outputNode.gain.setValueAtTime(0, context.currentTime);
       },
-      
+
       cleanup(): void {
         this.inputNode.disconnect();
         this.outputNode.disconnect();
@@ -327,14 +358,14 @@ export class EffectsFactory {
         this.dryGainNode.disconnect();
         delay.disconnect();
         feedback.disconnect();
-      }
+      },
     };
   }
 
   private static createCompressorEffect(id?: string): AudioEffect {
     const context = this.context!;
     const nodePool = AudioContextManager.getNodePool();
-    
+
     const compressor = context.createDynamicsCompressor();
     const inputGain = nodePool?.getGainNode() || context.createGain();
     const outputGain = nodePool?.getGainNode() || context.createGain();
@@ -350,15 +381,39 @@ export class EffectsFactory {
     compressor.release.value = 0.25;
 
     const parameters = new Map<string, EffectParameter>();
-    parameters.set('threshold', { name: 'Threshold', value: -24, min: -100, max: 0, unit: 'dB' });
-    parameters.set('ratio', { name: 'Ratio', value: 4, min: 1, max: 20, unit: ':1' });
-    parameters.set('attack', { name: 'Attack', value: 0.003, min: 0, max: 1, unit: 's' });
-    parameters.set('release', { name: 'Release', value: 0.25, min: 0, max: 1, unit: 's' });
+    parameters.set("threshold", {
+      name: "Threshold",
+      value: -24,
+      min: -100,
+      max: 0,
+      unit: "dB",
+    });
+    parameters.set("ratio", {
+      name: "Ratio",
+      value: 4,
+      min: 1,
+      max: 20,
+      unit: ":1",
+    });
+    parameters.set("attack", {
+      name: "Attack",
+      value: 0.003,
+      min: 0,
+      max: 1,
+      unit: "s",
+    });
+    parameters.set("release", {
+      name: "Release",
+      value: 0.25,
+      min: 0,
+      max: 1,
+      unit: "s",
+    });
 
     return {
       id: id || `compressor_${Date.now()}`,
       type: EffectType.COMPRESSOR,
-      name: 'Compressor',
+      name: "Compressor",
       enabled: true,
       parameters,
       inputNode: inputGain,
@@ -366,60 +421,60 @@ export class EffectsFactory {
       wetGainNode: outputGain, // Compressor doesn't have wet/dry
       dryGainNode: inputGain,
       bypass: false,
-      
+
       process(input: AudioNode): AudioNode {
         input.connect(this.inputNode);
         return this.outputNode;
       },
-      
+
       setParameter(name: string, value: number): void {
         const param = this.parameters.get(name);
         if (!param) return;
-        
+
         param.value = Math.max(param.min, Math.min(param.max, value));
-        
+
         switch (name) {
-          case 'threshold':
+          case "threshold":
             compressor.threshold.setValueAtTime(value, context.currentTime);
             break;
-          case 'ratio':
+          case "ratio":
             compressor.ratio.setValueAtTime(value, context.currentTime);
             break;
-          case 'attack':
+          case "attack":
             compressor.attack.setValueAtTime(value, context.currentTime);
             break;
-          case 'release':
+          case "release":
             compressor.release.setValueAtTime(value, context.currentTime);
             break;
         }
       },
-      
+
       getParameter(name: string): number | undefined {
         return this.parameters.get(name)?.value;
       },
-      
+
       enable(): void {
         this.enabled = true;
         this.outputNode.gain.setValueAtTime(1, context.currentTime);
       },
-      
+
       disable(): void {
         this.enabled = false;
         this.outputNode.gain.setValueAtTime(0, context.currentTime);
       },
-      
+
       cleanup(): void {
         this.inputNode.disconnect();
         this.outputNode.disconnect();
         compressor.disconnect();
-      }
+      },
     };
   }
 
   private static createFilterEffect(id?: string): AudioEffect {
     const context = this.context!;
     const nodePool = AudioContextManager.getNodePool();
-    
+
     const filter = context.createBiquadFilter();
     const inputGain = nodePool?.getGainNode() || context.createGain();
     const outputGain = nodePool?.getGainNode() || context.createGain();
@@ -428,18 +483,31 @@ export class EffectsFactory {
     filter.connect(outputGain);
 
     // Set initial filter values
-    filter.type = 'lowpass';
+    filter.type = "lowpass";
     filter.frequency.value = 1000;
     filter.Q.value = 1;
 
     const parameters = new Map<string, EffectParameter>();
-    parameters.set('frequency', { name: 'Frequency', value: 1000, min: 20, max: 20000, unit: 'Hz', curve: 'logarithmic' });
-    parameters.set('Q', { name: 'Resonance', value: 1, min: 0.1, max: 30, unit: 'Q' });
+    parameters.set("frequency", {
+      name: "Frequency",
+      value: 1000,
+      min: 20,
+      max: 20000,
+      unit: "Hz",
+      curve: "logarithmic",
+    });
+    parameters.set("Q", {
+      name: "Resonance",
+      value: 1,
+      min: 0.1,
+      max: 30,
+      unit: "Q",
+    });
 
     return {
       id: id || `filter_${Date.now()}`,
       type: EffectType.FILTER,
-      name: 'Filter',
+      name: "Filter",
       enabled: true,
       parameters,
       inputNode: inputGain,
@@ -447,47 +515,47 @@ export class EffectsFactory {
       wetGainNode: outputGain,
       dryGainNode: inputGain,
       bypass: false,
-      
+
       process(input: AudioNode): AudioNode {
         input.connect(this.inputNode);
         return this.outputNode;
       },
-      
+
       setParameter(name: string, value: number): void {
         const param = this.parameters.get(name);
         if (!param) return;
-        
+
         param.value = Math.max(param.min, Math.min(param.max, value));
-        
+
         switch (name) {
-          case 'frequency':
+          case "frequency":
             filter.frequency.setValueAtTime(value, context.currentTime);
             break;
-          case 'Q':
+          case "Q":
             filter.Q.setValueAtTime(value, context.currentTime);
             break;
         }
       },
-      
+
       getParameter(name: string): number | undefined {
         return this.parameters.get(name)?.value;
       },
-      
+
       enable(): void {
         this.enabled = true;
         this.outputNode.gain.setValueAtTime(1, context.currentTime);
       },
-      
+
       disable(): void {
         this.enabled = false;
         this.outputNode.gain.setValueAtTime(0, context.currentTime);
       },
-      
+
       cleanup(): void {
         this.inputNode.disconnect();
         this.outputNode.disconnect();
         filter.disconnect();
-      }
+      },
     };
   }
 }
@@ -525,7 +593,7 @@ export class MixerEngine {
       inputGain,
       effectChain: [],
       outputGain,
-      analyser
+      analyser,
     };
   }
 
@@ -534,7 +602,7 @@ export class MixerEngine {
    */
   createUserChannel(userId: string, username: string): UserChannel {
     const nodePool = AudioContextManager.getNodePool();
-    
+
     const inputGain = nodePool?.getGainNode() || this.context.createGain();
     const outputGain = nodePool?.getGainNode() || this.context.createGain();
     const panNode = this.context.createStereoPanner();
@@ -542,7 +610,7 @@ export class MixerEngine {
     // Connect channel
     inputGain.connect(panNode);
     panNode.connect(outputGain);
-    
+
     if (this.masterSection) {
       outputGain.connect(this.masterSection.inputGain);
     }
@@ -555,7 +623,7 @@ export class MixerEngine {
       outputGain,
       soloMute: { solo: false, mute: false },
       sends: new Map(),
-      panNode
+      panNode,
     };
 
     this.userChannels.set(userId, channel);
@@ -565,7 +633,10 @@ export class MixerEngine {
   /**
    * Add effect to user channel
    */
-  addEffectToChannel(userId: string, effectType: EffectType): AudioEffect | null {
+  addEffectToChannel(
+    userId: string,
+    effectType: EffectType,
+  ): AudioEffect | null {
     const channel = this.userChannels.get(userId);
     if (!channel) return null;
 
@@ -573,9 +644,10 @@ export class MixerEngine {
     if (!effect) return null;
 
     // Insert effect into chain
-    const lastNode = channel.effectChain.length > 0 
-      ? channel.effectChain[channel.effectChain.length - 1].outputNode
-      : channel.inputGain;
+    const lastNode =
+      channel.effectChain.length > 0
+        ? channel.effectChain[channel.effectChain.length - 1].outputNode
+        : channel.inputGain;
 
     lastNode.disconnect();
     lastNode.connect(effect.inputNode);
@@ -607,23 +679,27 @@ export class MixerEngine {
    */
   cleanup(): void {
     // Cleanup user channels
-    this.userChannels.forEach(channel => {
-      channel.effectChain.forEach(effect => EffectsFactory.releaseEffect(effect));
+    this.userChannels.forEach((channel) => {
+      channel.effectChain.forEach((effect) =>
+        EffectsFactory.releaseEffect(effect),
+      );
       channel.inputGain.disconnect();
       channel.outputGain.disconnect();
       channel.panNode?.disconnect();
     });
 
     // Cleanup aux buses
-    this.auxBuses.forEach(bus => {
-      bus.effectChain.forEach(effect => EffectsFactory.releaseEffect(effect));
+    this.auxBuses.forEach((bus) => {
+      bus.effectChain.forEach((effect) => EffectsFactory.releaseEffect(effect));
       bus.inputGain.disconnect();
       bus.outputGain.disconnect();
     });
 
     // Cleanup master section
     if (this.masterSection) {
-      this.masterSection.effectChain.forEach(effect => EffectsFactory.releaseEffect(effect));
+      this.masterSection.effectChain.forEach((effect) =>
+        EffectsFactory.releaseEffect(effect),
+      );
       this.masterSection.inputGain.disconnect();
       this.masterSection.outputGain.disconnect();
       this.masterSection.analyser.disconnect();
@@ -637,20 +713,20 @@ export class MixerEngine {
 
 /**
  * Usage Example:
- * 
+ *
  * // Initialize mixer
  * const audioContext = AudioContextManager.getInstrumentContext();
  * const mixer = new MixerEngine(audioContext);
- * 
+ *
  * // Create user channels
  * const userChannel = mixer.createUserChannel('user1', 'Alice');
- * 
+ *
  * // Add effects
  * const reverb = mixer.addEffectToChannel('user1', EffectType.REVERB);
  * reverb?.setParameter('wetLevel', 0.4);
- * 
+ *
  * // Route instrument
  * mixer.routeInstrumentToChannel(toneJsSynth, 'user1');
- * 
+ *
  * // The WebRTC voice remains separate and unprocessed for lowest latency
- */ 
+ */

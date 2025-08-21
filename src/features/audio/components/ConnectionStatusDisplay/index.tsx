@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { ConnectionState } from '../../types/connectionState';
+import { ConnectionState } from "../../types/connectionState";
+import React, { useState, useEffect } from "react";
 
 /**
  * Connection Status Display Component
@@ -19,7 +19,7 @@ interface ConnectionStatusProps {
 interface StatusMessage {
   id: string;
   message: string;
-  type: 'error' | 'warning' | 'info' | 'success';
+  type: "error" | "warning" | "info" | "success";
   timestamp: number;
   autoHide?: boolean;
   action?: {
@@ -35,24 +35,27 @@ export const ConnectionStatusDisplay: React.FC<ConnectionStatusProps> = ({
   reconnectionAttempts,
   onRetry,
   onReturnToLobby,
-  onClearErrors
+  onClearErrors,
 }) => {
   const [messages, setMessages] = useState<StatusMessage[]>([]);
   const [isVisible, setIsVisible] = useState(false);
 
   // Add message to display
-  const addMessage = (message: Omit<StatusMessage, 'id' | 'timestamp'>) => {
+  const addMessage = (message: Omit<StatusMessage, "id" | "timestamp">) => {
     const newMessage: StatusMessage = {
       ...message,
       id: `msg-${Date.now()}-${Math.random()}`,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
 
-    setMessages(prev => [...prev.slice(-4), newMessage]); // Keep only last 5 messages
+    setMessages((prev) => [...prev.slice(-4), newMessage]); // Keep only last 5 messages
     setIsVisible(true);
 
     // Auto-hide success and info messages
-    if (message.autoHide !== false && (message.type === 'success' || message.type === 'info')) {
+    if (
+      message.autoHide !== false &&
+      (message.type === "success" || message.type === "info")
+    ) {
       setTimeout(() => {
         removeMessage(newMessage.id);
       }, 5000);
@@ -61,8 +64,8 @@ export const ConnectionStatusDisplay: React.FC<ConnectionStatusProps> = ({
 
   // Remove message
   const removeMessage = (id: string) => {
-    setMessages(prev => {
-      const filtered = prev.filter(msg => msg.id !== id);
+    setMessages((prev) => {
+      const filtered = prev.filter((msg) => msg.id !== id);
       if (filtered.length === 0) {
         setIsVisible(false);
       }
@@ -81,28 +84,36 @@ export const ConnectionStatusDisplay: React.FC<ConnectionStatusProps> = ({
   useEffect(() => {
     if (connectionState === ConnectionState.DISCONNECTED && !isHealthy) {
       addMessage({
-        message: 'Connection lost. Please check your internet connection.',
-        type: 'error',
+        message: "Connection lost. Please check your internet connection.",
+        type: "error",
         autoHide: false,
-        action: onRetry ? {
-          label: 'Retry',
-          onClick: onRetry
-        } : undefined
+        action: onRetry
+          ? {
+              label: "Retry",
+              onClick: onRetry,
+            }
+          : undefined,
       });
     } else if (isInGracePeriod) {
       addMessage({
         message: `Reconnecting... (attempt ${reconnectionAttempts}/3)`,
-        type: 'warning',
-        autoHide: false
+        type: "warning",
+        autoHide: false,
       });
     } else if (connectionState === ConnectionState.IN_ROOM && isHealthy) {
       addMessage({
-        message: 'Connected successfully',
-        type: 'success',
-        autoHide: true
+        message: "Connected successfully",
+        type: "success",
+        autoHide: true,
       });
     }
-  }, [connectionState, isHealthy, isInGracePeriod, reconnectionAttempts, onRetry]);
+  }, [
+    connectionState,
+    isHealthy,
+    isInGracePeriod,
+    reconnectionAttempts,
+    onRetry,
+  ]);
 
   // Expose addMessage function globally for error recovery service
   useEffect(() => {
@@ -116,33 +127,33 @@ export const ConnectionStatusDisplay: React.FC<ConnectionStatusProps> = ({
     return null;
   }
 
-  const getStatusIcon = (type: StatusMessage['type']) => {
+  const getStatusIcon = (type: StatusMessage["type"]) => {
     switch (type) {
-      case 'error':
-        return '❌';
-      case 'warning':
-        return '⚠️';
-      case 'info':
-        return 'ℹ️';
-      case 'success':
-        return '✅';
+      case "error":
+        return "❌";
+      case "warning":
+        return "⚠️";
+      case "info":
+        return "ℹ️";
+      case "success":
+        return "✅";
       default:
-        return 'ℹ️';
+        return "ℹ️";
     }
   };
 
-  const getStatusColor = (type: StatusMessage['type']) => {
+  const getStatusColor = (type: StatusMessage["type"]) => {
     switch (type) {
-      case 'error':
-        return 'bg-red-100 border-red-400 text-red-700';
-      case 'warning':
-        return 'bg-yellow-100 border-yellow-400 text-yellow-700';
-      case 'info':
-        return 'bg-blue-100 border-blue-400 text-blue-700';
-      case 'success':
-        return 'bg-green-100 border-green-400 text-green-700';
+      case "error":
+        return "bg-red-100 border-red-400 text-red-700";
+      case "warning":
+        return "bg-yellow-100 border-yellow-400 text-yellow-700";
+      case "info":
+        return "bg-blue-100 border-blue-400 text-blue-700";
+      case "success":
+        return "bg-green-100 border-green-400 text-green-700";
       default:
-        return 'bg-gray-100 border-gray-400 text-gray-700';
+        return "bg-gray-100 border-gray-400 text-gray-700";
     }
   };
 
@@ -176,15 +187,23 @@ export const ConnectionStatusDisplay: React.FC<ConnectionStatusProps> = ({
                 className="text-current hover:opacity-70 transition-opacity"
               >
                 <span className="sr-only">Close</span>
-                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                <svg
+                  className="h-4 w-4"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                    clipRule="evenodd"
+                  />
                 </svg>
               </button>
             </div>
           </div>
         </div>
       ))}
-      
+
       {messages.length > 1 && (
         <div className="flex justify-end">
           <button
@@ -195,7 +214,7 @@ export const ConnectionStatusDisplay: React.FC<ConnectionStatusProps> = ({
           </button>
         </div>
       )}
-      
+
       {/* Connection actions */}
       {(connectionState === ConnectionState.DISCONNECTED || !isHealthy) && (
         <div className="bg-white border border-gray-300 rounded-md p-3 shadow-lg">
@@ -232,33 +251,36 @@ export const ConnectionStatusDisplay: React.FC<ConnectionStatusProps> = ({
 
 // Hook for using connection status display
 export const useConnectionStatusDisplay = () => {
-  const addMessage = (message: Omit<StatusMessage, 'id' | 'timestamp'>) => {
+  const addMessage = (message: Omit<StatusMessage, "id" | "timestamp">) => {
     if ((window as any).addConnectionStatusMessage) {
       (window as any).addConnectionStatusMessage(message);
     }
   };
 
-  const showError = (message: string, action?: { label: string; onClick: () => void }) => {
-    addMessage({ message, type: 'error', autoHide: false, action });
+  const showError = (
+    message: string,
+    action?: { label: string; onClick: () => void },
+  ) => {
+    addMessage({ message, type: "error", autoHide: false, action });
   };
 
   const showWarning = (message: string, autoHide = true) => {
-    addMessage({ message, type: 'warning', autoHide });
+    addMessage({ message, type: "warning", autoHide });
   };
 
   const showInfo = (message: string, autoHide = true) => {
-    addMessage({ message, type: 'info', autoHide });
+    addMessage({ message, type: "info", autoHide });
   };
 
   const showSuccess = (message: string, autoHide = true) => {
-    addMessage({ message, type: 'success', autoHide });
+    addMessage({ message, type: "success", autoHide });
   };
 
   return {
     showError,
     showWarning,
     showInfo,
-    showSuccess
+    showSuccess,
   };
 };
 
@@ -281,8 +303,8 @@ const styles = `
 `;
 
 // Inject styles
-if (typeof document !== 'undefined') {
-  const styleSheet = document.createElement('style');
+if (typeof document !== "undefined") {
+  const styleSheet = document.createElement("style");
   styleSheet.textContent = styles;
   document.head.appendChild(styleSheet);
 }

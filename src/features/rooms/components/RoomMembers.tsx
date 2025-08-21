@@ -1,6 +1,6 @@
 import PlayingIndicator from "./PlayingIndicator";
-import type { RoomUser } from "@/shared/types";
 import { getInstrumentIcon } from "@/shared/constants/instruments";
+import type { RoomUser } from "@/shared/types";
 import { memo } from "react";
 
 interface VoiceUser {
@@ -63,11 +63,16 @@ const RoomMembers = memo(
                     {user.username}
                   </span>
                   <div className="flex gap-2 text-xs whitespace-nowrap">
-                    {user.role === "band_member" || user.role === "room_owner"
-                      ? user.currentInstrument
-                        ? getInstrumentIcon(user.currentInstrument)
-                        : <div>🎸</div>
-                      : <div>👥</div>}
+                    {user.role === "band_member" ||
+                    user.role === "room_owner" ? (
+                      user.currentInstrument ? (
+                        getInstrumentIcon(user.currentInstrument)
+                      ) : (
+                        <div>🎸</div>
+                      )
+                    ) : (
+                      <div>👥</div>
+                    )}
                   </div>
                   {user.role !== "audience" && user.currentInstrument ? (
                     <span className="text-xs text-base-content/60 bg-base-300 px-2 py-1 rounded whitespace-nowrap">

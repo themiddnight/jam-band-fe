@@ -1,6 +1,6 @@
 import type { Room, RoomUser } from "../../../shared/types";
-import { create } from "zustand";
 import { ConnectionState } from "../../audio/types/connectionState";
+import { create } from "zustand";
 
 interface RoomState {
   currentRoom: Room | null;

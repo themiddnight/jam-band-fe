@@ -1,8 +1,16 @@
-import { io, Socket } from 'socket.io-client';
-import { ConnectionState } from '../types/connectionState';
-import type { ConnectionConfig, ApprovalRequest } from '../types/connectionState';
-import { SessionStorageManager } from './SessionStorageManager';
-import { ErrorRecoveryService, ErrorType, RecoveryAction, type ErrorContext } from './ErrorRecoveryService';
+import { ConnectionState } from "../types/connectionState";
+import type {
+  ConnectionConfig,
+  ApprovalRequest,
+} from "../types/connectionState";
+import {
+  ErrorRecoveryService,
+  ErrorType,
+  RecoveryAction,
+  type ErrorContext,
+} from "./ErrorRecoveryService";
+import { SessionStorageManager } from "./SessionStorageManager";
+import { io, Socket } from "socket.io-client";
 
 /**
  * Manages socket connections for the room isolation architecture
@@ -14,28 +22,31 @@ export class RoomSocketManager {
   private approvalSocket: Socket | null = null;
   private currentState: ConnectionState = ConnectionState.DISCONNECTED;
   private currentConfig: ConnectionConfig | null = null;
-  
+
   // Event handlers
-  private stateChangeHandlers: Array<(state: ConnectionState, config: ConnectionConfig | null) => void> = [];
+  private stateChangeHandlers: Array<
+    (state: ConnectionState, config: ConnectionConfig | null) => void
+  > = [];
   private errorHandlers: Array<(error: string) => void> = [];
   private reconnectionHandlers: Array<() => void> = [];
-  
+
   // Approval state
   private currentApprovalRequest: ApprovalRequest | null = null;
   private approvalTimeoutId: ReturnType<typeof setTimeout> | null = null;
-  
+
   // Grace period and reconnection management
   private gracePeriodTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private readonly GRACE_PERIOD_MS = 30000; // 30 seconds
   private isInGracePeriod = false;
   private reconnectionAttempts = 0;
   private readonly MAX_RECONNECTION_ATTEMPTS = 3;
-  
+
   // Error recovery service
   private errorRecoveryService: ErrorRecoveryService;
-  private connectionHealthCheckInterval: ReturnType<typeof setInterval> | null = null;
+  private connectionHealthCheckInterval: ReturnType<typeof setInterval> | null =
+    null;
   private readonly CONNECTION_HEALTH_CHECK_INTERVAL = 10000; // 10 seconds
-  
+
   constructor(private backendUrl: string) {
     // Initialize error recovery service
     this.errorRecoveryService = new ErrorRecoveryService({
@@ -44,12 +55,12 @@ export class RoomSocketManager {
       maxDelay: 30000,
       exponentialBackoff: true,
       enableUserFeedback: true,
-      enableAutoRecovery: true
+      enableAutoRecovery: true,
     });
 
     // Set up error recovery handlers
     this.setupErrorRecoveryHandlers();
-    
+
     // Start connection health monitoring
     this.startConnectionHealthMonitoring();
   }
@@ -90,20 +101,25 @@ export class RoomSocketManager {
   async connectToLobby(): Promise<void> {
     await this.transitionTo(ConnectionState.LOBBY, {
       state: ConnectionState.LOBBY,
-      namespace: '/lobby-monitor'
+      namespace: "/lobby-monitor",
     });
   }
 
   /**
    * Connect to room approval namespace for private rooms
    */
-  async connectToApproval(roomId: string, userId: string, username: string, role: 'band_member' | 'audience'): Promise<void> {
+  async connectToApproval(
+    roomId: string,
+    userId: string,
+    username: string,
+    role: "band_member" | "audience",
+  ): Promise<void> {
     const approvalRequest: ApprovalRequest = {
       roomId,
       userId,
       username,
       role,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
 
     this.currentApprovalRequest = approvalRequest;
@@ -112,18 +128,18 @@ export class RoomSocketManager {
       state: ConnectionState.REQUESTING,
       namespace: `/approval/${roomId}`,
       roomId,
-      role
+      role,
     });
 
     // Emit the approval request on the approval namespace
     if (this.approvalSocket) {
       const emitRequest = () => {
-        this.approvalSocket!.emit('request_approval', approvalRequest);
+        this.approvalSocket!.emit("request_approval", approvalRequest);
       };
       if (this.approvalSocket.connected) {
         emitRequest();
       } else {
-        this.approvalSocket.once('connect', emitRequest);
+        this.approvalSocket.once("connect", emitRequest);
       }
     }
 
@@ -137,14 +153,19 @@ export class RoomSocketManager {
    * Connect to room namespace
    * Requirements: 6.6 - Session data storage for room reconnection after page refresh
    */
-  async connectToRoom(roomId: string, role: 'band_member' | 'audience', userId?: string, username?: string): Promise<void> {
+  async connectToRoom(
+    roomId: string,
+    role: "band_member" | "audience",
+    userId?: string,
+    username?: string,
+  ): Promise<void> {
     // Store session data for reconnection
     if (userId && username) {
       SessionStorageManager.storeRoomSession({
         roomId,
         role,
         userId,
-        username
+        username,
       });
     }
 
@@ -152,7 +173,7 @@ export class RoomSocketManager {
       state: ConnectionState.IN_ROOM,
       namespace: `/room/${roomId}`,
       roomId,
-      role
+      role,
     });
   }
 
@@ -172,9 +193,9 @@ export class RoomSocketManager {
 
     // Emit cancellation event if socket is connected
     if (this.approvalSocket?.connected && this.currentApprovalRequest) {
-      this.approvalSocket.emit('cancel_approval_request', {
+      this.approvalSocket.emit("cancel_approval_request", {
         userId: this.currentApprovalRequest.userId,
-        roomId: this.currentApprovalRequest.roomId
+        roomId: this.currentApprovalRequest.roomId,
       });
     }
 
@@ -189,8 +210,11 @@ export class RoomSocketManager {
    * Leave current room and return to lobby
    */
   async leaveRoom(): Promise<void> {
-    if (this.currentState === ConnectionState.IN_ROOM && this.roomSocket?.connected) {
-      this.roomSocket.emit('leave_room', { isIntendedLeave: true });
+    if (
+      this.currentState === ConnectionState.IN_ROOM &&
+      this.roomSocket?.connected
+    ) {
+      this.roomSocket.emit("leave_room", { isIntendedLeave: true });
     }
 
     // Clear session data when intentionally leaving
@@ -211,7 +235,9 @@ export class RoomSocketManager {
   /**
    * Add state change handler
    */
-  onStateChange(handler: (state: ConnectionState, config: ConnectionConfig | null) => void): () => void {
+  onStateChange(
+    handler: (state: ConnectionState, config: ConnectionConfig | null) => void,
+  ): () => void {
     this.stateChangeHandlers.push(handler);
     return () => {
       const index = this.stateChangeHandlers.indexOf(handler);
@@ -268,7 +294,10 @@ export class RoomSocketManager {
    * Get stored session data for reconnection
    * Requirements: 6.6, 6.7 - Session data storage and state restoration after reconnection
    */
-  getStoredSession(): { roomId: string; role: 'band_member' | 'audience' } | null {
+  getStoredSession(): {
+    roomId: string;
+    role: "band_member" | "audience";
+  } | null {
     const session = SessionStorageManager.getRoomSession();
     if (!session) {
       return null;
@@ -276,7 +305,7 @@ export class RoomSocketManager {
 
     return {
       roomId: session.roomId,
-      role: session.role
+      role: session.role,
     };
   }
 
@@ -291,11 +320,19 @@ export class RoomSocketManager {
     }
 
     try {
-      console.log('🔄 Attempting reconnection using stored session:', { roomId: session.roomId, role: session.role });
-      await this.connectToRoom(session.roomId, session.role, session.userId, session.username);
+      console.log("🔄 Attempting reconnection using stored session:", {
+        roomId: session.roomId,
+        role: session.role,
+      });
+      await this.connectToRoom(
+        session.roomId,
+        session.role,
+        session.userId,
+        session.username,
+      );
       return true;
     } catch (error) {
-      console.error('❌ Failed to reconnect using stored session:', error);
+      console.error("❌ Failed to reconnect using stored session:", error);
       SessionStorageManager.clearRoomSession();
       return false;
     }
@@ -305,15 +342,27 @@ export class RoomSocketManager {
    * Store instrument state for restoration after reconnection
    * Requirements: 6.7 - State restoration (user role, instrument, settings) after reconnection
    */
-  storeInstrumentState(instrument: string, category: string, synthParams?: any): void {
-    SessionStorageManager.storeInstrumentState(instrument, category, synthParams);
+  storeInstrumentState(
+    instrument: string,
+    category: string,
+    synthParams?: any,
+  ): void {
+    SessionStorageManager.storeInstrumentState(
+      instrument,
+      category,
+      synthParams,
+    );
   }
 
   /**
    * Get stored instrument state for restoration
    * Requirements: 6.7 - State restoration (user role, instrument, settings) after reconnection
    */
-  getStoredInstrumentState(): { instrument?: string; category?: string; synthParams?: any } | null {
+  getStoredInstrumentState(): {
+    instrument?: string;
+    category?: string;
+    synthParams?: any;
+  } | null {
     return SessionStorageManager.getStoredInstrumentState();
   }
 
@@ -337,8 +386,16 @@ export class RoomSocketManager {
    * Handle recovery actions from error recovery service
    * Requirements: 6.10 - Automatic state recovery for inconsistent connection states
    */
-  private async handleRecoveryAction(action: RecoveryAction, context: ErrorContext): Promise<void> {
-    console.log('🔧 RoomSocketManager: Executing recovery action', action, 'for', context.errorType);
+  private async handleRecoveryAction(
+    action: RecoveryAction,
+    context: ErrorContext,
+  ): Promise<void> {
+    console.log(
+      "🔧 RoomSocketManager: Executing recovery action",
+      action,
+      "for",
+      context.errorType,
+    );
 
     try {
       switch (action) {
@@ -346,7 +403,9 @@ export class RoomSocketManager {
           if (this.currentConfig) {
             await this.retryCurrentConnection();
           } else {
-            console.log('⚠️ Cannot retry connection - no current configuration');
+            console.log(
+              "⚠️ Cannot retry connection - no current configuration",
+            );
             // Fall back to lobby if no config
             await this.connectToLobby();
           }
@@ -374,15 +433,19 @@ export class RoomSocketManager {
 
         case RecoveryAction.NO_ACTION:
           // Do nothing, just log
-          console.log('🔧 RoomSocketManager: No recovery action needed');
+          console.log("🔧 RoomSocketManager: No recovery action needed");
           break;
 
         default:
-          console.warn('🔧 RoomSocketManager: Unknown recovery action', action);
+          console.warn("🔧 RoomSocketManager: Unknown recovery action", action);
       }
     } catch (error) {
-      console.error('❌ RoomSocketManager: Recovery action failed', action, error);
-      
+      console.error(
+        "❌ RoomSocketManager: Recovery action failed",
+        action,
+        error,
+      );
+
       // If recovery fails, try returning to lobby as last resort
       if (action !== RecoveryAction.RETURN_TO_LOBBY) {
         await this.returnToLobby();
@@ -395,14 +458,14 @@ export class RoomSocketManager {
    */
   private async retryCurrentConnection(): Promise<void> {
     if (!this.currentConfig) {
-      throw new Error('No current configuration to retry');
+      throw new Error("No current configuration to retry");
     }
 
-    console.log('🔄 RoomSocketManager: Retrying current connection');
-    
+    console.log("🔄 RoomSocketManager: Retrying current connection");
+
     // Clean up current connections
     await this.cleanupCurrentConnections();
-    
+
     // Re-establish connection with current config
     await this.establishConnection(this.currentConfig);
   }
@@ -411,16 +474,18 @@ export class RoomSocketManager {
    * Fallback to HTTP mode (disable real-time features)
    */
   private async fallbackToHttpMode(): Promise<void> {
-    console.log('🔄 RoomSocketManager: Falling back to HTTP mode');
-    
+    console.log("🔄 RoomSocketManager: Falling back to HTTP mode");
+
     // Disconnect all socket connections
     await this.cleanupCurrentConnections();
-    
+
     // Set state to disconnected but keep config for potential retry
     this.currentState = ConnectionState.DISCONNECTED;
-    
+
     // Notify handlers about fallback mode
-    this.notifyError('Connection failed. Some real-time features may be unavailable.');
+    this.notifyError(
+      "Connection failed. Some real-time features may be unavailable.",
+    );
     this.notifyStateChange();
   }
 
@@ -428,18 +493,18 @@ export class RoomSocketManager {
    * Force reconnection with state cleanup
    */
   private async forceReconnection(): Promise<void> {
-    console.log('🔄 RoomSocketManager: Force reconnecting');
-    
+    console.log("🔄 RoomSocketManager: Force reconnecting");
+
     // Clear error recovery state
     this.errorRecoveryService.clearRecoveryState();
-    
+
     // Reset reconnection attempts
     this.reconnectionAttempts = 0;
     this.isInGracePeriod = false;
-    
+
     // Try to reconnect using stored session if available
     const success = await this.attemptStoredSessionReconnection();
-    
+
     if (!success) {
       // If stored session reconnection fails, return to lobby
       await this.returnToLobby();
@@ -450,12 +515,12 @@ export class RoomSocketManager {
    * Clear state and reconnect
    */
   private async clearStateAndReconnect(): Promise<void> {
-    console.log('🔄 RoomSocketManager: Clearing state and reconnecting');
-    
+    console.log("🔄 RoomSocketManager: Clearing state and reconnecting");
+
     // Clear all state
     SessionStorageManager.clearRoomSession();
     this.errorRecoveryService.clearAllRetryCounts();
-    
+
     // Return to lobby
     await this.connectToLobby();
   }
@@ -464,11 +529,11 @@ export class RoomSocketManager {
    * Return to lobby
    */
   private async returnToLobby(): Promise<void> {
-    console.log('🔄 RoomSocketManager: Returning to lobby');
-    
+    console.log("🔄 RoomSocketManager: Returning to lobby");
+
     // Clear session data
     SessionStorageManager.clearRoomSession();
-    
+
     // Connect to lobby
     await this.connectToLobby();
   }
@@ -477,7 +542,7 @@ export class RoomSocketManager {
    * Reload page as last resort
    */
   private reloadPage(): void {
-    console.log('🔄 RoomSocketManager: Reloading page');
+    console.log("🔄 RoomSocketManager: Reloading page");
     window.location.reload();
   }
 
@@ -511,36 +576,43 @@ export class RoomSocketManager {
    */
   private checkConnectionHealth(): void {
     const activeSocket = this.getActiveSocket();
-    
+
     // Check for state inconsistencies
-    if (this.currentState !== ConnectionState.DISCONNECTED && (!activeSocket || !activeSocket.connected)) {
-      console.warn('⚠️ RoomSocketManager: State inconsistency detected', {
+    if (
+      this.currentState !== ConnectionState.DISCONNECTED &&
+      (!activeSocket || !activeSocket.connected)
+    ) {
+      console.warn("⚠️ RoomSocketManager: State inconsistency detected", {
         currentState: this.currentState,
         hasSocket: !!activeSocket,
-        socketConnected: activeSocket?.connected
+        socketConnected: activeSocket?.connected,
       });
 
       this.errorRecoveryService.handleError({
         errorType: ErrorType.STATE_INCONSISTENCY,
-        message: 'Connection state inconsistent with socket state',
+        message: "Connection state inconsistent with socket state",
         connectionState: this.currentState,
         timestamp: Date.now(),
         additionalData: {
           hasSocket: !!activeSocket,
-          socketConnected: activeSocket?.connected
-        }
+          socketConnected: activeSocket?.connected,
+        },
       });
     }
 
     // Check for stuck grace period
-    if (this.isInGracePeriod && Date.now() - (this.gracePeriodStartTime || 0) > this.GRACE_PERIOD_MS + 5000) {
-      console.warn('⚠️ RoomSocketManager: Grace period stuck, forcing cleanup');
-      
+    if (
+      this.isInGracePeriod &&
+      Date.now() - (this.gracePeriodStartTime || 0) >
+        this.GRACE_PERIOD_MS + 5000
+    ) {
+      console.warn("⚠️ RoomSocketManager: Grace period stuck, forcing cleanup");
+
       this.errorRecoveryService.handleError({
         errorType: ErrorType.GRACE_PERIOD_EXPIRED,
-        message: 'Grace period exceeded maximum duration',
+        message: "Grace period exceeded maximum duration",
         connectionState: this.currentState,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
     }
   }
@@ -553,7 +625,10 @@ export class RoomSocketManager {
   /**
    * Transition to a new connection state
    */
-  private async transitionTo(newState: ConnectionState, config: ConnectionConfig | null): Promise<void> {
+  private async transitionTo(
+    newState: ConnectionState,
+    config: ConnectionConfig | null,
+  ): Promise<void> {
     // Clean up current connections
     await this.cleanupCurrentConnections();
 
@@ -624,11 +699,14 @@ export class RoomSocketManager {
    * Requirements: 6.10 - Comprehensive error handling for namespace connection failures
    */
   private async establishConnection(config: ConnectionConfig): Promise<void> {
-    console.log('🔌 RoomSocketManager: Establishing connection to', config.namespace);
+    console.log(
+      "🔌 RoomSocketManager: Establishing connection to",
+      config.namespace,
+    );
 
     try {
       const socket = io(`${this.backendUrl}${config.namespace}`, {
-        transports: ['websocket', 'polling'],
+        transports: ["websocket", "polling"],
         timeout: 20000,
         forceNew: true,
         reconnection: false, // We handle reconnection manually
@@ -660,48 +738,58 @@ export class RoomSocketManager {
           reject(error);
         }, 10000); // Reduced timeout to fail faster
 
-        socket.on('connect', () => {
+        socket.on("connect", () => {
           clearTimeout(timeout);
-          console.log('✅ RoomSocketManager: Connected to', config.namespace);
-          
+          console.log("✅ RoomSocketManager: Connected to", config.namespace);
+
           // Clear any previous error recovery state for successful connection
           this.errorRecoveryService.clearRetryCount({
             errorType: ErrorType.NAMESPACE_CONNECTION_FAILED,
-            roomId: config.roomId
+            roomId: config.roomId,
           });
-          
+
           resolve();
         });
 
-        socket.on('connect_error', (error) => {
+        socket.on("connect_error", (error) => {
           clearTimeout(timeout);
-          console.error('❌ RoomSocketManager: Connection error to', config.namespace, error);
-          
+          console.error(
+            "❌ RoomSocketManager: Connection error to",
+            config.namespace,
+            error,
+          );
+
           // Handle specific connection errors
           this.handleConnectionError(error, config);
           reject(error);
         });
 
         // Handle transport errors
-        socket.on('disconnect', (reason) => {
-          if (reason === 'transport error' || reason === 'transport close') {
-            console.warn('⚠️ RoomSocketManager: Transport error during connection', reason);
+        socket.on("disconnect", (reason) => {
+          if (reason === "transport error" || reason === "transport close") {
+            console.warn(
+              "⚠️ RoomSocketManager: Transport error during connection",
+              reason,
+            );
             this.handleTransportError(reason, config);
           }
         });
       });
-
     } catch (error) {
-      console.error('❌ RoomSocketManager: Failed to establish connection', error);
-      
+      console.error(
+        "❌ RoomSocketManager: Failed to establish connection",
+        error,
+      );
+
       // Report error to recovery service
       await this.errorRecoveryService.handleError({
         errorType: ErrorType.NAMESPACE_CONNECTION_FAILED,
-        message: `Failed to connect to ${config.namespace}: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        originalError: error instanceof Error ? error : new Error(String(error)),
+        message: `Failed to connect to ${config.namespace}: ${error instanceof Error ? error.message : "Unknown error"}`,
+        originalError:
+          error instanceof Error ? error : new Error(String(error)),
         connectionState: config.state,
         roomId: config.roomId,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
 
       throw error;
@@ -717,15 +805,19 @@ export class RoomSocketManager {
     let message = `Connection failed to ${config.namespace}`;
 
     // Classify error types
-    if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+    if (error.code === "ENOTFOUND" || error.code === "ECONNREFUSED") {
       errorType = ErrorType.NETWORK_ERROR;
-      message = 'Network connection failed. Please check your internet connection.';
-    } else if (error.message?.includes('timeout')) {
+      message =
+        "Network connection failed. Please check your internet connection.";
+    } else if (error.message?.includes("timeout")) {
       errorType = ErrorType.NETWORK_ERROR;
-      message = 'Connection timed out. Please check your network connection.';
-    } else if (error.message?.includes('permission') || error.message?.includes('forbidden')) {
+      message = "Connection timed out. Please check your network connection.";
+    } else if (
+      error.message?.includes("permission") ||
+      error.message?.includes("forbidden")
+    ) {
       errorType = ErrorType.PERMISSION_DENIED;
-      message = 'Permission denied. Please refresh the page and try again.';
+      message = "Permission denied. Please refresh the page and try again.";
     }
 
     this.errorRecoveryService.handleError({
@@ -734,7 +826,7 @@ export class RoomSocketManager {
       originalError: error,
       connectionState: config.state,
       roomId: config.roomId,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
@@ -748,7 +840,7 @@ export class RoomSocketManager {
       connectionState: config.state,
       roomId: config.roomId,
       timestamp: Date.now(),
-      additionalData: { transportError: reason }
+      additionalData: { transportError: reason },
     });
   }
 
@@ -757,108 +849,144 @@ export class RoomSocketManager {
    * Requirements: 6.10 - Comprehensive error handling for namespace connection failures
    */
   private setupCommonEventHandlers(socket: Socket): void {
-    socket.on('disconnect', (reason) => {
-      console.log('🔌 RoomSocketManager: Socket disconnected', reason);
-      
+    socket.on("disconnect", (reason) => {
+      console.log("🔌 RoomSocketManager: Socket disconnected", reason);
+
       // Handle different disconnect reasons
-      if (reason === 'io server disconnect' || reason === 'io client disconnect') {
+      if (
+        reason === "io server disconnect" ||
+        reason === "io client disconnect"
+      ) {
         // Intentional disconnect, don't trigger recovery
-        console.log('🔌 RoomSocketManager: Intentional disconnect, no recovery needed');
+        console.log(
+          "🔌 RoomSocketManager: Intentional disconnect, no recovery needed",
+        );
       } else {
         // Unexpected disconnection, handle with recovery
         this.handleUnexpectedDisconnection(reason);
       }
     });
 
-    socket.on('connect_error', (error) => {
-      console.error('❌ RoomSocketManager: Connect error', error);
-      
+    socket.on("connect_error", (error) => {
+      console.error("❌ RoomSocketManager: Connect error", error);
+
       this.errorRecoveryService.handleError({
         errorType: ErrorType.NAMESPACE_CONNECTION_FAILED,
         message: `Connection error: ${error.message}`,
         originalError: error,
         connectionState: this.currentState,
         roomId: this.currentConfig?.roomId,
-        timestamp: Date.now()
-      });
-    });
-
-    socket.on('error', (data: { message: string; code?: string; retryAfter?: number; details?: unknown }) => {
-      console.error('\u274c RoomSocketManager: Socket error', data);
-
-      // Handle validation errors from server (e.g., Joi via secureSocketEvent)
-      if (typeof data?.message === 'string' && data.message.includes('Invalid data format')) {
-        // Do NOT attempt auto-recovery/reconnect on validation errors to avoid loops
-        const details = typeof data.details === 'string' ? data.details : JSON.stringify(data.details || {});
-        console.error('Validation details:', details);
-        this.notifyError(`Invalid data sent to server${details ? `: ${details}` : ''}`);
-
-        // If we are in a room, return to lobby to stop further invalid emissions (e.g., periodic heartbeats)
-        if (this.currentState === ConnectionState.IN_ROOM) {
-          // Clear session and navigate back to lobby state
-          this.returnToLobby();
-        }
-        return;
-      }
-
-      // Classify other error types based on message or code
-      let errorType = ErrorType.UNKNOWN_ERROR;
-      if (data.code === 'RATE_LIMITED' || data.message?.includes('rate limit')) {
-        // Don't trigger recovery for rate limiting, just notify user
-        this.notifyError(`Rate limited: ${data.message}${data.retryAfter ? ` Try again in ${data.retryAfter} seconds.` : ''}`);
-        return;
-      } else if (data.message?.includes('permission') || data.message?.includes('unauthorized')) {
-        errorType = ErrorType.PERMISSION_DENIED;
-      } else if (data.message?.includes('network') || data.message?.includes('connection')) {
-        errorType = ErrorType.NETWORK_ERROR;
-      }
-
-      this.errorRecoveryService.handleError({
-        errorType,
-        message: data.message,
-        connectionState: this.currentState,
-        roomId: this.currentConfig?.roomId,
         timestamp: Date.now(),
-        additionalData: { code: data.code, retryAfter: data.retryAfter }
       });
     });
+
+    socket.on(
+      "error",
+      (data: {
+        message: string;
+        code?: string;
+        retryAfter?: number;
+        details?: unknown;
+      }) => {
+        console.error("\u274c RoomSocketManager: Socket error", data);
+
+        // Handle validation errors from server (e.g., Joi via secureSocketEvent)
+        if (
+          typeof data?.message === "string" &&
+          data.message.includes("Invalid data format")
+        ) {
+          // Do NOT attempt auto-recovery/reconnect on validation errors to avoid loops
+          const details =
+            typeof data.details === "string"
+              ? data.details
+              : JSON.stringify(data.details || {});
+          console.error("Validation details:", details);
+          this.notifyError(
+            `Invalid data sent to server${details ? `: ${details}` : ""}`,
+          );
+
+          // If we are in a room, return to lobby to stop further invalid emissions (e.g., periodic heartbeats)
+          if (this.currentState === ConnectionState.IN_ROOM) {
+            // Clear session and navigate back to lobby state
+            this.returnToLobby();
+          }
+          return;
+        }
+
+        // Classify other error types based on message or code
+        let errorType = ErrorType.UNKNOWN_ERROR;
+        if (
+          data.code === "RATE_LIMITED" ||
+          data.message?.includes("rate limit")
+        ) {
+          // Don't trigger recovery for rate limiting, just notify user
+          this.notifyError(
+            `Rate limited: ${data.message}${data.retryAfter ? ` Try again in ${data.retryAfter} seconds.` : ""}`,
+          );
+          return;
+        } else if (
+          data.message?.includes("permission") ||
+          data.message?.includes("unauthorized")
+        ) {
+          errorType = ErrorType.PERMISSION_DENIED;
+        } else if (
+          data.message?.includes("network") ||
+          data.message?.includes("connection")
+        ) {
+          errorType = ErrorType.NETWORK_ERROR;
+        }
+
+        this.errorRecoveryService.handleError({
+          errorType,
+          message: data.message,
+          connectionState: this.currentState,
+          roomId: this.currentConfig?.roomId,
+          timestamp: Date.now(),
+          additionalData: { code: data.code, retryAfter: data.retryAfter },
+        });
+      },
+    );
 
     // Handle reconnection events
-    socket.on('reconnect', (attemptNumber) => {
-      console.log('✅ RoomSocketManager: Socket reconnected after', attemptNumber, 'attempts');
-      
+    socket.on("reconnect", (attemptNumber) => {
+      console.log(
+        "✅ RoomSocketManager: Socket reconnected after",
+        attemptNumber,
+        "attempts",
+      );
+
       // Clear error recovery state on successful reconnection
       this.errorRecoveryService.clearRetryCount({
         errorType: ErrorType.NAMESPACE_CONNECTION_FAILED,
-        roomId: this.currentConfig?.roomId
+        roomId: this.currentConfig?.roomId,
       });
-      
+
       // Notify reconnection handlers
       this.notifyReconnection();
     });
 
-    socket.on('reconnect_error', (error) => {
-      console.error('❌ RoomSocketManager: Reconnect error', error);
-      
+    socket.on("reconnect_error", (error) => {
+      console.error("❌ RoomSocketManager: Reconnect error", error);
+
       this.errorRecoveryService.handleError({
         errorType: ErrorType.NAMESPACE_CONNECTION_FAILED,
         message: `Reconnection failed: ${error.message}`,
         originalError: error,
         connectionState: this.currentState,
         roomId: this.currentConfig?.roomId,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
     });
 
-    socket.on('reconnect_failed', () => {
-      console.error('❌ RoomSocketManager: Reconnection failed permanently');
-      
+    socket.on("reconnect_failed", () => {
+      console.error("❌ RoomSocketManager: Reconnection failed permanently");
+
       this.errorRecoveryService.handleError({
         errorType: ErrorType.NAMESPACE_CONNECTION_FAILED,
-        message: 'Failed to reconnect after multiple attempts',
+        message: "Failed to reconnect after multiple attempts",
         connectionState: this.currentState,
         roomId: this.currentConfig?.roomId,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
     });
   }
@@ -877,8 +1005,11 @@ export class RoomSocketManager {
   /**
    * Set up approval-specific event handlers
    */
-  private setupApprovalEventHandlers(socket: Socket, config: ConnectionConfig): void {
-    socket.on('approval_granted', async () => {
+  private setupApprovalEventHandlers(
+    socket: Socket,
+    config: ConnectionConfig,
+  ): void {
+    socket.on("approval_granted", async () => {
       // Clear approval timeout
       if (this.approvalTimeoutId) {
         clearTimeout(this.approvalTimeoutId);
@@ -895,7 +1026,7 @@ export class RoomSocketManager {
     });
 
     // Support legacy event name used by owner actions
-    socket.on('member_approved', async () => {
+    socket.on("member_approved", async () => {
       if (this.approvalTimeoutId) {
         clearTimeout(this.approvalTimeoutId);
         this.approvalTimeoutId = null;
@@ -906,7 +1037,7 @@ export class RoomSocketManager {
       }
     });
 
-    socket.on('approval_denied', async (data: { message: string }) => {
+    socket.on("approval_denied", async (data: { message: string }) => {
       // Clear approval timeout
       if (this.approvalTimeoutId) {
         clearTimeout(this.approvalTimeoutId);
@@ -922,22 +1053,22 @@ export class RoomSocketManager {
     });
 
     // Support legacy event name used by owner actions
-    socket.on('member_rejected', async (data: { message: string }) => {
+    socket.on("member_rejected", async (data: { message: string }) => {
       if (this.approvalTimeoutId) {
         clearTimeout(this.approvalTimeoutId);
         this.approvalTimeoutId = null;
       }
       this.currentApprovalRequest = null;
-      this.notifyError(data.message || 'Your request was rejected');
+      this.notifyError(data.message || "Your request was rejected");
       await this.connectToLobby();
     });
 
-    socket.on('approval_timeout', async () => {
+    socket.on("approval_timeout", async () => {
       await this.handleApprovalTimeout();
     });
 
     // Optional: informational only
-    socket.on('approval_pending', () => {
+    socket.on("approval_pending", () => {
       // No-op: UI already reflects REQUESTING state
     });
   }
@@ -945,7 +1076,10 @@ export class RoomSocketManager {
   /**
    * Set up room-specific event handlers
    */
-  private setupRoomEventHandlers(socket: Socket, config: ConnectionConfig): void {
+  private setupRoomEventHandlers(
+    socket: Socket,
+    config: ConnectionConfig,
+  ): void {
     // Reference params to satisfy no-unused-vars without disabling linting
     void socket;
     void config;
@@ -963,7 +1097,7 @@ export class RoomSocketManager {
     }
 
     this.currentApprovalRequest = null;
-    this.notifyError('Approval request timed out');
+    this.notifyError("Approval request timed out");
     await this.connectToLobby();
   }
 
@@ -973,57 +1107,63 @@ export class RoomSocketManager {
    * Requirements: 6.10 - Automatic state recovery for inconsistent connection states
    */
   private handleUnexpectedDisconnection(reason?: string): void {
-    console.log('🔄 RoomSocketManager: Unexpected disconnection detected', reason);
+    console.log(
+      "🔄 RoomSocketManager: Unexpected disconnection detected",
+      reason,
+    );
 
-    if (this.currentState === ConnectionState.IN_ROOM && !this.isInGracePeriod) {
-      console.log('🔄 Entering grace period for room connection');
-      
+    if (
+      this.currentState === ConnectionState.IN_ROOM &&
+      !this.isInGracePeriod
+    ) {
+      console.log("🔄 Entering grace period for room connection");
+
       this.isInGracePeriod = true;
       this.gracePeriodStartTime = Date.now();
-      
+
       // Set grace period timeout
       this.gracePeriodTimeoutId = setTimeout(() => {
-        console.log('⏰ Grace period expired');
+        console.log("⏰ Grace period expired");
         this.isInGracePeriod = false;
         this.gracePeriodStartTime = null;
         this.reconnectionAttempts = 0;
-        
+
         // Report grace period expiration to error recovery service
         this.errorRecoveryService.handleError({
           errorType: ErrorType.GRACE_PERIOD_EXPIRED,
-          message: 'Grace period expired without successful reconnection',
+          message: "Grace period expired without successful reconnection",
           connectionState: this.currentState,
           roomId: this.currentConfig?.roomId,
           timestamp: Date.now(),
-          additionalData: { disconnectReason: reason }
+          additionalData: { disconnectReason: reason },
         });
       }, this.GRACE_PERIOD_MS);
-      
+
       // Attempt reconnection
       this.attemptReconnection();
     } else if (this.currentState === ConnectionState.REQUESTING) {
       // Handle approval disconnection
-      console.log('🔄 Approval connection lost');
-      
+      console.log("🔄 Approval connection lost");
+
       this.errorRecoveryService.handleError({
         errorType: ErrorType.APPROVAL_TIMEOUT,
-        message: 'Lost connection during approval process',
+        message: "Lost connection during approval process",
         connectionState: this.currentState,
         roomId: this.currentConfig?.roomId,
         timestamp: Date.now(),
-        additionalData: { disconnectReason: reason }
+        additionalData: { disconnectReason: reason },
       });
     } else {
       // Handle other disconnections
-      console.log('🔄 Connection lost in state', this.currentState);
-      
+      console.log("🔄 Connection lost in state", this.currentState);
+
       this.errorRecoveryService.handleError({
         errorType: ErrorType.NAMESPACE_CONNECTION_FAILED,
         message: `Connection lost in ${this.currentState} state`,
         connectionState: this.currentState,
         roomId: this.currentConfig?.roomId,
         timestamp: Date.now(),
-        additionalData: { disconnectReason: reason }
+        additionalData: { disconnectReason: reason },
       });
     }
   }
@@ -1038,37 +1178,44 @@ export class RoomSocketManager {
     }
 
     this.reconnectionAttempts++;
-    
+
     if (this.reconnectionAttempts > this.MAX_RECONNECTION_ATTEMPTS) {
-      console.log('❌ Max reconnection attempts reached');
+      console.log("❌ Max reconnection attempts reached");
       return;
     }
 
-    console.log(`🔄 Attempting reconnection ${this.reconnectionAttempts}/${this.MAX_RECONNECTION_ATTEMPTS}`);
+    console.log(
+      `🔄 Attempting reconnection ${this.reconnectionAttempts}/${this.MAX_RECONNECTION_ATTEMPTS}`,
+    );
 
     try {
       // Re-establish connection with current config
       await this.establishConnection(this.currentConfig);
-      
+
       // Clear grace period
       if (this.gracePeriodTimeoutId) {
         clearTimeout(this.gracePeriodTimeoutId);
         this.gracePeriodTimeoutId = null;
       }
-      
+
       this.isInGracePeriod = false;
       this.reconnectionAttempts = 0;
-      
-      console.log('✅ Reconnection successful');
-      
+
+      console.log("✅ Reconnection successful");
+
       // Notify reconnection handlers
       this.notifyReconnection();
-      
     } catch (error) {
-      console.warn(`⚠️ Reconnection attempt ${this.reconnectionAttempts} failed:`, error);
-      
+      console.warn(
+        `⚠️ Reconnection attempt ${this.reconnectionAttempts} failed:`,
+        error,
+      );
+
       // Retry with exponential backoff
-      const delay = Math.min(1000 * Math.pow(2, this.reconnectionAttempts - 1), 10000);
+      const delay = Math.min(
+        1000 * Math.pow(2, this.reconnectionAttempts - 1),
+        10000,
+      );
       setTimeout(() => {
         this.attemptReconnection();
       }, delay);
@@ -1080,11 +1227,11 @@ export class RoomSocketManager {
    * Requirements: 5.7 - WebRTC mesh restoration after page refresh or reconnection
    */
   private notifyReconnection(): void {
-    this.reconnectionHandlers.forEach(handler => {
+    this.reconnectionHandlers.forEach((handler) => {
       try {
         handler();
       } catch (error) {
-        console.error('Error in reconnection handler:', error);
+        console.error("Error in reconnection handler:", error);
       }
     });
   }
@@ -1093,11 +1240,11 @@ export class RoomSocketManager {
    * Notify state change handlers
    */
   private notifyStateChange(): void {
-    this.stateChangeHandlers.forEach(handler => {
+    this.stateChangeHandlers.forEach((handler) => {
       try {
         handler(this.currentState, this.currentConfig);
       } catch (error) {
-        console.error('Error in state change handler:', error);
+        console.error("Error in state change handler:", error);
       }
     });
   }
@@ -1106,11 +1253,11 @@ export class RoomSocketManager {
    * Notify error handlers
    */
   private notifyError(error: string): void {
-    this.errorHandlers.forEach(handler => {
+    this.errorHandlers.forEach((handler) => {
       try {
         handler(error);
       } catch (err) {
-        console.error('Error in error handler:', err);
+        console.error("Error in error handler:", err);
       }
     });
   }
@@ -1130,19 +1277,20 @@ export class RoomSocketManager {
     currentState: ConnectionState;
     isInGracePeriod: boolean;
     reconnectionAttempts: number;
-    errorStats: ReturnType<ErrorRecoveryService['getErrorStats']>;
+    errorStats: ReturnType<ErrorRecoveryService["getErrorStats"]>;
   } {
     const activeSocket = this.getActiveSocket();
-    
+
     return {
-      isHealthy: this.currentState !== ConnectionState.DISCONNECTED && 
-                 !!activeSocket && 
-                 activeSocket.connected && 
-                 !this.isInGracePeriod,
+      isHealthy:
+        this.currentState !== ConnectionState.DISCONNECTED &&
+        !!activeSocket &&
+        activeSocket.connected &&
+        !this.isInGracePeriod,
       currentState: this.currentState,
       isInGracePeriod: this.isInGracePeriod,
       reconnectionAttempts: this.reconnectionAttempts,
-      errorStats: this.errorRecoveryService.getErrorStats()
+      errorStats: this.errorRecoveryService.getErrorStats(),
     };
   }
 
@@ -1160,27 +1308,27 @@ export class RoomSocketManager {
    * Complete cleanup of the service
    */
   async cleanup(): Promise<void> {
-    console.log('🧹 RoomSocketManager: Complete cleanup');
-    
+    console.log("🧹 RoomSocketManager: Complete cleanup");
+
     // Stop all monitoring
     this.stopConnectionHealthMonitoring();
-    
+
     // Clean up connections
     await this.cleanupCurrentConnections();
-    
+
     // Clean up error recovery service
     this.errorRecoveryService.cleanup();
-    
+
     // Clear all state
     this.currentState = ConnectionState.DISCONNECTED;
     this.currentConfig = null;
     this.currentApprovalRequest = null;
-    
+
     // Clear handlers
     this.stateChangeHandlers.length = 0;
     this.errorHandlers.length = 0;
     this.reconnectionHandlers.length = 0;
-    
-    console.log('✅ RoomSocketManager: Cleanup complete');
+
+    console.log("✅ RoomSocketManager: Cleanup complete");
   }
 }

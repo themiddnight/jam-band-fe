@@ -1,5 +1,11 @@
+import {
+  dbToGain,
+  gainToDb,
+  formatDb,
+  getDbColorClass,
+  getSliderColorClass,
+} from "../../../utils/audioUtils";
 import React, { useCallback } from "react";
-import { dbToGain, gainToDb, formatDb, getDbColorClass, getSliderColorClass } from "../../../utils/audioUtils";
 
 interface GainControlProps {
   /** Current linear gain value (Web Audio API format) */
@@ -24,7 +30,7 @@ export const GainControl: React.FC<GainControlProps> = ({
 }) => {
   // Convert current gain to dB for display and slider
   const currentDb = gainToDb(gain);
-  
+
   // Handle dB slider change
   const handleDbChange = useCallback(
     (newDb: number) => {
@@ -39,47 +45,49 @@ export const GainControl: React.FC<GainControlProps> = ({
       {/* Header with current value */}
       <div className="flex items-center justify-between">
         <label className="text-sm font-medium">Input Gain</label>
-        <span 
+        <span
           className={`text-xs font-mono px-2 py-1 rounded bg-base-200 ${getDbColorClass(currentDb)}`}
         >
           {formatDb(currentDb)}
         </span>
       </div>
-      
+
       {/* Professional mixer-style slider */}
       <div className="relative">
         <input
           type="range"
-          min={-48}   // -48dB minimum (very quiet but not silence)
-          max={36}    // +36dB maximum (extreme amplification)
-          step={0.5}  // 0.5dB steps for precise control
+          min={-48} // -48dB minimum (very quiet but not silence)
+          max={36} // +36dB maximum (extreme amplification)
+          step={0.5} // 0.5dB steps for precise control
           value={currentDb}
           onChange={(e) => handleDbChange(Number(e.target.value))}
           disabled={disabled}
           className={`range range-sm w-full ${getSliderColorClass(currentDb)}`}
         />
-        
+
         {/* Tick marks with 0dB prominently marked */}
         <div className="flex justify-between text-xs text-base-content/50 mt-1 px-1">
           <span>-48</span>
           <span>-24</span>
           <span>-12</span>
-          <span className="font-bold text-primary border-b border-primary">0dB</span>
+          <span className="font-bold text-primary border-b border-primary">
+            0dB
+          </span>
           <span>+12</span>
           <span>+24</span>
           <span>+36</span>
         </div>
-        
+
         {/* Center line indicator for 0dB */}
-        <div 
+        <div
           className="absolute top-0 w-0.5 h-full bg-primary/30 pointer-events-none"
-          style={{ 
-            left: `${((0 - (-48)) / (36 - (-48))) * 100}%`,
-            transform: 'translateX(-50%)'
+          style={{
+            left: `${((0 - -48) / (36 - -48)) * 100}%`,
+            transform: "translateX(-50%)",
           }}
         />
       </div>
-      
+
       {/* Professional gain staging info */}
       {/* <div className="text-xs text-center text-base-content/60 space-y-0.5">
         <div>0dB = Unity Gain (Recommended)</div>

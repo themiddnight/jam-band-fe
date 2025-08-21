@@ -387,18 +387,22 @@ export const useInstrument = (
       setIsAudioContextReady(true);
     } catch (error) {
       console.error("Failed to initialize audio context:", error);
-      
+
       // Check if this is a user gesture error
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      const isUserGestureError = errorMessage.includes('AudioContext state is closed') ||
-                                errorMessage.includes('user gesture') ||
-                                errorMessage.includes('suspended') ||
-                                errorMessage.includes('interact');
-                                
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      const isUserGestureError =
+        errorMessage.includes("AudioContext state is closed") ||
+        errorMessage.includes("user gesture") ||
+        errorMessage.includes("suspended") ||
+        errorMessage.includes("interact");
+
       if (isUserGestureError) {
-        console.log('🎵 AudioContext requires user gesture, showing enable button');
+        console.log(
+          "🎵 AudioContext requires user gesture, showing enable button",
+        );
         setNeedsUserGesture(true);
-        setAudioContextError('Audio requires user interaction to initialize');
+        setAudioContextError("Audio requires user interaction to initialize");
       } else {
         setAudioContextError(
           error instanceof Error
@@ -635,7 +639,10 @@ export const useInstrument = (
     async (notes: string[], velocity: number, isKeyHeld: boolean = false) => {
       try {
         if (!Array.isArray(notes)) {
-          console.error('useInstrument playNote received non-array notes:', notes);
+          console.error(
+            "useInstrument playNote received non-array notes:",
+            notes,
+          );
           notes = [notes as string];
         }
         if (!instrumentManager.isReady()) {
@@ -653,7 +660,10 @@ export const useInstrument = (
     async (notes: string[]) => {
       try {
         if (!Array.isArray(notes)) {
-          console.error('useInstrument stopNotes received non-array notes:', notes);
+          console.error(
+            "useInstrument stopNotes received non-array notes:",
+            notes,
+          );
           notes = [notes as string];
         }
         await instrumentManager.stopLocalNotes(notes);
@@ -780,26 +790,33 @@ export const useInstrument = (
       category: InstrumentCategory,
     ) => {
       try {
-        console.log(`🎵 updateRemoteUserInstrument: Starting update for ${username} - ${instrumentName} (${category})`);
+        console.log(
+          `🎵 updateRemoteUserInstrument: Starting update for ${username} - ${instrumentName} (${category})`,
+        );
         await instrumentManager.updateRemoteInstrument(
           userId,
           username,
           instrumentName,
           category,
         );
-        console.log(`✅ updateRemoteUserInstrument: Successfully updated ${username} to ${instrumentName} (${category})`);
+        console.log(
+          `✅ updateRemoteUserInstrument: Successfully updated ${username} to ${instrumentName} (${category})`,
+        );
       } catch (error) {
         console.error(
           `❌ updateRemoteUserInstrument: Failed to update remote instrument for user ${username}:`,
           error,
         );
-        console.error(`❌ updateRemoteUserInstrument: Error details for ${username}:`, {
-          userId,
-          username,
-          instrumentName,
-          category,
-          error
-        });
+        console.error(
+          `❌ updateRemoteUserInstrument: Error details for ${username}:`,
+          {
+            userId,
+            username,
+            instrumentName,
+            category,
+            error,
+          },
+        );
 
         // For remote users, we don't automatically try fallbacks
         // The fallback will be handled by the remote user's own device
@@ -871,8 +888,13 @@ export const useInstrument = (
   useEffect(() => {
     const autoInit = async () => {
       // Only try to auto-initialize once, and not if we already know we need user gesture
-      if (!isAudioContextReady && !isCurrentlyLoading.current && !needsUserGesture && !audioContextError) {
-        console.log('🎵 Attempting auto-initialization of audio context');
+      if (
+        !isAudioContextReady &&
+        !isCurrentlyLoading.current &&
+        !needsUserGesture &&
+        !audioContextError
+      ) {
+        console.log("🎵 Attempting auto-initialization of audio context");
         try {
           await initializeAudioContext();
         } catch {
@@ -881,28 +903,44 @@ export const useInstrument = (
         }
       }
     };
-    
+
     autoInit();
-  }, [initializeAudioContext, isAudioContextReady, needsUserGesture, audioContextError]);
+  }, [
+    initializeAudioContext,
+    isAudioContextReady,
+    needsUserGesture,
+    audioContextError,
+  ]);
 
   // WebRTC performance optimization effect
   useEffect(() => {
     const handleWebRTCState = (event: CustomEvent<{ active: boolean }>) => {
       const isWebRTCActive = event.detail.active;
-      console.log(`🎵 Instrument Hook: WebRTC state changed: ${isWebRTCActive}`);
-      
+      console.log(
+        `🎵 Instrument Hook: WebRTC state changed: ${isWebRTCActive}`,
+      );
+
       // Apply optimization to local engine
       const localEngine = instrumentManager.getLocalEngine();
-      if (localEngine && typeof localEngine.setWebRTCOptimization === 'function') {
+      if (
+        localEngine &&
+        typeof localEngine.setWebRTCOptimization === "function"
+      ) {
         localEngine.setWebRTCOptimization(isWebRTCActive);
       }
     };
 
     // Listen for WebRTC state changes
-    window.addEventListener('webrtc-active', handleWebRTCState as EventListener);
-    
+    window.addEventListener(
+      "webrtc-active",
+      handleWebRTCState as EventListener,
+    );
+
     return () => {
-      window.removeEventListener('webrtc-active', handleWebRTCState as EventListener);
+      window.removeEventListener(
+        "webrtc-active",
+        handleWebRTCState as EventListener,
+      );
     };
   }, [instrumentManager]);
 

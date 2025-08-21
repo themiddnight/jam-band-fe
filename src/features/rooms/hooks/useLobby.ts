@@ -1,21 +1,21 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import type { Socket } from "socket.io-client";
-import { useNavigate } from "react-router-dom";
 import { useRoomSocket } from "@/features/audio/hooks/useRoomSocket";
+import { ConnectionState } from "@/features/audio/types/connectionState";
 import { useRoomQuery, useRoomStore } from "@/features/rooms";
 import { createRoom as createRoomAPI } from "@/features/rooms/services/api";
 import { useUserStore } from "@/shared/stores/userStore";
-import { ConnectionState } from "@/features/audio/types/connectionState";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import type { Socket } from "socket.io-client";
 
 /**
  * Lobby hook using the RoomSocketManager for namespace-based connections
  */
 export const useLobby = () => {
   const navigate = useNavigate();
-  
+
   // User state
   const { username, userId, setUsername, setUserId } = useUserStore();
-  
+
   // Room socket
   const {
     connectionState,
@@ -34,7 +34,9 @@ export const useLobby = () => {
   const { clearRoom } = useRoomStore();
 
   // Active socket state to trigger re-renders when it changes
-  const [activeSocket, setActiveSocket] = useState<Socket | null>(getActiveSocket());
+  const [activeSocket, setActiveSocket] = useState<Socket | null>(
+    getActiveSocket(),
+  );
 
   // Keep active socket updated with the latest from the manager
   useEffect(() => {
@@ -69,39 +71,54 @@ export const useLobby = () => {
   } | null>(null);
 
   // Define handleJoinRoom first
-  const handleJoinRoom = useCallback(async (roomId: string, role: "band_member" | "audience") => {
-    if (!username || !userId) {
-      setShowUsernameModal(true);
-      return;
-    }
-
-    // Clear any existing room state
-    clearRoom();
-
-    // Find the room to check if it's private
-    const room = rooms.find((r: any) => r.id === roomId);
-    const isPrivateRoom = room?.isPrivate || false;
-
-    try {
-      if (isPrivateRoom && role === "band_member") {
-        // For private rooms, band members need approval
-        setPendingRoomIntent({ roomId, role });
-        await requestRoomApproval(roomId, userId, username, role);
-        // Stay on lobby page during approval process
-      } else {
-        // For public rooms or audience members, join directly
-        await connectToRoom(roomId, role);
-        // Navigate to room page
-        navigate(`/room/${roomId}`, { state: { role } });
+  const handleJoinRoom = useCallback(
+    async (roomId: string, role: "band_member" | "audience") => {
+      if (!username || !userId) {
+        setShowUsernameModal(true);
+        return;
       }
-    } catch (error) {
-      console.error("Failed to join room:", error);
-    }
-  }, [username, userId, rooms, clearRoom, requestRoomApproval, connectToRoom, navigate]);
+
+      // Clear any existing room state
+      clearRoom();
+
+      // Find the room to check if it's private
+      const room = rooms.find((r: any) => r.id === roomId);
+      const isPrivateRoom = room?.isPrivate || false;
+
+      try {
+        if (isPrivateRoom && role === "band_member") {
+          // For private rooms, band members need approval
+          setPendingRoomIntent({ roomId, role });
+          await requestRoomApproval(roomId, userId, username, role);
+          // Stay on lobby page during approval process
+        } else {
+          // For public rooms or audience members, join directly
+          await connectToRoom(roomId, role);
+          // Navigate to room page
+          navigate(`/room/${roomId}`, { state: { role } });
+        }
+      } catch (error) {
+        console.error("Failed to join room:", error);
+      }
+    },
+    [
+      username,
+      userId,
+      rooms,
+      clearRoom,
+      requestRoomApproval,
+      connectToRoom,
+      navigate,
+    ],
+  );
 
   // Initialize lobby connection when component mounts
   useEffect(() => {
-    if (username && userId && connectionState === ConnectionState.DISCONNECTED) {
+    if (
+      username &&
+      userId &&
+      connectionState === ConnectionState.DISCONNECTED
+    ) {
       connectToLobby();
     }
   }, [username, userId, connectionState, connectToLobby]);
@@ -156,7 +173,9 @@ export const useLobby = () => {
   // Navigate to the room after approval (when socket transitions to IN_ROOM)
   useEffect(() => {
     if (connectionState === ConnectionState.IN_ROOM && pendingRoomIntent) {
-      navigate(`/room/${pendingRoomIntent.roomId}`, { state: { role: pendingRoomIntent.role } });
+      navigate(`/room/${pendingRoomIntent.roomId}`, {
+        state: { role: pendingRoomIntent.role },
+      });
       setPendingRoomIntent(null);
     }
   }, [connectionState, pendingRoomIntent, navigate]);
@@ -181,7 +200,7 @@ export const useLobby = () => {
 
     const newUsername = tempUsername.trim();
     const newUserId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+
     setUsername(newUsername);
     setUserId(newUserId);
     setShowUsernameModal(false);
@@ -213,25 +232,39 @@ export const useLobby = () => {
     if (!newRoomName.trim() || !username || !userId) return;
 
     try {
-      const result = await createRoomAPI(newRoomName.trim(), username, userId, isPrivate, isHidden);
-      
+      const result = await createRoomAPI(
+        newRoomName.trim(),
+        username,
+        userId,
+        isPrivate,
+        isHidden,
+      );
+
       if (result.success) {
         // Refresh room list to show the new room
         fetchRooms();
-        
+
         // Navigate to the new room
         navigate(`/room/${result.room.id}`);
       }
     } catch (error) {
-      console.error('Failed to create room:', error);
+      console.error("Failed to create room:", error);
       // You could add error handling here
     }
-    
+
     setShowCreateRoomModal(false);
     setNewRoomName("");
     setIsPrivate(false);
     setIsHidden(false);
-  }, [newRoomName, username, userId, isPrivate, isHidden, fetchRooms, navigate]);
+  }, [
+    newRoomName,
+    username,
+    userId,
+    isPrivate,
+    isHidden,
+    fetchRooms,
+    navigate,
+  ]);
 
   const handleCreateRoomModalClose = useCallback(() => {
     setShowCreateRoomModal(false);
@@ -281,7 +314,7 @@ export const useLobby = () => {
     setIsPrivate,
     setIsHidden,
 
-  // Socket for ping measurement
-  activeSocket,
+    // Socket for ping measurement
+    activeSocket,
   };
 };

@@ -1,11 +1,11 @@
-import React from 'react';
-import { useAdaptiveAudio } from '../../hooks/useAdaptiveAudio';
+import { useAdaptiveAudio } from "../../hooks/useAdaptiveAudio";
+import React from "react";
 
 interface AdaptiveAudioStatusProps {
   audioContext?: AudioContext | null;
   userCount?: number;
   currentLatency?: number | null;
-  variant?: 'compact' | 'detailed' | 'badge';
+  variant?: "compact" | "detailed" | "badge";
   showRecommendations?: boolean;
 }
 
@@ -13,8 +13,8 @@ const AdaptiveAudioStatus: React.FC<AdaptiveAudioStatusProps> = ({
   audioContext,
   userCount = 0,
   currentLatency = null,
-  variant = 'compact',
-  showRecommendations = false
+  variant = "compact",
+  showRecommendations = false,
 }) => {
   const {
     configSummary,
@@ -23,27 +23,27 @@ const AdaptiveAudioStatus: React.FC<AdaptiveAudioStatusProps> = ({
     isBalanced,
     isStable,
     recommendations,
-    lastAdjustment
+    lastAdjustment,
   } = useAdaptiveAudio({
     audioContext,
     userCount,
-    currentLatency
+    currentLatency,
   });
 
   // Get quality color
   const getQualityColor = () => {
-    if (isUltraLowLatency) return 'text-success';
-    if (isBalanced) return 'text-warning';
-    if (isStable) return 'text-info';
-    return 'text-base-content';
+    if (isUltraLowLatency) return "text-success";
+    if (isBalanced) return "text-warning";
+    if (isStable) return "text-info";
+    return "text-base-content";
   };
 
   // Get quality icon
   const getQualityIcon = () => {
-    if (isUltraLowLatency) return '⚡';
-    if (isBalanced) return '⚖️';
-    if (isStable) return '🛡️';
-    return '🎵';
+    if (isUltraLowLatency) return "⚡";
+    if (isBalanced) return "⚖️";
+    if (isStable) return "🛡️";
+    return "🎵";
   };
 
   // Format time since last adjustment
@@ -54,25 +54,25 @@ const AdaptiveAudioStatus: React.FC<AdaptiveAudioStatusProps> = ({
     return `${Math.floor(seconds / 3600)}h ago`;
   };
 
-  if (variant === 'badge') {
+  if (variant === "badge") {
     return (
       <div className={`badge badge-outline ${getQualityColor()}`}>
-        {getQualityIcon()} {qualityLevel.replace('-', ' ')}
+        {getQualityIcon()} {qualityLevel.replace("-", " ")}
       </div>
     );
   }
 
-  if (variant === 'detailed') {
+  if (variant === "detailed") {
     return (
       <div className="card bg-base-100 shadow-sm">
         <div className="card-body p-4">
           <div className="flex items-center justify-between mb-3">
             <h4 className="card-title text-sm">Adaptive Audio</h4>
             <span className={`badge ${getQualityColor()}`}>
-              {getQualityIcon()} {qualityLevel.replace('-', ' ')}
+              {getQualityIcon()} {qualityLevel.replace("-", " ")}
             </span>
           </div>
-          
+
           <div className="space-y-2 text-xs">
             <div className="flex justify-between">
               <span>Mode:</span>
@@ -84,7 +84,9 @@ const AdaptiveAudioStatus: React.FC<AdaptiveAudioStatusProps> = ({
             </div>
             <div className="flex justify-between">
               <span>Buffer Size:</span>
-              <span className="font-mono">{configSummary.bufferSize} samples</span>
+              <span className="font-mono">
+                {configSummary.bufferSize} samples
+              </span>
             </div>
             <div className="flex justify-between">
               <span>Look-ahead:</span>
@@ -96,7 +98,9 @@ const AdaptiveAudioStatus: React.FC<AdaptiveAudioStatusProps> = ({
             </div>
             <div className="flex justify-between">
               <span>Last Adjusted:</span>
-              <span className="font-mono text-xs">{formatTimeSince(lastAdjustment)}</span>
+              <span className="font-mono text-xs">
+                {formatTimeSince(lastAdjustment)}
+              </span>
             </div>
           </div>
 
@@ -105,7 +109,9 @@ const AdaptiveAudioStatus: React.FC<AdaptiveAudioStatusProps> = ({
               <div className="text-xs font-semibold mb-2">Recommendations:</div>
               <ul className="text-xs space-y-1">
                 {recommendations.map((rec, index) => (
-                  <li key={index} className="text-warning">• {rec}</li>
+                  <li key={index} className="text-warning">
+                    • {rec}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -119,10 +125,10 @@ const AdaptiveAudioStatus: React.FC<AdaptiveAudioStatusProps> = ({
   return (
     <div className="flex items-center gap-2 text-sm">
       <span className={getQualityColor()}>{getQualityIcon()}</span>
-      <span className="font-mono">{qualityLevel.replace('-', ' ')}</span>
+      <span className="font-mono">{qualityLevel.replace("-", " ")}</span>
       <span className="text-base-content/60">({userCount} users)</span>
     </div>
   );
 };
 
-export default AdaptiveAudioStatus; 
+export default AdaptiveAudioStatus;

@@ -55,7 +55,7 @@ export const getDbColorClass = (db: number): string => {
  */
 export const getSliderColorClass = (db: number): string => {
   if (db <= -6) return "range-success";
-  if (db <= 12) return "range-warning"; 
+  if (db <= 12) return "range-warning";
   if (db <= 24) return "range-error";
   return "range-error"; // Keep red for extreme levels
 };

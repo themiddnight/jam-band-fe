@@ -56,9 +56,9 @@ export const AUDIO_CONFIG = {
     enabled: true,
     masterGainLevel: 0.8,
     busRouting: {
-      instruments: 'master',
-      metronome: 'master', 
-      voice: 'direct', // WebRTC bypasses master bus for lowest latency
+      instruments: "master",
+      metronome: "master",
+      voice: "direct", // WebRTC bypasses master bus for lowest latency
     },
     effects: {
       // Future effects configuration
@@ -78,10 +78,10 @@ export const ADAPTIVE_AUDIO_CONFIG = {
     bufferSize: 128,
     lookAhead: 0.002, // 2ms
     updateInterval: 0.002, // 2ms
-    quality: 'ultra-low-latency',
-    description: 'Ultra-low latency mode for small groups',
-    latencyTarget: '5-8ms',
-    cpuTarget: '20-40%'
+    quality: "ultra-low-latency",
+    description: "Ultra-low latency mode for small groups",
+    latencyTarget: "5-8ms",
+    cpuTarget: "20-40%",
   },
 
   // Medium mesh (4-6 users): Balanced approach
@@ -91,10 +91,10 @@ export const ADAPTIVE_AUDIO_CONFIG = {
     bufferSize: 256,
     lookAhead: 0.003, // 3ms
     updateInterval: 0.003, // 3ms
-    quality: 'balanced',
-    description: 'Balanced latency and quality for medium groups',
-    latencyTarget: '8-12ms',
-    cpuTarget: '40-60%'
+    quality: "balanced",
+    description: "Balanced latency and quality for medium groups",
+    latencyTarget: "8-12ms",
+    cpuTarget: "40-60%",
   },
 
   // Large mesh (7-10 users): Stability priority
@@ -104,11 +104,11 @@ export const ADAPTIVE_AUDIO_CONFIG = {
     bufferSize: 512,
     lookAhead: 0.004, // 4ms
     updateInterval: 0.004, // 4ms
-    quality: 'stable',
-    description: 'Stable performance for large groups',
-    latencyTarget: '12-18ms',
-    cpuTarget: '60-80%'
-  }
+    quality: "stable",
+    description: "Stable performance for large groups",
+    latencyTarget: "12-18ms",
+    cpuTarget: "60-80%",
+  },
 };
 
 // Helper function to get optimal settings based on device capability
@@ -120,7 +120,8 @@ export const getOptimalAudioConfig = () => {
   // Check if device supports 48kHz sample rate (most modern devices do)
   const supports48kHz = (() => {
     try {
-      const testContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const testContext = new (window.AudioContext ||
+        (window as any).webkitAudioContext)();
       const supports = testContext.sampleRate >= 48000;
       testContext.close();
       return supports;
@@ -165,19 +166,23 @@ export const getAdaptiveAudioConfig = (userCount: number) => {
 };
 
 // Helper function to check if quality should be reduced
-export const shouldReduceQuality = (userCount: number, currentLatency: number, cpuUsage?: number) => {
+export const shouldReduceQuality = (
+  userCount: number,
+  currentLatency: number,
+  cpuUsage?: number,
+) => {
   const config = getAdaptiveAudioConfig(userCount);
-  
+
   // If latency exceeds thresholds for current mesh size, reduce quality
-  if (currentLatency > parseFloat(config.latencyTarget.split('-')[1])) {
+  if (currentLatency > parseFloat(config.latencyTarget.split("-")[1])) {
     return true;
   }
-  
+
   // If CPU usage is high, reduce quality
   if (cpuUsage && cpuUsage > 80) {
     return true;
   }
-  
+
   return false;
 };
 
@@ -187,13 +192,15 @@ export const getPerformanceMetrics = () => {
     timestamp: Date.now(),
     userAgent: navigator.userAgent,
     audioContext: {
-      supported: 'AudioContext' in window || 'webkitAudioContext' in window,
-      workletSupported: 'audioWorklet' in (window.AudioContext || (window as any).webkitAudioContext || {}),
+      supported: "AudioContext" in window || "webkitAudioContext" in window,
+      workletSupported:
+        "audioWorklet" in
+        (window.AudioContext || (window as any).webkitAudioContext || {}),
     },
     hardware: {
-      cores: navigator.hardwareConcurrency || 'unknown',
-      memory: (navigator as any).deviceMemory || 'unknown',
-    }
+      cores: navigator.hardwareConcurrency || "unknown",
+      memory: (navigator as any).deviceMemory || "unknown",
+    },
   };
 };
 
@@ -282,7 +289,9 @@ class AudioNodePool {
       this.cleanupTimer = null;
     }
     // Disconnect all pooled nodes
-    [...this.gainNodes, ...this.analyserNodes].forEach(node => node.disconnect());
+    [...this.gainNodes, ...this.analyserNodes].forEach((node) =>
+      node.disconnect(),
+    );
     this.gainNodes = [];
     this.analyserNodes = [];
     this.bufferSourceNodes = [];
@@ -300,7 +309,7 @@ class MasterAudioBus {
     this.masterGain = context.createGain();
     this.masterGain.gain.value = AUDIO_CONFIG.MASTER_BUS.masterGainLevel;
     this.masterGain.connect(context.destination);
-    console.log('🎛️ Master Audio Bus initialized');
+    console.log("🎛️ Master Audio Bus initialized");
   }
 
   // Get the master gain node for routing
@@ -326,7 +335,7 @@ class MasterAudioBus {
 
   cleanup(): void {
     this.masterGain.disconnect();
-    this.effectsChain.forEach(effect => effect.disconnect());
+    this.effectsChain.forEach((effect) => effect.disconnect());
   }
 }
 
@@ -343,34 +352,42 @@ export class AudioContextManager {
   static async getInstrumentContext(): Promise<AudioContext> {
     if (!this.instrumentContext || this.instrumentContext.state === "closed") {
       const config = getOptimalAudioConfig();
-      
+
       // Use Safari-compatible audio context creation for Safari browsers
-      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-      
+      const isSafari = /^((?!chrome|android).)*safari/i.test(
+        navigator.userAgent,
+      );
+
       if (isSafari) {
         // Import Safari compatibility utility
-        const { createWebKitCompatibleAudioContext } = await import("../../../shared/utils/webkitCompat");
+        const { createWebKitCompatibleAudioContext } = await import(
+          "../../../shared/utils/webkitCompat"
+        );
         this.instrumentContext = await createWebKitCompatibleAudioContext();
       } else {
-        this.instrumentContext = new AudioContext(config.INSTRUMENT_AUDIO_CONTEXT);
+        this.instrumentContext = new AudioContext(
+          config.INSTRUMENT_AUDIO_CONTEXT,
+        );
       }
-      
+
       // Initialize node pool and master bus
       this.instrumentNodePool = new AudioNodePool(this.instrumentContext);
       if (config.MASTER_BUS.enabled) {
         this.masterBus = new MasterAudioBus(this.instrumentContext);
       }
-      
-      console.log(`🎵 Instrument AudioContext created: ${this.instrumentContext.sampleRate}Hz`);
-      
+
+      console.log(
+        `🎵 Instrument AudioContext created: ${this.instrumentContext.sampleRate}Hz`,
+      );
+
       // Add performance monitoring
       this.setupPerformanceMonitoring();
     }
-    
+
     if (this.instrumentContext.state === "suspended") {
       this.instrumentContext.resume().catch(console.warn);
     }
-    
+
     return this.instrumentContext;
   }
 
@@ -388,66 +405,85 @@ export class AudioContextManager {
   static async getWebRTCContext(): Promise<AudioContext> {
     if (!this.webrtcContext || this.webrtcContext.state === "closed") {
       const config = getOptimalAudioConfig();
-      
+
       // Use Safari-compatible audio context creation for Safari browsers
-      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-      
+      const isSafari = /^((?!chrome|android).)*safari/i.test(
+        navigator.userAgent,
+      );
+
       if (isSafari) {
         // Import Safari compatibility utility
-        const { createWebKitCompatibleAudioContext } = await import("../../../shared/utils/webkitCompat");
+        const { createWebKitCompatibleAudioContext } = await import(
+          "../../../shared/utils/webkitCompat"
+        );
         this.webrtcContext = await createWebKitCompatibleAudioContext();
       } else {
         this.webrtcContext = new AudioContext(config.WEBRTC_AUDIO_CONTEXT);
       }
       this.webrtcActive = true;
-      
-      console.log(`🎤 WebRTC AudioContext created: ${this.webrtcContext.sampleRate}Hz`);
-      
+
+      console.log(
+        `🎤 WebRTC AudioContext created: ${this.webrtcContext.sampleRate}Hz`,
+      );
+
       // Warn if sample rates don't match
-      if (this.instrumentContext && this.instrumentContext.sampleRate !== this.webrtcContext.sampleRate) {
-        console.warn(`⚠️ Sample rate mismatch! Instrument: ${this.instrumentContext.sampleRate}Hz, WebRTC: ${this.webrtcContext.sampleRate}Hz`);
+      if (
+        this.instrumentContext &&
+        this.instrumentContext.sampleRate !== this.webrtcContext.sampleRate
+      ) {
+        console.warn(
+          `⚠️ Sample rate mismatch! Instrument: ${this.instrumentContext.sampleRate}Hz, WebRTC: ${this.webrtcContext.sampleRate}Hz`,
+        );
       }
-      
+
       // Adjust instrument performance when WebRTC becomes active
       this.notifyWebRTCStateChange();
     }
-    
+
     if (this.webrtcContext.state === "suspended") {
       this.webrtcContext.resume().catch(console.warn);
     }
-    
+
     return this.webrtcContext;
   }
 
   // Check if WebRTC is active to adjust instrument performance
   static isWebRTCActive(): boolean {
-    return this.webrtcActive && this.webrtcContext !== null && this.webrtcContext.state === "running";
+    return (
+      this.webrtcActive &&
+      this.webrtcContext !== null &&
+      this.webrtcContext.state === "running"
+    );
   }
 
   // Get adjusted polyphony based on WebRTC state
   static getMaxPolyphony(): number {
     const config = getOptimalAudioConfig();
-    
+
     if (this.webrtcPriorityMode) {
       return config.PERFORMANCE.webrtcPriorityMode.maxPolyphony;
     } else if (this.isWebRTCActive()) {
       return config.PERFORMANCE.maxPolyphonyWithWebRTC;
     }
-    
+
     return config.PERFORMANCE.maxPolyphony;
   }
 
   // Enable priority mode for WebRTC (ultra-low latency)
   static enableWebRTCPriorityMode() {
     this.webrtcPriorityMode = true;
-    console.log("🚨 WebRTC Priority Mode ENABLED - Ultra-low latency for voice");
+    console.log(
+      "🚨 WebRTC Priority Mode ENABLED - Ultra-low latency for voice",
+    );
     this.notifyWebRTCStateChange();
   }
 
   // Disable priority mode
   static disableWebRTCPriorityMode() {
     this.webrtcPriorityMode = false;
-    console.log("✅ WebRTC Priority Mode DISABLED - Normal performance restored");
+    console.log(
+      "✅ WebRTC Priority Mode DISABLED - Normal performance restored",
+    );
     this.notifyWebRTCStateChange();
   }
 
@@ -459,12 +495,12 @@ export class AudioContextManager {
   // Notify when WebRTC state changes to adjust instrument performance
   static notifyWebRTCStateChange() {
     // Dispatch custom event to notify instruments of WebRTC state change
-    const event = new CustomEvent('webrtc-state-change', {
-      detail: { 
+    const event = new CustomEvent("webrtc-state-change", {
+      detail: {
         isActive: this.isWebRTCActive(),
         isPriorityMode: this.webrtcPriorityMode,
-        maxPolyphony: this.getMaxPolyphony()
-      }
+        maxPolyphony: this.getMaxPolyphony(),
+      },
     });
     window.dispatchEvent(event);
   }
@@ -480,30 +516,44 @@ export class AudioContextManager {
     if (this.instrumentContext) {
       // Monitor CPU usage and adjust buffer size if needed
       setInterval(() => {
-        if (this.instrumentContext && this.instrumentContext.state === "running" && this.webrtcContext) {
+        if (
+          this.instrumentContext &&
+          this.instrumentContext.state === "running" &&
+          this.webrtcContext
+        ) {
           const baseLatency = this.instrumentContext.baseLatency;
           const outputLatency = this.instrumentContext.outputLatency;
           const totalLatency = baseLatency + outputLatency;
-          
+
           // If latency is getting high and WebRTC is active, warn and potentially optimize
-          if (this.isWebRTCActive() && totalLatency > 0.05) { // 50ms
-            console.warn(`🚨 High audio latency detected: ${(totalLatency * 1000).toFixed(1)}ms - WebRTC may experience dropouts`);
-            
+          if (this.isWebRTCActive() && totalLatency > 0.05) {
+            // 50ms
+            console.warn(
+              `🚨 High audio latency detected: ${(totalLatency * 1000).toFixed(1)}ms - WebRTC may experience dropouts`,
+            );
+
             // If latency is very high, suggest reducing instrument quality
-            if (totalLatency > 0.1) { // 100ms
-              console.warn("⚡ Consider reducing instrument polyphony or quality to improve WebRTC performance");
+            if (totalLatency > 0.1) {
+              // 100ms
+              console.warn(
+                "⚡ Consider reducing instrument polyphony or quality to improve WebRTC performance",
+              );
               this.notifyWebRTCStateChange();
             }
           }
-          
+
           // Monitor WebRTC context specifically
           // NOTE: This measures Web Audio API context latency (browser audio processing overhead),
           // NOT the actual WebRTC network round-trip time. For network latency, see the
           // useRTCLatencyMeasurement hook which measures actual peer connection RTT.
           if (this.webrtcContext && this.webrtcContext.state === "running") {
-            const webrtcLatency = this.webrtcContext.baseLatency + this.webrtcContext.outputLatency;
-            if (webrtcLatency > 0.05) { // Increased threshold to 50ms to reduce false warnings
-              console.warn(`🎤 Web Audio API context latency: ${(webrtcLatency * 1000).toFixed(1)}ms (this is browser audio processing, not network latency)`);
+            const webrtcLatency =
+              this.webrtcContext.baseLatency + this.webrtcContext.outputLatency;
+            if (webrtcLatency > 0.05) {
+              // Increased threshold to 50ms to reduce false warnings
+              console.warn(
+                `🎤 Web Audio API context latency: ${(webrtcLatency * 1000).toFixed(1)}ms (this is browser audio processing, not network latency)`,
+              );
             }
           }
         }
@@ -514,7 +564,7 @@ export class AudioContextManager {
   // Cleanup contexts
   static async cleanup() {
     this.webrtcActive = false;
-    
+
     // Cleanup node pool and master bus
     if (this.instrumentNodePool) {
       this.instrumentNodePool.cleanup();
@@ -524,7 +574,7 @@ export class AudioContextManager {
       this.masterBus.cleanup();
       this.masterBus = null;
     }
-    
+
     if (this.instrumentContext) {
       await this.instrumentContext.close();
       this.instrumentContext = null;
@@ -544,7 +594,10 @@ export class AudioContextManager {
 
   // Resume instrument context
   static async resumeInstrumentContext() {
-    if (this.instrumentContext && this.instrumentContext.state === "suspended") {
+    if (
+      this.instrumentContext &&
+      this.instrumentContext.state === "suspended"
+    ) {
       await this.instrumentContext.resume();
     }
   }
@@ -553,7 +606,7 @@ export class AudioContextManager {
   static async cleanupWebRTC() {
     this.webrtcActive = false;
     this.notifyWebRTCStateChange();
-    
+
     if (this.webrtcContext) {
       await this.webrtcContext.close();
       this.webrtcContext = null;

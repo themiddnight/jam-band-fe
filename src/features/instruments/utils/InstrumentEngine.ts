@@ -525,9 +525,11 @@ export class InstrumentEngine {
 
   private async loadTraditionalInstrument(): Promise<any> {
     // Use separate audio context for instruments
-    const { AudioContextManager } = await import("../../audio/constants/audioConfig");
+    const { AudioContextManager } = await import(
+      "../../audio/constants/audioConfig"
+    );
     const instrumentContext = await AudioContextManager.getInstrumentContext();
-    
+
     // Update the audio context reference
     if (this.audioContext !== instrumentContext) {
       this.audioContext = instrumentContext;
@@ -583,9 +585,12 @@ export class InstrumentEngine {
 
     try {
       // Use separate audio context for instruments
-      const { AudioContextManager } = await import("../../audio/constants/audioConfig");
-      const instrumentContext = await AudioContextManager.getInstrumentContext();
-      
+      const { AudioContextManager } = await import(
+        "../../audio/constants/audioConfig"
+      );
+      const instrumentContext =
+        await AudioContextManager.getInstrumentContext();
+
       // Set Tone.js to use the dedicated instrument context
       Tone.setContext(instrumentContext);
       await Tone.start();
@@ -596,7 +601,9 @@ export class InstrumentEngine {
 
       // Adjust polyphony based on WebRTC state
       const maxPolyphony = AudioContextManager.getMaxPolyphony();
-      console.log(`🎹 Instrument Engine: Using max polyphony of ${maxPolyphony} (WebRTC active: ${AudioContextManager.isWebRTCActive()})`);
+      console.log(
+        `🎹 Instrument Engine: Using max polyphony of ${maxPolyphony} (WebRTC active: ${AudioContextManager.isWebRTCActive()})`,
+      );
 
       // Create audio chain: synth -> filter -> gain -> destination
       this.filterRef = new Tone.Filter({
@@ -945,7 +952,7 @@ export class InstrumentEngine {
     if (!this.synthRef) return;
 
     if (!Array.isArray(notes)) {
-      console.error('playSynthNotes received non-array notes:', notes);
+      console.error("playSynthNotes received non-array notes:", notes);
       notes = [notes as string];
     }
 
@@ -1082,7 +1089,7 @@ export class InstrumentEngine {
     if (!this.instrument) return;
 
     if (!Array.isArray(notes)) {
-      console.error('playTraditionalNotes received non-array notes:', notes);
+      console.error("playTraditionalNotes received non-array notes:", notes);
       notes = [notes as string];
     }
 
@@ -1156,10 +1163,10 @@ export class InstrumentEngine {
 
   private async stopSynthNotes(notes: string[]): Promise<void> {
     if (!Array.isArray(notes)) {
-      console.error('stopSynthNotes received non-array notes:', notes);
+      console.error("stopSynthNotes received non-array notes:", notes);
       notes = [notes as string];
     }
-    
+
     notes.forEach((note) => {
       const isKeyHeld = this.keyHeldNotes.has(note);
 
@@ -1191,10 +1198,14 @@ export class InstrumentEngine {
   private async stopTraditionalNotes(notes: string[]): Promise<void> {
     // Safety check: ensure notes is an array
     if (!Array.isArray(notes)) {
-      console.error('stopTraditionalNotes received non-array:', notes, 'Converting to array');
+      console.error(
+        "stopTraditionalNotes received non-array:",
+        notes,
+        "Converting to array",
+      );
       notes = [notes as string];
     }
-    
+
     notes.forEach((note) => {
       const activeNote = this.activeNotes.get(note);
       if (activeNote) {
@@ -1437,15 +1448,19 @@ export class InstrumentEngine {
   // WebRTC performance optimization methods
   setWebRTCOptimization(enabled: boolean): void {
     this.isWebRTCOptimized = enabled;
-    
+
     if (enabled) {
-      console.log(`🎵 InstrumentEngine: Enabling WebRTC optimization for ${this.config.username}`);
+      console.log(
+        `🎵 InstrumentEngine: Enabling WebRTC optimization for ${this.config.username}`,
+      );
       // Reduce update frequency for better performance
       this.throttledParamUpdate = throttle((params: Partial<SynthState>) => {
         this.updateSynthParamsInternal(params);
       }, 16); // Slower updates when WebRTC is active
     } else {
-      console.log(`🎵 InstrumentEngine: Disabling WebRTC optimization for ${this.config.username}`);
+      console.log(
+        `🎵 InstrumentEngine: Disabling WebRTC optimization for ${this.config.username}`,
+      );
       // Restore normal update frequency
       this.throttledParamUpdate = throttle((params: Partial<SynthState>) => {
         this.updateSynthParamsInternal(params);

@@ -1,12 +1,12 @@
+import { GainControl } from "./components";
 import {
   useAudioStream,
   useInputLevelMonitoring,
   useVoiceControls,
 } from "./hooks";
 import { useVoiceStateStore } from "./stores/voiceStateStore";
-import { GainControl } from "./components";
-import { AnchoredPopup, Modal } from "@/features/ui";
 import { RTCLatencyDisplay, AdaptiveAudioStatus } from "@/features/audio";
+import { AnchoredPopup, Modal } from "@/features/ui";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 
 interface VoiceInputProps {
@@ -56,8 +56,6 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
   const [showHeadphoneModal, setShowHeadphoneModal] = useState(false);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const infoButtonRef = useRef<HTMLButtonElement>(null);
-
-
 
   // Use custom hooks for state and logic
   const {
@@ -277,7 +275,7 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
             </div>
 
             {/* RTC Latency Display */}
-            <RTCLatencyDisplay 
+            <RTCLatencyDisplay
               latency={rtcLatency}
               isActive={rtcLatencyActive}
               showLabel={false}
@@ -419,17 +417,25 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
             <div className="p-4">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="font-semibold">🎵 Audio Performance</h4>
-                <span className="text-xs text-base-content/60">Real-time monitoring</span>
+                <span className="text-xs text-base-content/60">
+                  Real-time monitoring
+                </span>
               </div>
 
               {/* Latency Breakdown */}
               <div className="mb-4 p-3 bg-base-200 rounded-lg">
-                <h5 className="font-semibold text-sm mb-3">Latency Breakdown</h5>
+                <h5 className="font-semibold text-sm mb-3">
+                  Latency Breakdown
+                </h5>
                 <div className="space-y-2 text-sm">
                   {browserAudioLatency !== undefined && (
                     <div className="flex justify-between items-center">
-                      <span className="text-base-content/70">Audio Processing:</span>
-                      <span className="font-mono text-sm">{browserAudioLatency}ms</span>
+                      <span className="text-base-content/70">
+                        Audio Processing:
+                      </span>
+                      <span className="font-mono text-sm">
+                        {browserAudioLatency}ms
+                      </span>
                     </div>
                   )}
                   {meshLatency !== null && meshLatency !== undefined && (
@@ -439,19 +445,27 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
                     </div>
                   )}
                   <div className="flex justify-between items-center">
-                    <span className="text-base-content/70">Destination Processing Latency:</span>
+                    <span className="text-base-content/70">
+                      Destination Processing Latency:
+                    </span>
                     <span className="font-mono text-sm">+</span>
                   </div>
-                  {browserAudioLatency !== undefined && meshLatency !== null && meshLatency !== undefined && (
-                    <>
-                      <div className="divider my-2"></div>
-                      <div className="flex justify-between items-center font-semibold">
-                        <span>Total Latency:</span>
-                        <span className="font-mono text-sm">{browserAudioLatency + meshLatency}ms+</span>
-                      </div>
-                    </>
-                  )}
-                  {(browserAudioLatency === undefined || meshLatency === null || meshLatency === undefined) && (
+                  {browserAudioLatency !== undefined &&
+                    meshLatency !== null &&
+                    meshLatency !== undefined && (
+                      <>
+                        <div className="divider my-2"></div>
+                        <div className="flex justify-between items-center font-semibold">
+                          <span>Total Latency:</span>
+                          <span className="font-mono text-sm">
+                            {browserAudioLatency + meshLatency}ms+
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  {(browserAudioLatency === undefined ||
+                    meshLatency === null ||
+                    meshLatency === undefined) && (
                     <div className="text-center text-base-content/50 py-2">
                       {isConnecting ? (
                         <div className="flex items-center justify-center gap-2">
