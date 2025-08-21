@@ -617,6 +617,9 @@ const Room = memo(() => {
                 userCount={currentRoom?.users?.length || 0}
                 browserAudioLatency={browserAudioLatency}
                 meshLatency={meshLatency}
+                isConnecting={isConnecting}
+                connectionError={!!error}
+                onConnectionRetry={() => window.location.reload()}
               />
             )}
 

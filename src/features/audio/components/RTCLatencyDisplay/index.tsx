@@ -9,7 +9,10 @@ interface RTCLatencyDisplayProps {
   // New props for combined latency display
   browserAudioLatency?: number;
   meshLatency?: number | null;
-  showBreakdown?: boolean;
+  // Connection state props
+  isConnecting?: boolean;
+  connectionError?: boolean;
+  onRetry?: () => void;
 }
 
 const RTCLatencyDisplay: React.FC<RTCLatencyDisplayProps> = ({
@@ -19,8 +22,20 @@ const RTCLatencyDisplay: React.FC<RTCLatencyDisplayProps> = ({
   size = 'sm',
   browserAudioLatency,
   meshLatency,
-  showBreakdown = false
+  isConnecting = false,
+  connectionError = false,
+  onRetry
 }) => {
+
+  // Calculate merged latency value
+  const getMergedLatency = () => {
+    if (browserAudioLatency !== undefined && meshLatency !== null && meshLatency !== undefined) {
+      return browserAudioLatency + meshLatency;
+    }
+    return latency;
+  };
+
+  const mergedLatency = getMergedLatency();
 
   // Get latency color based on value with more granular thresholds
   const getLatencyColor = (latencyValue: number | null) => {
@@ -61,45 +76,76 @@ const RTCLatencyDisplay: React.FC<RTCLatencyDisplayProps> = ({
   const formatLatencyValue = (latencyValue: number | null) => {
     if (latencyValue === null) return '---';
     
-    // If we have breakdown information, show it in the format "15+6 ms"
-    if (showBreakdown && browserAudioLatency !== undefined && meshLatency !== undefined) {
-      return `${browserAudioLatency}+${meshLatency}${showMs ? ' ms' : ''}`;
-    }
-    
     // For very low latency (< 10ms), show 1 decimal place
     if (latencyValue < 10) {
-      return `${latencyValue.toFixed(1)}${showMs ? 'ms' : ''}`;
+      return `${latencyValue.toFixed(1)}${showMs ? 'ms+' : ''}`;
     }
     
     // For higher latency, round to nearest integer
-    return `${Math.round(latencyValue)}${showMs ? 'ms' : ''}`;
+    return `${Math.round(latencyValue)}${showMs ? 'ms+' : ''}`;
   };
 
   // Create breakdown tooltip text
   const getBreakdownTooltip = () => {
-    if (!showBreakdown || browserAudioLatency === undefined || meshLatency === undefined) {
-      return `RTC Latency: ${formatLatencyValue(latency)} (${getLatencyStatus(latency)})`;
+    if (browserAudioLatency !== undefined && meshLatency !== null && meshLatency !== undefined) {
+      return `Total: ${formatLatencyValue(mergedLatency)}\nAudio Processing: ${browserAudioLatency}ms\nRTC Latency: ${meshLatency}ms`;
     }
     
-    return `Total: ${formatLatencyValue(latency)}\nBrowser: ${browserAudioLatency}ms\nMesh: ${meshLatency}ms`;
+    return `RTC Latency: ${formatLatencyValue(mergedLatency)} (${getLatencyStatus(mergedLatency)})`;
   };
 
-  const displayValue = formatLatencyValue(latency);
-  const colorClass = getLatencyColor(latency);
   const sizeClass = getSizeClasses();
 
-  // Compact variant (default)
+  // Handle different connection states
+  if (isConnecting) {
+    return (
+      <div className={`flex items-center gap-1 ${sizeClass}`} title="Connecting...">
+        <div className="loading loading-spinner loading-xs"></div>
+        <span className="text-base-content/60">---</span>
+      </div>
+    );
+  }
+
+  if (connectionError) {
+    return (
+      <div className={`flex items-center gap-1 ${sizeClass}`}>
+        {onRetry ? (
+          <button
+            onClick={onRetry}
+            className="text-error hover:text-error/80 cursor-pointer"
+            title="Connection failed. Click to retry"
+          >
+            🔄
+          </button>
+        ) : (
+          <span className="text-error" title="Connection failed">❌</span>
+        )}
+        <span className="text-base-content/60">---</span>
+      </div>
+    );
+  }
+
+  if (!isActive) {
+    return (
+      <span 
+        className={`text-base-content/50 ${sizeClass} font-mono`}
+        title="No voice connections"
+      >
+        ---
+      </span>
+    );
+  }
+
+  const displayValue = formatLatencyValue(mergedLatency);
+  const colorClass = getLatencyColor(mergedLatency);
+
+  // Connected state - show latency
   return (
     <span 
       className={`${colorClass} ${sizeClass} font-mono`}
       title={getBreakdownTooltip()}
     >
       {displayValue}
-      {/* {showBreakdown && browserAudioLatency !== undefined && meshLatency !== undefined && (
-        <span className="opacity-70 ml-1">
-          ({browserAudioLatency}+{meshLatency})
-        </span>
-      )} */}
     </span>
   );
 };

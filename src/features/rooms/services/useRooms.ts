@@ -26,10 +26,6 @@ export function useRoomQuery() {
   const roomsQuery = useQuery<RoomListResponse>({
     queryKey: roomKeys.lists(),
     queryFn: getRoomList,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: true,
   });
 
   const roomLeaveMutate = useMutation<

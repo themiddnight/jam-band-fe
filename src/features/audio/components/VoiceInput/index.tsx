@@ -20,7 +20,10 @@ interface VoiceInputProps {
   // New props for combined latency display
   browserAudioLatency?: number;
   meshLatency?: number | null;
-  showLatencyBreakdown?: boolean;
+  // Connection state props
+  isConnecting?: boolean;
+  connectionError?: boolean;
+  onConnectionRetry?: () => void;
 }
 
 export interface VoiceState {
@@ -43,7 +46,10 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
   // New props for combined latency display
   browserAudioLatency,
   meshLatency,
-  showLatencyBreakdown = true,
+  // Connection state props
+  isConnecting = false,
+  connectionError = false,
+  onConnectionRetry,
 }) => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
@@ -277,7 +283,9 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
               showLabel={false}
               browserAudioLatency={browserAudioLatency}
               meshLatency={meshLatency}
-              showBreakdown={showLatencyBreakdown}
+              isConnecting={isConnecting}
+              connectionError={connectionError}
+              onRetry={onConnectionRetry}
             />
 
             <div className="flex items-center gap-3">
@@ -413,6 +421,55 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
                 <h4 className="font-semibold">🎵 Audio Performance</h4>
                 <span className="text-xs text-base-content/60">Real-time monitoring</span>
               </div>
+
+              {/* Latency Breakdown */}
+              <div className="mb-4 p-3 bg-base-200 rounded-lg">
+                <h5 className="font-semibold text-sm mb-3">Latency Breakdown</h5>
+                <div className="space-y-2 text-sm">
+                  {browserAudioLatency !== undefined && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-base-content/70">Audio Processing:</span>
+                      <span className="font-mono text-sm">{browserAudioLatency}ms</span>
+                    </div>
+                  )}
+                  {meshLatency !== null && meshLatency !== undefined && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-base-content/70">RTC Latency:</span>
+                      <span className="font-mono text-sm">{meshLatency}ms</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center">
+                    <span className="text-base-content/70">Destination Processing Latency:</span>
+                    <span className="font-mono text-sm">+</span>
+                  </div>
+                  {browserAudioLatency !== undefined && meshLatency !== null && meshLatency !== undefined && (
+                    <>
+                      <div className="divider my-2"></div>
+                      <div className="flex justify-between items-center font-semibold">
+                        <span>Total Latency:</span>
+                        <span className="font-mono text-sm">{browserAudioLatency + meshLatency}ms+</span>
+                      </div>
+                    </>
+                  )}
+                  {(browserAudioLatency === undefined || meshLatency === null || meshLatency === undefined) && (
+                    <div className="text-center text-base-content/50 py-2">
+                      {isConnecting ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="loading loading-spinner loading-xs"></div>
+                          <span>Measuring latency...</span>
+                        </div>
+                      ) : connectionError ? (
+                        <span>Connection error - unable to measure</span>
+                      ) : !rtcLatencyActive ? (
+                        <span>No active voice connections</span>
+                      ) : (
+                        <span>Latency data not available</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <AdaptiveAudioStatus
                 userCount={userCount}
                 currentLatency={rtcLatency}
