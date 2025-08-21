@@ -1,5 +1,6 @@
 import { routes, type AppRoute } from "./app-config";
 import { useUserStore, PWAUpdatePrompt } from "@/shared";
+import { useDeepLinkHandler } from "./shared/hooks/useDeepLinkHandler";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useLayoutEffect } from "react";
 import { Routes, Route } from "react-router-dom";
@@ -8,6 +9,9 @@ const queryClient = new QueryClient();
 
 export default function App() {
   const { ensureUserId } = useUserStore();
+
+  // Initialize deep link handling
+  useDeepLinkHandler();
 
   // Ensure userId exists on first app entry
   useLayoutEffect(() => {

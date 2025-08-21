@@ -29,6 +29,7 @@ import { useScaleSlotsStore } from "@/shared/stores/scaleSlotsStore";
 import { ControlType } from "@/shared/types";
 import { preloadCriticalComponents } from "@/shared/utils/componentPreloader";
 import { getSafariUserMessage } from "@/shared/utils/webkitCompat";
+import { useDeepLinkHandler } from "@/shared/hooks/useDeepLinkHandler";
 import { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
 
 /**
@@ -107,6 +108,9 @@ const Room = memo(() => {
     socket: activeSocket,
     enabled: isConnected,
   });
+
+  // Deep link handler utilities
+  const { generateInviteUrl } = useDeepLinkHandler();
 
   // Notification popup state
   const [isPendingPopupOpen, setIsPendingPopupOpen] = useState(false);
@@ -317,32 +321,63 @@ const Room = memo(() => {
   }
 
   const handleCopyInviteUrl = async (role: "band_member" | "audience") => {
+    if (!currentRoom?.id) return;
+    
+    const inviteUrl = generateInviteUrl(currentRoom.id, role);
+    
     try {
-      const inviteUrl = `${window.location.origin}/invite/${currentRoom?.id}?role=${role}`;
       await navigator.clipboard.writeText(inviteUrl);
-
-      // Show a temporary success message
-      const button = document.getElementById(`copy-invite-${role}`);
-      if (button) {
-        const originalText = button.textContent;
-        button.textContent = "Copied!";
-        button.classList.add("btn-success");
-
-        setTimeout(() => {
-          button.textContent = originalText;
-          button.classList.remove("btn-success");
-        }, 2000);
-      }
-    } catch (error) {
+      showSuccessMessage(`copy-invite-${role}`, "Copied!");
+    } catch (error: unknown) {
       console.error("Failed to copy invite URL:", error);
       // Fallback for older browsers
-      const inviteUrl = `${window.location.origin}/invite/${currentRoom?.id}?role=${role}`;
       const textArea = document.createElement("textarea");
       textArea.value = inviteUrl;
       document.body.appendChild(textArea);
       textArea.select();
       document.execCommand("copy");
       document.body.removeChild(textArea);
+      showSuccessMessage(`copy-invite-${role}`, "Copied!");
+    }
+  };
+
+  const handleShareInviteUrl = async (role: "band_member" | "audience") => {
+    if (!currentRoom?.id) return;
+    
+    const inviteUrl = generateInviteUrl(currentRoom.id, role);
+    const roleText = role === "band_member" ? "Band Member" : "Audience";
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Join ${currentRoom?.name} on COLLAB`,
+          text: `You're invited to join "${currentRoom?.name}" as ${roleText} on COLLAB!`,
+          url: inviteUrl,
+        });
+      } catch (error: unknown) {
+        if (error instanceof Error && error.name !== 'AbortError') {
+          console.error("Failed to share invite URL:", error);
+          // Fallback to copy
+          handleCopyInviteUrl(role);
+        }
+      }
+    } else {
+      // Fallback to copy if share API not available
+      handleCopyInviteUrl(role);
+    }
+  };
+
+  const showSuccessMessage = (buttonId: string, message: string) => {
+    const button = document.getElementById(buttonId);
+    if (button) {
+      const originalText = button.textContent;
+      button.textContent = message;
+      button.classList.add("btn-success");
+
+      setTimeout(() => {
+        button.textContent = originalText;
+        button.classList.remove("btn-success");
+      }, 2000);
     }
   };
 
@@ -446,23 +481,49 @@ const Room = memo(() => {
                           Select the role for the invited user
                         </p>
                       </div>
-                      <div className="space-y-2">
-                        <button
-                          id="copy-invite-band_member"
-                          onClick={() => handleCopyInviteUrl("band_member")}
-                          className="btn btn-sm btn-primary w-full justify-start"
-                          title="Copy link for band member invitation"
-                        >
-                          🎸 Band Member
-                        </button>
-                        <button
-                          id="copy-invite-audience"
-                          onClick={() => handleCopyInviteUrl("audience")}
-                          className="btn btn-sm btn-outline w-full justify-start"
-                          title="Copy link for audience invitation"
-                        >
-                          👥 Audience
-                        </button>
+                      <div className="space-y-3">
+                        <div>
+                          <p className="text-xs text-base-content/60 mb-2">Band Member</p>
+                          <div className="flex gap-2">
+                            <button
+                              id="copy-invite-band_member"
+                              onClick={() => handleCopyInviteUrl("band_member")}
+                              className="btn btn-sm btn-primary flex-1"
+                              title="Copy link for band member invitation"
+                            >
+                              📋 Copy
+                            </button>
+                            <button
+                              id="share-invite-band_member"
+                              onClick={() => handleShareInviteUrl("band_member")}
+                              className="btn btn-sm btn-outline"
+                              title="Share link for band member invitation"
+                            >
+                              📤
+                            </button>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-xs text-base-content/60 mb-2">Audience</p>
+                          <div className="flex gap-2">
+                            <button
+                              id="copy-invite-audience"
+                              onClick={() => handleCopyInviteUrl("audience")}
+                              className="btn btn-sm btn-outline flex-1"
+                              title="Copy link for audience invitation"
+                            >
+                              📋 Copy
+                            </button>
+                            <button
+                              id="share-invite-audience"
+                              onClick={() => handleShareInviteUrl("audience")}
+                              className="btn btn-sm btn-outline"
+                              title="Share link for audience invitation"
+                            >
+                              📤
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </AnchoredPopup>

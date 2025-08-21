@@ -24,5 +24,17 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "protocol_handlers": [
+    {
+      "protocol": "web+collab",
+      "url": "/invite/%s"
+    }
+  ],
+  "capture_links": "new-client",
+  "url_handlers": [
+    {
+      "origin": "https://jam-band-fe.vercel.app"
+    }
   ]
 }
