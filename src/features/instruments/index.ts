@@ -84,9 +84,9 @@ export { useBaseInstrumentStore } from "./stores/baseInstrumentStore";
 export { useDrumpadPresetsStore } from "./stores/drumpadPresetsStore";
 
 // Store factory exports (for creating new instrument stores)
-export { 
-  createInstrumentStore, 
-  createModeToggle, 
+export {
+  createInstrumentStore,
+  createModeToggle,
   createEnumNavigation,
-  type BaseInstrumentState 
+  type BaseInstrumentState,
 } from "./stores/createInstrumentStore";

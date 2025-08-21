@@ -1,9 +1,8 @@
 // Migration utility for metronome settings
 // This helps migrate from old localStorage approach to Zustand store
-
-import { useEffect } from 'react';
-import { useMetronomeStore } from '../stores/metronomeStore';
-import { METRONOME_STORAGE_KEYS, METRONOME_CONFIG } from '../constants';
+import { METRONOME_STORAGE_KEYS, METRONOME_CONFIG } from "../constants";
+import { useMetronomeStore } from "../stores/metronomeStore";
+import { useEffect } from "react";
 
 export const migrateMetronomeSettings = () => {
   try {
@@ -13,20 +12,24 @@ export const migrateMetronomeSettings = () => {
 
     // Get current store state
     const store = useMetronomeStore.getState();
-    
+
     // Only migrate if there are old values and store has default values
-    if (oldVolume !== null && store.volume === METRONOME_CONFIG.DEFAULT_VOLUME) {
+    if (
+      oldVolume !== null &&
+      store.volume === METRONOME_CONFIG.DEFAULT_VOLUME
+    ) {
       const volume = parseFloat(oldVolume);
       if (!isNaN(volume)) {
         store.setVolume(Math.max(0, Math.min(1, volume)));
-        console.log('Migrated metronome volume from localStorage to Zustand');
+        console.log("Migrated metronome volume from localStorage to Zustand");
       }
     }
 
-    if (oldIsMuted !== null && store.isMuted === true) { // Default is true
-      const isMuted = oldIsMuted === 'true';
+    if (oldIsMuted !== null && store.isMuted === true) {
+      // Default is true
+      const isMuted = oldIsMuted === "true";
       store.setIsMuted(isMuted);
-      console.log('Migrated metronome mute state from localStorage to Zustand');
+      console.log("Migrated metronome mute state from localStorage to Zustand");
     }
 
     // Clean up old localStorage keys after migration
@@ -36,9 +39,8 @@ export const migrateMetronomeSettings = () => {
     if (oldIsMuted !== null) {
       localStorage.removeItem(METRONOME_STORAGE_KEYS.IS_MUTED);
     }
-
   } catch (error) {
-    console.warn('Failed to migrate metronome settings:', error);
+    console.warn("Failed to migrate metronome settings:", error);
   }
 };
 

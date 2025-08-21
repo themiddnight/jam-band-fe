@@ -1,6 +1,5 @@
 // Metronome Utilities
-
-import { METRONOME_CONFIG } from '../constants';
+import { METRONOME_CONFIG } from "../constants";
 
 // BPM calculation from tap intervals
 export class TapTempoCalculator {
@@ -27,11 +26,15 @@ export class TapTempoCalculator {
       intervals.push(this.tapTimes[i] - this.tapTimes[i - 1]);
     }
 
-    const averageInterval = intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length;
+    const averageInterval =
+      intervals.reduce((sum, interval) => sum + interval, 0) / intervals.length;
     const bpm = Math.round(60000 / averageInterval); // 60000ms = 1 minute
 
     // Clamp to valid BPM range
-    return Math.max(METRONOME_CONFIG.MIN_BPM, Math.min(METRONOME_CONFIG.MAX_BPM, bpm));
+    return Math.max(
+      METRONOME_CONFIG.MIN_BPM,
+      Math.min(METRONOME_CONFIG.MAX_BPM, bpm),
+    );
   }
 
   reset(): void {
@@ -45,7 +48,10 @@ export class TapTempoCalculator {
 
 // BPM validation
 export const validateBpm = (bpm: number): number => {
-  return Math.max(METRONOME_CONFIG.MIN_BPM, Math.min(METRONOME_CONFIG.MAX_BPM, Math.round(bpm)));
+  return Math.max(
+    METRONOME_CONFIG.MIN_BPM,
+    Math.min(METRONOME_CONFIG.MAX_BPM, Math.round(bpm)),
+  );
 };
 
 // Format BPM for display

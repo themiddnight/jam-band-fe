@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { AudioContextManager } from '../constants/audioConfig';
+import { AudioContextManager } from "../constants/audioConfig";
+import { useEffect, useState } from "react";
 
 /**
  * Hook that listens to WebRTC state changes and provides performance optimization guidance
@@ -14,7 +14,7 @@ export const useWebRTCStateListener = () => {
     const updateState = () => {
       const active = AudioContextManager.isWebRTCActive();
       const polyphony = AudioContextManager.getMaxPolyphony();
-      
+
       setIsWebRTCActive(active);
       setMaxPolyphony(polyphony);
     };
@@ -27,14 +27,22 @@ export const useWebRTCStateListener = () => {
       const { isActive } = event.detail;
       setIsWebRTCActive(isActive);
       setMaxPolyphony(AudioContextManager.getMaxPolyphony());
-      
-      console.log(`🎵 WebRTC State Change: ${isActive ? 'Active' : 'Inactive'} - Max polyphony: ${AudioContextManager.getMaxPolyphony()}`);
+
+      console.log(
+        `🎵 WebRTC State Change: ${isActive ? "Active" : "Inactive"} - Max polyphony: ${AudioContextManager.getMaxPolyphony()}`,
+      );
     };
 
-    window.addEventListener('webrtc-state-change', handleWebRTCStateChange as EventListener);
+    window.addEventListener(
+      "webrtc-state-change",
+      handleWebRTCStateChange as EventListener,
+    );
 
     return () => {
-      window.removeEventListener('webrtc-state-change', handleWebRTCStateChange as EventListener);
+      window.removeEventListener(
+        "webrtc-state-change",
+        handleWebRTCStateChange as EventListener,
+      );
     };
   }, []);
 
@@ -44,6 +52,8 @@ export const useWebRTCStateListener = () => {
     // Helper functions for instruments
     shouldReduceQuality: isWebRTCActive,
     recommendedBufferSize: isWebRTCActive ? 512 : 256,
-    recommendedLatencyHint: isWebRTCActive ? 'balanced' as AudioContextLatencyCategory : 'interactive' as AudioContextLatencyCategory,
+    recommendedLatencyHint: isWebRTCActive
+      ? ("balanced" as AudioContextLatencyCategory)
+      : ("interactive" as AudioContextLatencyCategory),
   };
 };

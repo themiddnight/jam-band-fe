@@ -14,7 +14,13 @@ A real-time collaborative music-making web application built with React, TypeScr
 - **Scale & Chord Support**: Built-in music theory helpers
 - **Preset Management**: Save and load instrument configurations
 
-## � What's new (Aug 2025)
+## 🚧 Coming Soon
+
+- **Step Sequencer**: Pattern-based music creation with customizable sequences
+- **Audio Effects**: Professional effects including reverb, delay, distortion, and more
+- **Mixer Controls**: Individual volume management for each user in the room
+
+## 🆕 What's new (Aug 2025)
 
 - Network diagnostics and reliability improvements: frontend now measures round-trip ping and RTC latency and surfaces lightweight diagnostics in the UI.
 - Socket optimizations: message batching, note-event deduplication, and connection pooling reduce network chatter and improve responsiveness.

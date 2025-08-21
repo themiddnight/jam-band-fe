@@ -1,4 +1,5 @@
 import type { Room, RoomUser } from "../../../shared/types";
+import { ConnectionState } from "../../audio/types/connectionState";
 import { create } from "zustand";
 
 interface RoomState {
@@ -7,11 +8,13 @@ interface RoomState {
   isConnected: boolean;
   pendingApproval: boolean;
   error: string | null;
+  connectionState: ConnectionState;
   setCurrentRoom: (room: Room | null) => void;
   setCurrentUser: (user: RoomUser | null) => void;
   setIsConnected: (connected: boolean) => void;
   setPendingApproval: (pending: boolean) => void;
   setError: (error: string | null) => void;
+  setConnectionState: (state: ConnectionState) => void;
   updateUserInstrument: (
     userId: string,
     instrument: string,
@@ -32,6 +35,7 @@ export const useRoomStore = create<RoomState>((set, get) => ({
   isConnected: false,
   pendingApproval: false,
   error: null,
+  connectionState: ConnectionState.DISCONNECTED,
 
   setCurrentRoom: (room) => {
     if (room) {
@@ -50,6 +54,7 @@ export const useRoomStore = create<RoomState>((set, get) => ({
   setIsConnected: (connected) => set({ isConnected: connected }),
   setPendingApproval: (pending) => set({ pendingApproval: pending }),
   setError: (error) => set({ error }),
+  setConnectionState: (state) => set({ connectionState: state }),
 
   updateUserInstrument: (userId, instrument, category) => {
     const { currentRoom } = get();
@@ -169,5 +174,6 @@ export const useRoomStore = create<RoomState>((set, get) => ({
       isConnected: false,
       pendingApproval: false,
       error: null,
+      connectionState: ConnectionState.DISCONNECTED,
     }),
 }));

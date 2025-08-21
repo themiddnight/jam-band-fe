@@ -34,18 +34,42 @@ export const createWebKitCompatibleAudioContext =
 
     const context = new AudioContextClass();
 
-    // Safari requires explicit resume after user gesture
+    // Safari requires explicit resume after user gesture and proper initialization
     if (context.state === "suspended") {
       try {
         await context.resume();
-
-        // Extra wait for Safari to properly initialize
-        if (isSafari()) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
       } catch (error) {
         console.warn("Failed to resume AudioContext:", error);
         throw error;
+      }
+    }
+
+    // Ensure AudioDestinationNode is properly initialized in Safari
+    if (isSafari()) {
+      try {
+        // Force Safari to initialize the destination node by creating a minimal test node
+        const testOsc = context.createOscillator();
+        const testGain = context.createGain();
+
+        testOsc.connect(testGain);
+        testGain.connect(context.destination);
+        testGain.gain.value = 0; // Silent
+
+        testOsc.start(context.currentTime);
+        testOsc.stop(context.currentTime + 0.001); // Very brief
+
+        // Extra wait for Safari to properly initialize
+        await new Promise((resolve) => setTimeout(resolve, 150));
+
+        console.log(
+          "🍎 Safari AudioContext initialized with destination node verification",
+        );
+      } catch (error) {
+        console.warn(
+          "Safari AudioDestinationNode initialization failed:",
+          error,
+        );
+        throw new Error(`AudioDestinationNode is not initialized: ${error}`);
       }
     }
 

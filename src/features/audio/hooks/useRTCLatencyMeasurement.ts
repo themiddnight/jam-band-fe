@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { RTC_MEASURE_INTERVAL_MS, RTC_UI_THROTTLE_MS } from '@/features/audio/constants/intervals';
+import { RTC_MEASURE_INTERVAL_MS } from "@/features/audio/constants/intervals";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 interface RTCLatencyMeasurement {
   latency: number;
@@ -11,72 +11,182 @@ interface UseRTCLatencyMeasurementOptions {
   enabled?: boolean;
   interval?: number;
   maxHistory?: number;
+  // New option to use WebRTC mesh manager for latency measurement
+  useWebRTCMeshManager?: boolean;
+  webRTCMeshManager?: {
+    getWebRTCLatencyStats: () => Array<{
+      userId: string;
+      currentLatency: number | null;
+      averageLatency: number | null;
+    }>;
+  };
 }
 
 export function useRTCLatencyMeasurement({
   enabled = true,
   interval = RTC_MEASURE_INTERVAL_MS,
-  maxHistory = 5
+  maxHistory = 10, // Increased from 5 to 10 for better averaging
+  useWebRTCMeshManager = false,
+  webRTCMeshManager,
 }: UseRTCLatencyMeasurementOptions = {}) {
   const [currentLatency, setCurrentLatency] = useState<number | null>(null);
   const [averageLatency, setAverageLatency] = useState<number | null>(null);
   const [isActive, setIsActive] = useState<boolean>(false);
-  
+
   const latencyHistoryRef = useRef<RTCLatencyMeasurement[]>([]);
   const intervalRef = useRef<number | null>(null);
   const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
-  const bufferedLatencyRef = useRef<number | null>(null);
   const updateTimerRef = useRef<number | null>(null);
-  const UI_THROTTLE = RTC_UI_THROTTLE_MS;
+  const lastMeasurementRef = useRef<number>(0);
 
-  // Calculate average latency from history
+  // Calculate average latency from history with outlier filtering
   const calculateAverageLatency = useCallback(() => {
     const history = latencyHistoryRef.current;
     if (history.length === 0) return null;
-    
-    const sum = history.reduce((acc, measurement) => acc + measurement.latency, 0);
-    return Math.round(sum / history.length);
+
+    // Sort by timestamp to get recent measurements
+    const recentHistory = history
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 5); // Use only last 5 measurements for more responsive averaging
+
+    if (recentHistory.length === 0) return null;
+
+    // Filter out extreme outliers (more than 3x the median)
+    const sortedLatencies = recentHistory
+      .map((m) => m.latency)
+      .sort((a, b) => a - b);
+    const median = sortedLatencies[Math.floor(sortedLatencies.length / 2)];
+    const filteredLatencies = sortedLatencies.filter(
+      (latency) => latency <= median * 3 && latency >= median / 3,
+    );
+
+    if (filteredLatencies.length === 0) return median;
+
+    const sum = filteredLatencies.reduce((acc, latency) => acc + latency, 0);
+    return Math.round(sum / filteredLatencies.length);
   }, []);
 
-  // Measure RTC latency using RTCPeerConnection stats
+  // Measure RTC latency using RTCPeerConnection stats or WebRTC mesh manager
   const measureRTCLatency = useCallback(async () => {
-  if (!enabled || peersRef.current.size === 0) return;
+    if (!enabled) return;
+
+    const now = Date.now();
+    // Prevent measurements too close together
+    if (now - lastMeasurementRef.current < 500) return;
+    lastMeasurementRef.current = now;
+
+    // Use WebRTC mesh manager if available and enabled
+    if (useWebRTCMeshManager && webRTCMeshManager) {
+      try {
+        const stats = webRTCMeshManager.getWebRTCLatencyStats();
+
+        if (stats.length === 0) {
+          setIsActive(false);
+          return;
+        }
+
+        // Calculate average latency from all connected users
+        const validLatencies = stats
+          .map((stat) => stat.currentLatency)
+          .filter(
+            (latency): latency is number => latency !== null && latency > 0,
+          );
+
+        if (validLatencies.length > 0) {
+          // Use median for more stable measurements
+          const sortedLatencies = validLatencies.sort((a, b) => a - b);
+          const medianLatency =
+            sortedLatencies[Math.floor(sortedLatencies.length / 2)];
+          const avgLatency = Math.round(medianLatency);
+
+          // Store measurements for history
+          stats.forEach((stat) => {
+            if (stat.currentLatency !== null && stat.currentLatency > 0) {
+              const measurement: RTCLatencyMeasurement = {
+                latency: stat.currentLatency,
+                timestamp: now,
+                userId: stat.userId,
+              };
+              latencyHistoryRef.current.push(measurement);
+            }
+          });
+
+          // Update immediately for critical measurements
+          setCurrentLatency(avgLatency);
+          setIsActive(true);
+
+          // Keep only recent measurements
+          if (latencyHistoryRef.current.length > maxHistory) {
+            latencyHistoryRef.current =
+              latencyHistoryRef.current.slice(-maxHistory);
+          }
+          setAverageLatency(calculateAverageLatency());
+        } else {
+          setIsActive(false);
+        }
+      } catch (error) {
+        console.warn("Failed to get WebRTC mesh latency stats:", error);
+        setIsActive(false);
+      }
+      return;
+    }
+
+    // Fallback to direct peer connection measurement
+    if (peersRef.current.size === 0) {
+      setIsActive(false);
+      return;
+    }
 
     let totalLatency = 0;
     let validMeasurements = 0;
+    const measurements: RTCLatencyMeasurement[] = [];
 
     for (const [userId, peerConnection] of peersRef.current.entries()) {
       try {
-  // Accept RTCPeerConnection as connected when either connectionState is 'connected'
-  // or ICE connection state is 'completed' (some browsers report completed via iceConnectionState)
-  if (peerConnection.connectionState !== 'connected' && peerConnection.iceConnectionState !== 'completed') continue;
+        // Accept RTCPeerConnection as connected when either connectionState is 'connected'
+        // or ICE connection state is 'completed' (some browsers report completed via iceConnectionState)
+        if (
+          peerConnection.connectionState !== "connected" &&
+          peerConnection.iceConnectionState !== "completed"
+        ) {
+          continue;
+        }
 
         const stats = await peerConnection.getStats();
-        
+
         for (const report of stats.values()) {
           // Look for candidate-pair stats that indicate round-trip time
-          if (report.type === 'candidate-pair') {
+          if (report.type === "candidate-pair") {
             // Some browsers use 'state' === 'succeeded', others mark 'selected' === true
-            const isSelected = (report as any).state === 'succeeded' || (report as any).selected === true || (report as any).nominated === true;
+            const isSelected =
+              (report as any).state === "succeeded" ||
+              (report as any).selected === true ||
+              (report as any).nominated === true;
 
             if (!isSelected) continue;
 
             // Try a few possible RTT field names for compatibility
-            const rtt = (report as any).currentRoundTripTime ?? (report as any).roundTripTime ?? (report as any).rtt;
-            if (typeof rtt === 'number' && rtt > 0) {
-              const latencyMs = rtt * 1000; // Convert to milliseconds
-              totalLatency += latencyMs;
-              validMeasurements++;
+            const rtt =
+              (report as any).currentRoundTripTime ??
+              (report as any).roundTripTime ??
+              (report as any).rtt;
+            if (typeof rtt === "number" && rtt > 0) {
+              const latencyMs = Math.round(rtt * 1000); // Convert to milliseconds and round
 
-              // Store individual measurement
-              const measurement: RTCLatencyMeasurement = {
-                latency: latencyMs,
-                timestamp: Date.now(),
-                userId,
-              };
+              // Only accept reasonable latency values (1ms to 1000ms)
+              if (latencyMs >= 1 && latencyMs <= 1000) {
+                totalLatency += latencyMs;
+                validMeasurements++;
 
-              latencyHistoryRef.current.push(measurement);
-              break; // Only take one measurement per peer
+                // Store individual measurement
+                const measurement: RTCLatencyMeasurement = {
+                  latency: latencyMs,
+                  timestamp: now,
+                  userId,
+                };
+                measurements.push(measurement);
+                break; // Only take one measurement per peer
+              }
             }
           }
         }
@@ -88,34 +198,41 @@ export function useRTCLatencyMeasurement({
     if (validMeasurements > 0) {
       const avgLatency = Math.round(totalLatency / validMeasurements);
 
-      // Buffer UI updates to avoid frequent re-renders
-      bufferedLatencyRef.current = avgLatency;
-      if (!updateTimerRef.current) {
-        updateTimerRef.current = window.setTimeout(() => {
-          setCurrentLatency(bufferedLatencyRef.current);
-          // Keep only recent measurements
-          if (latencyHistoryRef.current.length > maxHistory) {
-            latencyHistoryRef.current = latencyHistoryRef.current.slice(-maxHistory);
-          }
-          setAverageLatency(calculateAverageLatency());
-          setIsActive(true);
-          updateTimerRef.current = null;
-        }, UI_THROTTLE);
+      // Store all valid measurements
+      measurements.forEach((measurement) => {
+        latencyHistoryRef.current.push(measurement);
+      });
+
+      // Update immediately for better responsiveness
+      setCurrentLatency(avgLatency);
+      setIsActive(true);
+
+      // Keep only recent measurements
+      if (latencyHistoryRef.current.length > maxHistory) {
+        latencyHistoryRef.current =
+          latencyHistoryRef.current.slice(-maxHistory);
       }
+      setAverageLatency(calculateAverageLatency());
     } else {
       setIsActive(false);
     }
-  }, [enabled, maxHistory, calculateAverageLatency, UI_THROTTLE]);
+  }, [
+    enabled,
+    maxHistory,
+    calculateAverageLatency,
+    useWebRTCMeshManager,
+    webRTCMeshManager,
+  ]);
 
   // Start latency measurements
   const startLatencyMeasurement = useCallback(() => {
-  if (intervalRef.current || !enabled) return;
+    if (intervalRef.current || !enabled) return;
 
-  // Send initial measurement
-  measureRTCLatency();
+    // Send initial measurement immediately
+    measureRTCLatency();
 
-  // Set up interval (use window.setInterval id type)
-  intervalRef.current = window.setInterval(measureRTCLatency, interval);
+    // Set up interval for regular measurements
+    intervalRef.current = window.setInterval(measureRTCLatency, interval);
   }, [measureRTCLatency, interval, enabled]);
 
   // Stop latency measurements
@@ -137,28 +254,35 @@ export function useRTCLatencyMeasurement({
     setAverageLatency(null);
     setIsActive(false);
     latencyHistoryRef.current = [];
+    lastMeasurementRef.current = 0;
   }, []);
 
   // Add peer connection for monitoring
-  const addPeerConnection = useCallback((userId: string, peerConnection: RTCPeerConnection) => {
-    peersRef.current.set(userId, peerConnection);
-    
-    // Start monitoring if this is the first peer and enabled
-    if (enabled && peersRef.current.size === 1) {
-      startLatencyMeasurement();
-    }
-  }, [enabled, startLatencyMeasurement]);
+  const addPeerConnection = useCallback(
+    (userId: string, peerConnection: RTCPeerConnection) => {
+      peersRef.current.set(userId, peerConnection);
+
+      // Start monitoring if this is the first peer and enabled
+      if (enabled && peersRef.current.size === 1) {
+        startLatencyMeasurement();
+      }
+    },
+    [enabled, startLatencyMeasurement],
+  );
 
   // Remove peer connection
-  const removePeerConnection = useCallback((userId: string) => {
-    peersRef.current.delete(userId);
-    
-    // Stop monitoring if no peers left
-    if (peersRef.current.size === 0) {
-      stopLatencyMeasurement();
-      resetLatencyMeasurement();
-    }
-  }, [stopLatencyMeasurement, resetLatencyMeasurement]);
+  const removePeerConnection = useCallback(
+    (userId: string) => {
+      peersRef.current.delete(userId);
+
+      // Stop monitoring if no peers left
+      if (peersRef.current.size === 0) {
+        stopLatencyMeasurement();
+        resetLatencyMeasurement();
+      }
+    },
+    [stopLatencyMeasurement, resetLatencyMeasurement],
+  );
 
   // Clear all peer connections
   const clearAllPeerConnections = useCallback(() => {
@@ -175,7 +299,12 @@ export function useRTCLatencyMeasurement({
     } else if (peersRef.current.size > 0) {
       startLatencyMeasurement();
     }
-  }, [enabled, startLatencyMeasurement, stopLatencyMeasurement, resetLatencyMeasurement]);
+  }, [
+    enabled,
+    startLatencyMeasurement,
+    stopLatencyMeasurement,
+    resetLatencyMeasurement,
+  ]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -193,6 +322,6 @@ export function useRTCLatencyMeasurement({
     removePeerConnection,
     clearAllPeerConnections,
     resetLatencyMeasurement,
-    measureRTCLatency
+    measureRTCLatency,
   };
 }

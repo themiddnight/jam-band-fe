@@ -18,14 +18,14 @@ export const useAudioContextManager = () => {
   });
 
   // Memoized context creation to avoid recreating
-  const createAudioContext = useCallback(() => {
+  const createAudioContext = useCallback(async () => {
     if (contextRef.current) {
       return contextRef.current;
     }
 
     try {
       // Use separated instrument audio context
-      contextRef.current = AudioContextManager.getInstrumentContext();
+      contextRef.current = await AudioContextManager.getInstrumentContext();
       return contextRef.current;
     } catch (error) {
       const errorMessage =
@@ -59,7 +59,7 @@ export const useAudioContextManager = () => {
       setState((prev) => ({ ...prev, isInitializing: true, error: null }));
 
       try {
-        const context = createAudioContext();
+        const context = await createAudioContext();
 
         // Resume context if suspended
         if (context.state === "suspended") {

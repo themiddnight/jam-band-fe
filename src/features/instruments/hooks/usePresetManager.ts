@@ -15,14 +15,14 @@ interface PresetManagerState {
 
 // Action types
 type PresetManagerAction =
-  | { type: 'SET_LOADING'; payload: boolean }
-  | { type: 'SET_ERROR'; payload: string | null }
-  | { type: 'SET_PRESETS'; payload: SynthPreset[] }
-  | { type: 'SET_CURRENT_PRESET'; payload: SynthPreset | null }
-  | { type: 'ADD_PRESET'; payload: SynthPreset }
-  | { type: 'UPDATE_PRESET'; payload: SynthPreset }
-  | { type: 'DELETE_PRESET'; payload: string }
-  | { type: 'RESET' };
+  | { type: "SET_LOADING"; payload: boolean }
+  | { type: "SET_ERROR"; payload: string | null }
+  | { type: "SET_PRESETS"; payload: SynthPreset[] }
+  | { type: "SET_CURRENT_PRESET"; payload: SynthPreset | null }
+  | { type: "ADD_PRESET"; payload: SynthPreset }
+  | { type: "UPDATE_PRESET"; payload: SynthPreset }
+  | { type: "DELETE_PRESET"; payload: string }
+  | { type: "RESET" };
 
 // Initial state
 const initialState: PresetManagerState = {
@@ -35,54 +35,56 @@ const initialState: PresetManagerState = {
 // Reducer function
 const presetManagerReducer = (
   state: PresetManagerState,
-  action: PresetManagerAction
+  action: PresetManagerAction,
 ): PresetManagerState => {
   switch (action.type) {
-    case 'SET_LOADING':
+    case "SET_LOADING":
       return { ...state, isLoading: action.payload };
-    
-    case 'SET_ERROR':
+
+    case "SET_ERROR":
       return { ...state, error: action.payload };
-    
-    case 'SET_PRESETS':
+
+    case "SET_PRESETS":
       return { ...state, presets: action.payload, error: null };
-    
-    case 'SET_CURRENT_PRESET':
+
+    case "SET_CURRENT_PRESET":
       return { ...state, currentPreset: action.payload };
-    
-    case 'ADD_PRESET':
-      return { 
-        ...state, 
+
+    case "ADD_PRESET":
+      return {
+        ...state,
         presets: [...state.presets, action.payload],
         currentPreset: action.payload,
-        error: null 
+        error: null,
       };
-    
-    case 'UPDATE_PRESET':
+
+    case "UPDATE_PRESET":
       return {
         ...state,
-        presets: state.presets.map(preset =>
-          preset.id === action.payload.id ? action.payload : preset
+        presets: state.presets.map((preset) =>
+          preset.id === action.payload.id ? action.payload : preset,
         ),
-        currentPreset: state.currentPreset?.id === action.payload.id 
-          ? action.payload 
-          : state.currentPreset,
-        error: null
+        currentPreset:
+          state.currentPreset?.id === action.payload.id
+            ? action.payload
+            : state.currentPreset,
+        error: null,
       };
-    
-    case 'DELETE_PRESET':
+
+    case "DELETE_PRESET":
       return {
         ...state,
-        presets: state.presets.filter(preset => preset.id !== action.payload),
-        currentPreset: state.currentPreset?.id === action.payload 
-          ? null 
-          : state.currentPreset,
-        error: null
+        presets: state.presets.filter((preset) => preset.id !== action.payload),
+        currentPreset:
+          state.currentPreset?.id === action.payload
+            ? null
+            : state.currentPreset,
+        error: null,
       };
-    
-    case 'RESET':
+
+    case "RESET":
       return initialState;
-    
+
     default:
       return state;
   }
@@ -93,7 +95,7 @@ export const usePresetManager = (): PresetManager => {
 
   const loadPresetsFromStorage = useCallback(() => {
     try {
-      dispatch({ type: 'SET_LOADING', payload: true });
+      dispatch({ type: "SET_LOADING", payload: true });
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const presetBank: PresetBank = JSON.parse(stored);
@@ -103,14 +105,17 @@ export const usePresetManager = (): PresetManager => {
           createdAt: new Date(preset.createdAt),
           updatedAt: new Date(preset.updatedAt),
         }));
-        dispatch({ type: 'SET_PRESETS', payload: parsedPresets });
+        dispatch({ type: "SET_PRESETS", payload: parsedPresets });
       }
-      dispatch({ type: 'SET_ERROR', payload: null });
+      dispatch({ type: "SET_ERROR", payload: null });
     } catch (err) {
-      dispatch({ type: 'SET_ERROR', payload: "Failed to load presets from storage" });
+      dispatch({
+        type: "SET_ERROR",
+        payload: "Failed to load presets from storage",
+      });
       console.error("Error loading presets:", err);
     } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
+      dispatch({ type: "SET_LOADING", payload: false });
     }
   }, []);
 
@@ -127,7 +132,10 @@ export const usePresetManager = (): PresetManager => {
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(presetBank));
     } catch (err) {
-      dispatch({ type: 'SET_ERROR', payload: "Failed to save presets to storage" });
+      dispatch({
+        type: "SET_ERROR",
+        payload: "Failed to save presets to storage",
+      });
       console.error("Error saving presets:", err);
     }
   }, []);
@@ -152,10 +160,10 @@ export const usePresetManager = (): PresetManager => {
         };
 
         const updatedPresets = [...state.presets, newPreset];
-        dispatch({ type: 'ADD_PRESET', payload: newPreset });
+        dispatch({ type: "ADD_PRESET", payload: newPreset });
         savePresetsToStorage(updatedPresets);
       } catch (err) {
-        dispatch({ type: 'SET_ERROR', payload: "Failed to save preset" });
+        dispatch({ type: "SET_ERROR", payload: "Failed to save preset" });
         console.error("Error saving preset:", err);
         throw err;
       }
@@ -164,7 +172,7 @@ export const usePresetManager = (): PresetManager => {
   );
 
   const loadPreset = useCallback((preset: SynthPreset) => {
-    dispatch({ type: 'SET_CURRENT_PRESET', payload: preset });
+    dispatch({ type: "SET_CURRENT_PRESET", payload: preset });
   }, []);
 
   const deletePreset = useCallback(
@@ -173,10 +181,10 @@ export const usePresetManager = (): PresetManager => {
         const updatedPresets = state.presets.filter(
           (preset) => preset.id !== presetId,
         );
-        dispatch({ type: 'DELETE_PRESET', payload: presetId });
+        dispatch({ type: "DELETE_PRESET", payload: presetId });
         savePresetsToStorage(updatedPresets);
       } catch (err) {
-        dispatch({ type: 'SET_ERROR', payload: "Failed to delete preset" });
+        dispatch({ type: "SET_ERROR", payload: "Failed to delete preset" });
         console.error("Error deleting preset:", err);
       }
     },
@@ -191,7 +199,7 @@ export const usePresetManager = (): PresetManager => {
       };
       return JSON.stringify(presetBank, null, 2);
     } catch (err) {
-      dispatch({ type: 'SET_ERROR', payload: "Failed to export presets" });
+      dispatch({ type: "SET_ERROR", payload: "Failed to export presets" });
       console.error("Error exporting presets:", err);
       throw err;
     }
@@ -210,12 +218,14 @@ export const usePresetManager = (): PresetManager => {
         }));
 
         const updatedPresets =
-          mode === "replace" ? importedPresets : [...state.presets, ...importedPresets];
+          mode === "replace"
+            ? importedPresets
+            : [...state.presets, ...importedPresets];
 
-        dispatch({ type: 'SET_PRESETS', payload: updatedPresets });
+        dispatch({ type: "SET_PRESETS", payload: updatedPresets });
         savePresetsToStorage(updatedPresets);
       } catch (err) {
-        dispatch({ type: 'SET_ERROR', payload: "Failed to import presets" });
+        dispatch({ type: "SET_ERROR", payload: "Failed to import presets" });
         console.error("Error importing presets:", err);
       }
     },
@@ -224,8 +234,9 @@ export const usePresetManager = (): PresetManager => {
 
   const getPresetsForSynth = useCallback(
     (synthType: "analog" | "fm", polyphony: "mono" | "poly"): SynthPreset[] => {
-      return state.presets.filter((preset) => 
-        preset.synthType === synthType && preset.polyphony === polyphony
+      return state.presets.filter(
+        (preset) =>
+          preset.synthType === synthType && preset.polyphony === polyphony,
       );
     },
     [state.presets],

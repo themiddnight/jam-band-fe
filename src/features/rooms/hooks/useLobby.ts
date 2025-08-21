@@ -1,181 +1,304 @@
-import { useSocket } from "@/features/audio/hooks/useSocket";
+import { useRoomSocket } from "@/features/audio/hooks/useRoomSocket";
+import { ConnectionState } from "@/features/audio/types/connectionState";
 import { useRoomQuery, useRoomStore } from "@/features/rooms";
+import { createRoom as createRoomAPI } from "@/features/rooms/services/api";
 import { useUserStore } from "@/shared/stores/userStore";
-import { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import type { Socket } from "socket.io-client";
 
-export function useLobby() {
+/**
+ * Lobby hook using the RoomSocketManager for namespace-based connections
+ */
+export const useLobby = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { username, userId, setUsername } = useUserStore();
+
+  // User state
+  const { username, userId, setUsername, setUserId } = useUserStore();
+
+  // Room socket
   const {
-    connect,
-    createRoom,
-    isConnected,
+    connectionState,
     isConnecting,
+    error,
+    connectToLobby,
+    connectToRoom,
+    requestRoomApproval,
+    cancelApprovalRequest,
+    getActiveSocket,
     onRoomCreated,
     onRoomClosed,
-    socketRef,
-  } = useSocket();
-  const { currentRoom } = useRoomStore();
+  } = useRoomSocket();
 
-  // Use TanStack Query for room fetching
+  // Room store
+  const { clearRoom } = useRoomStore();
+
+  // Active socket state to trigger re-renders when it changes
+  const [activeSocket, setActiveSocket] = useState<Socket | null>(
+    getActiveSocket(),
+  );
+
+  // Keep active socket updated with the latest from the manager
+  useEffect(() => {
+    const next = getActiveSocket();
+    // Only update when identity changes to avoid unnecessary renders
+    if (next !== activeSocket) {
+      setActiveSocket(next);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [getActiveSocket, connectionState]);
+
+  // Room query for HTTP-based room list
   const { roomsQuery } = useRoomQuery();
-  const { data: rooms, isLoading: loading, refetch: fetchRooms } = roomsQuery;
+  const rooms = useMemo(() => roomsQuery.data || [], [roomsQuery.data]);
+  const loading = roomsQuery.isLoading;
+  const fetchRooms = roomsQuery.refetch;
 
+  // UI state
   const [showUsernameModal, setShowUsernameModal] = useState(false);
   const [tempUsername, setTempUsername] = useState("");
   const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
+  const [showRejectionModal, setShowRejectionModal] = useState(false);
+  const [rejectionMessage, setRejectionMessage] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
-  const [showRejectionModal, setShowRejectionModal] = useState(false);
-  const [rejectionMessage, setRejectionMessage] = useState<string>("");
 
-  // Check if username is set
+  // Track pending room intent while waiting for approval
+  const [pendingRoomIntent, setPendingRoomIntent] = useState<{
+    roomId: string;
+    role: "band_member" | "audience";
+  } | null>(null);
+
+  // Define handleJoinRoom first
+  const handleJoinRoom = useCallback(
+    async (roomId: string, role: "band_member" | "audience") => {
+      if (!username || !userId) {
+        setShowUsernameModal(true);
+        return;
+      }
+
+      // Clear any existing room state
+      clearRoom();
+
+      // Find the room to check if it's private
+      const room = rooms.find((r: any) => r.id === roomId);
+      const isPrivateRoom = room?.isPrivate || false;
+
+      try {
+        if (isPrivateRoom && role === "band_member") {
+          // For private rooms, band members need approval
+          setPendingRoomIntent({ roomId, role });
+          await requestRoomApproval(roomId, userId, username, role);
+          // Stay on lobby page during approval process
+        } else {
+          // For public rooms or audience members, join directly
+          await connectToRoom(roomId, role);
+          // Navigate to room page
+          navigate(`/room/${roomId}`, { state: { role } });
+        }
+      } catch (error) {
+        console.error("Failed to join room:", error);
+      }
+    },
+    [
+      username,
+      userId,
+      rooms,
+      clearRoom,
+      requestRoomApproval,
+      connectToRoom,
+      navigate,
+    ],
+  );
+
+  // Initialize lobby connection when component mounts
+  useEffect(() => {
+    if (
+      username &&
+      userId &&
+      connectionState === ConnectionState.DISCONNECTED
+    ) {
+      connectToLobby();
+    }
+  }, [username, userId, connectionState, connectToLobby]);
+
+  // Show username modal if no username is set
   useEffect(() => {
     if (!username) {
       setShowUsernameModal(true);
-    } else {
-      // Check if there's a pending invite in sessionStorage (for when user refreshes after setting username)
+    }
+  }, [username]);
+
+  // Handle pending invite from sessionStorage
+  useEffect(() => {
+    if (username && userId) {
       const pendingInvite = sessionStorage.getItem("pendingInvite");
       if (pendingInvite) {
         try {
           const { roomId, role } = JSON.parse(pendingInvite);
           sessionStorage.removeItem("pendingInvite");
-          navigate(`/room/${roomId}`, { state: { role } });
+          handleJoinRoom(roomId, role);
         } catch (error) {
           console.error("Failed to parse pending invite:", error);
           sessionStorage.removeItem("pendingInvite");
         }
       }
     }
-  }, [username, navigate]);
+  }, [username, userId, handleJoinRoom]);
 
-  // Check for rejection message in location state
+  // Set up room event handlers
   useEffect(() => {
-    const state = location.state as { rejectionMessage?: string } | null;
-    if (state?.rejectionMessage) {
-      setRejectionMessage(state.rejectionMessage);
-      setShowRejectionModal(true);
-      // Clear the state to prevent showing the modal again on refresh
-      navigate(location.pathname, { replace: true });
-    }
-  }, [location.state, navigate, location.pathname]);
-
-  // Connect to socket and fetch rooms
-  useEffect(() => {
-    if (username && !isConnected && !isConnecting) {
-      connect();
-    }
-  }, [username, connect, isConnected, isConnecting]);
-
-  // Listen for room creation and deletion broadcasts
-  useEffect(() => {
-    if (!isConnected) return;
-
-    const handleRoomCreated = () => {
-      // Refresh the room list immediately when a new room is created
+    onRoomCreated(() => {
+      // Refresh room list when a new room is created
       fetchRooms();
-    };
+    });
 
-    const handleRoomClosed = () => {
-      // Refresh the room list when a room is closed
+    onRoomClosed(() => {
+      // Refresh room list when a room is closed
       fetchRooms();
-    };
+    });
+  }, [onRoomCreated, onRoomClosed, fetchRooms]);
 
-    // Set up the room created and closed callbacks
-    onRoomCreated(handleRoomCreated);
-    onRoomClosed(handleRoomClosed);
-  }, [isConnected, onRoomCreated, onRoomClosed, fetchRooms]);
-
-  // Redirect to room when created
+  // Handle errors
   useEffect(() => {
-    if (currentRoom) {
-      navigate(`/room/${currentRoom.id}`);
+    if (error) {
+      if (error.includes("rejected")) {
+        setRejectionMessage(error);
+        setShowRejectionModal(true);
+      }
     }
-  }, [currentRoom, navigate]);
+  }, [error]);
 
-  const handleUsernameSubmit = () => {
-    if (tempUsername.trim()) {
-      setUsername(tempUsername.trim());
+  // Navigate to the room after approval (when socket transitions to IN_ROOM)
+  useEffect(() => {
+    if (connectionState === ConnectionState.IN_ROOM && pendingRoomIntent) {
+      navigate(`/room/${pendingRoomIntent.roomId}`, {
+        state: { role: pendingRoomIntent.role },
+      });
+      setPendingRoomIntent(null);
+    }
+  }, [connectionState, pendingRoomIntent, navigate]);
+
+  // Expose cancel approval action for UI
+  const cancelApproval = useCallback(async () => {
+    try {
+      await cancelApprovalRequest();
+    } finally {
+      setPendingRoomIntent(null);
+    }
+  }, [cancelApprovalRequest]);
+
+  // Username management
+  const handleUsernameClick = useCallback(() => {
+    setTempUsername(username || "");
+    setShowUsernameModal(true);
+  }, [username]);
+
+  const handleUsernameSubmit = useCallback(() => {
+    if (!tempUsername.trim()) return;
+
+    const newUsername = tempUsername.trim();
+    const newUserId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+    setUsername(newUsername);
+    setUserId(newUserId);
+    setShowUsernameModal(false);
+    setTempUsername("");
+
+    // Connect to lobby after setting username
+    if (connectionState === ConnectionState.DISCONNECTED) {
+      connectToLobby();
+    }
+  }, [tempUsername, setUsername, setUserId, connectionState, connectToLobby]);
+
+  const handleUsernameModalClose = useCallback(() => {
+    if (username) {
       setShowUsernameModal(false);
       setTempUsername("");
     }
-  };
+  }, [username]);
 
-  const handleCreateRoom = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newRoomName.trim() && username && userId) {
-      createRoom(newRoomName.trim(), username, userId, isPrivate, isHidden);
-      setShowCreateRoomModal(false);
-      setNewRoomName("");
-      setIsPrivate(false);
-      setIsHidden(false);
+  // Room creation
+  const handleCreateRoomButtonClick = useCallback(() => {
+    if (!username) {
+      setShowUsernameModal(true);
+      return;
     }
-  };
+    setShowCreateRoomModal(true);
+  }, [username]);
 
-  const handleJoinRoom = (roomId: string, role: "band_member" | "audience") => {
-    if (username && userId) {
-      navigate(`/room/${roomId}`, { state: { role } });
+  const handleCreateRoomSubmit = useCallback(async () => {
+    if (!newRoomName.trim() || !username || !userId) return;
+
+    try {
+      const result = await createRoomAPI(
+        newRoomName.trim(),
+        username,
+        userId,
+        isPrivate,
+        isHidden,
+      );
+
+      if (result.success) {
+        // Refresh room list to show the new room
+        fetchRooms();
+
+        // Navigate to the new room
+        navigate(`/room/${result.room.id}`);
+      }
+    } catch (error) {
+      console.error("Failed to create room:", error);
+      // You could add error handling here
     }
-  };
 
-  const handleUsernameClick = () => {
-    setTempUsername(username || "");
-    setShowUsernameModal(true);
-  };
-
-  const handleCreateRoomModalClose = () => {
     setShowCreateRoomModal(false);
     setNewRoomName("");
     setIsPrivate(false);
     setIsHidden(false);
-  };
+  }, [
+    newRoomName,
+    username,
+    userId,
+    isPrivate,
+    isHidden,
+    fetchRooms,
+    navigate,
+  ]);
 
-  const handleUsernameModalClose = () => {
-    setShowUsernameModal(false);
-    setTempUsername("");
-  };
+  const handleCreateRoomModalClose = useCallback(() => {
+    setShowCreateRoomModal(false);
+    setNewRoomName("");
+    setIsPrivate(false);
+    setIsHidden(false);
+  }, []);
 
-  const handleRejectionModalClose = () => {
+  // Modal handlers
+  const handleRejectionModalClose = useCallback(() => {
     setShowRejectionModal(false);
     setRejectionMessage("");
-  };
-
-  const handleCreateRoomSubmit = () => {
-    if (newRoomName.trim()) {
-      handleCreateRoom({ preventDefault: () => {} } as React.FormEvent);
-    }
-  };
-
-  const handleCreateRoomButtonClick = () => {
-    setShowCreateRoomModal(true);
-  };
+  }, []);
 
   return {
     // State
     username,
-    rooms: rooms || [],
+    rooms,
     loading,
     showUsernameModal,
     tempUsername,
     showCreateRoomModal,
     newRoomName,
-    isPrivate,
-    isHidden,
     showRejectionModal,
     rejectionMessage,
-    isConnected,
+    isConnected: connectionState === ConnectionState.LOBBY,
     isConnecting,
-
-    // Socket reference for ping measurement
-    socketRef,
+    isPrivate,
+    isHidden,
+    connectionState,
 
     // Actions
     fetchRooms,
     handleUsernameSubmit,
-    handleCreateRoom,
     handleJoinRoom,
     handleUsernameClick,
     handleCreateRoomModalClose,
@@ -183,14 +306,15 @@ export function useLobby() {
     handleRejectionModalClose,
     handleCreateRoomSubmit,
     handleCreateRoomButtonClick,
+    cancelApproval,
 
     // Setters
-    setShowUsernameModal,
     setTempUsername,
-    setShowCreateRoomModal,
     setNewRoomName,
     setIsPrivate,
     setIsHidden,
-    setShowRejectionModal,
+
+    // Socket for ping measurement
+    activeSocket,
   };
-}
+};

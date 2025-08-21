@@ -129,12 +129,28 @@ export const Footer: React.FC = () => {
                 Synthesizer)
               </li>
               <li>• Real-time collaborative jamming sessions</li>
-              <li>• Synchronized metronome with tap tempo and personal controls</li>
+              <li>
+                • Synchronized metronome with tap tempo and personal controls
+              </li>
               <li>• Voice input and chat capabilities</li>
               <li>• MIDI controller support</li>
               <li>• Preset management for instruments</li>
               <li>• Room-based collaboration system</li>
             </ul>
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-lg mb-2">Coming Soon</h4>
+            <div className="p-3 bg-primary/10 rounded-lg border border-primary/20">
+              <p className="text-sm text-primary leading-relaxed">
+                🚧 <span className="font-bold">Next on the roadmap:</span>
+              </p>
+              <ul className="mt-2 space-y-1 text-xs text-primary/80">
+                <li>• Step sequencer for pattern-based music creation</li>
+                <li>• Audio effects (reverb, delay, distortion, etc.)</li>
+                <li>• Mixer controls in the user list for individual volume management</li>
+              </ul>
+            </div>
           </div>
 
           <div>

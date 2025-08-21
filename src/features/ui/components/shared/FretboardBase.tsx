@@ -42,34 +42,35 @@ const FretButton = React.memo<{
   showNoteNames?: boolean;
   sustain?: boolean;
   sustainToggle?: boolean;
-}>(({
-  stringIndex,
-  fret,
-  position,
-  onPress,
-  onRelease,
-  showNoteNames = true,
-  sustain = false,
-  sustainToggle = false,
-}) => {
-  const touchHandlers = useTouchEvents({ onPress, onRelease });
+}>(
+  ({
+    stringIndex,
+    fret,
+    position,
+    onPress,
+    onRelease,
+    showNoteNames = true,
+    sustain = false,
+    sustainToggle = false,
+  }) => {
+    const touchHandlers = useTouchEvents({ onPress, onRelease });
 
-  const isPressed = position.isPressed;
-  const isHighlighted = position.isHighlighted;
-  const isScaleNote = position.isScaleNote;
+    const isPressed = position.isPressed;
+    const isHighlighted = position.isHighlighted;
+    const isScaleNote = position.isScaleNote;
 
-  // Only call onRelease on mouse leave if sustain is not active
-  const handleMouseLeave = () => {
-    if (!sustain && !sustainToggle) {
-      onRelease();
-    }
-  };
+    // Only call onRelease on mouse leave if sustain is not active
+    const handleMouseLeave = () => {
+      if (!sustain && !sustainToggle) {
+        onRelease();
+      }
+    };
 
-  return (
-    <button
-      key={`${stringIndex}-${fret}`}
-      ref={touchHandlers.ref as React.RefObject<HTMLButtonElement>}
-      className={`
+    return (
+      <button
+        key={`${stringIndex}-${fret}`}
+        ref={touchHandlers.ref as React.RefObject<HTMLButtonElement>}
+        className={`
         relative w-12 h-8 border border-gray-300 transition-all duration-100
         ${isPressed ? "bg-blue-500 scale-95" : "bg-gray-100 hover:bg-gray-200"}
         ${isHighlighted ? "ring-2 ring-yellow-400" : ""}
@@ -77,101 +78,114 @@ const FretButton = React.memo<{
         ${fret === 0 ? "brightness-70" : ""}
         touch-manipulation
       `}
-      onMouseDown={onPress}
-      onMouseUp={onRelease}
-      onMouseLeave={handleMouseLeave}
-    >
-      {showNoteNames && (
-        <span
-          className={`text-xs ${isPressed ? "text-white" : "text-gray-700"}`}
-        >
-          {position.note}
-        </span>
-      )}
-    </button>
-  );
-});
-
-export const FretboardBase = React.memo<FretboardBaseProps>(({
-  config,
-  positions,
-  onFretPress,
-  onFretRelease,
-  className = "",
-  sustain = false,
-  sustainToggle = false,
-}) => {
-  const {
-    strings,
-    frets,
-    showNoteNames = true,
-    showFretNumbers = true,
-    highlightFrets = [],
-  } = config;
-
-  // Memoize expensive computations
-  const getFretPosition = React.useCallback((
-    stringIndex: number,
-    fret: number,
-  ): FretPosition | undefined => {
-    return positions.find(
-      (pos) => pos.string === stringIndex && pos.fret === fret,
+        onMouseDown={onPress}
+        onMouseUp={onRelease}
+        onMouseLeave={handleMouseLeave}
+      >
+        {showNoteNames && (
+          <span
+            className={`text-xs ${isPressed ? "text-white" : "text-gray-700"}`}
+          >
+            {position.note}
+          </span>
+        )}
+      </button>
     );
-  }, [positions]);
+  },
+);
 
-  // Memoize fret rendering to avoid unnecessary re-renders
-  const renderFret = React.useCallback((stringIndex: number, fret: number) => {
-    const position = getFretPosition(stringIndex, fret);
-    if (!position) return null;
+export const FretboardBase = React.memo<FretboardBaseProps>(
+  ({
+    config,
+    positions,
+    onFretPress,
+    onFretRelease,
+    className = "",
+    sustain = false,
+    sustainToggle = false,
+  }) => {
+    const {
+      strings,
+      frets,
+      showNoteNames = true,
+      showFretNumbers = true,
+      highlightFrets = [],
+    } = config;
 
-    return (
-      <FretButton
-        key={`${stringIndex}-${fret}`}
-        stringIndex={stringIndex}
-        fret={fret}
-        position={position}
-        onPress={() => onFretPress(stringIndex, fret, position.note)}
-        onRelease={() => onFretRelease(stringIndex, fret, position.note)}
-        showNoteNames={showNoteNames}
-        sustain={sustain}
-        sustainToggle={sustainToggle}
-      />
+    // Memoize expensive computations
+    const getFretPosition = React.useCallback(
+      (stringIndex: number, fret: number): FretPosition | undefined => {
+        return positions.find(
+          (pos) => pos.string === stringIndex && pos.fret === fret,
+        );
+      },
+      [positions],
     );
-  }, [getFretPosition, onFretPress, onFretRelease, showNoteNames, sustain, sustainToggle]);
 
-  // Memoize fret numbers rendering
-  const renderFretNumbers = React.useMemo(() => {
-    if (!showFretNumbers) return null;
+    // Memoize fret rendering to avoid unnecessary re-renders
+    const renderFret = React.useCallback(
+      (stringIndex: number, fret: number) => {
+        const position = getFretPosition(stringIndex, fret);
+        if (!position) return null;
 
-    return (
-      <div className="flex mb-2">
-        {Array.from({ length: frets + 1 }, (_, fret) => (
-          <div key={fret} className="w-12 text-center text-xs text-gray-500">
-            {highlightFrets?.includes(fret) ? (
-              <span className="text-yellow-500">{fret}</span>
-            ) : (
-              fret
-            )}
-          </div>
-        ))}
-      </div>
+        return (
+          <FretButton
+            key={`${stringIndex}-${fret}`}
+            stringIndex={stringIndex}
+            fret={fret}
+            position={position}
+            onPress={() => onFretPress(stringIndex, fret, position.note)}
+            onRelease={() => onFretRelease(stringIndex, fret, position.note)}
+            showNoteNames={showNoteNames}
+            sustain={sustain}
+            sustainToggle={sustainToggle}
+          />
+        );
+      },
+      [
+        getFretPosition,
+        onFretPress,
+        onFretRelease,
+        showNoteNames,
+        sustain,
+        sustainToggle,
+      ],
     );
-  }, [showFretNumbers, frets, highlightFrets]);
 
-  return (
-    <div className={`fretboard-base mx-auto p-3 ${className}`}>
-      {renderFretNumbers}
-      <div className="fretboard-grid">
-        {strings.map((_stringName, stringIndex) => (
-          <div key={stringIndex} className="flex items-center mb-1">
-            <div className="flex">
-              {Array.from({ length: frets + 1 }, (_, fret) =>
-                renderFret(stringIndex, fret),
+    // Memoize fret numbers rendering
+    const renderFretNumbers = React.useMemo(() => {
+      if (!showFretNumbers) return null;
+
+      return (
+        <div className="flex mb-2">
+          {Array.from({ length: frets + 1 }, (_, fret) => (
+            <div key={fret} className="w-12 text-center text-xs text-gray-500">
+              {highlightFrets?.includes(fret) ? (
+                <span className="text-yellow-500">{fret}</span>
+              ) : (
+                fret
               )}
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
+      );
+    }, [showFretNumbers, frets, highlightFrets]);
+
+    return (
+      <div className={`fretboard-base mx-auto p-3 ${className}`}>
+        {renderFretNumbers}
+        <div className="fretboard-grid">
+          {strings.map((_stringName, stringIndex) => (
+            <div key={stringIndex} className="flex items-center mb-1">
+              <div className="flex">
+                {Array.from({ length: frets + 1 }, (_, fret) =>
+                  renderFret(stringIndex, fret),
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
-  );
-});
+    );
+  },
+);

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef } from "react";
 import { AudioContextManager } from "../constants/audioConfig";
+import { useCallback, useEffect, useRef } from "react";
 
 /**
  * Hook for managing audio performance optimization when WebRTC is active
@@ -11,20 +11,28 @@ export const usePerformanceOptimization = () => {
   // Monitor WebRTC state and adjust instrument performance
   const monitorPerformance = useCallback(() => {
     const isWebRTCActive = AudioContextManager.isWebRTCActive();
-    
+
     // Only trigger changes when state actually changes
     if (isWebRTCActive !== lastWebRTCStateRef.current) {
       lastWebRTCStateRef.current = isWebRTCActive;
-      
+
       if (isWebRTCActive) {
-        console.log("🎵 Performance: WebRTC detected, optimizing instrument performance");
+        console.log(
+          "🎵 Performance: WebRTC detected, optimizing instrument performance",
+        );
         // Optionally reduce instrument context priority
         // This could trigger polyphony reduction in instruments
-        window.dispatchEvent(new CustomEvent('webrtc-active', { detail: { active: true } }));
+        window.dispatchEvent(
+          new CustomEvent("webrtc-active", { detail: { active: true } }),
+        );
       } else {
-        console.log("🎵 Performance: WebRTC inactive, restoring full instrument performance");
+        console.log(
+          "🎵 Performance: WebRTC inactive, restoring full instrument performance",
+        );
         // Restore full performance
-        window.dispatchEvent(new CustomEvent('webrtc-active', { detail: { active: false } }));
+        window.dispatchEvent(
+          new CustomEvent("webrtc-active", { detail: { active: false } }),
+        );
       }
     }
   }, []);
@@ -32,8 +40,11 @@ export const usePerformanceOptimization = () => {
   // Start performance monitoring
   const startPerformanceMonitoring = useCallback(() => {
     if (performanceMonitorRef.current) return;
-    
-    performanceMonitorRef.current = setInterval(monitorPerformance, 2000) as unknown as number;
+
+    performanceMonitorRef.current = setInterval(
+      monitorPerformance,
+      2000,
+    ) as unknown as number;
     console.log("🔍 Performance: Started audio performance monitoring");
   }, [monitorPerformance]);
 
@@ -50,7 +61,9 @@ export const usePerformanceOptimization = () => {
   const suspendInstruments = useCallback(async () => {
     try {
       await AudioContextManager.suspendInstrumentContext();
-      console.log("⏸️ Performance: Suspended instrument audio context to save CPU");
+      console.log(
+        "⏸️ Performance: Suspended instrument audio context to save CPU",
+      );
     } catch (error) {
       console.warn("Failed to suspend instrument context:", error);
     }

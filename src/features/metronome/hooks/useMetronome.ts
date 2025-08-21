@@ -1,12 +1,11 @@
 // Metronome Hook
-
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Socket } from 'socket.io-client';
-import { MetronomeSoundService } from '../services/MetronomeSoundService';
-import { MetronomeSocketService } from '../services/MetronomeSocketService';
-import { TapTempoCalculator, validateBpm } from '../utils';
-import { METRONOME_CONFIG } from '../constants';
-import { useMetronomeStore } from '../stores/metronomeStore';
+import { METRONOME_CONFIG } from "../constants";
+import { MetronomeSocketService } from "../services/MetronomeSocketService";
+import { MetronomeSoundService } from "../services/MetronomeSoundService";
+import { useMetronomeStore } from "../stores/metronomeStore";
+import { TapTempoCalculator, validateBpm } from "../utils";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Socket } from "socket.io-client";
 
 interface UseMetronomeOptions {
   socket: Socket | null;
@@ -16,17 +15,12 @@ interface UseMetronomeOptions {
 export const useMetronome = ({ socket, canEdit }: UseMetronomeOptions) => {
   // Metronome state (synced across room)
   const [bpm, setBpm] = useState<number>(METRONOME_CONFIG.DEFAULT_BPM);
-  
+
   // Beat indicator state
   const [isOnBeat, setIsOnBeat] = useState<boolean>(false);
 
   // Personal settings from Zustand store
-  const { 
-    volume, 
-    isMuted, 
-    setVolume, 
-    toggleMute 
-  } = useMetronomeStore();
+  const { volume, isMuted, setVolume, toggleMute } = useMetronomeStore();
 
   // Services
   const soundServiceRef = useRef<MetronomeSoundService | null>(null);
@@ -65,13 +59,13 @@ export const useMetronome = ({ socket, canEdit }: UseMetronomeOptions) => {
     socketService.onMetronomeTick(() => {
       // Set beat indicator
       setIsOnBeat(true);
-      
+
       // Reset beat indicator after a brief flash
       const flashDuration = Math.min(100, (60 / bpm) * 1000 * 0.2); // 20% of beat duration or 100ms max
       setTimeout(() => {
         setIsOnBeat(false);
       }, flashDuration);
-      
+
       // Only play sound if not muted and metronome is playing
       if (!isMuted && soundServiceRef.current) {
         soundServiceRef.current.playTick(volume);
@@ -92,13 +86,16 @@ export const useMetronome = ({ socket, canEdit }: UseMetronomeOptions) => {
   }, [isMuted, volume, bpm]);
 
   // Handle BPM change
-  const handleBpmChange = useCallback((newBpm: number) => {
-    const validBpm = validateBpm(newBpm);
-    
-    if (canEdit && socketServiceRef.current) {
-      socketServiceRef.current.updateBpm(validBpm);
-    }
-  }, [canEdit]);
+  const handleBpmChange = useCallback(
+    (newBpm: number) => {
+      const validBpm = validateBpm(newBpm);
+
+      if (canEdit && socketServiceRef.current) {
+        socketServiceRef.current.updateBpm(validBpm);
+      }
+    },
+    [canEdit],
+  );
 
   // Handle mute toggle (personal setting)
   const handleToggleMute = useCallback(() => {
@@ -106,10 +103,13 @@ export const useMetronome = ({ socket, canEdit }: UseMetronomeOptions) => {
   }, [toggleMute]);
 
   // Handle volume change (personal setting)
-  const handleVolumeChange = useCallback((newVolume: number) => {
-    const clampedVolume = Math.max(0, Math.min(1, newVolume));
-    setVolume(clampedVolume);
-  }, [setVolume]);
+  const handleVolumeChange = useCallback(
+    (newVolume: number) => {
+      const clampedVolume = Math.max(0, Math.min(1, newVolume));
+      setVolume(clampedVolume);
+    },
+    [setVolume],
+  );
 
   // Handle tap tempo
   const handleTapTempo = useCallback(() => {
@@ -144,9 +144,5 @@ export const useMetronome = ({ socket, canEdit }: UseMetronomeOptions) => {
     handleTapTempo,
     resetTapTempo,
     getTapCount,
-
-    // Utilities
-    hasAudioFile: soundServiceRef.current?.hasAudioFile ?? false,
-    reloadSound: soundServiceRef.current?.reloadSound.bind(soundServiceRef.current),
   };
 };

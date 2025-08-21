@@ -1,8 +1,12 @@
+import { PingDisplay, usePingMeasurement } from "@/features/audio";
+import { ConnectionState } from "@/features/audio/types/connectionState";
 import { useLobby } from "@/features/rooms";
 import { Modal } from "@/features/ui";
 import { Footer } from "@/features/ui";
-import { PingDisplay, usePingMeasurement } from "@/features/audio";
 
+/**
+ * Lobby page using the RoomSocketManager for namespace-based connections
+ */
 export default function Lobby() {
   const {
     // State
@@ -19,6 +23,7 @@ export default function Lobby() {
     isConnecting,
     isPrivate,
     isHidden,
+    connectionState,
 
     // Actions
     fetchRooms,
@@ -30,6 +35,7 @@ export default function Lobby() {
     handleRejectionModalClose,
     handleCreateRoomSubmit,
     handleCreateRoomButtonClick,
+    cancelApproval,
 
     // Setters
     setTempUsername,
@@ -38,12 +44,12 @@ export default function Lobby() {
     setIsHidden,
 
     // Socket for ping measurement
-    socketRef,
+    activeSocket,
   } = useLobby();
 
   // Ping measurement for lobby
   const { currentPing } = usePingMeasurement({
-    socket: socketRef?.current,
+    socket: activeSocket,
     enabled: isConnected,
   });
 
@@ -57,10 +63,16 @@ export default function Lobby() {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-3">
                 <div
-                  className={`w-3 h-3 rounded-full ${isConnected ? "bg-success" : isConnecting ? "bg-warning" : "bg-error"}`}
+                  className={`w-3 h-3 rounded-full ${
+                    connectionState === ConnectionState.LOBBY
+                      ? "bg-success"
+                      : isConnecting
+                        ? "bg-warning"
+                        : "bg-error"
+                  }`}
                 ></div>
-                <PingDisplay 
-                  ping={currentPing} 
+                <PingDisplay
+                  ping={currentPing}
                   isConnected={isConnected}
                   variant="compact"
                   showLabel={false}
@@ -75,6 +87,32 @@ export default function Lobby() {
               </button>
             </div>
           </div>
+
+          {/* Waiting for approval modal */}
+          <Modal
+            open={connectionState === ConnectionState.REQUESTING}
+            setOpen={() => {}}
+            title="Waiting for Approval"
+            showOkButton={false}
+            showCancelButton={true}
+            cancelText="Cancel Request"
+            onCancel={cancelApproval}
+            allowClose={false}
+            size="md"
+          >
+            <div className="space-y-4">
+              <p className="text-base-content/70">
+                Your request to join the private room as a band member is
+                pending owner approval.
+              </p>
+              <div className="flex justify-center">
+                <div className="loading loading-spinner mx-auto loading-lg text-primary"></div>
+              </div>
+              <div className="text-xs text-base-content/50 mt-2">
+                Request will timeout automatically after 30 seconds
+              </div>
+            </div>
+          </Modal>
 
           {/* Card */}
           <div className="card bg-base-100 shadow-xl h-full">
@@ -107,7 +145,7 @@ export default function Lobby() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {rooms.map((room) => (
+                    {rooms.map((room: any) => (
                       <div key={room.id} className="card bg-base-200">
                         <div className="card-body p-4">
                           <div className="flex justify-between items-start">
@@ -129,9 +167,6 @@ export default function Lobby() {
                                 {room.userCount} member
                                 {room.userCount !== 1 ? "s" : ""}
                               </p>
-                              {/* <p className="text-xs text-base-content/50">
-                              Created {new Date(room.createdAt).toLocaleDateString()}
-                            </p> */}
                             </div>
                             <div className="flex items-center gap-2 flex-wrap justify-end">
                               <span className="text-xs text-base-content/70">
@@ -142,6 +177,10 @@ export default function Lobby() {
                                   handleJoinRoom(room.id, "band_member")
                                 }
                                 className="btn btn-xs btn-primary"
+                                disabled={
+                                  isConnecting ||
+                                  connectionState === ConnectionState.REQUESTING
+                                }
                               >
                                 Band Member
                               </button>
@@ -150,6 +189,10 @@ export default function Lobby() {
                                   handleJoinRoom(room.id, "audience")
                                 }
                                 className="btn btn-xs btn-outline"
+                                disabled={
+                                  isConnecting ||
+                                  connectionState === ConnectionState.REQUESTING
+                                }
                               >
                                 Audience
                               </button>

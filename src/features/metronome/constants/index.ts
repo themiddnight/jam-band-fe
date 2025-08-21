@@ -10,9 +10,9 @@ export const METRONOME_CONFIG = {
 } as const;
 
 export const METRONOME_STORAGE_KEYS = {
-  VOLUME: 'metronome_volume',
-  IS_MUTED: 'metronome_is_muted',
+  VOLUME: "metronome_volume",
+  IS_MUTED: "metronome_is_muted",
 } as const;
 
 // Sound file path - user should place tick sound here
-export const METRONOME_SOUND_PATH = '/sounds/metronome-tick.wav';
+export const METRONOME_SOUND_PATH = "/sounds/metronome-tick.wav";

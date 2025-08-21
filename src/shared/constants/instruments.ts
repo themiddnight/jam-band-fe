@@ -10,9 +10,24 @@ export enum InstrumentCategory {
 
 // Available drum machines from smplr
 export const DRUM_MACHINES: Instrument[] = [
-  { value: "TR-808", label: "Roland TR-808", controlType: ControlType.Drumpad, icon: "🥁" },
-  { value: "LM-2", label: "LinnDrum LM-2", controlType: ControlType.Drumpad, icon: "🥁" },
-  { value: "Casio-RZ1", label: "Casio RZ-1", controlType: ControlType.Drumpad, icon: "🥁" },
+  {
+    value: "TR-808",
+    label: "Roland TR-808",
+    controlType: ControlType.Drumpad,
+    icon: "🥁",
+  },
+  {
+    value: "LM-2",
+    label: "LinnDrum LM-2",
+    controlType: ControlType.Drumpad,
+    icon: "🥁",
+  },
+  {
+    value: "Casio-RZ1",
+    label: "Casio RZ-1",
+    controlType: ControlType.Drumpad,
+    icon: "🥁",
+  },
   {
     value: "MFB-512",
     label: "Fricke MFB-512",
@@ -111,32 +126,62 @@ export const SOUNDFONT_INSTRUMENTS: Instrument[] = [
     controlType: ControlType.Keyboard,
     icon: "🎹",
   },
-  { value: "clavinet", label: "Clavinet", controlType: ControlType.Keyboard, icon: "🎹" },
+  {
+    value: "clavinet",
+    label: "Clavinet",
+    controlType: ControlType.Keyboard,
+    icon: "🎹",
+  },
 
   // Chromatic Percussion
-  { value: "celesta", label: "Celesta", controlType: ControlType.Keyboard, icon: "🎹" },
+  {
+    value: "celesta",
+    label: "Celesta",
+    controlType: ControlType.Keyboard,
+    icon: "🎹",
+  },
   {
     value: "glockenspiel",
     label: "Glockenspiel",
     controlType: ControlType.Keyboard,
     icon: "🎼",
   },
-  { value: "music_box", label: "Music Box", controlType: ControlType.Keyboard, icon: "🎵" },
+  {
+    value: "music_box",
+    label: "Music Box",
+    controlType: ControlType.Keyboard,
+    icon: "🎵",
+  },
   {
     value: "vibraphone",
     label: "Vibraphone",
     controlType: ControlType.Keyboard,
     icon: "🎹",
   },
-  { value: "marimba", label: "Marimba", controlType: ControlType.Keyboard, icon: "🎹" },
-  { value: "xylophone", label: "Xylophone", controlType: ControlType.Keyboard, icon: "🎹" },
+  {
+    value: "marimba",
+    label: "Marimba",
+    controlType: ControlType.Keyboard,
+    icon: "🎹",
+  },
+  {
+    value: "xylophone",
+    label: "Xylophone",
+    controlType: ControlType.Keyboard,
+    icon: "🎹",
+  },
   {
     value: "tubular_bells",
     label: "Tubular Bells",
     controlType: ControlType.Keyboard,
     icon: "🔔",
   },
-  { value: "dulcimer", label: "Dulcimer", controlType: ControlType.Keyboard, icon: "🎹" },
+  {
+    value: "dulcimer",
+    label: "Dulcimer",
+    controlType: ControlType.Keyboard,
+    icon: "🎹",
+  },
 
   // Organ
   {
@@ -169,8 +214,18 @@ export const SOUNDFONT_INSTRUMENTS: Instrument[] = [
     controlType: ControlType.Keyboard,
     icon: "🎹",
   },
-  { value: "accordion", label: "Accordion", controlType: ControlType.Keyboard, icon: "🪗" },
-  { value: "harmonica", label: "Harmonica", controlType: ControlType.Keyboard, icon: "🎹" },
+  {
+    value: "accordion",
+    label: "Accordion",
+    controlType: ControlType.Keyboard,
+    icon: "🪗",
+  },
+  {
+    value: "harmonica",
+    label: "Harmonica",
+    controlType: ControlType.Keyboard,
+    icon: "🎹",
+  },
   {
     value: "tango_accordion",
     label: "Tango Accordion",
@@ -253,8 +308,18 @@ export const SOUNDFONT_INSTRUMENTS: Instrument[] = [
     controlType: ControlType.Bass,
     icon: "🎸",
   },
-  { value: "slap_bass_1", label: "Slap Bass 1", controlType: ControlType.Bass, icon: "🎸" },
-  { value: "slap_bass_2", label: "Slap Bass 2", controlType: ControlType.Bass, icon: "🎸" },
+  {
+    value: "slap_bass_1",
+    label: "Slap Bass 1",
+    controlType: ControlType.Bass,
+    icon: "🎸",
+  },
+  {
+    value: "slap_bass_2",
+    label: "Slap Bass 2",
+    controlType: ControlType.Bass,
+    icon: "🎸",
+  },
   {
     value: "synth_bass_1",
     label: "Synth Bass 1",
@@ -269,9 +334,24 @@ export const SOUNDFONT_INSTRUMENTS: Instrument[] = [
   },
 
   // Strings
-  { value: "violin", label: "Violin", controlType: ControlType.Keyboard, icon: "🎻" },
-  { value: "viola", label: "Viola", controlType: ControlType.Keyboard, icon: "🎻" },
-  { value: "cello", label: "Cello", controlType: ControlType.Keyboard, icon: "🎻" },
+  {
+    value: "violin",
+    label: "Violin",
+    controlType: ControlType.Keyboard,
+    icon: "🎻",
+  },
+  {
+    value: "viola",
+    label: "Viola",
+    controlType: ControlType.Keyboard,
+    icon: "🎻",
+  },
+  {
+    value: "cello",
+    label: "Cello",
+    controlType: ControlType.Keyboard,
+    icon: "🎻",
+  },
   {
     value: "contrabass",
     label: "Contrabass",
@@ -296,7 +376,12 @@ export const SOUNDFONT_INSTRUMENTS: Instrument[] = [
     controlType: ControlType.Keyboard,
     icon: "🎹",
   },
-  { value: "timpani", label: "Timpani", controlType: ControlType.Keyboard, icon: "🥁" },
+  {
+    value: "timpani",
+    label: "Timpani",
+    controlType: ControlType.Keyboard,
+    icon: "🥁",
+  },
 
   // Ensemble
   {
@@ -349,9 +434,24 @@ export const SOUNDFONT_INSTRUMENTS: Instrument[] = [
   },
 
   // Brass
-  { value: "trumpet", label: "Trumpet", controlType: ControlType.Keyboard, icon: "🎺" },
-  { value: "trombone", label: "Trombone", controlType: ControlType.Keyboard, icon: "🎺" },
-  { value: "tuba", label: "Tuba", controlType: ControlType.Keyboard, icon: "🎺" },
+  {
+    value: "trumpet",
+    label: "Trumpet",
+    controlType: ControlType.Keyboard,
+    icon: "🎺",
+  },
+  {
+    value: "trombone",
+    label: "Trombone",
+    controlType: ControlType.Keyboard,
+    icon: "🎺",
+  },
+  {
+    value: "tuba",
+    label: "Tuba",
+    controlType: ControlType.Keyboard,
+    icon: "🎺",
+  },
   {
     value: "muted_trumpet",
     label: "Muted Trumpet",
@@ -390,29 +490,74 @@ export const SOUNDFONT_INSTRUMENTS: Instrument[] = [
     controlType: ControlType.Keyboard,
     icon: "🎷",
   },
-  { value: "alto_sax", label: "Alto Sax", controlType: ControlType.Keyboard, icon: "🎷" },
-  { value: "tenor_sax", label: "Tenor Sax", controlType: ControlType.Keyboard, icon: "🎷" },
+  {
+    value: "alto_sax",
+    label: "Alto Sax",
+    controlType: ControlType.Keyboard,
+    icon: "🎷",
+  },
+  {
+    value: "tenor_sax",
+    label: "Tenor Sax",
+    controlType: ControlType.Keyboard,
+    icon: "🎷",
+  },
   {
     value: "baritone_sax",
     label: "Baritone Sax",
     controlType: ControlType.Keyboard,
     icon: "🎷",
   },
-  { value: "oboe", label: "Oboe", controlType: ControlType.Keyboard, icon: "🎹" },
+  {
+    value: "oboe",
+    label: "Oboe",
+    controlType: ControlType.Keyboard,
+    icon: "🎹",
+  },
   {
     value: "english_horn",
     label: "English Horn",
     controlType: ControlType.Keyboard,
     icon: "🎹",
   },
-  { value: "bassoon", label: "Bassoon", controlType: ControlType.Keyboard, icon: "🎹" },
-  { value: "clarinet", label: "Clarinet", controlType: ControlType.Keyboard, icon: "🎹" },
+  {
+    value: "bassoon",
+    label: "Bassoon",
+    controlType: ControlType.Keyboard,
+    icon: "🎹",
+  },
+  {
+    value: "clarinet",
+    label: "Clarinet",
+    controlType: ControlType.Keyboard,
+    icon: "🎹",
+  },
 
   // Pipe
-  { value: "piccolo", label: "Piccolo", controlType: ControlType.Keyboard, icon: "🎶" },
-  { value: "flute", label: "Flute", controlType: ControlType.Keyboard, icon: "🎶" },
-  { value: "recorder", label: "Recorder", controlType: ControlType.Keyboard, icon: "🎶" },
-  { value: "pan_flute", label: "Pan Flute", controlType: ControlType.Keyboard, icon: "🎶" },
+  {
+    value: "piccolo",
+    label: "Piccolo",
+    controlType: ControlType.Keyboard,
+    icon: "🎶",
+  },
+  {
+    value: "flute",
+    label: "Flute",
+    controlType: ControlType.Keyboard,
+    icon: "🎶",
+  },
+  {
+    value: "recorder",
+    label: "Recorder",
+    controlType: ControlType.Keyboard,
+    icon: "🎶",
+  },
+  {
+    value: "pan_flute",
+    label: "Pan Flute",
+    controlType: ControlType.Keyboard,
+    icon: "🎶",
+  },
   {
     value: "blown_bottle",
     label: "Blown Bottle",
@@ -425,8 +570,18 @@ export const SOUNDFONT_INSTRUMENTS: Instrument[] = [
     controlType: ControlType.Keyboard,
     icon: "🎶",
   },
-  { value: "whistle", label: "Whistle", controlType: ControlType.Keyboard, icon: "🎶" },
-  { value: "ocarina", label: "Ocarina", controlType: ControlType.Keyboard, icon: "🎶" },
+  {
+    value: "whistle",
+    label: "Whistle",
+    controlType: ControlType.Keyboard,
+    icon: "🎶",
+  },
+  {
+    value: "ocarina",
+    label: "Ocarina",
+    controlType: ControlType.Keyboard,
+    icon: "🎶",
+  },
 
   // Synth Lead
   {
@@ -579,14 +734,54 @@ export const SOUNDFONT_INSTRUMENTS: Instrument[] = [
   },
 
   // Ethnic
-  { value: "sitar", label: "Sitar", controlType: ControlType.Keyboard, icon: "🎻" },
-  { value: "banjo", label: "Banjo", controlType: ControlType.Keyboard, icon: "🪕" },
-  { value: "shamisen", label: "Shamisen", controlType: ControlType.Keyboard, icon: "🎻" },
-  { value: "koto", label: "Koto", controlType: ControlType.Keyboard, icon: "🎻" },
-  { value: "kalimba", label: "Kalimba", controlType: ControlType.Keyboard, icon: "🎹" },
-  { value: "bagpipe", label: "Bagpipe", controlType: ControlType.Keyboard, icon: "🎶" },
-  { value: "fiddle", label: "Fiddle", controlType: ControlType.Keyboard, icon: "🎻" },
-  { value: "shanai", label: "Shanai", controlType: ControlType.Keyboard, icon: "🎶" },
+  {
+    value: "sitar",
+    label: "Sitar",
+    controlType: ControlType.Keyboard,
+    icon: "🎻",
+  },
+  {
+    value: "banjo",
+    label: "Banjo",
+    controlType: ControlType.Keyboard,
+    icon: "🪕",
+  },
+  {
+    value: "shamisen",
+    label: "Shamisen",
+    controlType: ControlType.Keyboard,
+    icon: "🎻",
+  },
+  {
+    value: "koto",
+    label: "Koto",
+    controlType: ControlType.Keyboard,
+    icon: "🎻",
+  },
+  {
+    value: "kalimba",
+    label: "Kalimba",
+    controlType: ControlType.Keyboard,
+    icon: "🎹",
+  },
+  {
+    value: "bagpipe",
+    label: "Bagpipe",
+    controlType: ControlType.Keyboard,
+    icon: "🎶",
+  },
+  {
+    value: "fiddle",
+    label: "Fiddle",
+    controlType: ControlType.Keyboard,
+    icon: "🎻",
+  },
+  {
+    value: "shanai",
+    label: "Shanai",
+    controlType: ControlType.Keyboard,
+    icon: "🎶",
+  },
 
   // Percussive
   {
@@ -595,14 +790,24 @@ export const SOUNDFONT_INSTRUMENTS: Instrument[] = [
     controlType: ControlType.Keyboard,
     icon: "🔔",
   },
-  { value: "agogo", label: "Agogo", controlType: ControlType.Keyboard, icon: "🥁" },
+  {
+    value: "agogo",
+    label: "Agogo",
+    controlType: ControlType.Keyboard,
+    icon: "🥁",
+  },
   {
     value: "steel_drums",
     label: "Steel Drums",
     controlType: ControlType.Keyboard,
     icon: "🥁",
   },
-  { value: "woodblock", label: "Woodblock", controlType: ControlType.Keyboard, icon: "🥁" },
+  {
+    value: "woodblock",
+    label: "Woodblock",
+    controlType: ControlType.Keyboard,
+    icon: "🥁",
+  },
   {
     value: "taiko_drum",
     label: "Taiko Drum",
@@ -641,7 +846,12 @@ export const SOUNDFONT_INSTRUMENTS: Instrument[] = [
     controlType: ControlType.Keyboard,
     icon: "🎹",
   },
-  { value: "seashore", label: "Seashore", controlType: ControlType.Keyboard, icon: "🌊" },
+  {
+    value: "seashore",
+    label: "Seashore",
+    controlType: ControlType.Keyboard,
+    icon: "🌊",
+  },
   {
     value: "bird_tweet",
     label: "Bird Tweet",
@@ -660,8 +870,18 @@ export const SOUNDFONT_INSTRUMENTS: Instrument[] = [
     controlType: ControlType.Keyboard,
     icon: "🚁",
   },
-  { value: "applause", label: "Applause", controlType: ControlType.Keyboard, icon: "👏" },
-  { value: "gunshot", label: "Gunshot", controlType: ControlType.Keyboard, icon: "🎹" },
+  {
+    value: "applause",
+    label: "Applause",
+    controlType: ControlType.Keyboard,
+    icon: "👏",
+  },
+  {
+    value: "gunshot",
+    label: "Gunshot",
+    controlType: ControlType.Keyboard,
+    icon: "🎹",
+  },
 ];
 
 // Helper function to get instrument icon
@@ -672,7 +892,9 @@ export const getInstrumentIcon = (instrumentValue: string): string => {
     ...SYNTHESIZER_INSTRUMENTS,
     ...SOUNDFONT_INSTRUMENTS,
   ];
-  
-  const instrument = allInstruments.find(inst => inst.value === instrumentValue);
+
+  const instrument = allInstruments.find(
+    (inst) => inst.value === instrumentValue,
+  );
   return instrument?.icon || "🎹"; // Default to keyboard emoji if not found
 };

@@ -1,7 +1,7 @@
-import { 
-  createInstrumentStore, 
-  createModeToggle, 
-  type BaseInstrumentState 
+import {
+  createInstrumentStore,
+  createModeToggle,
+  type BaseInstrumentState,
 } from "./createInstrumentStore";
 
 // Drum-specific state interface
@@ -24,22 +24,30 @@ interface DrumSpecificActions {
 }
 
 // Combined state type
-export type DrumState = BaseInstrumentState & DrumSpecificState & DrumSpecificActions;
+export type DrumState = BaseInstrumentState &
+  DrumSpecificState &
+  DrumSpecificActions;
 
 // Helper functions
-const drumModeToggle = createModeToggle(["basic", "advanced", "pattern"] as const);
+const drumModeToggle = createModeToggle([
+  "basic",
+  "advanced",
+  "pattern",
+] as const);
 
 // Create the drum store using the factory
-export const useDrumStore = createInstrumentStore<DrumSpecificState & DrumSpecificActions>({
+export const useDrumStore = createInstrumentStore<
+  DrumSpecificState & DrumSpecificActions
+>({
   initialState: {
     // Override base defaults for drums
     velocity: 0.8,
-    
+
     // Drum-specific initial state
     mode: "basic" as const,
     tempo: 120,
     swing: 0,
-    
+
     // Placeholder actions (will be overridden)
     setMode: () => {},
     setTempo: () => {},
@@ -50,13 +58,13 @@ export const useDrumStore = createInstrumentStore<DrumSpecificState & DrumSpecif
     incrementSwing: () => {},
     decrementSwing: () => {},
   },
-  
+
   actions: (set) => ({
     // Drum-specific setters
     setMode: (mode: "basic" | "advanced" | "pattern") => set({ mode } as any),
-    setTempo: (tempo: number) => 
+    setTempo: (tempo: number) =>
       set({ tempo: Math.max(60, Math.min(200, tempo)) } as any),
-    setSwing: (swing: number) => 
+    setSwing: (swing: number) =>
       set({ swing: Math.max(0, Math.min(1, swing)) } as any),
 
     // Drum-specific toggle actions
@@ -81,6 +89,6 @@ export const useDrumStore = createInstrumentStore<DrumSpecificState & DrumSpecif
         swing: Math.max(0, state.swing - 0.1),
       })),
   }),
-  
+
   persistKey: "drum-state",
 });

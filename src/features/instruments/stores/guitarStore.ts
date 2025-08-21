@@ -2,11 +2,11 @@ import {
   BRUSHING_TIMES,
   type BrushingTime,
 } from "../constants/guitarShortcuts";
-import { 
-  createInstrumentStore, 
-  createModeToggle, 
+import {
+  createInstrumentStore,
+  createModeToggle,
   createEnumNavigation,
-  type BaseInstrumentState 
+  type BaseInstrumentState,
 } from "./createInstrumentStore";
 
 // Guitar-specific state interface
@@ -29,24 +29,32 @@ interface GuitarSpecificActions {
 }
 
 // Combined state type
-export type GuitarState = BaseInstrumentState & GuitarSpecificState & GuitarSpecificActions;
+export type GuitarState = BaseInstrumentState &
+  GuitarSpecificState &
+  GuitarSpecificActions;
 
 // Helper functions
-const guitarModeToggle = createModeToggle(["basic", "melody", "chord"] as const);
+const guitarModeToggle = createModeToggle([
+  "basic",
+  "melody",
+  "chord",
+] as const);
 const brushingSpeedNav = createEnumNavigation(Object.values(BRUSHING_TIMES));
 
 // Create the guitar store using the factory
-export const useGuitarStore = createInstrumentStore<GuitarSpecificState & GuitarSpecificActions>({
+export const useGuitarStore = createInstrumentStore<
+  GuitarSpecificState & GuitarSpecificActions
+>({
   initialState: {
     // Override base defaults for guitar
     velocity: 0.5,
     currentOctave: 3,
-    
+
     // Guitar-specific initial state
     mode: "basic" as const,
     chordVoicing: 0,
     brushingSpeed: BRUSHING_TIMES.FAST,
-    
+
     // Placeholder actions (will be overridden)
     setMode: () => {},
     setChordVoicing: () => {},
@@ -57,13 +65,14 @@ export const useGuitarStore = createInstrumentStore<GuitarSpecificState & Guitar
     incrementBrushingSpeed: () => {},
     decrementBrushingSpeed: () => {},
   },
-  
+
   actions: (set) => ({
     // Guitar-specific setters
     setMode: (mode: "basic" | "melody" | "chord") => set({ mode } as any),
     setChordVoicing: (voicing: number) =>
       set({ chordVoicing: Math.max(-2, Math.min(2, voicing)) } as any),
-    setBrushingSpeed: (speed: BrushingTime) => set({ brushingSpeed: speed } as any),
+    setBrushingSpeed: (speed: BrushingTime) =>
+      set({ brushingSpeed: speed } as any),
 
     // Guitar-specific toggle actions
     toggleMode: () =>
@@ -87,6 +96,6 @@ export const useGuitarStore = createInstrumentStore<GuitarSpecificState & Guitar
         brushingSpeed: brushingSpeedNav.decrement(state.brushingSpeed),
       })),
   }),
-  
+
   persistKey: "guitar-state",
 });
