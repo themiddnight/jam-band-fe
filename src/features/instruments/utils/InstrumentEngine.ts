@@ -976,26 +976,60 @@ export class InstrumentEngine {
     try {
       // Check polyphony limit
       const maxPolyphony = this.getMaxPolyphony();
+      
+      // More aggressive cleanup when approaching polyphony limit
       if (this.activeNotes.size >= maxPolyphony) {
-        // Stop the oldest note to make room
-        const oldestNote = this.activeNotes.keys().next().value;
-        if (oldestNote) {
-          this.synthRef.triggerRelease(oldestNote, Tone.now());
-          this.activeNotes.delete(oldestNote);
-          this.sustainedNotes.delete(oldestNote);
-        }
+        // Stop multiple oldest notes to make room for chords
+        const notesToRemove = Math.max(1, Math.ceil(maxPolyphony * 0.2)); // Remove 20% of capacity
+        const oldestNotes = Array.from(this.activeNotes.keys()).slice(0, notesToRemove);
+        
+        oldestNotes.forEach((oldNote) => {
+          try {
+            this.synthRef.triggerRelease(oldNote, Tone.now());
+            this.activeNotes.delete(oldNote);
+            this.sustainedNotes.delete(oldNote);
+            this.keyHeldNotes.delete(oldNote);
+          } catch (error) {
+            console.warn(`Failed to release old note ${oldNote}:`, error);
+          }
+        });
+        
+        console.log(`🎹 Polyphony cleanup: removed ${notesToRemove} notes, ${this.activeNotes.size} remaining`);
       }
 
-      // Release existing note to avoid stacking
+      // Release existing note to avoid stacking - more thorough cleanup
       if (this.activeNotes.has(note)) {
-        this.synthRef.triggerRelease(note, Tone.now());
+        try {
+          this.synthRef.triggerRelease(note, Tone.now());
+        } catch (error) {
+          console.warn(`Failed to release existing note ${note}:`, error);
+        }
         this.activeNotes.delete(note);
         this.sustainedNotes.delete(note);
+        this.keyHeldNotes.delete(note);
       }
 
-      this.synthRef.triggerAttack(note, Tone.now(), velocity);
+      // Clear any pending timeouts for this note
+      this.clearPendingNote(note);
+
+      // Trigger the new note with additional error handling
+      try {
+        this.synthRef.triggerAttack(note, Tone.now(), velocity);
+      } catch (error) {
+        console.warn(`Failed to trigger attack for note ${note}:`, error);
+        // If triggerAttack fails, don't continue with tracking
+        return;
+      }
+      
+      // Store cleanup function for this note
       this.activeNotes.set(note, () => {
-        this.synthRef.triggerRelease(note, Tone.now());
+        try {
+          if (this.synthRef && this.synthRef instanceof Tone.PolySynth) {
+            this.synthRef.triggerRelease(note, Tone.now());
+          }
+        } catch (error) {
+          console.warn(`Failed to release note ${note} in cleanup:`, error);
+        }
       });
 
       // Track notes
@@ -1022,17 +1056,53 @@ export class InstrumentEngine {
         }, 10);
       }
 
-      // Auto-stop non-held notes if sustain is off
+      // Auto-stop non-held notes if sustain is off - with improved cleanup for sequencer
       if (!isKeyHeld && !this.sustain) {
+        // Shorter timeout for sequencer-triggered notes to prevent accumulation
+        const autoReleaseTime = this.isWebRTCOptimized ? 150 : 250;
+        
+        const releaseTimeout = setTimeout(() => {
+          if (this.activeNotes.has(note) && !this.keyHeldNotes.has(note)) {
+            try {
+              this.synthRef.triggerRelease(note, Tone.now());
+              this.activeNotes.delete(note);
+              this.sustainedNotes.delete(note);
+            } catch (error) {
+              console.warn(`Failed to auto-release note ${note}:`, error);
+              // Force cleanup even if release fails
+              this.activeNotes.delete(note);
+              this.sustainedNotes.delete(note);
+            }
+          }
+          this.pendingReleases.delete(note);
+        }, autoReleaseTime);
+        
+        // Store timeout for potential cancellation
+        this.pendingReleases.set(note, releaseTimeout as unknown as number);
+        
+        // Additional emergency cleanup for sequencer-triggered chords
+        const emergencyTimeout = autoReleaseTime + 750; // Extra buffer for chords
         setTimeout(() => {
           if (this.activeNotes.has(note) && !this.keyHeldNotes.has(note)) {
-            this.synthRef.triggerRelease(note, Tone.now());
+            console.warn(`🎹 Emergency cleanup: force stopping stuck note ${note}`);
+            try {
+              this.synthRef.triggerRelease(note, Tone.now());
+            } catch (error) {
+              console.warn(`Emergency release failed for note ${note}:`, error);
+            }
             this.activeNotes.delete(note);
+            this.sustainedNotes.delete(note);
+            this.clearPendingNote(note);
           }
-        }, 300);
+        }, emergencyTimeout);
       }
     } catch (error) {
       console.warn("Error triggering poly synth note:", error);
+      // Force cleanup on error to prevent stuck notes
+      this.activeNotes.delete(note);
+      this.sustainedNotes.delete(note);
+      this.keyHeldNotes.delete(note);
+      this.clearPendingNote(note);
     }
   }
 
@@ -1149,6 +1219,72 @@ export class InstrumentEngine {
         }
       }
     });
+  }
+
+  // Get all active notes
+  getAllActiveNotes(): string[] {
+    return Array.from(this.activeNotes.keys());
+  }
+
+  // Stop all active notes
+  async stopAllNotes(): Promise<void> {
+    if (!this.isReady()) return;
+
+    const allNotes = this.getAllActiveNotes();
+    if (allNotes.length > 0) {
+      await this.stopNotes(allNotes);
+    }
+  }
+
+  // Emergency cleanup method for stuck sounds - force reset everything
+  emergencyCleanup(): void {
+    console.warn("🆘 Emergency cleanup triggered - forcing stop of all notes and resetting synthesizer");
+    
+    try {
+      // Clear all tracking
+      this.activeNotes.clear();
+      this.sustainedNotes.clear();
+      this.keyHeldNotes.clear();
+      this.pendingReleases.clear();
+      this.pendingStop.clear();
+      this.noteStack = [];
+      this.currentNote = null;
+      
+      // Force release all notes from synthesizer
+      if (this.synthRef && this.config.category === InstrumentCategory.Synthesizer) {
+        try {
+          if (this.synthRef instanceof Tone.PolySynth) {
+            // For PolySynth, release all voices
+            this.synthRef.releaseAll();
+          } else {
+            // For MonoSynth, trigger release
+            this.synthRef.triggerRelease();
+          }
+        } catch (error) {
+          console.warn("Failed to release synthesizer notes during emergency cleanup:", error);
+        }
+        
+        // Reset filter envelope
+        if (this.filterEnvelopeRef && this.filterEnvelopeActive) {
+          try {
+            this.filterEnvelopeRef.triggerRelease(Tone.now());
+            this.filterEnvelopeActive = false;
+          } catch (error) {
+            console.warn("Failed to reset filter envelope during emergency cleanup:", error);
+          }
+        }
+      }
+      
+      console.log("✅ Emergency cleanup completed");
+    } catch (error) {
+      console.error("Error during emergency cleanup:", error);
+      // Even if emergency cleanup fails, clear the tracking
+      this.activeNotes.clear();
+      this.sustainedNotes.clear();
+      this.keyHeldNotes.clear();
+      this.pendingReleases.clear();
+      this.pendingStop.clear();
+    }
   }
 
   async stopNotes(notes: string[]): Promise<void> {

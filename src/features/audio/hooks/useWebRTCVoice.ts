@@ -294,7 +294,7 @@ export const useWebRTCVoice = ({
           window.AudioContext || (window as any).webkitAudioContext;
         audioContextRef.current = new AudioContextClass({
           sampleRate: 48000, // WebRTC preferred sample rate
-          latencyHint: "balanced", // Balanced for voice quality
+          latencyHint: "interactive", // Lowest latency for real-time performance
         });
       }
     }

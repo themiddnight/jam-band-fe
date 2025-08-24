@@ -904,6 +904,13 @@ export const useRoomSocket = (instrumentManager?: any) => {
     [safeEmit],
   );
 
+  const stopAllNotes = useCallback(
+    (instrument: string, category: string) => {
+      safeEmit("stop_all_notes", { instrument, category });
+    },
+    [safeEmit],
+  );
+
   const updateSynthParams = useCallback(
     (params: Partial<SynthState>) => {
       console.log("🎛️ updateSynthParams called in useRoomSocket:", params);
@@ -994,7 +1001,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
         instrument: string;
         category: string;
       }) => {
-        console.log("🎵 Raw instrument_changed event received:", data);
+        console.log("🎵 Instrument changed event received:", data);
         callback(data);
       };
 
@@ -1003,6 +1010,46 @@ export const useRoomSocket = (instrumentManager?: any) => {
       return () => {
         console.log("🧹 Removing instrument_changed listener");
         socket.off("instrument_changed", handleInstrumentChanged);
+      };
+    },
+    [getActiveSocket],
+  );
+
+  const onStopAllNotes = useCallback(
+    (
+      callback: (data: {
+        userId: string;
+        username: string;
+        instrument: string;
+        category: string;
+      }) => void,
+    ) => {
+      const socket = getActiveSocket();
+      if (!socket) {
+        console.log("⚠️ No active socket for onStopAllNotes");
+        return () => {};
+      }
+
+      console.log(
+        "🔧 Setting up stop_all_notes listener on socket:",
+        socket.id,
+      );
+
+      const handleStopAllNotes = (data: {
+        userId: string;
+        username: string;
+        instrument: string;
+        category: string;
+      }) => {
+        console.log("🛑 Stop all notes event received:", data);
+        callback(data);
+      };
+
+      socket.on("stop_all_notes", handleStopAllNotes);
+
+      return () => {
+        console.log("🧹 Removing stop_all_notes listener");
+        socket.off("stop_all_notes", handleStopAllNotes);
       };
     },
     [getActiveSocket],
@@ -1078,6 +1125,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
     updateSynthParams,
     requestSynthParams,
     sendChatMessage,
+    stopAllNotes,
 
     // Event handlers
     onNoteReceived,
@@ -1085,6 +1133,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
     onRoomClosed,
     onUserLeft,
     onInstrumentChanged,
+    onStopAllNotes,
     onSynthParamsChanged,
     onRequestSynthParamsResponse,
     onGuestCancelled,

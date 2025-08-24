@@ -96,6 +96,7 @@ export const Footer: React.FC = () => {
                   <li>• Smplr (Sample player)</li>
                   <li>• Web Audio API</li>
                   <li>• MIDI support</li>
+                  <li>• WebRTC (Voice communication)</li>
                 </ul>
               </div>
               <div>
@@ -113,9 +114,10 @@ export const Footer: React.FC = () => {
                 </h5>
                 <ul className="space-y-1 text-sm text-base-content/70">
                   <li>• PWA support</li>
-                  <li>• WebRTC voice chat</li>
                   <li>• Real-time collaboration</li>
                   <li>• Responsive design</li>
+                  <li>• Network diagnostics</li>
+                  <li>• Performance monitoring</li>
                 </ul>
               </div>
             </div>
@@ -132,23 +134,31 @@ export const Footer: React.FC = () => {
               <li>
                 • Synchronized metronome with tap tempo and personal controls
               </li>
-              <li>• Voice input and chat capabilities</li>
-              <li>• MIDI controller support</li>
+              <li>• Step sequencer for pattern-based music creation</li>
+              <li>• WebRTC voice chat with connection health monitoring</li>
+              <li>• MIDI controller support and device management</li>
               <li>• Preset management for instruments</li>
-              <li>• Room-based collaboration system</li>
+              <li>• Room-based collaboration with role management</li>
+              <li>• Chat system for band communication</li>
+              <li>• Scale and chord selection with music theory helpers</li>
+              <li>• Network diagnostics and performance monitoring</li>
+              <li>• PWA support with offline capabilities</li>
             </ul>
           </div>
 
-          <div>
+                      <div>
             <h4 className="font-semibold text-lg mb-2">Coming Soon</h4>
             <div className="p-3 bg-primary/10 rounded-lg border border-primary/20">
               <p className="text-sm text-primary leading-relaxed">
                 🚧 <span className="font-bold">Next on the roadmap:</span>
               </p>
               <ul className="mt-2 space-y-1 text-xs text-primary/80">
-                <li>• Step sequencer for pattern-based music creation</li>
                 <li>• Audio effects (reverb, delay, distortion, etc.)</li>
                 <li>• Mixer controls in the user list for individual volume management</li>
+                <li>• Advanced audio recording and export capabilities</li>
+                <li>• More advanced synthesizers (FM, wavetable, granular synthesis)</li>
+                <li>• Advanced modulation and LFO controls</li>
+                <li>• Custom wavetable editor and import</li>
               </ul>
             </div>
           </div>

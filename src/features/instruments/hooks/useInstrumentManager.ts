@@ -57,6 +57,7 @@ export interface UseInstrumentManagerReturn {
     isKeyHeld?: boolean,
   ) => Promise<void>;
   stopLocalNotes: (notes: string[]) => Promise<void>;
+  stopAllLocalNotes: () => Promise<void>;
   setLocalSustain: (sustain: boolean) => void;
 
   playRemoteNotes: (
@@ -97,6 +98,7 @@ export interface UseInstrumentManagerReturn {
 
   // Utility methods
   isReady: () => boolean;
+  emergencyCleanup: () => void;
   cleanup: () => void;
   preloadInstruments: (
     instruments: Array<{
@@ -395,6 +397,14 @@ export const useInstrumentManager = (): UseInstrumentManagerReturn => {
     await localEngine.current.stopNotes(notes);
   }, []);
 
+  const stopAllLocalNotes = useCallback(async () => {
+    if (!localEngine.current) {
+      return;
+    }
+
+    await localEngine.current.stopAllNotes();
+  }, []);
+
   const setLocalSustain = useCallback((sustain: boolean) => {
     if (!localEngine.current) {
       return;
@@ -650,6 +660,7 @@ export const useInstrumentManager = (): UseInstrumentManagerReturn => {
     // Playback methods
     playLocalNotes,
     stopLocalNotes,
+    stopAllLocalNotes,
     setLocalSustain,
     playRemoteNotes,
     stopRemoteNotes,
@@ -665,6 +676,17 @@ export const useInstrumentManager = (): UseInstrumentManagerReturn => {
 
     // Utility methods
     isReady,
+    emergencyCleanup: useCallback(() => {
+      console.warn("🆘 Emergency cleanup triggered for all instruments");
+      // Clean up local engine
+      if (localEngine.current) {
+        localEngine.current.emergencyCleanup();
+      }
+      // Clean up all remote engines
+      remoteEngines.current.forEach((engine) => {
+        engine.emergencyCleanup();
+      });
+    }, []),
     cleanup,
     preloadInstruments,
   };

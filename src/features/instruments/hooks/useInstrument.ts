@@ -464,6 +464,12 @@ export const useInstrument = (
       setAudioContextError(null);
 
       try {
+        // Stop all currently playing notes before switching instruments
+        if (instrumentManager.isReady()) {
+          console.log("🛑 Stopping all notes before instrument switch");
+          await instrumentManager.stopAllLocalNotes();
+        }
+
         if (!instrumentManager.isReady()) {
           await instrumentManager.initializeLocalEngine({
             userId: currentUserId.current,
