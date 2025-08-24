@@ -1,6 +1,5 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 import React, { memo, useCallback, useMemo } from "react";
-import { FixedSizeList as List } from "react-window";
 import type {
   SequencerRow,
   DrumRow,
@@ -20,6 +19,7 @@ interface StepGridProps {
   editMode: EditMode;
   onStepToggle: (beat: number, note: string) => void;
   onBeatSelect: (beat: number) => void;
+  onCurrentBeatChange: (beat: number) => void;
   hasStepAt: (beat: number, note: string) => boolean;
   getStepData: (beat: number, note: string) => SequencerStep | null;
   onPlayNotes: (notes: string[], velocity: number, isKeyHeld: boolean) => void;
@@ -432,52 +432,40 @@ const RowLabel = memo(
 
 RowLabel.displayName = "RowLabel";
 
-// Virtual row component for react-window
-interface VirtualRowProps {
-  index: number;
-  style: React.CSSProperties;
-  data: {
-    rows: Array<{ row: SequencerRow; rowIndex: number; key: string }>;
-    gridStyles: any;
-    beatNumbers: number[];
-    sequenceLength: number;
-    currentBeat: number;
-    isRecording: boolean;
-    editMode: EditMode;
-    stepDataLookup: (beat: number, note: string) => SequencerStep | null;
-    hasStepAt: (beat: number, note: string) => boolean;
-    onStepToggle: (beat: number, note: string) => void;
-    onBeatSelect: (beat: number) => void;
-    onUpdateStep: (beat: number, note: string, updates: Partial<SequencerStep>) => void;
-    onPlayNotes: (notes: string[], velocity: number, isKeyHeld: boolean) => void;
-    onStopNotes: (notes: string[]) => void;
-  };
-}
-
-const VirtualRow = memo(({ index, style, data }: VirtualRowProps) => {
-  const { 
-    rows, 
-    gridStyles, 
-    beatNumbers, 
-    stepDataLookup, 
-    hasStepAt, 
-    onStepToggle, 
-    onBeatSelect, 
-    onUpdateStep, 
-    onPlayNotes, 
-    onStopNotes,
-    isRecording,
-    editMode
-  } = data;
-  
-  const rowData = rows[index];
-  if (!rowData) return null;
-  
-  const { row } = rowData;
+// Single row component
+const SequencerRow = memo(({ 
+  row, 
+  rowIndex,
+  gridStyles,
+  beatNumbers,
+  stepDataLookup,
+  hasStepAt,
+  onStepToggle,
+  onBeatSelect,
+  onUpdateStep,
+  onPlayNotes,
+  onStopNotes,
+  isRecording,
+  editMode
+}: {
+  row: SequencerRow;
+  rowIndex: number;
+  gridStyles: any;
+  beatNumbers: number[];
+  stepDataLookup: (beat: number, note: string) => SequencerStep | null;
+  hasStepAt: (beat: number, note: string) => boolean;
+  onStepToggle: (beat: number, note: string) => void;
+  onBeatSelect: (beat: number) => void;
+  onUpdateStep: (beat: number, note: string, updates: Partial<SequencerStep>) => void;
+  onPlayNotes: (notes: string[], velocity: number, isKeyHeld: boolean) => void;
+  onStopNotes: (notes: string[]) => void;
+  isRecording: boolean;
+  editMode: EditMode;
+}) => {
   const note = 'sampleName' in row ? row.sampleName : row.note;
-
+  
   return (
-    <div style={style} className="flex items-center">
+    <div key={`${note}-${rowIndex}`} className="flex items-center">
       <RowLabel 
         row={row} 
         labelWidth={gridStyles.labelWidth}
@@ -513,7 +501,7 @@ const VirtualRow = memo(({ index, style, data }: VirtualRowProps) => {
   );
 });
 
-VirtualRow.displayName = "VirtualRow";
+SequencerRow.displayName = "SequencerRow";
 
 export const StepGrid = memo(
   ({
@@ -524,6 +512,7 @@ export const StepGrid = memo(
     editMode,
     onStepToggle,
     onBeatSelect,
+    onCurrentBeatChange,
     hasStepAt,
     getStepData,
     onPlayNotes,
@@ -561,99 +550,10 @@ export const StepGrid = memo(
       }));
     }, [rows]);
 
-    // Create stable step data lookup function (FIXED: no more Map recreation)
+    // Create stable step data lookup function
     const stepDataLookup = useMemo(() => {
       return createStepDataLookup(hasStepAt, getStepData);
     }, [hasStepAt, getStepData]);
-
-    // Use virtualization for large grids (>8 rows)
-    const shouldUseVirtualization = memoizedRows.length > 8;
-    const rowHeight = SEQUENCER_CONSTANTS.GRID.CELL_SIZE + 4; // cell size + margin
-    const maxHeight = shouldUseVirtualization ? 300 : undefined; // 300px max height for virtual list
-    const listWidth = shouldUseVirtualization ? 
-      SEQUENCER_CONSTANTS.GRID.LABEL_WIDTH + (sequenceLength * (SEQUENCER_CONSTANTS.GRID.CELL_SIZE + SEQUENCER_CONSTANTS.GRID.CELL_GAP)) + 100 : 
-      undefined; // Add 100px buffer for scrollbar
-
-    // Virtual list data
-    const virtualListData = useMemo(() => ({
-      rows: memoizedRows,
-      gridStyles,
-      beatNumbers,
-      sequenceLength,
-      currentBeat,
-      isRecording,
-      editMode,
-      stepDataLookup,
-      hasStepAt,
-      onStepToggle: handleStepToggle,
-      onBeatSelect: handleBeatSelect,
-      onUpdateStep,
-      onPlayNotes,
-      onStopNotes,
-    }), [
-      memoizedRows,
-      gridStyles,
-      beatNumbers,
-      sequenceLength,
-      currentBeat,
-      isRecording,
-      editMode,
-      stepDataLookup,
-      hasStepAt,
-      handleStepToggle,
-      handleBeatSelect,
-      onUpdateStep,
-      onPlayNotes,
-      onStopNotes,
-    ]);
-
-    // Non-virtualized row component for small grids
-    const RegularRow = memo(({ 
-      rowData, 
-    }: {
-      rowData: { row: any; rowIndex: number; key: string };
-    }) => {
-      const { row } = rowData;
-      const note = 'sampleName' in row ? row.sampleName : row.note;
-      
-      return (
-        <div key={rowData.key} className="flex items-center">
-          <RowLabel 
-            row={row} 
-            labelWidth={gridStyles.labelWidth}
-            onPlayNotes={onPlayNotes} 
-            onStopNotes={onStopNotes} 
-          />
-          <div 
-            className="flex overflow-x-auto scrollbar-thin scrollbar-thumb-base-300 scrollbar-track-base-100"
-            style={{ gap: gridStyles.cellGap }}
-          >
-            {beatNumbers.map((beatIndex) => {
-              const stepData = stepDataLookup(beatIndex, note);
-              
-              return (
-                <StepCell
-                  key={`${note}-${beatIndex}`}
-                  beat={beatIndex}
-                  note={note}
-                  isActive={hasStepAt(beatIndex, note)}
-                  isRecording={isRecording}
-                  editMode={editMode}
-                  row={row}
-                  stepData={stepData}
-                  cellSize={gridStyles.cellSize}
-                  onToggle={() => handleStepToggle(beatIndex, note)}
-                  onBeatSelect={() => handleBeatSelect(beatIndex)}
-                  onUpdateStep={onUpdateStep}
-                />
-              );
-            })}
-          </div>
-        </div>
-      );
-    });
-
-    RegularRow.displayName = "RegularRow";
 
     if (rows.length === 0) {
       return (
@@ -696,7 +596,10 @@ export const StepGrid = memo(
             {beatNumbers.map((beat) => (
               <button
                 key={beat}
-                onClick={() => handleBeatSelect(beat)}
+                onClick={() => {
+                  handleBeatSelect(beat);
+                  onCurrentBeatChange(beat);
+                }}
                 className="flex items-center justify-center text-xs font-bold border-b-2 transition-colors cursor-pointer hover:bg-base-200"
                 style={{
                   minWidth: gridStyles.cellSize,
@@ -720,28 +623,27 @@ export const StepGrid = memo(
           </div>
         </div>
 
-        {/* Step grid rows - virtualized for large grids */}
-        {shouldUseVirtualization ? (
-          <List
-            height={maxHeight!}
-            width={listWidth!}
-            itemCount={memoizedRows.length}
-            itemSize={rowHeight}
-            itemData={virtualListData}
-            className="scrollbar-thin scrollbar-thumb-base-300 scrollbar-track-base-100"
-          >
-            {VirtualRow}
-          </List>
-        ) : (
-          <div className="space-y-1 max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-base-300 scrollbar-track-base-100">
-            {memoizedRows.map((rowData) => (
-              <RegularRow
-                key={rowData.key}
-                rowData={rowData}
-              />
-            ))}
-          </div>
-        )}
+        {/* Step grid rows - using ordinary React DOM */}
+        <div className="space-y-1 max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-base-300 scrollbar-track-base-100">
+          {memoizedRows.map((rowData) => (
+            <SequencerRow
+              key={rowData.key}
+              row={rowData.row}
+              rowIndex={rowData.rowIndex}
+              gridStyles={gridStyles}
+              beatNumbers={beatNumbers}
+              stepDataLookup={stepDataLookup}
+              hasStepAt={hasStepAt}
+              onStepToggle={handleStepToggle}
+              onBeatSelect={handleBeatSelect}
+              onUpdateStep={onUpdateStep}
+              onPlayNotes={onPlayNotes}
+              onStopNotes={onStopNotes}
+              isRecording={isRecording}
+              editMode={editMode}
+            />
+          ))}
+        </div>
 
         {/* Mobile scroll hint */}
         <div className="md:hidden mt-2 text-xs text-base-content/50 text-center">

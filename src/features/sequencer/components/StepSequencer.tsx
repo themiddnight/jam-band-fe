@@ -456,6 +456,7 @@ export const StepSequencer = memo(
               editMode={editMode}
               onStepToggle={sequencer.handleStepToggle}
               onBeatSelect={onSelectedBeatChange}
+              onCurrentBeatChange={sequencer.setCurrentBeat}
               hasStepAt={sequencer.hasStepAt}
               getStepData={getStepDataMemo}
               onUpdateStep={onUpdateStepMemo}

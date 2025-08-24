@@ -20,7 +20,8 @@ import {
 import { MetronomeControls } from "@/features/metronome";
 import { StepSequencer } from "@/features/sequencer";
 import { useSequencer } from "@/features/sequencer/hooks/useSequencer";
-import { useSequencerUI } from "@/features/sequencer/hooks/useSequencerUI";
+import { useSequencerStore } from "@/features/sequencer/stores/sequencerStore";
+
 import { ChatBox, ApprovalWaiting } from "@/features/rooms";
 import { RoomMembers } from "@/features/rooms";
 import { useRoom } from "@/features/rooms";
@@ -234,11 +235,8 @@ const Room = memo(() => {
     onStopNotes: handleStopNotesWrapper,
   });
 
-  // Sequencer UI state hook (resets on every room entry)
-  const sequencerUI = useSequencerUI({
-    sequenceLength: sequencer.settings?.length || 16,
-    defaultEditMode: "note",
-  });
+  // Get sequencer UI state from store
+  const { settings, setSelectedBeat, setEditMode, resetUI } = useSequencerStore();
 
   // Enhanced note playing wrapper that also handles recording
   const handlePlayNotesWithRecording = useCallback(
@@ -324,9 +322,9 @@ const Room = memo(() => {
   // Reset sequencer UI state when entering a new room
   useEffect(() => {
     if (currentRoom) {
-      sequencerUI.resetUI();
+      resetUI();
     }
-  }, [currentRoom?.id, sequencerUI]);
+  }, [currentRoom?.id, resetUI]);
 
   // Initialize scale slots on first load
   useEffect(() => {
@@ -779,9 +777,9 @@ const Room = memo(() => {
                     ]}
                     onPlayNotes={handlePlayNotesWrapper}
                     onStopNotes={handleStopNotesWrapper}
-                    editMode={sequencerUI.editMode}
-                    onSelectedBeatChange={sequencerUI.setSelectedBeat}
-                    onEditModeChange={sequencerUI.setEditMode}
+                                editMode={settings.editMode}
+            onSelectedBeatChange={setSelectedBeat}
+            onEditModeChange={setEditMode}
                   />
                 </div>
 

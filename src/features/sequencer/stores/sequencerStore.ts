@@ -12,6 +12,7 @@ import type {
   BankName,
   DisplayMode,
   BankMode,
+  EditMode,
 } from "../types";
 
 // Shallow comparison utilities for performance optimization
@@ -90,10 +91,10 @@ interface SequencerStore extends SequencerState {
   setLength: (length: number) => void;
   setBankMode: (mode: BankMode) => void;
   setDisplayMode: (mode: DisplayMode) => void;
-  // Note: setEditMode is now managed by React state
+  setEditMode: (mode: EditMode) => void;
 
   // UI state
-  // Note: setSelectedBeat is now managed by React state
+  setSelectedBeat: (beat: number) => void;
   setWaitingForMetronome: (waiting: boolean) => void;
   setWaitingBankChange: (bankId: string | null) => void;
 
@@ -114,6 +115,7 @@ interface SequencerStore extends SequencerState {
 
   // Reset
   reset: () => void;
+  resetUI: () => void;
 }
 
 // Helper function to create empty bank
@@ -149,9 +151,9 @@ const initialState: SequencerState = {
     length: SEQUENCER_CONSTANTS.DEFAULT_LENGTH,
     bankMode: "single",
     displayMode: "scale_notes",
-    // Note: editMode is now managed by React state
+    editMode: "note",
   },
-  // Note: selectedBeat is now managed by React state
+  selectedBeat: 0,
   presets: [],
   clipboard: null,
 };
@@ -572,6 +574,16 @@ export const useSequencerStore = create<SequencerStore>()(
           }));
         },
 
+        setEditMode: (editMode) => {
+          set((state) => ({
+            settings: { ...state.settings, editMode },
+          }));
+        },
+
+        setSelectedBeat: (beat) => {
+          set({ selectedBeat: Math.max(0, Math.min(get().settings.length - 1, beat)) });
+        },
+
 
 
 
@@ -610,7 +622,7 @@ export const useSequencerStore = create<SequencerStore>()(
             banks: preset.banks,
             settings: preset.settings,
             currentBeat: 0,
-            // Note: selectedBeat is now managed by React state
+            selectedBeat: 0,
           });
         },
 
@@ -700,6 +712,11 @@ export const useSequencerStore = create<SequencerStore>()(
         reset: () => {
           set(initialState);
         },
+
+        // Reset UI state (useful when entering new room)
+        resetUI: () => {
+          set({ selectedBeat: 0, settings: { ...get().settings, editMode: "note" } });
+        },
       }),
       {
         name: "sequencer-store",
@@ -710,7 +727,7 @@ export const useSequencerStore = create<SequencerStore>()(
           settings: state.settings,
           presets: state.presets,
           clipboard: state.clipboard,
-          // Note: currentBank, selectedBeat, and editMode are now managed by React state
+          selectedBeat: state.selectedBeat,
         }),
       }
     )

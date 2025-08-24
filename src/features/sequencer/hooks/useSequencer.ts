@@ -82,12 +82,22 @@ export const useSequencer = ({
               hasStartedPlayingRef.current = true;
             }
             
+            // Check for soft-stop at the last beat of the sequence
+            const isLastBeat = beat === (sequencerStoreRef.current.settings.length - 1);
+            if (isLastBeat && sequencerStoreRef.current.softStopRequested && hasStartedPlayingRef.current) {
+              console.log(`🎵 Soft-stop requested: at last beat ${beat} - will stop after notes finish playing according to their gate values`);
+              // Continue processing to let onPlayStep handle the final beat and set up completion logic
+              // Don't return early - we need the final beat to be processed
+            }
+            
             // Handle bank switching when looping back to beat 0
             if (beat === 0 && hasStartedPlayingRef.current) {
               // Check soft-stop request FIRST to prevent bank switching after soft-stop
               if (sequencerStoreRef.current.softStopRequested) {
-                console.log(`🎵 Soft-stop requested: stopping at end of sequence (beat 0)`);
-                sequencerStoreRef.current.hardStop(); // Use hardStop to clean up state
+                console.log(`🎵 Soft-stop requested: stopping at beat 0 - soft-stop should have been handled at the last beat`);
+                // This should not happen anymore since we handle soft-stop at the last beat
+                // But if we reach here, it means the completion logic didn't work, so stop immediately
+                sequencerStoreRef.current.stop(); // Clean stop without cutting notes
                 if (sequencerServiceRef.current) {
                   sequencerServiceRef.current.stopPlayback();
                 }
@@ -100,6 +110,14 @@ export const useSequencer = ({
               if (sequencerStoreRef.current.waitingBankChange) {
                 const waitingBank = sequencerStoreRef.current.waitingBankChange;
                 console.log(`🎵 Executing queued bank change to ${waitingBank} at beat 0`);
+                
+                // Bank isolation: Stop all playing notes when changing banks
+                const playingNotes = Array.from(currentlyPlayingNotesRef.current);
+                if (playingNotes.length > 0) {
+                  console.log(`🎵 Bank change: stopping ${playingNotes.length} playing notes for clean bank transition:`, playingNotes);
+                  onStopNotesRef.current(playingNotes);
+                  currentlyPlayingNotesRef.current.clear();
+                }
                 
                 // Clear the waiting state and switch to the queued bank
                 sequencerStoreRef.current.setWaitingBankChange(null);
@@ -116,6 +134,15 @@ export const useSequencer = ({
                 const nextBank = sequencerStoreRef.current.getNextEnabledBank();
                 if (nextBank && nextBank !== sequencerStoreRef.current.currentBank) {
                   console.log(`🎵 Continuous mode: switching from ${sequencerStoreRef.current.currentBank} to ${nextBank} at beat 0`);
+                  
+                  // Bank isolation: Stop all playing notes when changing banks
+                  const playingNotes = Array.from(currentlyPlayingNotesRef.current);
+                  if (playingNotes.length > 0) {
+                    console.log(`🎵 Continuous mode bank change: stopping ${playingNotes.length} playing notes for clean bank transition:`, playingNotes);
+                    onStopNotesRef.current(playingNotes);
+                    currentlyPlayingNotesRef.current.clear();
+                  }
+                  
                   sequencerStoreRef.current.switchBank(nextBank);
                   
                   // Update the sequencer service with the new bank's steps
@@ -132,13 +159,18 @@ export const useSequencer = ({
           onPlayStep: (steps: SequencerStep[]) => {
             const currentBank = sequencerStoreRef.current.currentBank;
             const currentBeat = sequencerStoreRef.current.currentBeat;
+            const actualBeat = steps.length > 0 ? steps[0].beat : currentBeat; // Use the actual beat being processed
+            const isLastBeat = actualBeat === (sequencerStoreRef.current.settings.length - 1);
+            const isSoftStopRequested = sequencerStoreRef.current.softStopRequested;
             
             console.log(`🎵 onPlayStep: playing ${steps.length} steps for bank ${currentBank} at beat ${currentBeat}`, {
               steps: steps.map(s => ({ note: s.note, beat: s.beat, gate: s.gate })),
               storeBeat: sequencerStoreRef.current.currentBeat,
               storeBank: sequencerStoreRef.current.currentBank,
               timestamp: Date.now(),
-              stepsFromBeat: steps.length > 0 ? steps[0].beat : 'none'
+              stepsFromBeat: actualBeat,
+              isLastBeat,
+              isSoftStopRequested
             });
             
             // Group notes by beat to handle chords properly
@@ -159,73 +191,102 @@ export const useSequencer = ({
             
             // Process each beat's notes as a chord
             notesByBeat.forEach((beatNotes, beat) => {
-              // Extract all notes for this beat
-              const allNotes = beatNotes.map(n => n.note);
+              // Calculate average velocity for new notes
               const avgVelocity = beatNotes.reduce((sum, n) => sum + n.velocity, 0) / beatNotes.length;
-              const minGate = Math.min(...beatNotes.map(n => n.gate));
               
-              // Check for legato continuation (all notes must be continuing from previous beat)
-              const allNotesAreLegato = beatNotes.every(noteData => 
-                isPreviousBeatSameNote(noteData.step) && isPreviousStepFullGate(noteData.step)
-              );
+              // Process each note individually for legato logic
+              const legatoNotes: string[] = [];
+              const newNotes: string[] = [];
+              const newNoteStopData: Array<{note: string, gate: number, hasNext: boolean}> = [];
               
-              // Only trigger note-on if this is NOT a complete legato continuation
-              if (!allNotesAreLegato) {
-                // Find which notes are new (not legato continuations)
-                const newNotes = beatNotes
-                  .filter(noteData => !(isPreviousBeatSameNote(noteData.step) && isPreviousStepFullGate(noteData.step)))
-                  .map(noteData => noteData.note);
+              beatNotes.forEach(noteData => {
+                const isLegatoContinuation = isPreviousBeatSameNote(noteData.step) && isPreviousStepFullGate(noteData.step);
+                const hasNextSameNote = hasNextBeatSameNote(noteData.step);
                 
-                if (newNotes.length > 0) {
-                  onPlayNotesRef.current(newNotes, avgVelocity, true);
-                  // Track playing notes for hard-stop
-                  newNotes.forEach(note => currentlyPlayingNotesRef.current.add(note));
+                if (isLegatoContinuation) {
+                  legatoNotes.push(noteData.note);
+                  // Don't process stop logic for legato continuations - they're already managed by the original note
+                } else {
+                  newNotes.push(noteData.note);
+                  // Only process stop logic for newly triggered notes
+                  newNoteStopData.push({
+                    note: noteData.note,
+                    gate: noteData.gate,
+                    hasNext: hasNextSameNote
+                  });
                 }
+              });
+              
+              // Only trigger note-on for new notes (not legato continuations)
+              if (newNotes.length > 0) {
+                onPlayNotesRef.current(newNotes, avgVelocity, true);
+                // Track playing notes for hard-stop
+                newNotes.forEach(note => currentlyPlayingNotesRef.current.add(note));
               }
               
-              // Handle note stopping for this chord
-              const hasNextSameNotes = beatNotes.map(noteData => hasNextBeatSameNote(noteData.step));
-              const isFullGateChord = minGate >= 1.0;
-              const shouldDoLegato = isFullGateChord && hasNextSameNotes.every(hasNext => hasNext);
+              // Handle note stopping only for newly triggered notes
+              let maxGateTimeForSoftStop = 0; // Track longest gate time for soft-stop completion
               
-              if (!shouldDoLegato) {
-                // Stop notes after gate duration - handle as a group to prevent race conditions
-                const timing = SequencerService.calculateStepTiming(currentBPMRef.current, sequencerStoreRef.current.settings.speed);
-                const gateTime = timing.stepInterval * minGate * 1000; // Use minimum gate time for the chord
+              newNoteStopData.forEach(noteData => {
+                const isFullGate = noteData.gate >= 1.0;
+                const shouldDoLegato = isFullGate && noteData.hasNext;
                 
-                // Add minimum and maximum gate times to prevent issues
-                const minGateTime = 50; // Minimum 50ms to ensure notes are heard
-                const maxGateTime = 2000; // Maximum 2s to prevent stuck notes
-                const safeGateTime = Math.max(minGateTime, Math.min(maxGateTime, gateTime));
-                
-                setTimeout(() => {
-                  // Determine which notes should stop (not continuing to next beat)
-                  const notesToStop = beatNotes
-                    .filter((_noteData, index) => !hasNextSameNotes[index] || minGate < 1.0)
-                    .map(noteData => noteData.note);
+                if (!shouldDoLegato) {
+                  // Stop this note after its gate duration
+                  const timing = SequencerService.calculateStepTiming(currentBPMRef.current, sequencerStoreRef.current.settings.speed);
+                  const gateTime = timing.stepInterval * noteData.gate * 1000;
                   
-                  if (notesToStop.length > 0) {
-                    console.log(`🎵 Stopping chord notes after gate: ${notesToStop.join(', ')}`);
-                    onStopNotesRef.current(notesToStop);
-                    // Remove from tracking when notes stop
-                    notesToStop.forEach(note => currentlyPlayingNotesRef.current.delete(note));
+                  // Add minimum and maximum gate times to prevent issues
+                  const minGateTime = 50; // Minimum 50ms to ensure notes are heard
+                  const maxGateTime = 2000; // Maximum 2s to prevent stuck notes
+                  const safeGateTime = Math.max(minGateTime, Math.min(maxGateTime, gateTime));
+                  
+                  // Track the longest gate time for soft-stop completion
+                  if (isLastBeat && isSoftStopRequested) {
+                    maxGateTimeForSoftStop = Math.max(maxGateTimeForSoftStop, safeGateTime);
                   }
-                }, safeGateTime);
-                
-                // Emergency cleanup: force stop all notes from this beat if still playing
-                const emergencyTimeout = safeGateTime + 1000; // 1s extra buffer for chords
-                setTimeout(() => {
-                  allNotes.forEach(note => {
-                    if (currentlyPlayingNotesRef.current.has(note)) {
-                      console.warn(`🎵 Emergency cleanup: force stopping stuck chord note ${note} from beat ${beat}`);
-                      onStopNotesRef.current([note]);
-                      currentlyPlayingNotesRef.current.delete(note);
+                  
+                  setTimeout(() => {
+                    console.log(`🎵 Stopping note after gate: ${noteData.note} (gate: ${noteData.gate})`);
+                    onStopNotesRef.current([noteData.note]);
+                    // Remove from tracking when notes stop
+                    currentlyPlayingNotesRef.current.delete(noteData.note);
+                  }, safeGateTime);
+                  
+                  // Emergency cleanup: force stop this note if still playing
+                  const emergencyTimeout = safeGateTime + 1000; // 1s extra buffer
+                  setTimeout(() => {
+                    if (currentlyPlayingNotesRef.current.has(noteData.note)) {
+                      console.warn(`🎵 Emergency cleanup: force stopping stuck note ${noteData.note} from beat ${beat}`);
+                      onStopNotesRef.current([noteData.note]);
+                      currentlyPlayingNotesRef.current.delete(noteData.note);
                     }
-                  });
-                }, emergencyTimeout);
+                  }, emergencyTimeout);
+                }
+              });
+              
+              // Handle soft-stop completion: stop sequencer after all notes from final beat finish
+              if (isLastBeat && isSoftStopRequested) {
+                // Ensure at least a minimum delay to let final beat notes start playing
+                const completionDelay = Math.max(maxGateTimeForSoftStop, 50) + 100; // Add small buffer
+                console.log(`🎵 Soft-stop: sequencer will complete in ${completionDelay}ms after final notes finish (maxGateTime: ${maxGateTimeForSoftStop})`);
                 
-                // Store timeouts for potential cleanup (we'll use a separate Map for this)
-                // TODO: Implement timeout tracking if needed for cleanup
+                setTimeout(() => {
+                  console.log(`🎵 Soft-stop complete: stopping sequencer and any remaining notes`);
+                  
+                  // Stop any notes that are still playing (including legato notes)
+                  const remainingNotes = Array.from(currentlyPlayingNotesRef.current);
+                  if (remainingNotes.length > 0) {
+                    console.log(`🎵 Soft-stop: stopping ${remainingNotes.length} remaining notes:`, remainingNotes);
+                    onStopNotesRef.current(remainingNotes);
+                    currentlyPlayingNotesRef.current.clear();
+                  }
+                  
+                  sequencerStoreRef.current.stop(); // Clean stop
+                  if (sequencerServiceRef.current) {
+                    sequencerServiceRef.current.stopPlayback();
+                  }
+                }, completionDelay);
               }
             });
             
@@ -237,8 +298,13 @@ export const useSequencer = ({
               const currentBank = sequencerStoreRef.current.banks[currentBankId];
               if (!currentBank) return false;
               
-              const sequenceLength = sequencerStoreRef.current.settings.length;
-              const prevBeat = currentStep.beat === 0 ? sequenceLength - 1 : currentStep.beat - 1;
+              // Bank isolation: No legato across bank boundaries (beat 0 = start of bank)
+              if (currentStep.beat === 0) {
+                console.log(`🎵 Legato check - Beat 0: no legato across bank boundaries`);
+                return false;
+              }
+              
+              const prevBeat = currentStep.beat - 1; // Only check previous beat within the same bank cycle
               
               const prevStepWithSameNote = currentBank.steps.find(step => 
                 step.beat === prevBeat && 
@@ -260,8 +326,12 @@ export const useSequencer = ({
               const currentBank = sequencerStoreRef.current.banks[currentBankId];
               if (!currentBank) return false;
               
-              const sequenceLength = sequencerStoreRef.current.settings.length;
-              const prevBeat = currentStep.beat === 0 ? sequenceLength - 1 : currentStep.beat - 1;
+              // Bank isolation: No legato across bank boundaries (beat 0 = start of bank)
+              if (currentStep.beat === 0) {
+                return false;
+              }
+              
+              const prevBeat = currentStep.beat - 1; // Only check previous beat within the same bank cycle
               
               const prevStep = currentBank.steps.find(step => 
                 step.beat === prevBeat && 
@@ -674,7 +744,7 @@ export const useSequencer = ({
     banks: sequencerStore.banks,
     currentBank: sequencerStore.currentBank,
     currentBeat: sequencerStore.currentBeat,
-    // Note: selectedBeat and editMode are now managed by React state via useSequencerUI
+    // Note: selectedBeat and editMode are now managed by the store
     isPlaying: sequencerStore.isPlaying,
     isPaused: sequencerStore.isPaused,
     isRecording: sequencerStore.isRecording,
@@ -682,7 +752,7 @@ export const useSequencer = ({
     waitingForMetronome: sequencerStore.waitingForMetronome,
     waitingBankChange: sequencerStore.waitingBankChange,
     getTotalStepsCount: sequencerStore.getTotalStepsCount,
-    // Note: setSelectedBeat is now managed by useSequencerUI
+    // Note: setSelectedBeat is now managed by the store
     setCurrentBeat: sequencerStore.setCurrentBeat,
     clearAllBanks: sequencerStore.clearAllBanks,
 
@@ -715,7 +785,7 @@ export const useSequencer = ({
     handleLengthChange,
     handleBankModeChange,
     handleDisplayModeChange,
-    // Note: handleEditModeChange is now managed by useSequencerUI
+    // Note: handleEditModeChange is now managed by the store
 
     // Recording
     handleToggleRecording,
