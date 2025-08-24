@@ -195,11 +195,11 @@ const ChatBox: React.FC<ChatBoxProps> = ({ currentUserId, onSendMessage }) => {
         {/* Messages Container */}
         <div
           ref={messagesContainerRef}
-          className="flex-1 min-h-64 max-h-64 overflow-y-auto border border-base-300 rounded-lg p-2 bg-base-50"
+          className="flex-1 min-h-96 max-h-96 overflow-y-auto border border-base-300 rounded-lg p-2 bg-base-50"
           onScroll={handleScroll}
         >
           {messages.length === 0 ? (
-            <div className="text-center text-base-content/50 py-16">
+            <div className="text-center text-base-content/50 mt-36">
               <p>No messages yet</p>
               <p className="text-sm">Start the conversation!</p>
             </div>

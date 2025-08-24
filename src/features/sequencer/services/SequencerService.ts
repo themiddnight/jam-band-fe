@@ -1,6 +1,7 @@
 import * as Tone from "tone";
 import type { SequencerStep, SequencerSpeed } from "../types";
 import { SEQUENCER_CONSTANTS, SEQUENCER_SPEEDS } from "@/shared/constants";
+import { getSequencerWorker } from './SequencerWorkerService';
 
 export interface SequencerServiceEvents {
   onBeatChange: (beat: number) => void;
@@ -25,6 +26,9 @@ export class SequencerService {
   private useManualScheduling: boolean = true;
   private tickCounter: number = 0; // For slower speeds that need multiple ticks per step
   private previousSpeed: SequencerSpeed | null = null; // Track speed changes
+  private animationFrameId: number | null = null; // For RAF-based scheduling
+  private worker = getSequencerWorker(); // Web Worker for heavy calculations
+  private beatStepsCache: Map<number, SequencerStep[]> = new Map(); // Cached beat data for fast access
 
   constructor(events: SequencerServiceEvents) {
     this.events = events;
@@ -51,9 +55,19 @@ export class SequencerService {
    */
   updateSettings(bpm: number, speed: SequencerSpeed, length: number): void {
     console.log(`🎵 SequencerService: Updating settings - BPM: ${bpm}, Speed: ${speed}, Length: ${length}`);
+    const lengthChanged = this.sequenceLength !== length;
+    
     this.currentBPM = bpm;
     this.currentSpeed = speed;
     this.sequenceLength = length;
+
+    // If sequence length changed, recompute beat data
+    if (lengthChanged) {
+      this.precomputeBeatData();
+    }
+
+    // Update worker state
+    this.syncWorkerState();
 
     if (this.sequence) {
       this.updateSequenceSettings();
@@ -73,9 +87,67 @@ export class SequencerService {
     this.stepsData = steps;
     console.log("🎵 Steps data updated, stepsData length:", this.stepsData.length);
     
+    // Precompute beat data for fast access during playback (main thread optimization)
+    this.precomputeBeatData();
+    
+    // Update worker with new steps data for off-thread processing
+    this.syncWorkerState();
+    
     if (this.sequence && this.isPlaying) {
       this.updateSequenceSteps();
     }
+  }
+
+  /**
+   * Sync current state with worker for off-thread processing
+   */
+  private async syncWorkerState(): Promise<void> {
+    try {
+      await this.worker.updateState({
+        stepsData: this.stepsData,
+        settings: {
+          speed: this.currentSpeed,
+          length: this.sequenceLength
+        }
+      });
+    } catch (error) {
+      console.warn('Failed to sync worker state:', error);
+    }
+  }
+
+  /**
+   * Get steps for beat synchronously (fallback for when async isn't possible)
+   */
+  private getStepsForBeatSync(beat: number): SequencerStep[] {
+    // Use cached data if available (much faster than filtering)
+    if (this.beatStepsCache.has(beat)) {
+      return this.beatStepsCache.get(beat)!;
+    }
+    
+    // Fallback to filtering if cache miss
+    return this.stepsData.filter(step => step.beat === beat && step.enabled);
+  }
+
+  /**
+   * Precompute steps for each beat for fast access during playback
+   * This moves the heavy computation out of the critical timing path
+   */
+  private precomputeBeatData(): void {
+    const startTime = performance.now();
+    
+    // Clear existing cache
+    this.beatStepsCache.clear();
+    
+    // Precompute for all possible beats in sequence
+    for (let beat = 0; beat < this.sequenceLength; beat++) {
+      const stepsForBeat = this.stepsData.filter(step => 
+        step.beat === beat && step.enabled
+      );
+      this.beatStepsCache.set(beat, stepsForBeat);
+    }
+    
+    const endTime = performance.now();
+    console.log(`🎵 Precomputed beat data for ${this.sequenceLength} beats in ${(endTime - startTime).toFixed(2)}ms`);
   }
 
   /**
@@ -156,7 +228,7 @@ export class SequencerService {
                 if (!this.isPlaying) return;
                 
                 // Play steps for this beat after bank switch
-                const stepsForBeat = this.stepsData.filter(step => step.beat === beat && step.enabled);
+                const stepsForBeat = this.getStepsForBeatSync(beat);
                 console.log(`🎵 Found ${stepsForBeat.length} steps for beat ${beat} (after bank switch)`, {
                   steps: stepsForBeat.map(s => ({ note: s.note, beat: s.beat, gate: s.gate }))
                 });
@@ -169,7 +241,7 @@ export class SequencerService {
               queueMicrotask(playStepsAfterBankSwitch);
             } else {
               // For non-zero beats, play steps first then notify beat change (normal order)
-              const stepsForBeat = this.stepsData.filter(step => step.beat === beat && step.enabled);
+              const stepsForBeat = this.getStepsForBeatSync(beat);
               if (stepsForBeat.length > 0) {
                 this.events.onPlayStep(stepsForBeat);
               }
@@ -214,6 +286,12 @@ export class SequencerService {
       this.sequence.stop();
       this.sequence.dispose();
       this.sequence = null;
+    }
+    
+    // Cancel any pending animation frames
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
     }
     
     this.isPlaying = false;
@@ -294,50 +372,63 @@ export class SequencerService {
         
         console.log(`🎵 Fast speed path: playing ${beatsThisTick} beats sequentially this tick`);
         
+        // Use RAF-based scheduling for better timing precision
+        const startTime = performance.now();
+        
         for (let i = 0; i < beatsThisTick; i++) {
           const beat = (this.currentBeatIndex + i) % this.sequenceLength;
-          const delayMs = i * subInterval * 1000; // Delay for this beat within the tick
+          const targetTime = startTime + (i * subInterval * 1000); // Target time for this beat
           
-          // Schedule each beat with appropriate delay
-          setTimeout(() => {
+          // Schedule each beat with RAF for frame-synchronized timing
+          const scheduleRAF = (currentTime: number) => {
             if (!this.isPlaying) return; // Guard against stopping mid-sequence
             
-            console.log(`🎵 Fast beat ${i+1}/${beatsThisTick}: beat=${beat} (delayed ${delayMs}ms)`);
+            const timeDiff = targetTime - currentTime;
             
-            // For beat 0, notify beat change FIRST to allow bank switching before playing steps
-            if (beat === 0) {
-              console.log(`🎵 Beat 0: calling onBeatChange first`);
-              this.events.onBeatChange(beat);
-              console.log(`🎵 Beat 0: onBeatChange completed, now calling onPlayStep`);
+            if (timeDiff <= 16.67) { // Within one frame (60fps = 16.67ms)
+              console.log(`🎵 Fast beat ${i+1}/${beatsThisTick}: beat=${beat} (RAF scheduled)`);
               
-              // Use queueMicrotask to ensure state updates are processed before playing steps
-              const playStepsAfterBankSwitch = () => {
-                if (!this.isPlaying) return;
+              // For beat 0, notify beat change FIRST to allow bank switching before playing steps
+              if (beat === 0) {
+                console.log(`🎵 Beat 0: calling onBeatChange first`);
+                this.events.onBeatChange(beat);
+                console.log(`🎵 Beat 0: onBeatChange completed, now calling onPlayStep`);
                 
-                // Play steps for this beat after bank switch
-                const stepsForBeat = this.stepsData.filter(step => step.beat === beat && step.enabled);
-                console.log(`🎵 Found ${stepsForBeat.length} steps for beat ${beat} (after bank switch)`, {
-                  steps: stepsForBeat.map(s => ({ note: s.note, beat: s.beat, gate: s.gate }))
-                });
+                // Use queueMicrotask to ensure state updates are processed before playing steps
+                const playStepsAfterBankSwitch = () => {
+                  if (!this.isPlaying) return;
+                  
+                  // Play steps for this beat after bank switch
+                  const stepsForBeat = this.getStepsForBeatSync(beat);
+                  console.log(`🎵 Found ${stepsForBeat.length} steps for beat ${beat} (after bank switch)`, {
+                    steps: stepsForBeat.map(s => ({ note: s.note, beat: s.beat, gate: s.gate }))
+                  });
+                  if (stepsForBeat.length > 0) {
+                    this.events.onPlayStep(stepsForBeat);
+                  }
+                };
+                
+                // Use queueMicrotask to ensure bank switching state updates are processed
+                queueMicrotask(playStepsAfterBankSwitch);
+              } else {
+                // For non-zero beats, play steps first then notify beat change (normal order)
+                const stepsForBeat = this.getStepsForBeatSync(beat);
+                console.log(`🎵 Found ${stepsForBeat.length} steps for beat ${beat}`);
                 if (stepsForBeat.length > 0) {
                   this.events.onPlayStep(stepsForBeat);
                 }
-              };
-              
-              // Use queueMicrotask to ensure bank switching state updates are processed
-              queueMicrotask(playStepsAfterBankSwitch);
-            } else {
-              // For non-zero beats, play steps first then notify beat change (normal order)
-              const stepsForBeat = this.stepsData.filter(step => step.beat === beat && step.enabled);
-              console.log(`🎵 Found ${stepsForBeat.length} steps for beat ${beat}`);
-              if (stepsForBeat.length > 0) {
-                this.events.onPlayStep(stepsForBeat);
+                
+                // Notify UI of beat change
+                this.events.onBeatChange(beat);
               }
-              
-              // Notify UI of beat change
-              this.events.onBeatChange(beat);
+            } else {
+              // Still too early, schedule another RAF
+              this.animationFrameId = requestAnimationFrame(scheduleRAF);
             }
-          }, delayMs);
+          };
+          
+          // Start RAF scheduling for this beat
+          this.animationFrameId = requestAnimationFrame(scheduleRAF);
         }
         
         // Advance beat index by the number of beats we played
@@ -364,7 +455,7 @@ export class SequencerService {
               if (!this.isPlaying) return;
               
               // Play steps for this beat after bank switch
-              const stepsForBeat = this.stepsData.filter(step => step.beat === beat && step.enabled);
+              const stepsForBeat = this.getStepsForBeatSync(beat);
               console.log(`🎵 Found ${stepsForBeat.length} steps for beat ${beat} (after bank switch)`, {
                 steps: stepsForBeat.map(s => ({ note: s.note, beat: s.beat, gate: s.gate }))
               });
@@ -377,7 +468,7 @@ export class SequencerService {
             queueMicrotask(playStepsAfterBankSwitch);
           } else {
             // For non-zero beats, play steps first then notify beat change (normal order)
-            const stepsForBeat = this.stepsData.filter(step => step.beat === beat && step.enabled);
+            const stepsForBeat = this.getStepsForBeatSync(beat);
             console.log(`🎵 Found ${stepsForBeat.length} steps for beat ${beat}`);
             if (stepsForBeat.length > 0) {
               this.events.onPlayStep(stepsForBeat);

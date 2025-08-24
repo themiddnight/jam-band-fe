@@ -19,7 +19,12 @@ export interface SequencerSettings {
   length: number; // 1-16 beats (trimming)
   bankMode: "single" | "continuous";
   displayMode: "all_notes" | "scale_notes" | "only_current";
-  editMode: EditMode; // "note" | "gate" | "velocity"
+  // Note: editMode is now managed by React state
+}
+
+export interface SequencerClipboard {
+  steps: SequencerStep[];
+  timestamp: number;
 }
 
 export interface SequencerState {
@@ -40,8 +45,11 @@ export interface SequencerState {
   settings: SequencerSettings;
   
   // UI state
-  selectedBeat: number; // For editing
+  // Note: selectedBeat and editMode are now managed by React state
   presets: SequencerPreset[];
+  
+  // Clipboard state
+  clipboard: SequencerClipboard | null;
 }
 
 export interface SequencerPreset {

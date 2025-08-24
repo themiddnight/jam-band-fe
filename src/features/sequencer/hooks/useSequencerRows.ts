@@ -4,6 +4,20 @@ import { InstrumentCategory } from "@/shared/constants/instruments";
 import { useDrumpadPresetsStore } from "@/features/instruments/stores/drumpadPresetsStore";
 import { validatePresetAssignments } from "@/features/instruments/constants/presets/drumPresets";
 
+// Memoized chromatic notes generation - static data
+const CHROMATIC_NOTES = (() => {
+  const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  const notes: string[] = [];
+  
+  for (let octave = 2; octave <= 6; octave++) {
+    for (const note of noteNames) {
+      notes.push(`${note}${octave}`);
+    }
+  }
+  
+  return notes.reverse(); // Higher notes first for better display
+})();
+
 interface UseSequencerRowsProps {
   currentCategory: string;
   displayMode: DisplayMode;
@@ -13,17 +27,9 @@ interface UseSequencerRowsProps {
 }
 
 // Generate chromatic notes for melodic instruments
-const generateChromaticNotes = (startOctave: number = 2, endOctave: number = 6): string[] => {
-  const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-  const notes: string[] = [];
-  
-  for (let octave = startOctave; octave <= endOctave; octave++) {
-    for (const note of noteNames) {
-      notes.push(`${note}${octave}`);
-    }
-  }
-  
-  return notes.reverse(); // Higher notes first for better display
+const generateChromaticNotes = (): string[] => {
+  // Use the pre-computed static notes for better performance
+  return CHROMATIC_NOTES;
 };
 
 // Extract note name without octave for scale checking
@@ -52,6 +58,9 @@ export const useSequencerRows = ({
   
   const rows = useMemo(() => {
     const isDrumInstrument = currentCategory === InstrumentCategory.DrumBeat;
+    
+    // Optimize step lookups by creating a Set for O(1) lookups
+    const stepNotesSet = new Set(currentSteps.map(step => step.note));
 
     if (isDrumInstrument) {
       // Handle drum instruments using current drumpad preset assignments
@@ -84,7 +93,7 @@ export const useSequencerRows = ({
       }
 
       const drumRows: DrumRow[] = samplesToUse.map(sample => {
-        const hasSteps = currentSteps.some(step => step.note === sample);
+        const hasSteps = stepNotesSet.has(sample);
         
         let visible = true;
         if (displayMode === "only_current") {
@@ -106,7 +115,7 @@ export const useSequencerRows = ({
       const noteRows: NoteRow[] = allNotes.map(note => {
         const octave = parseInt(note.slice(-1));
         const inScale = scaleNotes.length === 0 || isNoteInScale(note, scaleNotes);
-        const hasSteps = currentSteps.some(step => step.note === note);
+        const hasSteps = stepNotesSet.has(note);
         
         let visible = true;
         switch (displayMode) {

@@ -37,7 +37,7 @@ const RoomMembers = memo(
           {/* Active Members - Compact List */}
           <div className="flex flex-wrap gap-2">
             {sortedUsers.map((user) => {
-              const playingIndicator = playingIndicators.get(user.username);
+              const playingIndicator = playingIndicators.get(user.id);
               const voiceUser = voiceUsers.find((v) => v.userId === user.id);
 
               return (

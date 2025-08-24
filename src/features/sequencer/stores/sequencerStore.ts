@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import { subscribeWithSelector } from "zustand/middleware";
 import { v4 as uuidv4 } from "uuid";
 import { SEQUENCER_CONSTANTS } from "@/shared/constants";
 import type {
@@ -11,8 +12,41 @@ import type {
   BankName,
   DisplayMode,
   BankMode,
-  EditMode,
 } from "../types";
+
+// Shallow comparison utilities for performance optimization
+const shallowEqual = (obj1: any, obj2: any): boolean => {
+  const keys1 = Object.keys(obj1);
+  const keys2 = Object.keys(obj2);
+  
+  if (keys1.length !== keys2.length) return false;
+  
+  for (const key of keys1) {
+    if (obj1[key] !== obj2[key]) return false;
+  }
+  
+  return true;
+};
+
+const arraysShallowEqual = <T>(arr1: T[], arr2: T[]): boolean => {
+  if (arr1.length !== arr2.length) return false;
+  return arr1.every((item, index) => item === arr2[index]);
+};
+
+// Step comparison utility for checking if step arrays actually changed
+const stepsEqual = (steps1: SequencerStep[], steps2: SequencerStep[]): boolean => {
+  if (steps1.length !== steps2.length) return false;
+  
+  return steps1.every((step1, index) => {
+    const step2 = steps2[index];
+    return step1.id === step2.id && 
+           step1.beat === step2.beat && 
+           step1.note === step2.note && 
+           step1.velocity === step2.velocity && 
+           step1.gate === step2.gate && 
+           step1.enabled === step2.enabled;
+  });
+};
 
 interface SequencerStore extends SequencerState {
   // Step management
@@ -32,6 +66,7 @@ interface SequencerStore extends SequencerState {
   // Copy/Paste functionality
   copyBank: (bankId: string) => void;
   pasteBank: (bankId: string) => void;
+  clearClipboard: () => void;
 
   // Playback control
   play: () => void;
@@ -55,10 +90,10 @@ interface SequencerStore extends SequencerState {
   setLength: (length: number) => void;
   setBankMode: (mode: BankMode) => void;
   setDisplayMode: (mode: DisplayMode) => void;
-  setEditMode: (mode: EditMode) => void;
+  // Note: setEditMode is now managed by React state
 
   // UI state
-  setSelectedBeat: (beat: number) => void;
+  // Note: setSelectedBeat is now managed by React state
   setWaitingForMetronome: (waiting: boolean) => void;
   setWaitingBankChange: (bankId: string | null) => void;
 
@@ -114,542 +149,570 @@ const initialState: SequencerState = {
     length: SEQUENCER_CONSTANTS.DEFAULT_LENGTH,
     bankMode: "single",
     displayMode: "scale_notes",
-    editMode: SEQUENCER_CONSTANTS.DEFAULT_EDIT_MODE,
+    // Note: editMode is now managed by React state
   },
-  selectedBeat: 0,
+  // Note: selectedBeat is now managed by React state
   presets: [],
+  clipboard: null,
 };
 
 export const useSequencerStore = create<SequencerStore>()(
-  persist(
-    (set, get) => ({
-      ...initialState,
+  subscribeWithSelector(
+    persist(
+      (set, get) => ({
+        ...initialState,
 
-      // Step management
-      addStep: (bankId, beat, note, velocity = SEQUENCER_CONSTANTS.DEFAULT_VELOCITY, gate = SEQUENCER_CONSTANTS.DEFAULT_GATE) => {
-        set((state) => {
-          const bank = state.banks[bankId];
-          if (!bank) return state;
+        // Step management
+        addStep: (bankId, beat, note, velocity = SEQUENCER_CONSTANTS.DEFAULT_VELOCITY, gate = SEQUENCER_CONSTANTS.DEFAULT_GATE) => {
+          set((state) => {
+            const bank = state.banks[bankId];
+            if (!bank) return state;
 
-          const existingStepIndex = bank.steps.findIndex(
-            step => step.beat === beat && step.note === note
-          );
+            const existingStepIndex = bank.steps.findIndex(
+              step => step.beat === beat && step.note === note
+            );
 
-          if (existingStepIndex >= 0) {
-            // Update existing step
-            const updatedSteps = [...bank.steps];
-            updatedSteps[existingStepIndex] = {
-              ...updatedSteps[existingStepIndex],
-              velocity,
-              gate,
-              enabled: true,
-            };
+            let newSteps: SequencerStep[];
             
+            if (existingStepIndex >= 0) {
+              // Update existing step - only if values actually changed
+              const existingStep = bank.steps[existingStepIndex];
+              if (existingStep.velocity === velocity && 
+                  existingStep.gate === gate && 
+                  existingStep.enabled === true) {
+                // No change needed
+                return state;
+              }
+              
+              newSteps = [...bank.steps];
+              newSteps[existingStepIndex] = {
+                ...existingStep,
+                velocity,
+                gate,
+                enabled: true,
+              };
+            } else {
+              // Add new step
+              const newStep: SequencerStep = {
+                id: uuidv4(),
+                beat,
+                note,
+                velocity,
+                gate,
+                enabled: true,
+              };
+              newSteps = [...bank.steps, newStep];
+            }
+
+            // Check if steps actually changed
+            if (stepsEqual(bank.steps, newSteps)) {
+              return state;
+            }
+
             return {
               banks: {
                 ...state.banks,
-                [bankId]: { ...bank, steps: updatedSteps },
+                [bankId]: { ...bank, steps: newSteps },
               },
             };
-          } else {
-            // Add new step
-            const newStep: SequencerStep = {
-              id: uuidv4(),
-              beat,
-              note,
-              velocity,
-              gate,
-              enabled: true,
-            };
+          });
+        },
+
+        removeStep: (bankId, stepId) => {
+          set((state) => {
+            const bank = state.banks[bankId];
+            if (!bank) return state;
 
             return {
               banks: {
                 ...state.banks,
                 [bankId]: {
                   ...bank,
-                  steps: [...bank.steps, newStep],
+                  steps: bank.steps.filter(step => step.id !== stepId),
                 },
               },
             };
-          }
-        });
-      },
-
-      removeStep: (bankId, stepId) => {
-        set((state) => {
-          const bank = state.banks[bankId];
-          if (!bank) return state;
-
-          return {
-            banks: {
-              ...state.banks,
-              [bankId]: {
-                ...bank,
-                steps: bank.steps.filter(step => step.id !== stepId),
-              },
-            },
-          };
-        });
-      },
-
-      updateStep: (bankId, beat, note, updates) => {
-        set((state) => {
-          const bank = state.banks[bankId];
-          if (!bank) return state;
-
-          const stepIndex = bank.steps.findIndex(step => step.beat === beat && step.note === note);
-          if (stepIndex === -1) return state;
-
-          const updatedSteps = [...bank.steps];
-          updatedSteps[stepIndex] = { ...updatedSteps[stepIndex], ...updates };
-
-          return {
-            banks: {
-              ...state.banks,
-              [bankId]: { ...bank, steps: updatedSteps },
-            },
-          };
-        });
-      },
-
-      toggleStep: (bankId, beat, note) => {
-        const state = get();
-        const bank = state.banks[bankId];
-        if (!bank) return;
-
-        const existingStep = bank.steps.find(
-          step => step.beat === beat && step.note === note
-        );
-
-        if (existingStep) {
-          state.removeStep(bankId, existingStep.id);
-        } else {
-          state.addStep(bankId, beat, note);
-        }
-      },
-
-      clearBeat: (bankId, beat) => {
-        set((state) => {
-          const bank = state.banks[bankId];
-          if (!bank) return state;
-
-          return {
-            banks: {
-              ...state.banks,
-              [bankId]: {
-                ...bank,
-                steps: bank.steps.filter(step => step.beat !== beat),
-              },
-            },
-          };
-        });
-      },
-
-      clearBank: (bankId) => {
-        set((state) => {
-          const bank = state.banks[bankId];
-          if (!bank) return state;
-
-          return {
-            banks: {
-              ...state.banks,
-              [bankId]: { ...bank, steps: [] },
-            },
-          };
-        });
-      },
-
-      clearAllBanks: () => {
-        set((state) => {
-          const updatedBanks = { ...state.banks };
-          Object.keys(updatedBanks).forEach(bankId => {
-            updatedBanks[bankId] = { ...updatedBanks[bankId], steps: [] };
           });
+        },
 
-          return { banks: updatedBanks };
-        });
-      },
+        updateStep: (bankId, beat, note, updates) => {
+          set((state) => {
+            const bank = state.banks[bankId];
+            if (!bank) return state;
 
-      // Bank management
-      switchBank: (bankId) => {
-        console.log(`🎵 switchBank: changing from ${get().currentBank} to ${bankId}`);
-        set({ currentBank: bankId });
-        console.log(`🎵 switchBank: changed to ${get().currentBank}`);
-      },
+            const stepIndex = bank.steps.findIndex(step => step.beat === beat && step.note === note);
+            if (stepIndex === -1) return state;
 
-      toggleBankEnabled: (bankId) => {
-        set((state) => {
+            const updatedSteps = [...bank.steps];
+            updatedSteps[stepIndex] = { ...updatedSteps[stepIndex], ...updates };
+
+            return {
+              banks: {
+                ...state.banks,
+                [bankId]: { ...bank, steps: updatedSteps },
+              },
+            };
+          });
+        },
+
+        toggleStep: (bankId, beat, note) => {
+          const state = get();
           const bank = state.banks[bankId];
-          if (!bank) return state;
+          if (!bank) return;
 
-          return {
-            banks: {
-              ...state.banks,
-              [bankId]: { ...bank, enabled: !bank.enabled },
-            },
-          };
-        });
-      },
+          const existingStep = bank.steps.find(
+            step => step.beat === beat && step.note === note
+          );
 
-      duplicateBank: (fromBankId, toBankId) => {
-        set((state) => {
-          const fromBank = state.banks[fromBankId];
-          const toBank = state.banks[toBankId];
-          if (!fromBank || !toBank) return state;
-
-          const duplicatedSteps = fromBank.steps.map(step => ({
-            ...step,
-            id: uuidv4(), // Generate new IDs
-          }));
-
-          return {
-            banks: {
-              ...state.banks,
-              [toBankId]: {
-                ...toBank,
-                steps: duplicatedSteps,
-              },
-            },
-          };
-        });
-      },
-
-      copyBank: (bankId) => {
-        const state = get();
-        const bank = state.banks[bankId];
-        if (!bank) return;
-
-        // Store the copied bank data in localStorage for persistence across sessions
-        const copiedBankData = {
-          steps: bank.steps.map(step => ({
-            ...step,
-            id: uuidv4(), // Generate new IDs for the copied data
-          })),
-          timestamp: Date.now(),
-        };
-        
-        localStorage.setItem('sequencer_copied_bank', JSON.stringify(copiedBankData));
-        console.log(`🎵 Copied bank ${bankId} with ${bank.steps.length} steps`);
-      },
-
-      pasteBank: (bankId) => {
-        const state = get();
-        const bank = state.banks[bankId];
-        if (!bank) return;
-
-        const copiedBankData = localStorage.getItem('sequencer_copied_bank');
-        if (!copiedBankData) {
-          console.log('🎵 No copied bank data found');
-          return;
-        }
-
-        try {
-          const parsedData = JSON.parse(copiedBankData);
-          const copiedSteps = parsedData.steps.map((step: SequencerStep) => ({
-            ...step,
-            id: uuidv4(), // Generate new IDs for the pasted data
-          }));
-
-          set((state) => ({
-            banks: {
-              ...state.banks,
-              [bankId]: {
-                ...state.banks[bankId],
-                steps: copiedSteps,
-              },
-            },
-          }));
-
-          console.log(`🎵 Pasted ${copiedSteps.length} steps to bank ${bankId}`);
-        } catch (error) {
-          console.error('🎵 Error pasting bank data:', error);
-        }
-      },
-
-      // Playback control
-      play: () => {
-        set({ isPlaying: true, isPaused: false, waitingForMetronome: true });
-      },
-
-      // Note: This is now hardStop - immediate stop with note-off
-      stop: () => {
-        set({ 
-          isPlaying: false, 
-          isPaused: false, 
-          softStopRequested: false,
-          currentBeat: 0,
-          waitingForMetronome: false,
-          waitingBankChange: null,
-        });
-      },
-
-      pause: () => {
-        set({ isPlaying: false, isPaused: true });
-      },
-
-      softStop: () => {
-        set({ softStopRequested: true });
-      },
-
-      cancelSoftStop: () => {
-        set({ softStopRequested: false });
-      },
-
-      hardStop: () => {
-        set({ 
-          isPlaying: false, 
-          isPaused: false, 
-          softStopRequested: false,
-          currentBeat: 0,
-          waitingForMetronome: false,
-          waitingBankChange: null,
-        });
-      },
-
-      togglePlayback: () => {
-        const state = get();
-        if (state.isPlaying) {
-          state.pause();
-        } else {
-          state.play();
-        }
-      },
-
-      setCurrentBeat: (beat) => {
-        console.log(`🎵 setCurrentBeat: updating from ${get().currentBeat} to ${beat}`);
-        set({ currentBeat: Math.max(0, Math.min(get().settings.length - 1, beat)) });
-        console.log(`🎵 setCurrentBeat: updated to ${get().currentBeat}`);
-      },
-
-      nextBeat: () => {
-        const state = get();
-        const nextBeat = (state.currentBeat + 1) % state.settings.length;
-        
-        // Handle bank switching in continuous mode
-        if (nextBeat === 0 && state.settings.bankMode === "continuous") {
-          const nextBank = state.getNextEnabledBank();
-          if (nextBank && nextBank !== state.currentBank) {
-            set({ currentBank: nextBank });
+          if (existingStep) {
+            state.removeStep(bankId, existingStep.id);
+          } else {
+            state.addStep(bankId, beat, note);
           }
-        }
-        
-        state.setCurrentBeat(nextBeat);
-      },
+        },
 
-      resetToStart: () => {
-        set({ currentBeat: 0 });
-      },
+        clearBeat: (bankId, beat) => {
+          set((state) => {
+            const bank = state.banks[bankId];
+            if (!bank) return state;
 
-      // Recording
-      toggleRecording: () => {
-        set((state) => ({ isRecording: !state.isRecording }));
-      },
+            const newSteps = bank.steps.filter(step => step.beat !== beat);
+            
+            // Check if steps actually changed
+            if (arraysShallowEqual(bank.steps, newSteps)) {
+              return state;
+            }
 
-      recordStep: (note, velocity, gate, isRealtime = false) => {
-        const state = get();
-        if (!state.isRecording) return;
+            return {
+              banks: {
+                ...state.banks,
+                [bankId]: {
+                  ...bank,
+                  steps: newSteps,
+                },
+              },
+            };
+          });
+        },
 
-        // Determine gate value based on context
-        let finalGate: number;
-        if (gate !== undefined) {
-          // Use provided gate (e.g., from MIDI or explicit setting)
-          finalGate = gate;
-        } else if (isRealtime && state.isPlaying) {
-          // Real-time recording while playing - use 100% gate for legato
-          finalGate = 1.0;
-        } else {
-          // Pause/stop recording or non-realtime - use default gate
-          finalGate = SEQUENCER_CONSTANTS.DEFAULT_GATE;
-        }
+        clearBank: (bankId) => {
+          set((state) => {
+            const bank = state.banks[bankId];
+            if (!bank) return state;
 
-        state.addStep(
-          state.currentBank,
-          state.currentBeat,
-          note,
-          velocity || SEQUENCER_CONSTANTS.DEFAULT_VELOCITY,
-          finalGate
-        );
-      },
+            return {
+              banks: {
+                ...state.banks,
+                [bankId]: { ...bank, steps: [] },
+              },
+            };
+          });
+        },
 
-      // Settings
-      updateSettings: (updates) => {
-        set((state) => ({
-          settings: { ...state.settings, ...updates },
-        }));
-      },
+        clearAllBanks: () => {
+          set((state) => {
+            const updatedBanks = { ...state.banks };
+            Object.keys(updatedBanks).forEach(bankId => {
+              updatedBanks[bankId] = { ...updatedBanks[bankId], steps: [] };
+            });
 
-      setSpeed: (speed) => {
-        set((state) => ({
-          settings: { ...state.settings, speed },
-        }));
-      },
+            return { banks: updatedBanks };
+          });
+        },
 
-      setLength: (length) => {
-        const clampedLength = Math.max(SEQUENCER_CONSTANTS.MIN_BEATS, Math.min(SEQUENCER_CONSTANTS.MAX_BEATS, length));
-        set((state) => ({
-          settings: { ...state.settings, length: clampedLength },
-          currentBeat: Math.min(state.currentBeat, clampedLength - 1),
-        }));
-      },
+        // Bank management
+        switchBank: (bankId) => {
+          console.log(`🎵 switchBank: changing from ${get().currentBank} to ${bankId}`);
+          set({ currentBank: bankId });
+          console.log(`🎵 switchBank: changed to ${get().currentBank}`);
+        },
 
-      setBankMode: (bankMode) => {
-        set((state) => ({
-          settings: { ...state.settings, bankMode },
-        }));
-      },
+        toggleBankEnabled: (bankId) => {
+          set((state) => {
+            const bank = state.banks[bankId];
+            if (!bank) return state;
 
-      setDisplayMode: (displayMode) => {
-        set((state) => ({
-          settings: { ...state.settings, displayMode },
-        }));
-      },
+            return {
+              banks: {
+                ...state.banks,
+                [bankId]: { ...bank, enabled: !bank.enabled },
+              },
+            };
+          });
+        },
 
-      setEditMode: (editMode) => {
-        set((state) => ({
-          settings: { ...state.settings, editMode },
-        }));
-      },
+        duplicateBank: (fromBankId, toBankId) => {
+          set((state) => {
+            const fromBank = state.banks[fromBankId];
+            const toBank = state.banks[toBankId];
+            if (!fromBank || !toBank) return state;
 
-      // UI state
-      setSelectedBeat: (beat) => {
-        set({ selectedBeat: Math.max(0, Math.min(get().settings.length - 1, beat)) });
-      },
+            const duplicatedSteps = fromBank.steps.map(step => ({
+              ...step,
+              id: uuidv4(), // Generate new IDs
+            }));
 
-      setWaitingForMetronome: (waiting) => {
-        set({ waitingForMetronome: waiting });
-      },
+            return {
+              banks: {
+                ...state.banks,
+                [toBankId]: {
+                  ...toBank,
+                  steps: duplicatedSteps,
+                },
+              },
+            };
+          });
+        },
 
-      setWaitingBankChange: (bankId) => {
-        set({ waitingBankChange: bankId });
-      },
+        copyBank: (bankId) => {
+          const state = get();
+          const bank = state.banks[bankId];
+          if (!bank) return;
 
-      // Preset management
-      savePreset: (name, instrumentCategory) => {
-        const state = get();
-        const preset: SequencerPreset = {
-          id: uuidv4(),
-          name,
-          banks: state.banks,
-          settings: state.settings,
-          instrumentCategory,
-          createdAt: Date.now(),
-        };
+          const copiedBankData = {
+            steps: bank.steps.map(step => ({
+              ...step,
+              id: uuidv4(), // Generate new IDs for the copied data
+            })),
+            timestamp: Date.now(),
+          };
+          
+          set({ clipboard: copiedBankData });
+          console.log(`🎵 Copied bank ${bankId} with ${bank.steps.length} steps`);
+        },
 
-        set((state) => ({
-          presets: [...state.presets, preset],
-        }));
-      },
+        pasteBank: (bankId) => {
+          const state = get();
+          const bank = state.banks[bankId];
+          if (!bank) return;
 
-      loadPreset: (presetId) => {
-        const state = get();
-        const preset = state.presets.find(p => p.id === presetId);
-        if (!preset) return;
+          if (!state.clipboard) {
+            console.log('🎵 No copied bank data found');
+            return;
+          }
 
-        set({
-          banks: preset.banks,
-          settings: preset.settings,
-          currentBeat: 0,
-          selectedBeat: 0,
-        });
-      },
+          // Check if clipboard is still valid (within 1 hour)
+          const clipboardAge = Date.now() - state.clipboard.timestamp;
+          if (clipboardAge > 60 * 60 * 1000) {
+            console.log('🎵 Clipboard data expired, clearing');
+            set({ clipboard: null });
+            return;
+          }
 
-      deletePreset: (presetId) => {
-        set((state) => ({
-          presets: state.presets.filter(p => p.id !== presetId),
-        }));
-      },
+          try {
+            const copiedSteps = state.clipboard.steps.map((step: SequencerStep) => ({
+              ...step,
+              id: uuidv4(), // Generate new IDs for the pasted data
+            }));
 
-      exportPreset: (presetId) => {
-        const state = get();
-        const preset = state.presets.find(p => p.id === presetId);
-        return preset ? JSON.stringify(preset, null, 2) : "";
-      },
+            set((state) => ({
+              banks: {
+                ...state.banks,
+                [bankId]: {
+                  ...state.banks[bankId],
+                  steps: copiedSteps,
+                },
+              },
+            }));
 
-      importPreset: (presetData) => {
-        try {
-          const preset: SequencerPreset = JSON.parse(presetData);
-          // Regenerate ID to avoid conflicts
-          preset.id = uuidv4();
-          preset.createdAt = Date.now();
+            console.log(`🎵 Pasted ${copiedSteps.length} steps to bank ${bankId}`);
+          } catch (error) {
+            console.error('🎵 Error pasting bank data:', error);
+          }
+        },
+
+        clearClipboard: () => {
+          set({ clipboard: null });
+        },
+
+        // Playback control
+        play: () => {
+          set({ isPlaying: true, isPaused: false, waitingForMetronome: true });
+        },
+
+        // Note: This is now hardStop - immediate stop with note-off
+        stop: () => {
+          set({ 
+            isPlaying: false, 
+            isPaused: false, 
+            softStopRequested: false,
+            currentBeat: 0,
+            waitingForMetronome: false,
+            waitingBankChange: null,
+          });
+        },
+
+        pause: () => {
+          set({ isPlaying: false, isPaused: true });
+        },
+
+        softStop: () => {
+          set({ softStopRequested: true });
+        },
+
+        cancelSoftStop: () => {
+          set({ softStopRequested: false });
+        },
+
+        hardStop: () => {
+          set({ 
+            isPlaying: false, 
+            isPaused: false, 
+            softStopRequested: false,
+            currentBeat: 0,
+            waitingForMetronome: false,
+            waitingBankChange: null,
+          });
+        },
+
+        togglePlayback: () => {
+          const state = get();
+          if (state.isPlaying) {
+            state.pause();
+          } else {
+            state.play();
+          }
+        },
+
+        setCurrentBeat: (beat) => {
+          console.log(`🎵 setCurrentBeat: updating from ${get().currentBeat} to ${beat}`);
+          set({ currentBeat: Math.max(0, Math.min(get().settings.length - 1, beat)) });
+          console.log(`🎵 setCurrentBeat: updated to ${get().currentBeat}`);
+        },
+
+        nextBeat: () => {
+          const state = get();
+          const nextBeat = (state.currentBeat + 1) % state.settings.length;
+          
+          // Handle bank switching in continuous mode
+          if (nextBeat === 0 && state.settings.bankMode === "continuous") {
+            const nextBank = state.getNextEnabledBank();
+            if (nextBank && nextBank !== state.currentBank) {
+              set({ currentBank: nextBank });
+            }
+          }
+          
+          state.setCurrentBeat(nextBeat);
+        },
+
+        resetToStart: () => {
+          set({ currentBeat: 0 });
+        },
+
+        // Recording
+        toggleRecording: () => {
+          set((state) => ({ isRecording: !state.isRecording }));
+        },
+
+        recordStep: (note, velocity, gate, isRealtime = false) => {
+          const state = get();
+          if (!state.isRecording) return;
+
+          // Determine gate value based on context
+          let finalGate: number;
+          if (gate !== undefined) {
+            // Use provided gate (e.g., from MIDI or explicit setting)
+            finalGate = gate;
+          } else if (isRealtime && state.isPlaying) {
+            // Real-time recording while playing - use 100% gate for legato
+            finalGate = 1.0;
+          } else {
+            // Pause/stop recording or non-realtime - use default gate
+            finalGate = SEQUENCER_CONSTANTS.DEFAULT_GATE;
+          }
+
+          state.addStep(
+            state.currentBank,
+            state.currentBeat,
+            note,
+            velocity || SEQUENCER_CONSTANTS.DEFAULT_VELOCITY,
+            finalGate
+          );
+        },
+
+        // Settings
+        updateSettings: (updates) => {
+          set((state) => {
+            const newSettings = { ...state.settings, ...updates };
+            
+            // Check if settings actually changed
+            if (shallowEqual(state.settings, newSettings)) {
+              return state;
+            }
+            
+            return {
+              settings: newSettings,
+            };
+          });
+        },
+
+        setSpeed: (speed) => {
+          set((state) => ({
+            settings: { ...state.settings, speed },
+          }));
+        },
+
+        setLength: (length) => {
+          const clampedLength = Math.max(SEQUENCER_CONSTANTS.MIN_BEATS, Math.min(SEQUENCER_CONSTANTS.MAX_BEATS, length));
+          set((state) => ({
+            settings: { ...state.settings, length: clampedLength },
+            currentBeat: Math.min(state.currentBeat, clampedLength - 1),
+          }));
+        },
+
+        setBankMode: (bankMode) => {
+          set((state) => ({
+            settings: { ...state.settings, bankMode },
+          }));
+        },
+
+        setDisplayMode: (displayMode) => {
+          set((state) => ({
+            settings: { ...state.settings, displayMode },
+          }));
+        },
+
+
+
+
+
+        setWaitingForMetronome: (waiting) => {
+          set({ waitingForMetronome: waiting });
+        },
+
+        setWaitingBankChange: (bankId) => {
+          set({ waitingBankChange: bankId });
+        },
+
+        // Preset management
+        savePreset: (name, instrumentCategory) => {
+          const state = get();
+          const preset: SequencerPreset = {
+            id: uuidv4(),
+            name,
+            banks: state.banks,
+            settings: state.settings,
+            instrumentCategory,
+            createdAt: Date.now(),
+          };
 
           set((state) => ({
             presets: [...state.presets, preset],
           }));
-        } catch (error) {
-          console.error("Failed to import preset:", error);
-        }
-      },
+        },
 
-      // Utility functions
-      getStepsForBeat: (bankId, beat) => {
-        const bank = get().banks[bankId];
-        return bank ? bank.steps.filter(step => step.beat === beat && step.enabled) : [];
-      },
+        loadPreset: (presetId) => {
+          const state = get();
+          const preset = state.presets.find(p => p.id === presetId);
+          if (!preset) return;
 
-      getActiveStepsForBeat: (beat) => {
-        const state = get();
-        return state.getStepsForBeat(state.currentBank, beat);
-      },
+          set({
+            banks: preset.banks,
+            settings: preset.settings,
+            currentBeat: 0,
+            // Note: selectedBeat is now managed by React state
+          });
+        },
 
-      hasStepAtBeat: (bankId, beat, note) => {
-        const steps = get().getStepsForBeat(bankId, beat);
-        return steps.some(step => step.note === note);
-      },
+        deletePreset: (presetId) => {
+          set((state) => ({
+            presets: state.presets.filter(p => p.id !== presetId),
+          }));
+        },
 
-      getNextEnabledBank: () => {
-        const state = get();
-        const bankNames = SEQUENCER_CONSTANTS.BANK_NAMES;
-        
-        // Get all enabled banks in order
-        const enabledBanks = bankNames.filter(name => state.banks[name]?.enabled);
-        console.log(`🎵 getNextEnabledBank: current=${state.currentBank}, enabled=[${enabledBanks.join(', ')}]`);
-        
-        if (enabledBanks.length === 0) {
-          console.log(`🎵 No enabled banks found`);
-          return null;
-        }
-        
-        // Find current bank position in enabled banks list
-        const currentIndex = enabledBanks.indexOf(state.currentBank as BankName);
-        
-        if (currentIndex === -1) {
-          // Current bank is not enabled, return first enabled bank
-          console.log(`🎵 Current bank ${state.currentBank} not enabled, returning first enabled: ${enabledBanks[0]}`);
-          return enabledBanks[0];
-        }
-        
-        // Get next enabled bank (cycle back to first if at end)
-        const nextIndex = (currentIndex + 1) % enabledBanks.length;
-        const nextBank = enabledBanks[nextIndex];
-        console.log(`🎵 Next enabled bank: ${nextBank} (position ${nextIndex}/${enabledBanks.length})`);
-        
-        return nextBank;
-      },
+        exportPreset: (presetId) => {
+          const state = get();
+          const preset = state.presets.find(p => p.id === presetId);
+          return preset ? JSON.stringify(preset, null, 2) : "";
+        },
 
-      getBeatStepsCount: (bankId, beat) => {
-        return get().getStepsForBeat(bankId, beat).length;
-      },
+        importPreset: (presetData) => {
+          try {
+            const preset: SequencerPreset = JSON.parse(presetData);
+            // Regenerate ID to avoid conflicts
+            preset.id = uuidv4();
+            preset.createdAt = Date.now();
 
-      getTotalStepsCount: (bankId) => {
-        const bank = get().banks[bankId];
-        return bank ? bank.steps.filter(step => step.enabled).length : 0;
-      },
+            set((state) => ({
+              presets: [...state.presets, preset],
+            }));
+          } catch (error) {
+            console.error("Failed to import preset:", error);
+          }
+        },
 
-      // Reset
-      reset: () => {
-        set(initialState);
-      },
-    }),
-    {
-      name: "sequencer-store",
-      storage: createJSONStorage(() => localStorage),
-      // Only persist certain parts of the state
-      partialize: (state) => ({
-        banks: state.banks,
-        settings: state.settings,
-        presets: state.presets,
-        currentBank: state.currentBank,
+        // Utility functions
+        getStepsForBeat: (bankId, beat) => {
+          const bank = get().banks[bankId];
+          return bank ? bank.steps.filter(step => step.beat === beat && step.enabled) : [];
+        },
+
+        getActiveStepsForBeat: (beat) => {
+          const state = get();
+          return state.getStepsForBeat(state.currentBank, beat);
+        },
+
+        hasStepAtBeat: (bankId, beat, note) => {
+          const steps = get().getStepsForBeat(bankId, beat);
+          return steps.some(step => step.note === note);
+        },
+
+        getNextEnabledBank: () => {
+          const state = get();
+          const bankNames = SEQUENCER_CONSTANTS.BANK_NAMES;
+          
+          // Get all enabled banks in order
+          const enabledBanks = bankNames.filter(name => state.banks[name]?.enabled);
+          console.log(`🎵 getNextEnabledBank: current=${state.currentBank}, enabled=[${enabledBanks.join(', ')}]`);
+          
+          if (enabledBanks.length === 0) {
+            console.log(`🎵 No enabled banks found`);
+            return null;
+          }
+          
+          // Find current bank position in enabled banks list
+          const currentIndex = enabledBanks.indexOf(state.currentBank as BankName);
+          
+          if (currentIndex === -1) {
+            // Current bank is not enabled, return first enabled bank
+            console.log(`🎵 Current bank ${state.currentBank} not enabled, returning first enabled: ${enabledBanks[0]}`);
+            return enabledBanks[0];
+          }
+          
+          // Get next enabled bank (cycle back to first if at end)
+          const nextIndex = (currentIndex + 1) % enabledBanks.length;
+          const nextBank = enabledBanks[nextIndex];
+          console.log(`🎵 Next enabled bank: ${nextBank} (position ${nextIndex}/${enabledBanks.length})`);
+          
+          return nextBank;
+        },
+
+        getBeatStepsCount: (bankId, beat) => {
+          return get().getStepsForBeat(bankId, beat).length;
+        },
+
+        getTotalStepsCount: (bankId) => {
+          const bank = get().banks[bankId];
+          return bank ? bank.steps.filter(step => step.enabled).length : 0;
+        },
+
+        // Reset
+        reset: () => {
+          set(initialState);
+        },
       }),
-    }
+      {
+        name: "sequencer-store",
+        storage: createJSONStorage(() => localStorage),
+        // Only persist certain parts of the state
+        partialize: (state) => ({
+          banks: state.banks,
+          settings: state.settings,
+          presets: state.presets,
+          clipboard: state.clipboard,
+          // Note: currentBank, selectedBeat, and editMode are now managed by React state
+        }),
+      }
+    )
   )
 ); 

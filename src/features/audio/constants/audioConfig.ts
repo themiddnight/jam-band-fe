@@ -16,7 +16,7 @@ export const AUDIO_CONFIG = {
   // Web Audio API context settings for WebRTC - Ultra-low latency mode
   WEBRTC_AUDIO_CONTEXT: {
     sampleRate: 48000, // WebRTC preferred sample rate
-    latencyHint: "interactive" as AudioContextLatencyCategory, // Interactive for real-time performance
+    latencyHint: "interactive" as AudioContextLatencyCategory, // Lowest latency for real-time performance
   },
 
   // Synthesizer timing settings - Ultra-responsive

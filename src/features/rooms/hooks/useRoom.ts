@@ -442,6 +442,27 @@ export const useRoom = () => {
         if (eventType === "note_on") {
           console.log("🎵 Playing locally:", { notes, velocity, isKeyHeld });
           await playLocalNote(notes, velocity, isKeyHeld || false);
+          
+          // Set local playing indicator immediately for local user
+          if (userId) {
+            setPlayingIndicators((prev) => {
+              const newMap = new Map(prev);
+              newMap.set(userId, {
+                velocity: velocity,
+                timestamp: Date.now(),
+              });
+              return newMap;
+            });
+            
+            // Clear local playing indicator after a short delay
+            setTimeout(() => {
+              setPlayingIndicators((prev) => {
+                const newMap = new Map(prev);
+                newMap.delete(userId);
+                return newMap;
+              });
+            }, 200);
+          }
         } else if (eventType === "note_off") {
           console.log("🛑 Stopping locally:", { notes });
           await stopLocalNotes(notes);
@@ -468,6 +489,7 @@ export const useRoom = () => {
       console.log("🎵 Sending noteData to playNote:", noteData);
       playNote(noteData);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       isConnected,
       currentInstrument,

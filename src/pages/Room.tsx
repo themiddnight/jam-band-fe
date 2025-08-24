@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 import { MidiStatus } from "@/features/audio";
 import { VoiceInput } from "@/features/audio";
 import { useWebRTCVoice } from "@/features/audio";
@@ -19,6 +20,7 @@ import {
 import { MetronomeControls } from "@/features/metronome";
 import { StepSequencer } from "@/features/sequencer";
 import { useSequencer } from "@/features/sequencer/hooks/useSequencer";
+import { useSequencerUI } from "@/features/sequencer/hooks/useSequencerUI";
 import { ChatBox, ApprovalWaiting } from "@/features/rooms";
 import { RoomMembers } from "@/features/rooms";
 import { useRoom } from "@/features/rooms";
@@ -94,7 +96,6 @@ const Room = memo(() => {
     getCurrentInstrumentControlType,
     updateSynthParams,
     loadPresetParams,
-    instrumentManager,
 
     // Audio management
     stopSustainedNotes,
@@ -233,6 +234,12 @@ const Room = memo(() => {
     onStopNotes: handleStopNotesWrapper,
   });
 
+  // Sequencer UI state hook (resets on every room entry)
+  const sequencerUI = useSequencerUI({
+    sequenceLength: sequencer.settings?.length || 16,
+    defaultEditMode: "note",
+  });
+
   // Enhanced note playing wrapper that also handles recording
   const handlePlayNotesWithRecording = useCallback(
     (notes: string[], velocity: number, isKeyHeld: boolean) => {
@@ -248,7 +255,6 @@ const Room = memo(() => {
         });
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [handlePlayNote, sequencer.isRecording, sequencer.handleRecordNote],
   );
 
@@ -314,6 +320,13 @@ const Room = memo(() => {
     currentRoom,
     enableAudioReception,
   ]);
+
+  // Reset sequencer UI state when entering a new room
+  useEffect(() => {
+    if (currentRoom) {
+      sequencerUI.resetUI();
+    }
+  }, [currentRoom?.id, sequencerUI]);
 
   // Initialize scale slots on first load
   useEffect(() => {
@@ -754,7 +767,6 @@ const Room = memo(() => {
                 {/* Step Sequencer */}
                 <div className="w-full max-w-6xl">
                   <StepSequencer
-                  instrumentManager={instrumentManager}
                     socket={activeSocket}
                     currentCategory={currentCategory}
                     availableSamples={availableSamples}
@@ -767,6 +779,9 @@ const Room = memo(() => {
                     ]}
                     onPlayNotes={handlePlayNotesWrapper}
                     onStopNotes={handleStopNotesWrapper}
+                    editMode={sequencerUI.editMode}
+                    onSelectedBeatChange={sequencerUI.setSelectedBeat}
+                    onEditModeChange={sequencerUI.setEditMode}
                   />
                 </div>
 

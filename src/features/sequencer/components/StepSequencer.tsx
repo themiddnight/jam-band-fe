@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, useCallback } from "react";
 import { Socket } from "socket.io-client";
 import { useSequencer } from "../hooks/useSequencer";
 import {
@@ -6,9 +6,10 @@ import {
   useDisplayModeOptions,
 } from "../hooks/useSequencerRows";
 import { StepGrid } from "./StepGrid";
+import { useTouchEvents } from "@/features/ui";
 import { SEQUENCER_CONSTANTS, SEQUENCER_SPEEDS } from "@/shared/constants";
-import type { DisplayMode } from "../types";
-import type { UseInstrumentManagerReturn } from "@/features/instruments/hooks/useInstrumentManager";
+import type { DisplayMode, EditMode } from "../types";
+import type { CSSProperties } from "react";
 
 interface StepSequencerProps {
   socket: Socket | null;
@@ -17,7 +18,10 @@ interface StepSequencerProps {
   scaleNotes?: string[];
   onPlayNotes: (notes: string[], velocity: number, isKeyHeld: boolean) => void;
   onStopNotes: (notes: string[]) => void;
-  instrumentManager?: UseInstrumentManagerReturn;
+  // UI state managed by parent component
+  editMode: EditMode;
+  onSelectedBeatChange: (beat: number) => void;
+  onEditModeChange: (mode: EditMode) => void;
 }
 
 export const StepSequencer = memo(
@@ -28,7 +32,9 @@ export const StepSequencer = memo(
     scaleNotes = [],
     onPlayNotes,
     onStopNotes,
-    instrumentManager,
+    editMode,
+    onSelectedBeatChange,
+    onEditModeChange,
   }: StepSequencerProps) => {
     const sequencer = useSequencer({
       socket,
@@ -74,6 +80,16 @@ export const StepSequencer = memo(
       currentSteps,
     });
 
+    // Memoized functions to prevent unnecessary re-renders in StepGrid
+    const getStepDataMemo = useCallback((beat: number, note: string) => {
+      const steps = sequencer.getBeatSteps(beat);
+      return steps.find((step) => step.note === note) || null;
+    }, [sequencer]);
+
+    const onUpdateStepMemo = useCallback((beat: number, note: string, updates: any) => {
+      sequencer.updateStep(beat, note, updates);
+    }, [sequencer]);
+
     // Get display mode options for this instrument type
     const displayModeOptions = useDisplayModeOptions(currentCategory);
 
@@ -108,11 +124,123 @@ export const StepSequencer = memo(
       }
     };
 
+    // Touch handlers for mobile optimization
+    const playButtonTouchHandlers = useTouchEvents({
+      onPress: handlePlayPause,
+      onRelease: () => {},
+      isPlayButton: true
+    });
+
+    const hardStopTouchHandlers = useTouchEvents({
+      onPress: sequencer.handleHardStop,
+      onRelease: () => {},
+      isPlayButton: true
+    });
+
+    const recordTouchHandlers = useTouchEvents({
+      onPress: sequencer.handleToggleRecording,
+      onRelease: () => {},
+      isPlayButton: true
+    });
+
+    // Bank mode touch handlers
+    const singleModeTouchHandlers = useTouchEvents({
+      onPress: () => sequencer.handleBankModeChange("single"),
+      onRelease: () => {},
+      isPlayButton: true
+    });
+
+    const continuousModeTouchHandlers = useTouchEvents({
+      onPress: () => sequencer.handleBankModeChange("continuous"),
+      onRelease: () => {},
+      isPlayButton: true
+    });
+
+    // Edit mode touch handlers
+    const noteModeTouchHandlers = useTouchEvents({
+      onPress: () => onEditModeChange("note"),
+      onRelease: () => {},
+      isPlayButton: true
+    });
+
+    const gateModeTouchHandlers = useTouchEvents({
+      onPress: () => onEditModeChange("gate"),
+      onRelease: () => {},
+      isPlayButton: true
+    });
+
+    const velocityModeTouchHandlers = useTouchEvents({
+      onPress: () => onEditModeChange("velocity"),
+      onRelease: () => {},
+      isPlayButton: true
+    });
+
+    // Copy/Paste/Clear touch handlers
+    const copyTouchHandlers = useTouchEvents({
+      onPress: () => sequencer.copyBank(currentBank),
+      onRelease: () => {},
+      isPlayButton: true
+    });
+
+    const pasteTouchHandlers = useTouchEvents({
+      onPress: () => sequencer.pasteBank(currentBank),
+      onRelease: () => {},
+      isPlayButton: true
+    });
+
+    const clearTouchHandlers = useTouchEvents({
+      onPress: sequencer.handleClearBank,
+      onRelease: () => {},
+      isPlayButton: true
+    });
+
+    // Bank switch touch handlers - Create individual hooks to avoid calling hooks in callbacks
+    const bankATouchHandlers = useTouchEvents({
+      onPress: () => sequencer.handleBankSwitch("A"),
+      onRelease: () => {},
+      isPlayButton: true
+    });
+    
+    const bankBTouchHandlers = useTouchEvents({
+      onPress: () => sequencer.handleBankSwitch("B"),
+      onRelease: () => {},
+      isPlayButton: true
+    });
+    
+    const bankCTouchHandlers = useTouchEvents({
+      onPress: () => sequencer.handleBankSwitch("C"),
+      onRelease: () => {},
+      isPlayButton: true
+    });
+    
+    const bankDTouchHandlers = useTouchEvents({
+      onPress: () => sequencer.handleBankSwitch("D"),
+      onRelease: () => {},
+      isPlayButton: true
+    });
+
+    // Map bank names to their touch handlers
+    const bankTouchHandlers = {
+      A: bankATouchHandlers,
+      B: bankBTouchHandlers,
+      C: bankCTouchHandlers,
+      D: bankDTouchHandlers,
+    };
+
     const getCurrentSpeedLabel = () => {
       const speedConfig = SEQUENCER_SPEEDS.find(
         (s) => s.value === settings.speed
       );
       return speedConfig?.label || settings.speed.toString();
+    };
+
+    // Common button styles for mobile optimization
+    const mobileButtonStyle: CSSProperties = {
+      touchAction: "manipulation",
+      WebkitTapHighlightColor: "transparent",
+      WebkitTouchCallout: "none" as const,
+      WebkitUserSelect: "none",
+      userSelect: "none",
     };
 
     // Show error state
@@ -124,8 +252,9 @@ export const StepSequencer = memo(
             <p className="text-base-content/70">{error}</p>
             <div className="card-actions justify-end">
               <button
-                className="btn btn-primary"
+                className="btn btn-primary touch-manipulation"
                 onClick={() => window.location.reload()}
+                style={mobileButtonStyle}
               >
                 Reload
               </button>
@@ -156,7 +285,12 @@ export const StepSequencer = memo(
         <input type="checkbox" id="step-sequencer" name="step-sequencer" />
         
         {/* First Row: Title */}
-        <h3 className="collapse-title font-bold">Step Sequencer</h3>
+        <h3 className="collapse-title font-bold">
+          {isPlaying && !softStopRequested && (
+            <span className="mr-2 text-primary animate-pulse">▶</span>
+          )}
+          Step Sequencer
+        </h3>
 
         <div className="collapse-content space-y-4 overflow-hidden">
           {/* Second Row: Play/Stop/Rec - Speed Select - Bank Mode <---> Bank Selector */}
@@ -165,9 +299,11 @@ export const StepSequencer = memo(
               {/* Playback Controls */}
               <div className="flex items-center gap-1">
                 <button
-                  className={`btn btn-sm ${playbackInfo.style}`}
-                  onClick={handlePlayPause}
+                  className={`btn btn-sm ${playbackInfo.style} touch-manipulation`}
+                  onMouseDown={handlePlayPause}
+                  ref={playButtonTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
                   disabled={playbackInfo.disabled}
+                  style={mobileButtonStyle}
                   title={
                     waitingForMetronome
                       ? "Waiting for metronome..."
@@ -182,17 +318,21 @@ export const StepSequencer = memo(
                 </button>
 
                 <button
-                  className="btn btn-sm btn-outline"
-                  onClick={sequencer.handleHardStop}
+                  className="btn btn-sm btn-outline touch-manipulation"
+                  onMouseDown={sequencer.handleHardStop}
+                  ref={hardStopTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
                   disabled={!isPlaying && !isPaused}
+                  style={mobileButtonStyle}
                   title="Hard Stop (immediate stop with note-off)"
                 >
                   ⏹
                 </button>
 
                 <button
-                  className={`btn btn-sm ${isRecording ? "btn-error" : "btn-outline"}`}
-                  onClick={sequencer.handleToggleRecording}
+                  className={`btn btn-sm touch-manipulation ${isRecording ? "btn-error" : "btn-outline"}`}
+                  onMouseDown={sequencer.handleToggleRecording}
+                  ref={recordTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
+                  style={mobileButtonStyle}
                   title={isRecording ? "Stop Recording" : "Start Recording"}
                 >
                   {isRecording ? "●" : "○"}
@@ -203,13 +343,14 @@ export const StepSequencer = memo(
               <div className="flex items-center gap-1">
                 <span className="text-xs text-base-content/70">Speed:</span>
                 <div className="dropdown dropdown-end">
-                  <div
+                  <button
                     tabIndex={0}
                     role="button"
-                    className="btn btn-sm btn-outline"
+                    className="btn btn-sm btn-outline touch-manipulation"
+                    style={mobileButtonStyle}
                   >
                     {getCurrentSpeedLabel()}
-                  </div>
+                  </button>
                   <ul
                     tabIndex={0}
                     className="dropdown-content menu p-2 shadow bg-base-100 rounded-box w-32 max-h-40 overflow-y-auto"
@@ -217,8 +358,9 @@ export const StepSequencer = memo(
                     {SEQUENCER_SPEEDS.map(({ value, label }) => (
                       <li key={value}>
                         <button
-                          className={`text-sm ${settings.speed === value ? "bg-primary/50" : ""}`}
+                          className={`text-sm touch-manipulation ${settings.speed === value ? "bg-primary/50" : ""}`}
                           onClick={() => sequencer.handleSpeedChange(value)}
+                          style={mobileButtonStyle}
                         >
                           {label}
                         </button>
@@ -233,20 +375,24 @@ export const StepSequencer = memo(
                 <span className="text-xs text-base-content/70">Loop Mode:</span>
                 <div className="join">
                   <button
-                    className={`btn btn-sm join-item ${settings.bankMode === "single"
+                    className={`btn btn-sm join-item touch-manipulation ${settings.bankMode === "single"
                         ? "btn-primary"
                         : "btn-outline"
                       }`}
-                    onClick={() => sequencer.handleBankModeChange("single")}
+                    onMouseDown={() => sequencer.handleBankModeChange("single")}
+                    ref={singleModeTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
+                    style={mobileButtonStyle}
                   >
                     Single
                   </button>
                   <button
-                    className={`btn btn-sm join-item ${settings.bankMode === "continuous"
+                    className={`btn btn-sm join-item touch-manipulation ${settings.bankMode === "continuous"
                         ? "btn-primary"
                         : "btn-outline"
                       }`}
-                    onClick={() => sequencer.handleBankModeChange("continuous")}
+                    onMouseDown={() => sequencer.handleBankModeChange("continuous")}
+                    ref={continuousModeTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
+                    style={mobileButtonStyle}
                   >
                     Continuous
                   </button>
@@ -269,7 +415,9 @@ export const StepSequencer = memo(
                           ? "btn-outline btn-primary"
                           : "btn-outline text-base-content/50"
                     }`}
-                  onClick={() => sequencer.handleBankSwitch(bankName)}
+                  onMouseDown={() => sequencer.handleBankSwitch(bankName)}
+                  ref={bankTouchHandlers[bankName].ref as React.RefObject<HTMLButtonElement>}
+                  style={mobileButtonStyle}
                   title={`Bank ${bankName} (${banks[bankName]?.steps?.length || 0} steps)${!banks[bankName]?.enabled ? " - Disabled" : ""
                     }`}
                 >
@@ -305,17 +453,12 @@ export const StepSequencer = memo(
               currentBeat={currentBeat}
               sequenceLength={settings.length}
               isRecording={isRecording}
-              editMode={settings.editMode}
+              editMode={editMode}
               onStepToggle={sequencer.handleStepToggle}
-              onBeatSelect={(beat) => sequencer.setCurrentBeat(beat)}
+              onBeatSelect={onSelectedBeatChange}
               hasStepAt={sequencer.hasStepAt}
-              getStepData={(beat, note) => {
-                const steps = sequencer.getBeatSteps(beat);
-                return steps.find((step) => step.note === note) || null;
-              }}
-              onUpdateStep={(beat, note, updates) => {
-                sequencer.updateStep(beat, note, updates);
-              }}
+              getStepData={getStepDataMemo}
+              onUpdateStep={onUpdateStepMemo}
               onPlayNotes={onPlayNotes}
               onStopNotes={onStopNotes}
             />
@@ -337,6 +480,7 @@ export const StepSequencer = memo(
                   sequencer.handleLengthChange(parseInt(e.target.value))
                 }
                 className="range range-sm range-primary flex-1 max-w-xs"
+                style={{ touchAction: "manipulation" }}
               />
               <div className="flex gap-1 text-xs text-base-content/50">
                 <span>{SEQUENCER_CONSTANTS.MIN_BEATS}</span>
@@ -349,13 +493,14 @@ export const StepSequencer = memo(
             <div className="flex items-center gap-1">
               <span className="text-xs text-base-content/70">Display:</span>
               <select
-                className="select select-sm select-bordered"
+                className="select select-sm select-bordered touch-manipulation"
                 value={settings.displayMode}
                 onChange={(e) =>
                   sequencer.handleDisplayModeChange(
                     e.target.value as DisplayMode
                   )
                 }
+                style={mobileButtonStyle}
               >
                 {displayModeOptions.map(({ value, label }) => (
                   <option key={value} value={value}>
@@ -370,22 +515,28 @@ export const StepSequencer = memo(
               <span className="text-xs text-base-content/70">Edit:</span>
               <div className="join">
                 <button
-                  className={`btn btn-sm join-item ${settings.editMode === "note" ? "btn-primary" : "btn-outline"}`}
-                  onClick={() => sequencer.handleEditModeChange("note")}
+                  className={`btn btn-sm join-item touch-manipulation ${editMode === "note" ? "btn-primary" : "btn-outline"}`}
+                  onMouseDown={() => onEditModeChange("note")}
+                  ref={noteModeTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
+                  style={mobileButtonStyle}
                   title="Note Mode - Toggle notes on/off"
                 >
                   📝
                 </button>
                 <button
-                  className={`btn btn-sm join-item ${settings.editMode === "gate" ? "btn-primary" : "btn-outline"}`}
-                  onClick={() => sequencer.handleEditModeChange("gate")}
+                  className={`btn btn-sm join-item touch-manipulation ${editMode === "gate" ? "btn-primary" : "btn-outline"}`}
+                  onMouseDown={() => onEditModeChange("gate")}
+                  ref={gateModeTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
+                  style={mobileButtonStyle}
                   title="Gate Mode - Adjust note length (drag left-right)"
                 >
                   ⏱️
                 </button>
                 <button
-                  className={`btn btn-sm join-item ${settings.editMode === "velocity" ? "btn-primary" : "btn-outline"}`}
-                  onClick={() => sequencer.handleEditModeChange("velocity")}
+                  className={`btn btn-sm join-item touch-manipulation ${editMode === "velocity" ? "btn-primary" : "btn-outline"}`}
+                  onMouseDown={() => onEditModeChange("velocity")}
+                  ref={velocityModeTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
+                  style={mobileButtonStyle}
                   title="Velocity Mode - Adjust note volume (drag up-down)"
                 >
                   🔊
@@ -397,15 +548,19 @@ export const StepSequencer = memo(
             <div className="flex items-center gap-2 flex-wrap">
               <div className="join">
                 <button
-                  className="btn btn-sm join-item btn-outline btn-info"
-                  onClick={() => sequencer.copyBank(currentBank)}
+                  className="btn btn-sm join-item btn-outline btn-info touch-manipulation"
+                  onMouseDown={() => sequencer.copyBank(currentBank)}
+                  ref={copyTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
+                  style={mobileButtonStyle}
                   title={`Copy Bank ${currentBank} patterns`}
                 >
                   📋 Copy
                 </button>
                 <button
-                  className="btn btn-sm join-item btn-outline btn-success"
-                  onClick={() => sequencer.pasteBank(currentBank)}
+                  className="btn btn-sm join-item btn-outline btn-success touch-manipulation"
+                  onMouseDown={() => sequencer.pasteBank(currentBank)}
+                  ref={pasteTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
+                  style={mobileButtonStyle}
                   title={`Paste copied patterns to Bank ${currentBank}`}
                 >
                   📄 Paste
@@ -415,24 +570,14 @@ export const StepSequencer = memo(
               <div className="divider divider-horizontal !w-0"></div>
 
               <button
-                className="btn btn-xs btn-outline btn-error"
-                onClick={sequencer.handleClearBank}
+                className="btn btn-xs btn-outline btn-error touch-manipulation"
+                onMouseDown={sequencer.handleClearBank}
+                ref={clearTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
+                style={mobileButtonStyle}
                 title={`Clear Bank ${currentBank}`}
               >
                 Clear
               </button>
-              {instrumentManager && (
-                <button
-                  className="btn btn-xs btn-outline btn-warning"
-                  onClick={() => {
-                    console.log("🆘 Emergency cleanup triggered from sequencer UI");
-                    instrumentManager.emergencyCleanup();
-                  }}
-                  title="Emergency cleanup - fixes stuck sounds"
-                >
-                  🆘 Fix Stuck
-                </button>
-              )}
             </div>
           </div>
         </div>

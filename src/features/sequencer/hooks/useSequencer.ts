@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Socket } from "socket.io-client";
+import { debounce } from "lodash";
 import { useSequencerStore } from "../stores/sequencerStore";
 import { SequencerService } from "../services/SequencerService";
 import { MetronomeSocketService } from "@/features/metronome/services/MetronomeSocketService";
-import type { SequencerSpeed, BankMode, DisplayMode, EditMode } from "../types";
+import { getSequencerWorker } from "../services/SequencerWorkerService";
+import type { SequencerSpeed, BankMode, DisplayMode } from "../types";
 import { SEQUENCER_CONSTANTS } from "@/shared/constants";
 import type { SequencerStep } from "../types";
 
@@ -35,6 +37,19 @@ export const useSequencer = ({
   const hasStartedPlayingRef = useRef(false);
   const currentlyPlayingNotesRef = useRef<Set<string>>(new Set()); // Track playing notes for hard-stop
   
+  // Debounced service update functions to prevent excessive calls with Lodash
+  const debouncedServiceUpdate = useRef(
+    debounce((bpm: number, speed: SequencerSpeed, length: number) => {
+      if (sequencerServiceRef.current && bpm > 0) {
+        sequencerServiceRef.current.updateSettings(bpm, speed, length);
+      }
+    }, 100, { 
+      leading: false,  // Don't call on leading edge
+      trailing: true,  // Call on trailing edge (default)
+      maxWait: 300     // Maximum wait time to ensure updates don't get stuck
+    })
+  );
+
   // Update refs when values change
   useEffect(() => {
     onPlayNotesRef.current = onPlayNotes;
@@ -186,7 +201,7 @@ export const useSequencer = ({
                 setTimeout(() => {
                   // Determine which notes should stop (not continuing to next beat)
                   const notesToStop = beatNotes
-                    .filter((noteData, index) => !hasNextSameNotes[index] || minGate < 1.0)
+                    .filter((_noteData, index) => !hasNextSameNotes[index] || minGate < 1.0)
                     .map(noteData => noteData.note);
                   
                   if (notesToStop.length > 0) {
@@ -316,6 +331,8 @@ export const useSequencer = ({
         metronomeServiceRef.current.removeListeners();
         metronomeServiceRef.current = null;
       }
+      // Cancel any pending debounced calls
+      debouncedServiceUpdate.current.cancel();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty dependency array - only run once
@@ -555,14 +572,12 @@ export const useSequencer = ({
   const handleSpeedChange = useCallback(
     (speed: SequencerSpeed) => {
       sequencerStoreRef.current.setSpeed(speed);
-      // Update the sequencer service immediately for instant speed changes
-      if (sequencerServiceRef.current && currentBPMRef.current > 0) {
-        sequencerServiceRef.current.updateSettings(
-          currentBPMRef.current,
-          speed,
-          sequencerStoreRef.current.settings.length
-        );
-      }
+      // Use debounced update to prevent excessive service calls
+      debouncedServiceUpdate.current(
+        currentBPMRef.current,
+        speed,
+        sequencerStoreRef.current.settings.length
+      );
     },
     []
   );
@@ -570,14 +585,12 @@ export const useSequencer = ({
   const handleLengthChange = useCallback(
     (length: number) => {
       sequencerStoreRef.current.setLength(length);
-      // Update the sequencer service immediately for instant length changes
-      if (sequencerServiceRef.current && currentBPMRef.current > 0) {
-        sequencerServiceRef.current.updateSettings(
-          currentBPMRef.current,
-          sequencerStoreRef.current.settings.speed,
-          length
-        );
-      }
+      // Use debounced update to prevent excessive service calls
+      debouncedServiceUpdate.current(
+        currentBPMRef.current,
+        sequencerStoreRef.current.settings.speed,
+        length
+      );
     },
     []
   );
@@ -596,12 +609,7 @@ export const useSequencer = ({
     []
   );
 
-  const handleEditModeChange = useCallback(
-    (mode: EditMode) => {
-      sequencerStoreRef.current.setEditMode(mode);
-    },
-    []
-  );
+
 
   // Recording functions
   const handleToggleRecording = useCallback(() => {
@@ -666,7 +674,7 @@ export const useSequencer = ({
     banks: sequencerStore.banks,
     currentBank: sequencerStore.currentBank,
     currentBeat: sequencerStore.currentBeat,
-    selectedBeat: sequencerStore.selectedBeat,
+    // Note: selectedBeat and editMode are now managed by React state via useSequencerUI
     isPlaying: sequencerStore.isPlaying,
     isPaused: sequencerStore.isPaused,
     isRecording: sequencerStore.isRecording,
@@ -674,7 +682,7 @@ export const useSequencer = ({
     waitingForMetronome: sequencerStore.waitingForMetronome,
     waitingBankChange: sequencerStore.waitingBankChange,
     getTotalStepsCount: sequencerStore.getTotalStepsCount,
-    setSelectedBeat: sequencerStore.setSelectedBeat,
+    // Note: setSelectedBeat is now managed by useSequencerUI
     setCurrentBeat: sequencerStore.setCurrentBeat,
     clearAllBanks: sequencerStore.clearAllBanks,
 
@@ -699,15 +707,15 @@ export const useSequencer = ({
     // Bank management
     handleBankSwitch,
     handleBankToggleEnabled,
-    copyBank: (bankId: string) => sequencerStoreRef.current.copyBank(bankId),
-    pasteBank: (bankId: string) => sequencerStoreRef.current.pasteBank(bankId),
+            copyBank: (bankId: string) => sequencerStoreRef.current.copyBank(bankId),
+        pasteBank: (bankId: string) => sequencerStoreRef.current.pasteBank(bankId),
 
     // Settings
     handleSpeedChange,
     handleLengthChange,
     handleBankModeChange,
     handleDisplayModeChange,
-    handleEditModeChange,
+    // Note: handleEditModeChange is now managed by useSequencerUI
 
     // Recording
     handleToggleRecording,
@@ -721,5 +729,8 @@ export const useSequencer = ({
     getCurrentBankSteps: () => sequencerStoreRef.current.banks[sequencerStoreRef.current.currentBank]?.steps || [],
     getBeatSteps: (beat: number) => sequencerStoreRef.current.getStepsForBeat(sequencerStoreRef.current.currentBank, beat),
     hasStepAt: (beat: number, note: string) => sequencerStoreRef.current.hasStepAtBeat(sequencerStoreRef.current.currentBank, beat, note),
+    
+    // Worker performance monitoring
+    getWorkerStats: () => getSequencerWorker().getStats(),
   };
 }; 
