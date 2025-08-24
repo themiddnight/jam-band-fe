@@ -17,6 +17,8 @@ import {
   LazySynthControlsWrapper as SynthControls,
 } from "@/features/instruments";
 import { MetronomeControls } from "@/features/metronome";
+import { StepSequencer } from "@/features/sequencer";
+import { useSequencer } from "@/features/sequencer/hooks/useSequencer";
 import { ChatBox, ApprovalWaiting } from "@/features/rooms";
 import { RoomMembers } from "@/features/rooms";
 import { useRoom } from "@/features/rooms";
@@ -92,6 +94,7 @@ const Room = memo(() => {
     getCurrentInstrumentControlType,
     updateSynthParams,
     loadPresetParams,
+    instrumentManager,
 
     // Audio management
     stopSustainedNotes,
@@ -104,6 +107,7 @@ const Room = memo(() => {
   // All hooks must be called before any early returns
   // Get the current active socket directly instead of using a ref
   const activeSocket = getActiveSocket();
+  
   const { currentPing } = usePingMeasurement({
     socket: activeSocket,
     enabled: isConnected,
@@ -221,6 +225,33 @@ const Room = memo(() => {
     [handleStopNote],
   );
 
+  // Sequencer hook for recording integration
+  const sequencer = useSequencer({
+    socket: activeSocket,
+    currentCategory,
+    onPlayNotes: handlePlayNotesWrapper,
+    onStopNotes: handleStopNotesWrapper,
+  });
+
+  // Enhanced note playing wrapper that also handles recording
+  const handlePlayNotesWithRecording = useCallback(
+    (notes: string[], velocity: number, isKeyHeld: boolean) => {
+      // Always play the note
+      handlePlayNote(notes, velocity, "note_on", isKeyHeld);
+      
+      // Also record to sequencer if recording is enabled
+      if (sequencer.isRecording) {
+        notes.forEach(note => {
+          // Determine if this is realtime recording (while sequencer is playing)
+          const isRealtime = sequencer.isPlaying;
+          sequencer.handleRecordNote(note, velocity, undefined, isRealtime);
+        });
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [handlePlayNote, sequencer.isRecording, sequencer.handleRecordNote],
+  );
+
   // Memoize commonProps to prevent child component re-renders
   const commonProps = useMemo(
     () => ({
@@ -229,7 +260,7 @@ const Room = memo(() => {
         scale: scaleState.scale,
         getScaleNotes: scaleState.getScaleNotes,
       },
-      onPlayNotes: handlePlayNotesWrapper,
+      onPlayNotes: handlePlayNotesWithRecording,
       onStopNotes: handleStopNotesWrapper,
       onStopSustainedNotes: stopSustainedNotes,
       onReleaseKeyHeldNote: handleReleaseKeyHeldNote,
@@ -240,13 +271,13 @@ const Room = memo(() => {
       scaleState.rootNote,
       scaleState.scale,
       scaleState.getScaleNotes,
-      handlePlayNotesWrapper,
+      handlePlayNotesWithRecording,
       handleStopNotesWrapper,
       stopSustainedNotes,
       handleReleaseKeyHeldNote,
       handleSustainChange,
       handleSustainToggleChange,
-    ],
+    ]
   );
 
   // Preload critical components when component mounts
@@ -710,7 +741,7 @@ const Room = memo(() => {
                 {/* Synthesizer Controls */}
                 {currentCategory === InstrumentCategory.Synthesizer &&
                   synthState && (
-                    <div className="w-full max-w-6xl mb-3">
+                    <div className="w-full max-w-6xl">
                       <SynthControls
                         currentInstrument={currentInstrument}
                         synthState={synthState}
@@ -719,6 +750,25 @@ const Room = memo(() => {
                       />
                     </div>
                   )}
+
+                {/* Step Sequencer */}
+                <div className="w-full max-w-6xl">
+                  <StepSequencer
+                  instrumentManager={instrumentManager}
+                    socket={activeSocket}
+                    currentCategory={currentCategory}
+                    availableSamples={availableSamples}
+                    scaleNotes={[
+                      ...scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, 2),
+                      ...scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, 3),
+                      ...scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, 4),
+                      ...scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, 5),
+                      ...scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, 6),
+                    ]}
+                    onPlayNotes={handlePlayNotesWrapper}
+                    onStopNotes={handleStopNotesWrapper}
+                  />
+                </div>
 
                 {/* Instrument Interface */}
                 {renderInstrumentControl()}

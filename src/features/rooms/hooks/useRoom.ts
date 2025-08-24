@@ -9,6 +9,7 @@ import { useUserStore } from "@/shared/stores/userStore";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import type { Socket } from "socket.io-client";
+import { useSequencerStore } from "@/features/sequencer";
 
 /**
  * Room hook using the RoomSocketManager for namespace-based connections
@@ -47,6 +48,7 @@ export const useRoom = () => {
     updateRemoteUserInstrument,
     playRemoteUserNote,
     stopRemoteUserNote,
+    instrumentManager,
   } = useInstrument();
 
   // Room socket
@@ -61,7 +63,7 @@ export const useRoom = () => {
     playNote,
     changeInstrument,
     updateSynthParams,
-
+    stopAllNotes,
     sendChatMessage,
     approveMember,
     rejectMember,
@@ -73,6 +75,7 @@ export const useRoom = () => {
     onUserLeft,
     onGuestCancelled,
     onMemberRejected,
+    onStopAllNotes,
     getActiveSocket,
     cleanup: socketCleanup,
   } = useRoomSocket();
@@ -80,6 +83,9 @@ export const useRoom = () => {
   // Room store
   const { currentRoom, currentUser, pendingApproval, clearRoom } =
     useRoomStore();
+
+  // Sequencer store
+  const sequencerStore = useSequencerStore();
 
   // UI state
   const [showLeaveConfirmModal, setShowLeaveConfirmModal] = useState(false);
@@ -269,41 +275,51 @@ export const useRoom = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onNoteReceived, connectionState]);
 
-  // Set up instrument changed handler
+  // Handle instrument change
   const handleInstrumentChanged = useCallback(
-    async (data: any) => {
-      console.log("🎵 Instrument changed received:", data);
-      console.log("🎵 Remote instrument change details:", {
-        userId: data.userId,
-        username: data.username,
-        instrument: data.instrument,
-        category: data.category,
-        fullData: data,
-      });
+    (data: {
+      userId: string;
+      username: string;
+      instrument: string;
+      category: string;
+    }) => {
+      console.log("🎵 Instrument changed event received:", data);
+      
+      // Stop all notes for this remote user before updating their instrument
+      if (data.userId !== userId) {
+        console.log("🛑 Stopping all notes for remote user before instrument change:", data.username);
+        // Stop all notes for this remote user
+        stopRemoteUserNote(data.userId, [], data.instrument, data.category as any);
+      }
+      
+      // Update the remote user's instrument
+      updateRemoteUserInstrument(
+        data.userId,
+        data.username,
+        data.instrument,
+        data.category as any,
+      );
+    },
+    [userId, updateRemoteUserInstrument, stopRemoteUserNote],
+  );
 
-      // Update the remote user's instrument directly using the instrument manager
-      try {
-        console.log(
-          `🎵 Updating remote instrument ${data.instrument} (${data.category}) for user ${data.username}`,
-        );
-        await updateRemoteUserInstrument(
-          data.userId,
-          data.username,
-          data.instrument,
-          data.category as InstrumentCategory,
-        );
-        console.log(
-          `✅ Successfully updated remote instrument ${data.instrument} for user ${data.username}`,
-        );
-      } catch (error) {
-        console.error(
-          `❌ Failed to update remote instrument for ${data.username}:`,
-          error,
-        );
-        console.error(`❌ Error details:`, error);
+  // Handle stop all notes
+  const handleStopAllNotes = useCallback(
+    (data: {
+      userId: string;
+      username: string;
+      instrument: string;
+      category: string;
+    }) => {
+      console.log("🛑 Stop all notes event received:", data);
+      // Stop all notes for the remote user
+      if (data.userId !== userId) {
+        console.log("🛑 Stopping all notes for remote user:", data.username);
+        // Always stop all notes for this user, regardless of playing indicators
+        stopRemoteUserNote(data.userId, [], data.instrument, data.category as any);
       }
     },
-    [updateRemoteUserInstrument],
+    [userId, stopRemoteUserNote],
   );
 
   useEffect(() => {
@@ -321,6 +337,23 @@ export const useRoom = () => {
     return unsubscribe;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onInstrumentChanged, connectionState]);
+
+  // Set up stop all notes handler
+  useEffect(() => {
+    // Only set up the handler when we're connected to a room
+    if (connectionState !== ConnectionState.IN_ROOM) {
+      console.log(
+        "🔧 Skipping onStopAllNotes setup - not in room yet:",
+        connectionState,
+      );
+      return;
+    }
+
+    console.log("🔧 Setting up onStopAllNotes handler");
+    const unsubscribe = onStopAllNotes(handleStopAllNotes);
+    return unsubscribe;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onStopAllNotes, connectionState]);
 
   // Set up synth params changed handler
   useEffect(() => {
@@ -582,6 +615,19 @@ export const useRoom = () => {
         "category:",
         currentCategory,
       );
+
+      // Stop all notes before switching instruments
+      if (isConnected) {
+        console.log("🛑 Sending stop all notes to remote users before instrument switch");
+        stopAllNotes(currentInstrument, currentCategory);
+      }
+
+      // Stop sequencer playback if it's playing
+      if (sequencerStore.isPlaying) {
+        console.log("🛑 Stopping sequencer playback before instrument switch");
+        sequencerStore.hardStop();
+      }
+
       await handleInstrumentChange(instrument);
       if (isConnected) {
         console.log(
@@ -614,12 +660,28 @@ export const useRoom = () => {
       currentCategory,
       synthState,
       updateSynthParams,
+      sequencerStore,
+      stopAllNotes,
+      currentInstrument,
     ],
   );
 
   const handleCategoryChangeWrapper = useCallback(
     (category: string) => {
       console.log("🎵 Category change wrapper called:", category);
+      
+      // Stop all notes before changing category
+      if (isConnected) {
+        console.log("🛑 Sending stop all notes to remote users before category change");
+        stopAllNotes(currentInstrument, currentCategory);
+      }
+
+      // Stop sequencer playback if it's playing
+      if (sequencerStore.isPlaying) {
+        console.log("🛑 Stopping sequencer playback before category change");
+        sequencerStore.hardStop();
+      }
+      
       handleCategoryChange(category as any);
       // Don't send remote change here - let the subsequent instrument change handle it
       // The local category change will trigger an instrument change to the default instrument
@@ -628,7 +690,7 @@ export const useRoom = () => {
         "🎵 Category changed locally, waiting for instrument change to sync to remote",
       );
     },
-    [handleCategoryChange],
+    [handleCategoryChange, isConnected, stopAllNotes, currentInstrument, currentCategory, sequencerStore],
   );
 
   // Synth parameter update
@@ -747,6 +809,9 @@ export const useRoom = () => {
     // Audio management
     stopSustainedNotes,
     initializeAudioContext,
+
+    // Instrument manager
+    instrumentManager,
 
     // Socket connection
     socketRef,
