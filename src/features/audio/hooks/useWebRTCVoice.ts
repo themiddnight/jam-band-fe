@@ -3,6 +3,7 @@ import {
   applyBrowserSpecificOptimizations,
   getBrowserAudioCapabilities,
 } from "../utils/ultraLowLatencyOptimizer";
+import { SocketAuthGuard } from "../utils/socketAuthGuard";
 import { useRef, useCallback, useEffect, useState, useMemo } from "react";
 import { Socket } from "socket.io-client";
 
@@ -385,8 +386,8 @@ export const useWebRTCVoice = ({
       ],
       iceCandidatePoolSize: 10, // Increased for mesh networks
       iceTransportPolicy: "all", // Use all available connection paths
-      // Mesh network optimizations
-      bundlePolicy: "max-bundle", // Bundle all media on single transport for efficiency
+      // Mesh network optimizations - use balanced bundle policy to avoid BUNDLE group issues
+      bundlePolicy: "balanced", // Changed from max-bundle to avoid SDP BUNDLE group errors
       rtcpMuxPolicy: "require", // Reduce port usage for mesh networks
       // Ultra-low latency optimizations
       enableDscp: true, // Enable DSCP marking for network prioritization
@@ -920,48 +921,42 @@ export const useWebRTCVoice = ({
       });
       lastLocalMutedRef.current = !hasActiveTrack;
 
-      // Announce that this user joined voice chat (all users need to announce to receive offers)
-      if (socket && roomId && currentUserId && currentUsername) {
-        console.log("📢 WebRTC: Announcing join_voice to room", {
-          roomId,
-          currentUserId,
-          currentUsername,
-          canTransmit,
-        });
-        socket.emit("join_voice", {
-          roomId,
-          userId: currentUserId,
-          username: currentUsername,
-        });
-        // Also broadcast our current mute state immediately so remotes reflect it on first render
-        try {
-          console.log("📢 WebRTC: Broadcasting initial mute state", {
-            isMuted: !hasActiveTrack,
+      // Use auth guard to ensure socket is ready before announcing voice presence
+      const announceVoicePresence = async () => {
+        const isReady = await SocketAuthGuard.waitForAuthentication(socket);
+
+        if (isReady && roomId && currentUserId && currentUsername) {
+          console.log("📢 WebRTC: Announcing join_voice to room", {
+            roomId,
+            currentUserId,
+            currentUsername,
+            canTransmit,
           });
-          socket.emit("voice_mute_changed", {
+          socket!.emit("join_voice", {
             roomId,
             userId: currentUserId,
-            isMuted: !hasActiveTrack,
+            username: currentUsername,
           });
-        } catch {
-          /* noop */
+          // Also broadcast our current mute state immediately so remotes reflect it on first render
+          try {
+            console.log("📢 WebRTC: Broadcasting initial mute state", {
+              isMuted: !hasActiveTrack,
+            });
+            socket!.emit("voice_mute_changed", {
+              roomId,
+              userId: currentUserId,
+              isMuted: !hasActiveTrack,
+            });
+          } catch {
+            /* noop */
+          }
+        } else {
+          console.warn("⚠️ Cannot announce voice join - socket not ready or missing data");
         }
-      } else {
-        console.warn("⚠️ Cannot announce voice join - missing requirements:", {
-          hasSocket: !!socket,
-          hasRoomId: !!roomId,
-          hasUserId: !!currentUserId,
-          hasUsername: !!currentUsername,
-        });
+      };
 
-        // If socket is not available yet, set up a retry mechanism
-        if (!socket && roomId && currentUserId && currentUsername) {
-          console.log("🔄 WebRTC: Socket not ready, will retry when available");
-
-          // Note: We'll rely on the socket reconnection effect to handle this case
-          // The socket reconnection effect will re-announce voice presence when socket becomes available
-        }
-      }
+      // Announce voice presence when socket is ready
+      announceVoicePresence();
     },
     [
       startAudioLevelMonitoring,
@@ -1268,7 +1263,12 @@ export const useWebRTCVoice = ({
   // Initiate voice call to a user - with mesh network limits
   const initiateVoiceCall = useCallback(
     async (targetUserId: string) => {
-      if (!isEnabled || !socket) {
+      if (!isEnabled || !socket || !socket.connected) {
+        console.warn("🚫 WebRTC: Cannot initiate call - missing requirements:", {
+          isEnabled,
+          hasSocket: !!socket,
+          socketConnected: socket?.connected
+        });
         return;
       }
 
@@ -1379,6 +1379,12 @@ export const useWebRTCVoice = ({
         // Create and set local description (offer)
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
+
+        // Ensure socket is authenticated before sending offer
+        const isReady = await SocketAuthGuard.waitForAuthentication(socket);
+        if (!isReady) {
+          throw new Error("Socket not authenticated for WebRTC offer");
+        }
 
         console.log("📤 WebRTC: Sending offer to", targetUserId);
         socket.emit("voice_offer", {
@@ -1714,6 +1720,13 @@ export const useWebRTCVoice = ({
       error.message &&
       error.message.includes("WebRTC validation failed")
     ) {
+      // Handle authentication errors gracefully to prevent retry loops
+      if (error.details && error.details.includes("User not authenticated")) {
+        console.warn("🔐 WebRTC: Authentication not ready, will retry when socket reconnects");
+        // Don't set connection error for auth issues - let socket reconnection handle it
+        return;
+      }
+
       setConnectionError(
         "Voice connection validation failed. Please refresh the page.",
       );
@@ -2276,12 +2289,12 @@ export const useWebRTCVoice = ({
           return prev.map((u) =>
             u.userId === currentUserId
               ? {
-                  ...u,
-                  username: currentUsername, // Update username in case it changed
-                  isMuted: !localStreamRef.current
-                    ?.getAudioTracks()
-                    .some((t) => t.enabled),
-                }
+                ...u,
+                username: currentUsername, // Update username in case it changed
+                isMuted: !localStreamRef.current
+                  ?.getAudioTracks()
+                  .some((t) => t.enabled),
+              }
               : u,
           );
         });
