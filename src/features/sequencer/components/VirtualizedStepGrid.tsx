@@ -42,7 +42,11 @@ interface CellData {
   getStepData: (beat: number, note: string) => SequencerStep | null;
   onPlayNotes: (notes: string[], velocity: number, isKeyHeld: boolean) => void;
   onStopNotes: (notes: string[]) => void;
-  onUpdateStep: (beat: number, note: string, updates: Partial<SequencerStep>) => void;
+  onUpdateStep: (
+    beat: number,
+    note: string,
+    updates: Partial<SequencerStep>
+  ) => void;
   gridConstants: {
     gridCellSize: number;
     noteCellSize: number;
@@ -62,414 +66,410 @@ const isNoteRow = (row: SequencerRow): row is NoteRow => {
 };
 
 // Beat header cell component
-const BeatHeaderCell = memo(({ beatIndex, onBeatSelect, onCurrentBeatChange }: {
-  beatIndex: number;
-  onBeatSelect: (beat: number) => void;
-  onCurrentBeatChange: (beat: number) => void;
-}) => (
-  <button
-    onClick={() => {
-      onBeatSelect(beatIndex);
-      onCurrentBeatChange(beatIndex);
-    }}
-    className="w-full h-full flex items-center justify-center text-xs font-bold border-b-2 transition-colors cursor-pointer hover:bg-base-200"
-    style={{
-      borderColor:
-        (beatIndex + 1) % 4 === 1
-          ? "hsl(var(--bc) / 0.3)"
-          : "hsl(var(--bc) / 0.2)",
-      color:
-        (beatIndex + 1) % 4 === 1
-          ? "hsl(var(--bc))"
-          : "hsl(var(--bc) / 0.7)",
-    }}
-    title={`Jump to beat ${beatIndex + 1}`}
-  >
-    {beatIndex + 1}
-  </button>
-));
+const BeatHeaderCell = memo(
+  ({
+    beatIndex,
+    onBeatSelect,
+    onCurrentBeatChange,
+  }: {
+    beatIndex: number;
+    onBeatSelect: (beat: number) => void;
+    onCurrentBeatChange: (beat: number) => void;
+  }) => (
+    <button
+      onClick={() => {
+        onBeatSelect(beatIndex);
+        onCurrentBeatChange(beatIndex);
+      }}
+      className="w-full h-full flex items-center justify-center text-xs font-bold border-b-2 transition-colors cursor-pointer hover:bg-base-200"
+      style={{
+        borderColor:
+          (beatIndex + 1) % 4 === 1
+            ? "hsl(var(--bc) / 0.3)"
+            : "hsl(var(--bc) / 0.2)",
+        color:
+          (beatIndex + 1) % 4 === 1 ? "hsl(var(--bc))" : "hsl(var(--bc) / 0.7)",
+      }}
+      title={`Jump to beat ${beatIndex + 1}`}
+    >
+      {beatIndex + 1}
+    </button>
+  )
+);
 
 BeatHeaderCell.displayName = "BeatHeaderCell";
 
 // Row label cell component
-const RowLabelCell = memo(({ row, onPlayNotes, onStopNotes }: {
-  row: SequencerRow;
-  onPlayNotes: (notes: string[], velocity: number, isKeyHeld: boolean) => void;
-  onStopNotes: (notes: string[]) => void;
-}) => {
-  const getNoteName = useCallback(() => {
-    return isDrumRow(row) ? row.sampleName : row.note;
-  }, [row]);
+const RowLabelCell = memo(
+  ({
+    row,
+    onPlayNotes,
+    onStopNotes,
+  }: {
+    row: SequencerRow;
+    onPlayNotes: (
+      notes: string[],
+      velocity: number,
+      isKeyHeld: boolean
+    ) => void;
+    onStopNotes: (notes: string[]) => void;
+  }) => {
+    const getNoteName = useCallback(() => {
+      return isDrumRow(row) ? row.sampleName : row.note;
+    }, [row]);
 
-  const getLabelClasses = useCallback(() => {
-    const baseClasses = `w-full h-full text-xs text-white font-medium p-2 border-r border-base-200 flex items-center justify-end cursor-pointer transition-colors hover:bg-base-200 active:bg-base-300 select-none`;
+    const getLabelClasses = useCallback(() => {
+      const baseClasses = `w-full h-full text-xs text-white font-medium p-2 border-r border-base-200 flex items-center justify-end cursor-pointer transition-colors hover:bg-base-200 active:bg-base-300 select-none`;
 
-    if (isNoteRow(row) && !row.inScale) {
-      return `${baseClasses} text-base-content/50`;
-    }
+      if (isNoteRow(row) && !row.inScale) {
+        return `${baseClasses} text-base-content/50`;
+      }
 
-    return `${baseClasses} text-base-content`;
-  }, [row]);
+      return `${baseClasses} text-base-content`;
+    }, [row]);
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      const noteName = getNoteName();
-      onPlayNotes([noteName], 80, true);
-    },
-    [getNoteName, onPlayNotes]
-  );
+    const handleMouseDown = useCallback(
+      (e: React.MouseEvent) => {
+        e.preventDefault();
+        const noteName = getNoteName();
+        onPlayNotes([noteName], 80, true);
+      },
+      [getNoteName, onPlayNotes]
+    );
 
-  const handleMouseUp = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      const noteName = getNoteName();
-      onStopNotes([noteName]);
-    },
-    [getNoteName, onStopNotes]
-  );
+    const handleMouseUp = useCallback(
+      (e: React.MouseEvent) => {
+        e.preventDefault();
+        const noteName = getNoteName();
+        onStopNotes([noteName]);
+      },
+      [getNoteName, onStopNotes]
+    );
 
-  const handleMouseLeave = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      const noteName = getNoteName();
-      onStopNotes([noteName]);
-    },
-    [getNoteName, onStopNotes]
-  );
+    const handleMouseLeave = useCallback(
+      (e: React.MouseEvent) => {
+        e.preventDefault();
+        const noteName = getNoteName();
+        onStopNotes([noteName]);
+      },
+      [getNoteName, onStopNotes]
+    );
 
-  return (
-    <button
-      className={getLabelClasses()}
-      onMouseDown={handleMouseDown}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseLeave}
-      title={`Preview ${isDrumRow(row) ? row.displayName : row.displayName}`}
-    >
-      <span className="truncate">
-        {isDrumRow(row) ? row.displayName : row.displayName}
-      </span>
-    </button>
-  );
-});
+    return (
+      <button
+        className={getLabelClasses()}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+        title={`Preview ${isDrumRow(row) ? row.displayName : row.displayName}`}
+      >
+        <span className="truncate">
+          {isDrumRow(row) ? row.displayName : row.displayName}
+        </span>
+      </button>
+    );
+  }
+);
 
 RowLabelCell.displayName = "RowLabelCell";
 
 // Step cell component
-const StepCell = memo(({ 
-  row, 
-  beatIndex, 
-  isRecording, 
-  editMode, 
-  hasStepAt, 
-  getStepData, 
-  onStepToggle, 
-  onUpdateStep,
-  gridConstants
-}: {
-  row: SequencerRow;
-  beatIndex: number;
-  isRecording: boolean;
-  editMode: EditMode;
-  hasStepAt: (beat: number, note: string) => boolean;
-  getStepData: (beat: number, note: string) => SequencerStep | null;
-  onStepToggle: (beat: number, note: string) => void;
-  onUpdateStep: (beat: number, note: string, updates: Partial<SequencerStep>) => void;
-  gridConstants: {
-    gridCellSize: number;
-    noteCellSize: number;
-    cellGap: number;
-    labelWidth: number;
-    beatHeaderHeight: number;
-  };
-}) => {
-  const note = isDrumRow(row) ? row.sampleName : row.note;
-  const isActive = hasStepAt(beatIndex, note);
-  const stepData = getStepData(beatIndex, note);
+const StepCell = memo(
+  ({
+    row,
+    beatIndex,
+    isRecording,
+    editMode,
+    hasStepAt,
+    getStepData,
+    onStepToggle,
+    onUpdateStep,
+    gridConstants,
+  }: {
+    row: SequencerRow;
+    beatIndex: number;
+    isRecording: boolean;
+    editMode: EditMode;
+    hasStepAt: (beat: number, note: string) => boolean;
+    getStepData: (beat: number, note: string) => SequencerStep | null;
+    onStepToggle: (beat: number, note: string) => void;
+    onUpdateStep: (
+      beat: number,
+      note: string,
+      updates: Partial<SequencerStep>
+    ) => void;
+    gridConstants: {
+      gridCellSize: number;
+      noteCellSize: number;
+      cellGap: number;
+      labelWidth: number;
+      beatHeaderHeight: number;
+    };
+  }) => {
+    const note = isDrumRow(row) ? row.sampleName : row.note;
+    const isActive = hasStepAt(beatIndex, note);
+    const stepData = getStepData(beatIndex, note);
 
-  // Drag state for gate and velocity editing
-  const [isDragging, setIsDragging] = React.useState(false);
-  const [dragStartPos, setDragStartPos] = React.useState({ x: 0, y: 0 });
-  const [dragStartValue, setDragStartValue] = React.useState(0);
+    // Drag state for gate and velocity editing
+    const [isDragging, setIsDragging] = React.useState(false);
+    const [dragStartPos, setDragStartPos] = React.useState({ x: 0, y: 0 });
+    const [dragStartValue, setDragStartValue] = React.useState(0);
 
-  // Cell styling based on edit mode
-  const getCellClasses = useCallback(() => {
-    const baseClasses = `w-full h-full btn btn-sm p-0 border border-white/20 transition-all duration-75 relative overflow-hidden cursor-pointer`;
+    // Cell styling based on edit mode
+    const getCellClasses = useCallback(() => {
+      const baseClasses = `w-full h-full btn btn-sm p-0 border border-white/20 transition-all duration-75 relative overflow-hidden cursor-pointer`;
 
-    if (isActive && stepData) {
-      if (editMode === "gate") {
-        return `${baseClasses} bg-success/20 border-success text-success-content hover:bg-success/30 active:bg-success/40`;
-      } else if (editMode === "velocity") {
-        return `${baseClasses} bg-warning/20 border-warning text-warning-content hover:bg-warning/30 active:bg-warning/40`;
-      } else {
-        if (isDrumRow(row)) {
-          return `${baseClasses} btn-accent border-accent-focus text-accent-content`;
-        } else if (isNoteRow(row) && !row.inScale) {
-          return `${baseClasses} btn-warning border-warning-focus text-warning-content opacity-75`;
+      if (isActive && stepData) {
+        if (editMode === "gate") {
+          return `${baseClasses} bg-success/20 border-success text-success-content hover:bg-success/30 active:bg-success/40`;
+        } else if (editMode === "velocity") {
+          return `${baseClasses} bg-warning/20 border-warning text-warning-content hover:bg-warning/30 active:bg-warning/40`;
         } else {
-          return `${baseClasses} btn-accent border-accent-focus text-accent-content`;
+          if (isDrumRow(row)) {
+            return `${baseClasses} btn-accent border-accent-focus text-accent-content`;
+          } else if (isNoteRow(row) && !row.inScale) {
+            return `${baseClasses} btn-warning border-warning-focus text-warning-content opacity-75`;
+          } else {
+            return `${baseClasses} btn-accent border-accent-focus text-accent-content`;
+          }
         }
       }
-    }
 
-    const beatStyle = (beatIndex + 1) % 4 === 1 ? "border-base-300" : "border-base-200";
+      const beatStyle =
+        (beatIndex + 1) % 4 === 1 ? "border-base-300" : "border-base-200";
 
-    if (isNoteRow(row) && !row.inScale) {
-      return `${baseClasses} btn-ghost ${beatStyle} opacity-50 hover:opacity-75`;
-    }
-
-    return `${baseClasses} btn-ghost ${beatStyle} hover:btn-outline`;
-  }, [isActive, stepData, editMode, row, beatIndex]);
-
-  // Cell content based on edit mode
-  const getCellContent = useCallback(() => {
-    if (!isActive || !stepData) {
-      return null;
-    }
-
-    switch (editMode) {
-      case "note":
-        return isRecording ? (
-          <span className="text-xs font-bold">●</span>
-        ) : (
-          <span className="text-xs font-bold">■</span>
-        );
-
-      case "gate": {
-        const gateWidth = Math.max(10, stepData.gate * 100);
-        return (
-          <div
-            className="absolute left-0 top-0 h-full bg-accent opacity-80 rounded-r-sm"
-            style={{ width: `${gateWidth}%` }}
-            title={`Gate: ${Math.round(stepData.gate * 100)}%`}
-          />
-        );
+      if (isNoteRow(row) && !row.inScale) {
+        return `${baseClasses} btn-ghost ${beatStyle} opacity-50 hover:opacity-75`;
       }
 
-      case "velocity": {
-        const velocityHeight = Math.max(10, stepData.velocity * 100);
-        return (
-          <div
-            className="absolute left-0 bottom-0 w-full bg-accent opacity-80 rounded-t-sm"
-            style={{ height: `${velocityHeight}%` }}
-            title={`Velocity: ${Math.round(stepData.velocity * 100)}%`}
-          />
-        );
+      return `${baseClasses} btn-ghost ${beatStyle} hover:btn-outline`;
+    }, [isActive, stepData, editMode, row, beatIndex]);
+
+    // Cell content based on edit mode
+    const getCellContent = useCallback(() => {
+      if (!isActive || !stepData) {
+        return null;
       }
 
-      default:
-        return <span className="text-xs font-bold">■</span>;
-    }
-  }, [isActive, stepData, editMode, isRecording]);
+      switch (editMode) {
+        case "note":
+          return isRecording ? (
+            <span className="text-xs font-bold">●</span>
+          ) : (
+            <span className="text-xs font-bold">■</span>
+          );
 
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent<HTMLButtonElement>) => {
-      if (editMode === "note") {
-        onStepToggle(beatIndex, note);
-        return;
+        case "gate": {
+          const gateWidth = Math.max(10, stepData.gate * 100);
+          return (
+            <div
+              className="absolute left-0 top-0 h-full bg-accent opacity-80 rounded-r-sm"
+              style={{ width: `${gateWidth}%` }}
+              title={`Gate: ${Math.round(stepData.gate * 100)}%`}
+            />
+          );
+        }
+
+        case "velocity": {
+          const velocityHeight = Math.max(10, stepData.velocity * 100);
+          return (
+            <div
+              className="absolute left-0 bottom-0 w-full bg-accent opacity-80 rounded-t-sm"
+              style={{ height: `${velocityHeight}%` }}
+              title={`Velocity: ${Math.round(stepData.velocity * 100)}%`}
+            />
+          );
+        }
+
+        default:
+          return <span className="text-xs font-bold">■</span>;
       }
+    }, [isActive, stepData, editMode, isRecording]);
 
-      e.preventDefault();
-      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-      setIsDragging(true);
+    const handlePointerDown = useCallback(
+      (e: React.PointerEvent<HTMLButtonElement>) => {
+        if (editMode === "note") {
+          onStepToggle(beatIndex, note);
+          return;
+        }
 
-      setDragStartPos({ x: e.clientX, y: e.clientY });
+        e.preventDefault();
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        setIsDragging(true);
 
-      if (stepData) {
-        setDragStartValue(
-          editMode === "gate" ? stepData.gate : stepData.velocity
-        );
-      } else {
-        setDragStartValue(
+        setDragStartPos({ x: e.clientX, y: e.clientY });
+
+        if (stepData) {
+          setDragStartValue(
+            editMode === "gate" ? stepData.gate : stepData.velocity
+          );
+        } else {
+          setDragStartValue(
+            editMode === "gate"
+              ? SEQUENCER_CONSTANTS.DEFAULT_GATE
+              : SEQUENCER_CONSTANTS.DEFAULT_VELOCITY
+          );
+        }
+      },
+      [editMode, stepData, beatIndex, note, onStepToggle]
+    );
+
+    const handlePointerMove = useCallback(
+      (e: React.PointerEvent<HTMLButtonElement>) => {
+        if (!isDragging || editMode === "note") return;
+
+        e.preventDefault();
+
+        const deltaX = e.clientX - dragStartPos.x;
+        const deltaY = dragStartPos.y - e.clientY;
+
+        let rawValue: number;
+
+        if (editMode === "gate") {
+          const sensitivity = 100;
+          rawValue = dragStartValue + deltaX / sensitivity;
+        } else if (editMode === "velocity") {
+          const sensitivity = 80;
+          rawValue = dragStartValue + deltaY / sensitivity;
+        } else {
+          return;
+        }
+
+        const minValue =
           editMode === "gate"
-            ? SEQUENCER_CONSTANTS.DEFAULT_GATE
-            : SEQUENCER_CONSTANTS.DEFAULT_VELOCITY
-        );
-      }
-    },
-    [editMode, stepData, beatIndex, note, onStepToggle]
-  );
+            ? SEQUENCER_CONSTANTS.MIN_GATE
+            : SEQUENCER_CONSTANTS.MIN_VELOCITY;
+        const clampedValue = Math.max(minValue, Math.min(1.0, rawValue));
 
-  const handlePointerMove = useCallback(
-    (e: React.PointerEvent<HTMLButtonElement>) => {
-      if (!isDragging || editMode === "note") return;
+        const steps =
+          editMode === "gate"
+            ? SEQUENCER_CONSTANTS.GATE_STEPS
+            : SEQUENCER_CONSTANTS.VELOCITY_STEPS;
+        const stepSize = (1.0 - minValue) / (steps - 1);
+        const stepIndex = Math.round((clampedValue - minValue) / stepSize);
+        const steppedValue = minValue + stepIndex * stepSize;
 
-      e.preventDefault();
+        if (!stepData) return;
 
-      const deltaX = e.clientX - dragStartPos.x;
-      const deltaY = dragStartPos.y - e.clientY;
+        const updates =
+          editMode === "gate"
+            ? { gate: steppedValue }
+            : { velocity: steppedValue };
 
-      let rawValue: number;
+        onUpdateStep(beatIndex, note, updates);
+      },
+      [
+        isDragging,
+        dragStartPos,
+        dragStartValue,
+        editMode,
+        stepData,
+        onUpdateStep,
+        beatIndex,
+        note,
+      ]
+    );
 
-      if (editMode === "gate") {
-        const sensitivity = 100;
-        rawValue = dragStartValue + deltaX / sensitivity;
-      } else if (editMode === "velocity") {
-        const sensitivity = 80;
-        rawValue = dragStartValue + deltaY / sensitivity;
-      } else {
-        return;
-      }
+    const handlePointerUp = useCallback(() => {
+      setIsDragging(false);
+    }, []);
 
-      const minValue =
-        editMode === "gate"
-          ? SEQUENCER_CONSTANTS.MIN_GATE
-          : SEQUENCER_CONSTANTS.MIN_VELOCITY;
-      const clampedValue = Math.max(minValue, Math.min(1.0, rawValue));
-
-      const steps =
-        editMode === "gate"
-          ? SEQUENCER_CONSTANTS.GATE_STEPS
-          : SEQUENCER_CONSTANTS.VELOCITY_STEPS;
-      const stepSize = (1.0 - minValue) / (steps - 1);
-      const stepIndex = Math.round((clampedValue - minValue) / stepSize);
-      const steppedValue = minValue + stepIndex * stepSize;
-
-      if (!stepData) return;
-
-      const updates =
-        editMode === "gate"
-          ? { gate: steppedValue }
-          : { velocity: steppedValue };
-
-      onUpdateStep(beatIndex, note, updates);
-    },
-    [
-      isDragging,
-      dragStartPos,
-      dragStartValue,
-      editMode,
-      stepData,
-      onUpdateStep,
-      beatIndex,
-      note,
-    ]
-  );
-
-  const handlePointerUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  return (
-    <button
-      className={getCellClasses()}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      style={{
-        touchAction: editMode === "note" ? "auto" : "none",
-        width: gridConstants.noteCellSize,
-        height: gridConstants.noteCellSize,
-        position: "absolute",
-        top: "50%",
-        left: "50%",
-        transform: "translate(-50%, -50%)",
-      }}
-      title={`Beat ${beatIndex + 1}: ${isDrumRow(row) ? row.displayName : note}${isActive ? " (Active)" : ""}`}
-      aria-label={`Step ${beatIndex + 1} for ${isDrumRow(row) ? row.displayName : note}`}
-      aria-pressed={isActive}
-    >
-      {getCellContent()}
-    </button>
-  );
-});
+    return (
+      <button
+        className={getCellClasses()}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        style={{
+          touchAction: editMode === "note" ? "auto" : "none",
+          width: gridConstants.noteCellSize,
+          height: gridConstants.noteCellSize,
+          position: "absolute",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+        }}
+        title={`Beat ${beatIndex + 1}: ${isDrumRow(row) ? row.displayName : note}${isActive ? " (Active)" : ""}`}
+        aria-label={`Step ${beatIndex + 1} for ${isDrumRow(row) ? row.displayName : note}`}
+        aria-pressed={isActive}
+      >
+        {getCellContent()}
+      </button>
+    );
+  }
+);
 
 StepCell.displayName = "StepCell";
 
 // Individual cell component for react-window
-const VirtualizedCell = memo(({ 
-  columnIndex, 
-  rowIndex, 
-  style, 
-  data 
-}: {
-  columnIndex: number;
-  rowIndex: number;
-  style: React.CSSProperties;
-  data: CellData;
-}) => {
-  const {
-    rows,
-    sequenceLength,
-    isRecording,
-    editMode,
-    onStepToggle,
-    onBeatSelect,
-    onCurrentBeatChange,
-    hasStepAt,
-    getStepData,
-    onPlayNotes,
-    onStopNotes,
-    onUpdateStep,
-    gridConstants,
-  } = data;
+const VirtualizedCell = memo(
+  ({
+    columnIndex,
+    rowIndex,
+    style,
+    data,
+  }: {
+    columnIndex: number;
+    rowIndex: number;
+    style: React.CSSProperties;
+    data: CellData;
+  }) => {
+    const {
+      rows,
+      sequenceLength,
+      isRecording,
+      editMode,
+      onStepToggle,
+      hasStepAt,
+      getStepData,
+      onPlayNotes,
+      onStopNotes,
+      onUpdateStep,
+      gridConstants,
+    } = data;
 
-  // Handle different cell types based on position
-  const isHeaderRow = rowIndex === 0;
-  const isLabelColumn = columnIndex === 0;
-  
-  // Beat header cell (top row, except first column)
-  if (isHeaderRow && !isLabelColumn) {
+    const isLabelColumn = columnIndex === 0;
+
+    // Row label cell (first column)
+    if (isLabelColumn) {
+      const row = rows[rowIndex];
+      if (!row) return null;
+
+      return (
+        <div style={style}>
+          <RowLabelCell
+            row={row}
+            onPlayNotes={onPlayNotes}
+            onStopNotes={onStopNotes}
+          />
+        </div>
+      );
+    }
+
+    // Step cell (main grid area)
     const beatIndex = columnIndex - 1; // Adjust for label column
-    if (beatIndex >= sequenceLength) return null;
+    const row = rows[rowIndex];
+
+    if (!row || beatIndex >= sequenceLength) return null;
 
     return (
       <div style={style}>
-        <BeatHeaderCell 
-          beatIndex={beatIndex}
-          onBeatSelect={onBeatSelect}
-          onCurrentBeatChange={onCurrentBeatChange}
-        />
-      </div>
-    );
-  }
-
-  // Row label cell (first column, except first row)
-  if (isLabelColumn && !isHeaderRow) {
-    const actualRowIndex = rowIndex - 1; // Adjust for header row
-    const row = rows[actualRowIndex];
-    if (!row) return null;
-
-    return (
-      <div style={style}>
-        <RowLabelCell 
+        <StepCell
           row={row}
-          onPlayNotes={onPlayNotes}
-          onStopNotes={onStopNotes}
+          beatIndex={beatIndex}
+          isRecording={isRecording}
+          editMode={editMode}
+          hasStepAt={hasStepAt}
+          getStepData={getStepData}
+          onStepToggle={onStepToggle}
+          onUpdateStep={onUpdateStep}
+          gridConstants={gridConstants}
         />
       </div>
     );
   }
-
-  // Top-left corner cell (empty)
-  if (isHeaderRow && isLabelColumn) {
-    return <div style={style} />;
-  }
-
-  // Step cell (main grid area)
-  const actualRowIndex = rowIndex - 1; // Adjust for header row
-  const beatIndex = columnIndex - 1; // Adjust for label column
-  const row = rows[actualRowIndex];
-  
-  if (!row || beatIndex >= sequenceLength) return null;
-
-  return (
-    <div style={style}>
-      <StepCell
-        row={row}
-        beatIndex={beatIndex}
-        isRecording={isRecording}
-        editMode={editMode}
-        hasStepAt={hasStepAt}
-        getStepData={getStepData}
-        onStepToggle={onStepToggle}
-        onUpdateStep={onUpdateStep}
-        gridConstants={gridConstants}
-      />
-    </div>
-  );
-});
+);
 
 VirtualizedCell.displayName = "VirtualizedCell";
 
@@ -490,74 +490,103 @@ export const VirtualizedStepGrid = memo(
     onUpdateStep,
   }: VirtualizedStepGridProps) => {
     const gridRef = useRef<Grid>(null);
+    const headerScrollRef = useRef<HTMLDivElement>(null);
     const lastBeatRef = useRef<number>(currentBeat);
     const userScrolledRef = useRef<boolean>(false);
     const [scrollLeft, setScrollLeft] = React.useState(0);
 
     // Grid dimensions
-    const gridConstants = useMemo(() => ({
-      gridCellSize: SEQUENCER_CONSTANTS.GRID.GRID_CELL_SIZE,
-      noteCellSize: SEQUENCER_CONSTANTS.GRID.NOTE_CELL_SIZE,
-      cellGap: SEQUENCER_CONSTANTS.GRID.CELL_GAP,
-      labelWidth: SEQUENCER_CONSTANTS.GRID.LABEL_WIDTH,
-      beatHeaderHeight: SEQUENCER_CONSTANTS.GRID.BEAT_HEADER_HEIGHT,
-    }), []);
+    const gridConstants = useMemo(
+      () => ({
+        gridCellSize: SEQUENCER_CONSTANTS.GRID.GRID_CELL_SIZE,
+        noteCellSize: SEQUENCER_CONSTANTS.GRID.NOTE_CELL_SIZE,
+        cellGap: SEQUENCER_CONSTANTS.GRID.CELL_GAP,
+        labelWidth: SEQUENCER_CONSTANTS.GRID.LABEL_WIDTH,
+        beatHeaderHeight: SEQUENCER_CONSTANTS.GRID.BEAT_HEADER_HEIGHT,
+      }),
+      []
+    );
 
-    // Total columns = label column + beat columns
+    // Total columns = label column + beat columns (no header row in virtualized grid now)
     const columnCount = sequenceLength + 1;
-    // Total rows = header row + data rows
-    const rowCount = rows.length + 1;
+    // Total rows = only data rows (header is separate now)
+    const rowCount = rows.length;
 
     // Grid dimensions
     const gridWidth = Math.min(
       1400, // Max width for desktop
-      gridConstants.labelWidth + (sequenceLength * (gridConstants.gridCellSize + gridConstants.cellGap))
+      gridConstants.labelWidth +
+        sequenceLength * (gridConstants.gridCellSize + gridConstants.cellGap)
     );
     const gridHeight = Math.min(
-      400, // Max height for mobile
-      gridConstants.beatHeaderHeight + (rows.length * (gridConstants.gridCellSize + gridConstants.cellGap))
+      300 - gridConstants.beatHeaderHeight, // Subtract header height
+      rows.length * (gridConstants.gridCellSize + gridConstants.cellGap)
     );
 
     // Column width function - first column is wider for labels
-    const getColumnWidth = useCallback((index: number) => {
-      return index === 0 ? gridConstants.labelWidth : gridConstants.gridCellSize + gridConstants.cellGap;
+    const getColumnWidth = useCallback(
+      (index: number) => {
+        return index === 0
+          ? gridConstants.labelWidth
+          : gridConstants.gridCellSize + gridConstants.cellGap;
+      },
+      [gridConstants]
+    );
+
+    // Row height function - all rows are the same height now
+    const getRowHeight = useCallback(() => {
+      return gridConstants.gridCellSize + gridConstants.cellGap;
     }, [gridConstants]);
 
-    // Row height function - first row is header height
-    const getRowHeight = useCallback((index: number) => {
-      return index === 0 ? gridConstants.beatHeaderHeight : gridConstants.gridCellSize + gridConstants.cellGap;
-    }, [gridConstants]);
+    // Cell data for react-window (updated to not include header row)
+    const cellData: CellData = useMemo(
+      () => ({
+        rows,
+        sequenceLength,
+        isRecording,
+        editMode,
+        onStepToggle,
+        onBeatSelect,
+        onCurrentBeatChange,
+        hasStepAt,
+        getStepData,
+        onPlayNotes,
+        onStopNotes,
+        onUpdateStep,
+        gridConstants,
+      }),
+      [
+        rows,
+        sequenceLength,
+        isRecording,
+        editMode,
+        onStepToggle,
+        onBeatSelect,
+        onCurrentBeatChange,
+        hasStepAt,
+        getStepData,
+        onPlayNotes,
+        onStopNotes,
+        onUpdateStep,
+        gridConstants,
+      ]
+    );
 
-    // Cell data for react-window
-    const cellData: CellData = useMemo(() => ({
-      rows,
-      sequenceLength,
-      isRecording,
-      editMode,
-      onStepToggle,
-      onBeatSelect,
-      onCurrentBeatChange,
-      hasStepAt,
-      getStepData,
-      onPlayNotes,
-      onStopNotes,
-      onUpdateStep,
-      gridConstants,
-    }), [
-      rows,
-      sequenceLength,
-      isRecording,
-      editMode,
-      onStepToggle,
-      onBeatSelect,
-      onCurrentBeatChange,
-      hasStepAt,
-      getStepData,
-      onPlayNotes,
-      onStopNotes,
-      onUpdateStep,
-      gridConstants,
-    ]);
+    // Sync header scroll with grid scroll
+    const handleGridScroll = useCallback(
+      ({ scrollLeft: newScrollLeft }: { scrollLeft: number }) => {
+        // Mark that user has manually scrolled
+        userScrolledRef.current = true;
+        // Track scroll position for playhead positioning
+        setScrollLeft(newScrollLeft);
+
+        // Sync header scroll
+        if (headerScrollRef.current) {
+          headerScrollRef.current.scrollLeft = newScrollLeft;
+        }
+      },
+      []
+    );
 
     // Scroll to current beat when it changes, but be smart about it
     useEffect(() => {
@@ -565,7 +594,7 @@ export const VirtualizedStepGrid = memo(
 
       const lastBeat = lastBeatRef.current;
       const beatDifference = Math.abs(currentBeat - lastBeat);
-      
+
       // Only auto-scroll if:
       // 1. It's a significant jump (user clicked a beat or seeking)
       // 2. The beat moved forward by more than a few beats (not just normal playback)
@@ -573,10 +602,11 @@ export const VirtualizedStepGrid = memo(
       const isSignificantJump = beatDifference > 4;
       const isManualSeek = beatDifference > 1 && !isRecording; // Large jumps when not recording
       const isStartOfPlayback = lastBeat === 0 && currentBeat > 0;
-      
+
       // Don't auto-scroll for normal playback progression or loop-back to 0
-      const shouldScroll = isSignificantJump || isManualSeek || isStartOfPlayback;
-      
+      const shouldScroll =
+        isSignificantJump || isManualSeek || isStartOfPlayback;
+
       if (shouldScroll && !userScrolledRef.current) {
         gridRef.current.scrollToItem({
           columnIndex: currentBeat + 1, // +1 for label column
@@ -584,10 +614,10 @@ export const VirtualizedStepGrid = memo(
           align: "auto", // Use "auto" instead of "center" for less jarring movement
         });
       }
-      
+
       // Update the last beat reference
       lastBeatRef.current = currentBeat;
-      
+
       // Reset user scroll flag after a short delay
       if (userScrolledRef.current) {
         const timeout = setTimeout(() => {
@@ -609,25 +639,65 @@ export const VirtualizedStepGrid = memo(
 
     return (
       <div className="w-fit mx-auto relative text-white">
-        {/* Playhead Overlay */}
+        {/* Sticky Header Row */}
+        <div className="sticky top-0 z-20 bg-neutral border-b border-base-200">
+          <div
+            ref={headerScrollRef}
+            className="flex overflow-x-hidden"
+            style={{ width: gridWidth }}
+          >
+            {/* Empty corner cell */}
+            <div
+              className="flex-shrink-0 border-r border-base-200"
+              style={{
+                width: gridConstants.labelWidth,
+                height: gridConstants.beatHeaderHeight,
+              }}
+            />
+
+            {/* Beat header cells */}
+            <div className="flex">
+              {Array.from({ length: sequenceLength }, (_, beatIndex) => (
+                <div
+                  key={beatIndex}
+                  style={{
+                    width: gridConstants.gridCellSize + gridConstants.cellGap,
+                    height: gridConstants.beatHeaderHeight,
+                  }}
+                >
+                  <BeatHeaderCell
+                    beatIndex={beatIndex}
+                    onBeatSelect={onBeatSelect}
+                    onCurrentBeatChange={onCurrentBeatChange}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Playhead Overlay - adjusted for sticky header */}
         <div
-          className={`absolute top-0 left-0 h-full pointer-events-none z-10 rounded-sm ${
+          className={`absolute pointer-events-none z-10 rounded-sm ${
             isRecording
               ? "border-2 border-error shadow-lg animate-pulse"
               : "border-2 border-primary shadow-md"
           }`}
           style={{
             width: gridConstants.gridCellSize + gridConstants.cellGap,
-            height: gridConstants.beatHeaderHeight + (rows.length * (gridConstants.gridCellSize + gridConstants.cellGap)),
+            height: gridConstants.beatHeaderHeight + gridHeight,
+            top: 0,
+            left: 0,
             transform: `translateX(${
-              gridConstants.labelWidth + 
-              (currentBeat * (gridConstants.gridCellSize + gridConstants.cellGap)) -
+              gridConstants.labelWidth +
+              currentBeat *
+                (gridConstants.gridCellSize + gridConstants.cellGap) -
               scrollLeft
             }px)`,
           }}
         />
 
-        {/* Virtualized Grid */}
+        {/* Virtualized Grid - only data rows now */}
         <Grid
           ref={gridRef}
           columnCount={columnCount}
@@ -639,12 +709,7 @@ export const VirtualizedStepGrid = memo(
           itemData={cellData}
           overscanColumnCount={2}
           overscanRowCount={3}
-          onScroll={({ scrollLeft: newScrollLeft }) => {
-            // Mark that user has manually scrolled
-            userScrolledRef.current = true;
-            // Track scroll position for playhead positioning
-            setScrollLeft(newScrollLeft);
-          }}
+          onScroll={handleGridScroll}
         >
           {VirtualizedCell}
         </Grid>
@@ -658,4 +723,4 @@ export const VirtualizedStepGrid = memo(
   }
 );
 
-VirtualizedStepGrid.displayName = "VirtualizedStepGrid"; 
+VirtualizedStepGrid.displayName = "VirtualizedStepGrid";

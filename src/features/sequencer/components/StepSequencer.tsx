@@ -447,7 +447,7 @@ export const StepSequencer = memo(
           </div>
 
           {/* Third Section: Sequencer */}
-          <div className="bg-neutral p-4 rounded-lg overflow-x-auto">
+          <div className="bg-neutral p-4 rounded-lg overflow-x-auto overflow-y-hidden ">
             <VirtualizedStepGrid
               rows={rows}
               currentBeat={currentBeat}
