@@ -46,12 +46,16 @@ export function usePingMeasurement({
 
   // Send ping measurement
   const sendPing = useCallback(() => {
-    if (!socket || !socket.connected || !enabled) return;
+    if (!socket || !socket.connected || !enabled) {
+      // Ping skipped - socket not ready
+      return;
+    }
 
     const pingId = `ping_${Date.now()}_${Math.random()}`;
     const timestamp = Date.now();
 
     pendingPingsRef.current.set(pingId, timestamp);
+    // Sending ping measurement
     socket.emit("ping_measurement", { pingId, timestamp });
 
     // Clean up old pending pings (older than 30 seconds)
@@ -144,9 +148,15 @@ export function usePingMeasurement({
 
   // Setup socket listeners
   useEffect(() => {
-    if (!socket) return;
+    if (!socket) {
+      // No socket provided
+      return;
+    }
+
+    // Setting up ping measurement
 
     const handleConnect = () => {
+      // Socket connected, starting ping measurement
       setIsConnected(true);
       if (enabled) {
         // Small delay to ensure connection is stable
@@ -161,6 +171,7 @@ export function usePingMeasurement({
     };
 
     const handleSocketPingResponse = (data: any) => {
+      // Received ping response
       handlePingResponse(data);
     };
 
@@ -204,6 +215,26 @@ export function usePingMeasurement({
     stopPingMeasurement,
     resetPingMeasurement,
   ]);
+
+  // Add socket health monitoring
+  useEffect(() => {
+    if (!socket || !enabled) return;
+
+    const healthCheck = setInterval(() => {
+      if (socket.connected && intervalRef.current) {
+        // Check if we haven't received a ping response in a while
+        const now = Date.now();
+        const oldestPending = Math.min(...Array.from(pendingPingsRef.current.values()));
+        
+        if (pendingPingsRef.current.size > 0 && now - oldestPending > 10000) {
+          console.warn('🏓 Ping responses seem stale, clearing pending pings');
+          pendingPingsRef.current.clear();
+        }
+      }
+    }, 15000); // Check every 15 seconds
+
+    return () => clearInterval(healthCheck);
+  }, [socket, enabled]);
 
   return {
     currentPing,
