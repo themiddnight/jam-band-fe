@@ -775,6 +775,7 @@ const Room = memo(() => {
                       ...scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, 5),
                       ...scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, 6),
                     ]}
+                    rootNote={scaleState.rootNote}
                     onPlayNotes={handlePlayNotesWrapper}
                     onStopNotes={handleStopNotesWrapper}
                                 editMode={settings.editMode}
