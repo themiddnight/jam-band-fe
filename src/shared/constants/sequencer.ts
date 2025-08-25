@@ -10,13 +10,15 @@ export const SEQUENCER_CONSTANTS = {
   
   // Grid layout configuration
   // To change grid size, modify these values:
-  // - CELL_SIZE: Controls the width and height of each step cell
-  // - CELL_GAP: Controls the spacing between cells
+  // - GRID_CELL_SIZE: Controls the width and height of each grid cell (container)
+  // - NOTE_CELL_SIZE: Controls the width and height of the actual note/step cells
+  // - CELL_GAP: Controls the spacing between grid cells
   // - LABEL_WIDTH: Controls the width of row labels
   // - BEAT_HEADER_HEIGHT: Controls the height of beat number headers
   GRID: {
-    CELL_SIZE: 32, // pixels - width and height of each step cell
-    CELL_GAP: 4,   // pixels - gap between cells
+    GRID_CELL_SIZE: 32, // pixels - width and height of each grid cell container
+    NOTE_CELL_SIZE: 30, // pixels - width and height of the actual note/step cells
+    CELL_GAP: 4,   // pixels - gap between grid cells
     LABEL_WIDTH: 64, // pixels - width of row labels
     BEAT_HEADER_HEIGHT: 32, // pixels - height of beat number header
   } as const,

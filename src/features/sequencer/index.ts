@@ -2,7 +2,7 @@
 export { StepSequencer } from "./components/StepSequencer";
 
 // Sub-components (for advanced usage)
-export { StepGrid } from "./components/StepGrid";
+export { VirtualizedStepGrid } from "./components/VirtualizedStepGrid";
 
 // Hooks
 export { useSequencer } from "./hooks/useSequencer";

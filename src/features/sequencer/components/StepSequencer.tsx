@@ -5,7 +5,7 @@ import {
   useSequencerRows,
   useDisplayModeOptions,
 } from "../hooks/useSequencerRows";
-import { StepGrid } from "./StepGrid";
+import { VirtualizedStepGrid } from "./VirtualizedStepGrid";
 import { useTouchEvents } from "@/features/ui";
 import { SEQUENCER_CONSTANTS, SEQUENCER_SPEEDS } from "@/shared/constants";
 import type { DisplayMode, EditMode } from "../types";
@@ -447,8 +447,8 @@ export const StepSequencer = memo(
           </div>
 
           {/* Third Section: Sequencer */}
-          <div className="bg-neutral p-4 rounded-lg overflow-auto">
-            <StepGrid
+          <div className="bg-neutral p-4 rounded-lg overflow-x-auto">
+            <VirtualizedStepGrid
               rows={rows}
               currentBeat={currentBeat}
               sequenceLength={settings.length}
