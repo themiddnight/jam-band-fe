@@ -72,6 +72,10 @@ export const useRoom = () => {
     onInstrumentChanged,
     onSynthParamsChanged,
     onRequestSynthParamsResponse,
+    onAutoSendSynthParamsToNewUser,
+    onSendCurrentSynthParamsToNewUser,
+    onRequestCurrentSynthParamsForNewUser,
+    onSendSynthParamsToNewUserNow,
     onUserLeft,
     onGuestCancelled,
     onMemberRejected,
@@ -382,10 +386,94 @@ export const useRoom = () => {
     const unsubscribe = onRequestSynthParamsResponse((data) => {
       // Handle requests for synth parameters
       console.log("Synth params requested:", data);
+      
+      // Send current synth parameters if we're using a synthesizer
+      if (currentCategory === InstrumentCategory.Synthesizer && synthState && Object.keys(synthState).length > 0) {
+        console.log("🎛️ Sending current synth params in response to request:", synthState);
+        updateSynthParams(synthState);
+      }
     });
 
     return unsubscribe;
-  }, [onRequestSynthParamsResponse]);
+  }, [onRequestSynthParamsResponse, currentCategory, synthState, updateSynthParams]);
+
+  // Set up auto send synth params to new user handler
+  useEffect(() => {
+    const unsubscribe = onAutoSendSynthParamsToNewUser((data) => {
+      console.log("🎛️ [DEBUG] Auto-send synth params to new user requested:", data);
+      console.log("🎛️ [DEBUG] Current category:", currentCategory);
+      console.log("🎛️ [DEBUG] Current synthState:", synthState);
+      
+      // Send current synth parameters if we're using a synthesizer
+      if (currentCategory === InstrumentCategory.Synthesizer && synthState && Object.keys(synthState).length > 0) {
+        console.log("🎛️ Auto-sending current synth params to new user:", synthState);
+        updateSynthParams(synthState);
+      } else {
+        console.log("🎛️ [DEBUG] Not sending synth params - not using synthesizer or no synth state");
+      }
+    });
+
+    return unsubscribe;
+  }, [onAutoSendSynthParamsToNewUser, currentCategory, synthState, updateSynthParams]);
+
+  // Set up send current synth params to new user handler
+  useEffect(() => {
+    const unsubscribe = onSendCurrentSynthParamsToNewUser((data) => {
+      console.log("🎛️ [DEBUG] Send current synth params to new user:", data);
+      console.log("🎛️ [DEBUG] Current category:", currentCategory);
+      console.log("🎛️ [DEBUG] Current synthState:", synthState);
+      
+      // Send current synth parameters if we're using a synthesizer
+      if (currentCategory === InstrumentCategory.Synthesizer && synthState && Object.keys(synthState).length > 0) {
+        console.log("🎛️ Sending current synth params to new user:", synthState);
+        updateSynthParams(synthState);
+      } else {
+        console.log("🎛️ [DEBUG] Not sending synth params - not using synthesizer or no synth state");
+      }
+    });
+
+    return unsubscribe;
+  }, [onSendCurrentSynthParamsToNewUser, currentCategory, synthState, updateSynthParams]);
+
+  // Set up request current synth params for new user handler
+  useEffect(() => {
+    const unsubscribe = onRequestCurrentSynthParamsForNewUser((data) => {
+      console.log("🎛️ [DEBUG] Request current synth params for new user:", data);
+      console.log("🎛️ [DEBUG] Current category:", currentCategory);
+      console.log("🎛️ [DEBUG] Current synthState:", synthState);
+      console.log("🎛️ [DEBUG] My userId:", userId);
+      
+      // Only respond if this request is for us and we're using a synthesizer
+      if (data.synthUserId === userId && currentCategory === InstrumentCategory.Synthesizer && synthState && Object.keys(synthState).length > 0) {
+        console.log("🎛️ Responding to synth params request for new user:", synthState);
+        updateSynthParams(synthState);
+      } else {
+        console.log("🎛️ [DEBUG] Not responding to synth params request - not for us or not using synthesizer");
+      }
+    });
+
+    return unsubscribe;
+  }, [onRequestCurrentSynthParamsForNewUser, currentCategory, synthState, updateSynthParams, userId]);
+
+  // Set up send synth params to new user now handler
+  useEffect(() => {
+    const unsubscribe = onSendSynthParamsToNewUserNow((data) => {
+      console.log("🎛️ [DEBUG] Send synth params to new user now:", data);
+      console.log("🎛️ [DEBUG] Current category:", currentCategory);
+      console.log("🎛️ [DEBUG] Current synthState:", synthState);
+      console.log("🎛️ [DEBUG] My userId:", userId);
+      
+      // Only respond if this request is for us and we're using a synthesizer
+      if (data.synthUserId === userId && currentCategory === InstrumentCategory.Synthesizer && synthState && Object.keys(synthState).length > 0) {
+        console.log("🎛️ Immediately sending synth params to new user:", synthState);
+        updateSynthParams(synthState);
+      } else {
+        console.log("🎛️ [DEBUG] Not immediately sending synth params - not for us or not using synthesizer");
+      }
+    });
+
+    return unsubscribe;
+  }, [onSendSynthParamsToNewUserNow, currentCategory, synthState, updateSynthParams, userId]);
 
   // Set up user left handler
   useEffect(() => {

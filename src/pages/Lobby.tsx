@@ -1,6 +1,6 @@
 import { PingDisplay, usePingMeasurement } from "@/features/audio";
 import { ConnectionState } from "@/features/audio/types/connectionState";
-import { useLobby } from "@/features/rooms";
+import { useLobby, InviteUrlInput } from "@/features/rooms";
 import { Modal } from "@/features/ui";
 import { Footer } from "@/features/ui";
 
@@ -42,6 +42,10 @@ export default function Lobby() {
     setNewRoomName,
     setIsPrivate,
     setIsHidden,
+    setSearchQuery,
+
+    // Search
+    searchQuery,
 
     // Socket for ping measurement
     activeSocket,
@@ -114,10 +118,10 @@ export default function Lobby() {
             </div>
           </Modal>
 
-          {/* Card */}
-          <div className="card bg-base-100 shadow-xl h-full">
-            <div className="card-body h-full">
-              <div className="flex justify-between items-center">
+          {/* Available Rooms Card */}
+          <div className="card bg-base-100 shadow-xl mb-4">
+            <div className="card-body">
+              <div className="flex justify-between items-center mb-3">
                 <h2 className="card-title">Available Rooms</h2>
                 <div className="flex gap-2">
                   <button
@@ -134,6 +138,35 @@ export default function Lobby() {
                     Create
                   </button>
                 </div>
+              </div>
+
+              {/* Search Input */}
+              <div className="form-control mb-3">
+                <label className="input input-bordered flex items-center gap-2 w-full">
+                  <svg
+                    className="h-[1em] opacity-50"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                  >
+                    <g
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                      strokeWidth="2.5"
+                      fill="none"
+                      stroke="currentColor"
+                    >
+                      <circle cx="11" cy="11" r="8"></circle>
+                      <path d="m21 21-4.3-4.3"></path>
+                    </g>
+                  </svg>
+                  <input
+                    type="search"
+                    className="grow"
+                    placeholder="Search rooms..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </label>
               </div>
 
               {/* Room List */}
@@ -206,6 +239,9 @@ export default function Lobby() {
               </div>
             </div>
           </div>
+
+          {/* Invite URL Input */}
+          <InviteUrlInput />
 
           {/* Username Modal */}
           <Modal

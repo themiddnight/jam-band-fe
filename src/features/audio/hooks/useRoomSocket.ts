@@ -83,6 +83,22 @@ export const useRoomSocket = (instrumentManager?: any) => {
     | ((data: { requestingUserId: string; requestingUsername: string }) => void)
     | null
   >(null);
+  const autoSendSynthParamsToNewUserCallbackRef = useRef<
+    | ((data: { newUserId: string; newUsername: string }) => void)
+    | null
+  >(null);
+  const sendCurrentSynthParamsToNewUserCallbackRef = useRef<
+    | ((data: { newUserId: string; newUsername: string }) => void)
+    | null
+  >(null);
+  const requestCurrentSynthParamsForNewUserCallbackRef = useRef<
+    | ((data: { newUserId: string; newUsername: string; synthUserId: string; synthUsername: string }) => void)
+    | null
+  >(null);
+  const sendSynthParamsToNewUserNowCallbackRef = useRef<
+    | ((data: { newUserId: string; newUsername: string; synthUserId: string; synthUsername: string }) => void)
+    | null
+  >(null);
   const guestCancelledCallbackRef = useRef<((userId: string) => void) | null>(
     null,
   );
@@ -432,6 +448,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
 
       on("user_joined", async (data: { user: any }) => {
         console.log("🎵 user_joined event received:", data);
+        console.log("🎛️ [DEBUG] New user joined, checking for synth parameter synchronization");
         addUser(data.user);
 
         // Preload the new user's instrument if they have one
@@ -605,6 +622,54 @@ export const useRoomSocket = (instrumentManager?: any) => {
         (data: { requestingUserId: string; requestingUsername: string }) => {
           if (requestSynthParamsResponseCallbackRef.current) {
             requestSynthParamsResponseCallbackRef.current(data);
+          }
+        },
+      );
+
+      on(
+        "auto_send_synth_params_to_new_user",
+        (data: { newUserId: string; newUsername: string }) => {
+          console.log("🎛️ [DEBUG] Received auto_send_synth_params_to_new_user event:", data);
+          if (autoSendSynthParamsToNewUserCallbackRef.current) {
+            autoSendSynthParamsToNewUserCallbackRef.current(data);
+          } else {
+            console.log("🎛️ [DEBUG] No callback registered for auto_send_synth_params_to_new_user");
+          }
+        },
+      );
+
+      on(
+        "send_current_synth_params_to_new_user",
+        (data: { newUserId: string; newUsername: string }) => {
+          console.log("🎛️ [DEBUG] Received send_current_synth_params_to_new_user event:", data);
+          if (sendCurrentSynthParamsToNewUserCallbackRef.current) {
+            sendCurrentSynthParamsToNewUserCallbackRef.current(data);
+          } else {
+            console.log("🎛️ [DEBUG] No callback registered for send_current_synth_params_to_new_user");
+          }
+        },
+      );
+
+      on(
+        "request_current_synth_params_for_new_user",
+        (data: { newUserId: string; newUsername: string; synthUserId: string; synthUsername: string }) => {
+          console.log("🎛️ [DEBUG] Received request_current_synth_params_for_new_user event:", data);
+          if (requestCurrentSynthParamsForNewUserCallbackRef.current) {
+            requestCurrentSynthParamsForNewUserCallbackRef.current(data);
+          } else {
+            console.log("🎛️ [DEBUG] No callback registered for request_current_synth_params_for_new_user");
+          }
+        },
+      );
+
+      on(
+        "send_synth_params_to_new_user_now",
+        (data: { newUserId: string; newUsername: string; synthUserId: string; synthUsername: string }) => {
+          console.log("🎛️ [DEBUG] Received send_synth_params_to_new_user_now event:", data);
+          if (sendSynthParamsToNewUserNowCallbackRef.current) {
+            sendSynthParamsToNewUserNowCallbackRef.current(data);
+          } else {
+            console.log("🎛️ [DEBUG] No callback registered for send_synth_params_to_new_user_now");
           }
         },
       );
@@ -1074,6 +1139,58 @@ export const useRoomSocket = (instrumentManager?: any) => {
     [],
   );
 
+  const onAutoSendSynthParamsToNewUser = useCallback(
+    (
+      callback: (data: {
+        newUserId: string;
+        newUsername: string;
+      }) => void,
+    ) => {
+      autoSendSynthParamsToNewUserCallbackRef.current = callback;
+    },
+    [],
+  );
+
+  const onSendCurrentSynthParamsToNewUser = useCallback(
+    (
+      callback: (data: {
+        newUserId: string;
+        newUsername: string;
+      }) => void,
+    ) => {
+      sendCurrentSynthParamsToNewUserCallbackRef.current = callback;
+    },
+    [],
+  );
+
+  const onRequestCurrentSynthParamsForNewUser = useCallback(
+    (
+      callback: (data: {
+        newUserId: string;
+        newUsername: string;
+        synthUserId: string;
+        synthUsername: string;
+      }) => void,
+    ) => {
+      requestCurrentSynthParamsForNewUserCallbackRef.current = callback;
+    },
+    [],
+  );
+
+  const onSendSynthParamsToNewUserNow = useCallback(
+    (
+      callback: (data: {
+        newUserId: string;
+        newUsername: string;
+        synthUserId: string;
+        synthUsername: string;
+      }) => void,
+    ) => {
+      sendSynthParamsToNewUserNowCallbackRef.current = callback;
+    },
+    [],
+  );
+
   const onGuestCancelled = useCallback((callback: (userId: string) => void) => {
     guestCancelledCallbackRef.current = callback;
   }, []);
@@ -1136,6 +1253,10 @@ export const useRoomSocket = (instrumentManager?: any) => {
     onStopAllNotes,
     onSynthParamsChanged,
     onRequestSynthParamsResponse,
+    onAutoSendSynthParamsToNewUser,
+    onSendCurrentSynthParamsToNewUser,
+    onRequestCurrentSynthParamsForNewUser,
+    onSendSynthParamsToNewUserNow,
     onGuestCancelled,
     onMemberRejected,
 

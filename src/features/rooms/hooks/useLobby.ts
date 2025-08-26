@@ -5,6 +5,7 @@ import { createRoom as createRoomAPI } from "@/features/rooms/services/api";
 import { useUserStore } from "@/shared/stores/userStore";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { debounce } from "lodash";
 import type { Socket } from "socket.io-client";
 
 /**
@@ -81,12 +82,45 @@ export const useLobby = () => {
   const [rejectionMessage, setRejectionMessage] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [isHidden, setIsHidden] = useState(false);
+  
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
 
   // Track pending room intent while waiting for approval
   const [pendingRoomIntent, setPendingRoomIntent] = useState<{
     roomId: string;
     role: "band_member" | "audience";
   } | null>(null);
+
+  // Debounced search function
+  const debouncedSearch = useMemo(
+    () =>
+      debounce((query: string) => {
+        setDebouncedSearchQuery(query);
+      }, 300),
+    []
+  );
+
+  // Update debounced search when search query changes
+  useEffect(() => {
+    debouncedSearch(searchQuery);
+    return () => {
+      debouncedSearch.cancel();
+    };
+  }, [searchQuery, debouncedSearch]);
+
+  // Filter rooms based on search query
+  const filteredRooms = useMemo(() => {
+    if (!debouncedSearchQuery.trim()) {
+      return rooms;
+    }
+    
+    const query = debouncedSearchQuery.toLowerCase();
+    return rooms.filter((room: any) => 
+      room.name.toLowerCase().includes(query)
+    );
+  }, [rooms, debouncedSearchQuery]);
 
   // Define handleJoinRoom first
   const handleJoinRoom = useCallback(
@@ -99,8 +133,8 @@ export const useLobby = () => {
       // Clear any existing room state
       clearRoom();
 
-      // Find the room to check if it's private
-      const room = rooms.find((r: any) => r.id === roomId);
+      // Find the room to check if it's private (use filteredRooms for consistency)
+      const room = filteredRooms.find((r: any) => r.id === roomId);
       const isPrivateRoom = room?.isPrivate || false;
 
       try {
@@ -122,7 +156,7 @@ export const useLobby = () => {
     [
       username,
       userId,
-      rooms,
+      filteredRooms,
       clearRoom,
       requestRoomApproval,
       connectToRoom,
@@ -300,7 +334,7 @@ export const useLobby = () => {
   return {
     // State
     username,
-    rooms,
+    rooms: filteredRooms,
     loading,
     showUsernameModal,
     tempUsername,
@@ -313,6 +347,7 @@ export const useLobby = () => {
     isPrivate,
     isHidden,
     connectionState,
+    searchQuery,
 
     // Actions
     fetchRooms,
@@ -331,6 +366,7 @@ export const useLobby = () => {
     setNewRoomName,
     setIsPrivate,
     setIsHidden,
+    setSearchQuery,
 
     // Socket for ping measurement
     activeSocket,
