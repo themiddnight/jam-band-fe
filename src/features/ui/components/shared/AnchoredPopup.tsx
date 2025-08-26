@@ -134,7 +134,7 @@ export default function AnchoredPopup({
 
   const container = useMemo(() => {
     if (typeof document === "undefined") return null;
-    return document.body;
+    return document.documentElement;
   }, []);
 
   if (!open || !container) return null;

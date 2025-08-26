@@ -21,7 +21,7 @@ export const InviteUrlInput = ({ className = "" }: InviteUrlInputProps) => {
         <p className="text-sm text-base-content/70">
           Paste an invite URL to join a specific room
         </p>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="form-control">
             <div className="join w-full">
@@ -63,7 +63,7 @@ export const InviteUrlInput = ({ className = "" }: InviteUrlInputProps) => {
             )}
           </div>
         </form>
-        
+
         {/* <div className="text-xs text-base-content/50 mt-2">
           <p>Supported formats:</p>
           <ul className="list-disc list-inside ml-2 space-y-1">

@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 
 interface ModalProps {
   open: boolean;
@@ -101,7 +102,7 @@ export const Modal: React.FC<ModalProps> = ({
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className="modal modal-open" onClick={handleBackdropClick}>
       <div
         className={`modal-box max-w-${size} max-h-[90vh] flex flex-col overflow-hidden`}
@@ -127,20 +128,21 @@ export const Modal: React.FC<ModalProps> = ({
 
         {/* Footer */}
         {(showOkButton || showCancelButton) && (
-          <div className="modal-action">
-            {showCancelButton && (
-              <button onClick={handleCancel} className="btn btn-outline">
-                {cancelText}
-              </button>
-            )}
-            {showOkButton && (
-              <button onClick={handleOk} className="btn btn-primary">
-                {okText}
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+            <div className="modal-action">
+              {showCancelButton && (
+                <button onClick={handleCancel} className="btn btn-outline">
+                  {cancelText}
+                </button>
+              )}
+              {showOkButton && (
+                <button onClick={handleOk} className="btn btn-primary">
+                  {okText}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>,
+      document.documentElement
+    );
 };
