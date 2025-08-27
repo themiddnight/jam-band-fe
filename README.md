@@ -66,6 +66,33 @@ Jam Band lets you create music together with friends in real-time using **virtua
 - Browser-specific optimizations
 - Network optimizations for mesh networks
 
+## ⚙️ Technical Requirements & Notes
+
+### **Current Implementation (POC)**
+- **WebRTC Mesh Network**: Using WebRTC mesh for ultra-low latency, but this limits the number of participants per session
+- **Voice Latency**: Depends on your browser and hardware. Technically, we cannot bypass the browser's audio processing pipeline
+- **Server Location**: Currently only in Southeast Asia, so latency may vary depending on your geographical location
+
+### **Network Recommendations**
+- **LAN Cable**: Recommended over WiFi or cellular for stable and low latency
+- **Stable Connection**: Ensure your network connection is stable for the best experience
+- **Bandwidth**: Sufficient bandwidth for real-time audio streaming
+
+### **Browser Compatibility**
+- **Chromium-based Browsers**: Chrome, Edge, Brave recommended for:
+  - Full MIDI device connection support
+  - Complete synthesizer instrument functionality
+  - Best overall performance
+- **WebKit Browsers**: Some instruments may not work properly
+- **Modern Browsers**: Web Audio API support required
+
+### **Pro Tips for Best Performance**
+- Close unnecessary browser tabs and applications
+- Use headphones to avoid audio feedback
+- Ensure microphone permissions are enabled
+- Test your audio setup before joining a session
+- Use a wired internet connection when possible
+
 ## 🎯 Perfect For
 
 - **🎵 Low-Mid Level Musicians**: Virtual instruments with built-in music theory assistance

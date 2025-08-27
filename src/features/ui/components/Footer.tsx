@@ -28,6 +28,15 @@ export const Footer: React.FC = () => {
 
             <div className="flex items-center gap-4 text-sm text-base-content/70">
               <a
+                href="https://jam-band-landing-page.vercel.app/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-primary transition-colors"
+              >
+                Homepage
+              </a>
+              <span>•</span>
+              <a
                 href="https://github.com/themiddnight/jam-band-fe"
                 target="_blank"
                 rel="noopener noreferrer"

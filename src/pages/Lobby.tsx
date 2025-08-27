@@ -1,8 +1,7 @@
 import { PingDisplay, usePingMeasurement } from "@/features/audio";
 import { ConnectionState } from "@/features/audio/types/connectionState";
 import { useLobby, InviteUrlInput } from "@/features/rooms";
-import { Modal } from "@/features/ui";
-import { Footer } from "@/features/ui";
+import { Modal, Footer, TechnicalInfoPanel } from "@/features/ui";
 
 /**
  * Lobby page using the RoomSocketManager for namespace-based connections
@@ -242,6 +241,13 @@ export default function Lobby() {
 
           {/* Invite URL Input */}
           <InviteUrlInput />
+
+          {/* Technical Information Panel */}
+          <div className="card bg-base-100 shadow-xl mb-4">
+            <div className="card-body">
+              <TechnicalInfoPanel />
+            </div>
+          </div>
 
           {/* Username Modal */}
           <Modal

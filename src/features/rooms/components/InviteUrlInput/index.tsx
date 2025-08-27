@@ -15,7 +15,7 @@ export const InviteUrlInput = ({ className = "" }: InviteUrlInputProps) => {
   } = useInviteUrl();
 
   return (
-    <div className={`card bg-base-100 shadow-xl ${className}`}>
+    <div className={`card bg-base-100 shadow-xl mb-4 ${className}`}>
       <div className="card-body">
         <h3 className="card-title text-lg">Join with Invite URL</h3>
         <p className="text-sm text-base-content/70">

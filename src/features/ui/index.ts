@@ -11,6 +11,7 @@ export { Knob } from "./components/shared/Knob";
 export { InstrumentButton } from "./components/shared/InstrumentButton";
 export { default as BaseInstrument } from "./components/shared/BaseInstrument";
 export { default as AnchoredPopup } from "./components/shared/AnchoredPopup";
+export { TechnicalInfoPanel } from "./components/TechnicalInfoPanel";
 export { SharedChordKeys as ChordKeys } from "./components/shared/ChordKeys";
 export { ChordModifierButton } from "./components/shared/ChordModifierButton";
 export { FretboardBase } from "./components/shared/FretboardBase";
