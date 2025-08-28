@@ -28,12 +28,12 @@ export const Footer: React.FC = () => {
 
             <div className="flex items-center gap-4 text-sm text-base-content/70">
               <a
-                href="https://jam-band-landing-page.vercel.app/"
+                href="https://jam-band-landing-page.vercel.app/feedback"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-primary transition-colors"
               >
-                Homepage
+                Give us feedback
               </a>
               <span>•</span>
               <a
