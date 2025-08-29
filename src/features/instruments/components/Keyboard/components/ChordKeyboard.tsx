@@ -53,7 +53,7 @@ const TriadButton = memo(
         onMouseUp={() => onTriadRelease(index)}
         onMouseLeave={handleMouseLeave}
         ref={triadTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
-        className={`w-12 h-20 border-2 border-gray-300 bg-purple-100 hover:bg-purple-200 
+        className={`w-14 h-24 border-2 border-gray-300 bg-purple-100 hover:bg-purple-200 
               transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1
               touch-manipulation
               ${isPressed ? "bg-purple-300 transform scale-95" : ""}`}
@@ -120,7 +120,7 @@ const RootNoteButton = memo(
         onMouseLeave={handleMouseLeave}
         ref={keyTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
         className={`
-        w-12 h-20 border-2 border-gray-300 bg-white hover:bg-gray-100 
+        w-14 h-24 border-2 border-gray-300 bg-white hover:bg-gray-100 
         transition-colors duration-75 focus:outline-none flex flex-col justify-between p-1
         touch-manipulation
         ${isPressed ? "bg-gray-200 transform scale-95" : ""}

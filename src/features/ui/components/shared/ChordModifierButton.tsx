@@ -32,7 +32,7 @@ export const ChordModifierButton: React.FC<ChordModifierButtonProps> = ({
       onMouseUp={onRelease}
       onMouseLeave={onRelease}
       ref={touchHandlers.ref as React.RefObject<HTMLButtonElement>}
-      className={`px-2 py-1 rounded text-xs touch-manipulation ${getChordModifierColorClass(modifier, isActive)}`}
+      className={`px-2 py-1 rounded text-sm touch-manipulation ${getChordModifierColorClass(modifier, isActive)}`}
     >
       {getChordModifierDisplayName(modifier)}{" "}
       <kbd className="kbd kbd-sm">{getKeyDisplayName(shortcutKey)}</kbd>

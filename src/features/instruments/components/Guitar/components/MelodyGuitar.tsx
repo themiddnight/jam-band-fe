@@ -140,7 +140,7 @@ export const MelodyGuitar: React.FC<MelodyGuitarProps> = ({
   }, [scaleState, currentOctave, guitarState.strings, shortcuts]);
 
   return (
-    <div className="flex flex-col lg:flex-row justify-center items-center gap-8">
+    <div className="flex flex-col lg:flex-row justify-center items-center gap-8 w-fit mx-auto">
       {/* Note Keys */}
       <div className="flex flex-col gap-4">
         {/* Higher octave row (QWERTYUIOP[]) */}
@@ -219,7 +219,7 @@ export const MelodyGuitar: React.FC<MelodyGuitarProps> = ({
       </div>
 
       {/* Play Buttons */}
-      <div className="flex flex-row md:flex-col justify-center gap-4">
+      <div className="flex flex-col md:flex-row justify-center gap-4">
         <button
           onMouseDown={() => {
             // Play notes for both strings with pick-up velocity
@@ -235,7 +235,7 @@ export const MelodyGuitar: React.FC<MelodyGuitarProps> = ({
           ref={
             playNotes70TouchHandlers.ref as React.RefObject<HTMLButtonElement>
           }
-          className="btn btn-primary btn-lg lg:btn-sm touch-manipulation"
+          className="btn btn-primary btn-lg xl:btn-sm touch-manipulation"
           style={{
             WebkitTapHighlightColor: "transparent",
             WebkitTouchCallout: "none",
@@ -254,7 +254,7 @@ export const MelodyGuitar: React.FC<MelodyGuitarProps> = ({
           ref={
             playNotesFullTouchHandlers.ref as React.RefObject<HTMLButtonElement>
           }
-          className="btn btn-secondary btn-lg lg:btn-sm touch-manipulation"
+          className="btn btn-secondary btn-lg xl:btn-sm touch-manipulation"
           style={{
             WebkitTapHighlightColor: "transparent",
             WebkitTouchCallout: "none",
