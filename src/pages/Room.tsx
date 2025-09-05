@@ -23,7 +23,7 @@ import { useSequencer } from "@/features/sequencer/hooks/useSequencer";
 import { useSequencerStore } from "@/features/sequencer/stores/sequencerStore";
 
 import { ChatBox, ApprovalWaiting } from "@/features/rooms";
-import { RoomMembers } from "@/features/rooms";
+import { RoomMembers, SwapInstrumentModal, KickUserModal } from "@/features/rooms";
 import { useRoom } from "@/features/rooms";
 import { Footer } from "@/features/ui";
 import { ScaleSlots } from "@/features/ui";
@@ -32,15 +32,18 @@ import { useScaleSlotKeyboard } from "@/features/ui";
 import { InstrumentCategory } from "@/shared/constants/instruments";
 import { useScaleSlotsStore } from "@/shared/stores/scaleSlotsStore";
 import { ControlType } from "@/shared/types";
+import type { RoomUser } from "@/shared/types";
 import { preloadCriticalComponents } from "@/shared/utils/componentPreloader";
 import { getSafariUserMessage } from "@/shared/utils/webkitCompat";
 import { useDeepLinkHandler } from "@/shared/hooks/useDeepLinkHandler";
 import { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 
 /**
  * Room page using the RoomSocketManager for namespace-based connections
  */
 const Room = memo(() => {
+  const navigate = useNavigate();
   const {
     // Room state
     currentRoom,
@@ -101,6 +104,26 @@ const Room = memo(() => {
     // Audio management
     stopSustainedNotes,
     initializeAudioContext,
+
+    // Instrument swap and kick functions
+    requestInstrumentSwap,
+    approveInstrumentSwap,
+    rejectInstrumentSwap,
+    cancelInstrumentSwap,
+    kickUser,
+    onSwapRequestReceived,
+    onSwapRequestSent,
+    onSwapApproved,
+    onSwapRejected,
+    onSwapCancelled,
+    onSwapCompleted,
+    onUserKicked,
+
+    // Sequencer snapshots
+    requestSequencerState,
+    sendSequencerState,
+    onSequencerStateRequested,
+    onSequencerStateReceived,
 
     // Socket connection
     getActiveSocket,
@@ -167,6 +190,25 @@ const Room = memo(() => {
   const [isInvitePopupOpen, setIsInvitePopupOpen] = useState(false);
   const inviteBtnRef = useRef<HTMLButtonElement>(null);
 
+  // Instrument swap state
+  const [pendingSwapTarget, setPendingSwapTarget] = useState<RoomUser | null>(null);
+  const [swapRequestData, setSwapRequestData] = useState<{
+    requester: RoomUser | null;
+    isModalOpen: boolean;
+  }>({
+    requester: null,
+    isModalOpen: false,
+  });
+
+  // Kick user state
+  const [kickUserData, setKickUserData] = useState<{
+    targetUser: RoomUser | null;
+    isModalOpen: boolean;
+  }>({
+    targetUser: null,
+    isModalOpen: false,
+  });
+
   // Initialize scale slots store and apply selected slot
   const { initialize, getSelectedSlot } = useScaleSlotsStore();
 
@@ -226,6 +268,59 @@ const Room = memo(() => {
     },
     [handleStopNote],
   );
+
+  // Instrument swap handlers
+  const handleSwapInstrument = useCallback(
+    (targetUserId: string) => {
+      const targetUser = currentRoom?.users.find(user => user.id === targetUserId);
+      if (targetUser) {
+        setPendingSwapTarget(targetUser);
+        requestInstrumentSwap(targetUserId);
+      }
+    },
+    [currentRoom?.users, requestInstrumentSwap],
+  );
+
+  const handleCancelSwap = useCallback(() => {
+    setPendingSwapTarget(null);
+    cancelInstrumentSwap();
+  }, [cancelInstrumentSwap]);
+
+  const handleApproveSwap = useCallback(() => {
+    if (swapRequestData.requester) {
+      approveInstrumentSwap(swapRequestData.requester.id);
+    }
+    setSwapRequestData({ requester: null, isModalOpen: false });
+  }, [swapRequestData.requester, approveInstrumentSwap]);
+
+  const handleRejectSwap = useCallback(() => {
+    if (swapRequestData.requester) {
+      rejectInstrumentSwap(swapRequestData.requester.id);
+    }
+    setSwapRequestData({ requester: null, isModalOpen: false });
+  }, [swapRequestData.requester, rejectInstrumentSwap]);
+
+  // Kick user handlers
+  const handleKickUser = useCallback(
+    (targetUserId: string) => {
+      const targetUser = currentRoom?.users.find(user => user.id === targetUserId);
+      if (targetUser) {
+        setKickUserData({ targetUser, isModalOpen: true });
+      }
+    },
+    [currentRoom?.users],
+  );
+
+  const handleConfirmKick = useCallback(() => {
+    if (kickUserData.targetUser) {
+      kickUser(kickUserData.targetUser.id);
+    }
+    setKickUserData({ targetUser: null, isModalOpen: false });
+  }, [kickUserData.targetUser, kickUser]);
+
+  const handleCancelKick = useCallback(() => {
+    setKickUserData({ targetUser: null, isModalOpen: false });
+  }, []);
 
   // Sequencer hook for recording integration
   const sequencer = useSequencer({
@@ -311,12 +406,163 @@ const Room = memo(() => {
 
       return () => clearTimeout(timer);
     }
+  }, [currentUser?.role, isVoiceEnabled, isAudioEnabled, currentRoom, enableAudioReception]);
+
+  // Sequencer hook for recording integration
+  useEffect(() => {
+    const unsubscribeSwapRequestReceived = onSwapRequestReceived((data) => {
+      console.log("🔄 Swap request received:", data);
+      // Find the requester user in current room
+      const requesterUser = currentRoom?.users.find(user => user.id === data.requesterId);
+      if (requesterUser) {
+        setSwapRequestData({
+          requester: requesterUser,
+          isModalOpen: true
+        });
+      }
+    });
+
+    const unsubscribeSwapRequestSent = onSwapRequestSent((data) => {
+      console.log("🔄 Swap request sent to:", data.targetUserId);
+      // Request was successfully sent - pending status is already set
+    });
+
+    const unsubscribeSwapApproved = onSwapApproved((data) => {
+      console.log("🔄 Swap approved:", data);
+      // Clear pending swap status - the swap will be executed
+      setPendingSwapTarget(null);
+    });
+
+    const unsubscribeSwapRejected = onSwapRejected(() => {
+      console.log("🔄 Swap rejected");
+      // Clear pending swap status
+      setPendingSwapTarget(null);
+    });
+
+    const unsubscribeSwapCancelled = onSwapCancelled(() => {
+      console.log("🔄 Swap cancelled");
+      // Close swap modal if open
+      setSwapRequestData({ requester: null, isModalOpen: false });
+    });
+
+    const unsubscribeSwapCompleted = onSwapCompleted(async (data) => {
+      console.log("🔄 Swap completed:", data);
+      // Clear any pending states
+      setPendingSwapTarget(null);
+      setSwapRequestData({ requester: null, isModalOpen: false });
+      
+      const currentUserId = currentUser?.id;
+      let myData = null;
+      let otherData = null;
+      
+      if (data.userA.userId === currentUserId) {
+        myData = data.userA;
+        otherData = data.userB;
+      } else if (data.userB.userId === currentUserId) {
+        myData = data.userB;
+        otherData = data.userA;
+      }
+      
+      if (myData && otherData) {
+        console.log("🔄 Applying swap data for current user:", {
+          myUserId: myData.userId,
+          newInstrument: myData.instrumentName,
+          newCategory: myData.category,
+          hasSynthParams: !!myData.synthParams
+        });
+        
+        // Change instrument first
+        await handleInstrumentChange(myData.instrumentName);
+        
+        // Apply synth parameters if provided
+        if (myData.synthParams && Object.keys(myData.synthParams).length > 0) {
+          setTimeout(async () => {
+            try {
+              await updateSynthParams(myData.synthParams);
+              console.log("✅ Synth parameters applied successfully");
+            } catch (error) {
+              console.error("❌ Failed to apply synth parameters:", error);
+            }
+          }, 100);
+        }
+
+        // Request sequencer snapshot from the other user
+        if (otherData.userId) {
+          console.log("🔄 Requesting sequencer snapshot from:", otherData.userId);
+          requestSequencerState(otherData.userId);
+        }
+      }
+    });
+
+    // When someone requests our sequencer state, send them a snapshot
+    const unsubscribeSequencerRequested = onSequencerStateRequested(({ requesterId }: { requesterId: string }) => {
+      try {
+        const snapshot = {
+          banks: useSequencerStore.getState().banks,
+          settings: useSequencerStore.getState().settings,
+          currentBank: useSequencerStore.getState().currentBank,
+        };
+        console.log("🎵 Sending sequencer snapshot to:", requesterId);
+        sendSequencerState(requesterId, snapshot);
+      } catch (e) {
+        console.error("❌ Failed to capture/send sequencer snapshot:", e);
+      }
+    });
+
+    // When we receive a snapshot, apply it
+    const unsubscribeSequencerReceived = onSequencerStateReceived(({ fromUserId, snapshot }: { fromUserId: string; snapshot: { banks: any; settings: any; currentBank: string } }) => {
+      try {
+        console.log("🎵 Applying sequencer snapshot from:", fromUserId);
+        // Stop if playing, then load snapshot, and reset beat to 0
+        if (sequencer.isPlaying) {
+          useSequencerStore.getState().hardStop();
+        }
+        useSequencerStore.setState({
+          banks: snapshot.banks,
+          settings: snapshot.settings,
+          currentBeat: 0,
+          selectedBeat: 0,
+          currentBank: snapshot.currentBank,
+        });
+      } catch (e) {
+        console.error("❌ Failed to apply sequencer snapshot:", e);
+      }
+    });
+
+    const unsubscribeUserKicked = onUserKicked((data) => {
+      console.log("🚫 User kicked:", data);
+      // Redirect immediately to lobby and pass reason in state
+      navigate("/", { state: { kicked: true, reason: data.reason } });
+    });
+
+    return () => {
+      unsubscribeSwapRequestReceived();
+      unsubscribeSwapRequestSent();
+      unsubscribeSwapApproved();
+      unsubscribeSwapRejected();
+      unsubscribeSwapCancelled();
+      unsubscribeSwapCompleted();
+      unsubscribeSequencerRequested();
+      unsubscribeSequencerReceived();
+      unsubscribeUserKicked();
+    };
   }, [
-    currentUser?.role,
-    isVoiceEnabled,
-    isAudioEnabled,
-    currentRoom,
-    enableAudioReception,
+    onSwapRequestReceived,
+    onSwapRequestSent,
+    onSwapApproved,
+    onSwapRejected,
+    onSwapCancelled,
+    onSwapCompleted,
+    onUserKicked,
+    currentRoom?.users,
+    currentUser?.id,
+    handleInstrumentChange,
+    updateSynthParams,
+    requestSequencerState,
+    onSequencerStateRequested,
+    sendSequencerState,
+    onSequencerStateReceived,
+    sequencer,
   ]);
 
   // Reset sequencer UI state when entering a new room
@@ -869,6 +1115,10 @@ const Room = memo(() => {
               voiceUsers={voiceUsers}
               onApproveMember={handleApproveMember}
               onRejectMember={handleRejectMember}
+              onSwapInstrument={handleSwapInstrument}
+              onKickUser={handleKickUser}
+              pendingSwapTarget={pendingSwapTarget}
+              onCancelSwap={handleCancelSwap}
             />
 
             {/* Chat Box */}
@@ -893,6 +1143,23 @@ const Room = memo(() => {
           Are you sure you want to leave the room? This action cannot be undone.
         </p>
       </Modal>
+
+      {/* Instrument Swap Modal */}
+      <SwapInstrumentModal
+        open={swapRequestData.isModalOpen}
+        onClose={() => setSwapRequestData({ requester: null, isModalOpen: false })}
+        requesterUser={swapRequestData.requester}
+        onApprove={handleApproveSwap}
+        onReject={handleRejectSwap}
+      />
+
+      {/* Kick User Modal */}
+      <KickUserModal
+        open={kickUserData.isModalOpen}
+        onClose={handleCancelKick}
+        targetUser={kickUserData.targetUser}
+        onConfirm={handleConfirmKick}
+      />
 
       <Footer />
     </div>

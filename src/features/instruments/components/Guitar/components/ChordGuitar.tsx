@@ -89,7 +89,7 @@ const ChordButton = memo(
         onPress={() => onChordPress(chordKey.degree)}
         onRelease={() => onChordRelease(chordKey.degree)}
         variant="chord"
-        size="md"
+        size="lg"
         sustain={sustain}
         sustainToggle={sustainToggle}
       />
@@ -356,7 +356,7 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
               });
             }}
             ref={strumUpTouchHandlers.ref as React.RefObject<HTMLButtonElement>}
-            className="btn btn-primary btn-lg lg:btn-sm touch-manipulation"
+            className="btn btn-primary btn-lg xl:btn-sm touch-manipulation"
             style={{
               WebkitTapHighlightColor: "transparent",
               WebkitTouchCallout: "none",
@@ -376,7 +376,7 @@ export const SimpleChordKeys: React.FC<SimpleChordKeysProps> = ({
             ref={
               strumDownTouchHandlers.ref as React.RefObject<HTMLButtonElement>
             }
-            className="btn btn-secondary btn-lg lg:btn-sm touch-manipulation"
+            className="btn btn-secondary btn-lg xl:btn-sm touch-manipulation"
             style={{
               WebkitTapHighlightColor: "transparent",
               WebkitTouchCallout: "none",

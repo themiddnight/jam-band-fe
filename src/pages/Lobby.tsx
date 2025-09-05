@@ -2,6 +2,8 @@ import { PingDisplay, usePingMeasurement } from "@/features/audio";
 import { ConnectionState } from "@/features/audio/types/connectionState";
 import { useLobby, InviteUrlInput } from "@/features/rooms";
 import { Modal, Footer, TechnicalInfoPanel } from "@/features/ui";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 /**
  * Lobby page using the RoomSocketManager for namespace-based connections
@@ -50,6 +52,21 @@ export default function Lobby() {
     activeSocket,
   } = useLobby();
 
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [showKickedModal, setShowKickedModal] = useState(false);
+  const [kickedReason, setKickedReason] = useState<string | undefined>();
+
+  useEffect(() => {
+    const state = location.state as { kicked?: boolean; reason?: string } | null;
+    if (state?.kicked) {
+      setKickedReason(state.reason ?? "You have been removed from the room.");
+      setShowKickedModal(true);
+      // Clear the state so refresh/back doesn't retrigger
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location.state, location.pathname, navigate]);
+
   // Ping measurement for lobby
   const { currentPing } = usePingMeasurement({
     socket: activeSocket,
@@ -66,13 +83,12 @@ export default function Lobby() {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-3">
                 <div
-                  className={`w-3 h-3 rounded-full ${
-                    connectionState === ConnectionState.LOBBY
+                  className={`w-3 h-3 rounded-full ${connectionState === ConnectionState.LOBBY
                       ? "bg-success"
                       : isConnecting
                         ? "bg-warning"
                         : "bg-error"
-                  }`}
+                    }`}
                 ></div>
                 <PingDisplay
                   ping={currentPing}
@@ -91,10 +107,24 @@ export default function Lobby() {
             </div>
           </div>
 
+          {/* Kicked info modal */}
+          <Modal
+            open={showKickedModal}
+            setOpen={setShowKickedModal}
+            title="Removed from Room"
+            showCancelButton={false}
+            okText="OK"
+            onOk={() => setShowKickedModal(false)}
+            allowClose={true}
+            size="md"
+          >
+            <p className="text-base-content/70">{kickedReason}</p>
+          </Modal>
+
           {/* Waiting for approval modal */}
           <Modal
             open={connectionState === ConnectionState.REQUESTING}
-            setOpen={() => {}}
+            setOpen={() => { }}
             title="Waiting for Approval"
             showOkButton={false}
             showCancelButton={true}
@@ -111,140 +141,137 @@ export default function Lobby() {
               <div className="flex justify-center">
                 <div className="loading loading-spinner mx-auto loading-lg text-primary"></div>
               </div>
-              <div className="text-xs text-base-content/50 mt-2">
-                Request will timeout automatically after 30 seconds
-              </div>
             </div>
           </Modal>
 
-          {/* Available Rooms Card */}
-          <div className="card bg-base-100 shadow-xl mb-4">
-            <div className="card-body">
-              <div className="flex justify-between items-center mb-3">
-                <h2 className="card-title">Available Rooms</h2>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => fetchRooms()}
-                    className="btn btn-sm btn-outline"
-                    disabled={loading}
-                  >
-                    {loading ? "Loading..." : "Refresh"}
-                  </button>
-                  <button
-                    onClick={handleCreateRoomButtonClick}
-                    className="btn btn-sm btn-primary"
-                  >
-                    Create
-                  </button>
-                </div>
-              </div>
-
-              {/* Search Input */}
-              <div className="form-control mb-3">
-                <label className="input input-bordered flex items-center gap-2 w-full">
-                  <svg
-                    className="h-[1em] opacity-50"
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                  >
-                    <g
-                      strokeLinejoin="round"
-                      strokeLinecap="round"
-                      strokeWidth="2.5"
-                      fill="none"
-                      stroke="currentColor"
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 h-full">
+            {/* Available Rooms Card */}
+            <div className="card bg-base-100 shadow-xl mb-4 h-full">
+              <div className="card-body">
+                <div className="flex justify-between items-center mb-3">
+                  <h2 className="card-title">Available Rooms</h2>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => fetchRooms()}
+                      className="btn btn-sm btn-outline"
+                      disabled={loading}
                     >
-                      <circle cx="11" cy="11" r="8"></circle>
-                      <path d="m21 21-4.3-4.3"></path>
-                    </g>
-                  </svg>
-                  <input
-                    type="search"
-                    className="grow"
-                    placeholder="Search rooms..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </label>
-              </div>
-
-              {/* Room List */}
-              <div className="flex flex-col gap-4">
-                {rooms.length === 0 ? (
-                  <div className="text-center py-8 text-base-content/50">
-                    <p>No rooms available</p>
-                    <p className="text-sm">Create a room to get started!</p>
+                      {loading ? "Loading..." : "Refresh"}
+                    </button>
+                    <button
+                      onClick={handleCreateRoomButtonClick}
+                      className="btn btn-sm btn-primary"
+                    >
+                      Create
+                    </button>
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    {rooms.map((room: any) => (
-                      <div key={room.id} className="card bg-base-200">
-                        <div className="card-body p-4">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h3 className="font-semibold">{room.name}</h3>
-                                {room.isPrivate && (
-                                  <span className="badge badge-warning badge-sm">
-                                    Private
-                                  </span>
-                                )}
-                                {room.isHidden && (
-                                  <span className="badge badge-neutral badge-sm">
-                                    Hidden
-                                  </span>
-                                )}
+                </div>
+
+                {/* Search Input */}
+                <div className="form-control mb-3">
+                  <label className="input input-bordered flex items-center gap-2 w-full">
+                    <svg
+                      className="h-[1em] opacity-50"
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                    >
+                      <g
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                        strokeWidth="2.5"
+                        fill="none"
+                        stroke="currentColor"
+                      >
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.3-4.3"></path>
+                      </g>
+                    </svg>
+                    <input
+                      type="search"
+                      className="grow"
+                      placeholder="Search rooms..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </label>
+                </div>
+
+                {/* Room List */}
+                <div className="flex flex-col gap-4">
+                  {rooms.length === 0 ? (
+                    <div className="text-center py-8 text-base-content/50">
+                      <p>No rooms available</p>
+                      <p className="text-sm">Create a room to get started!</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {rooms.map((room: any) => (
+                        <div key={room.id} className="card bg-base-200">
+                          <div className="card-body p-4">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h3 className="font-semibold">{room.name}</h3>
+                                  {room.isPrivate && (
+                                    <span className="badge badge-warning badge-sm">
+                                      Private
+                                    </span>
+                                  )}
+                                  {room.isHidden && (
+                                    <span className="badge badge-neutral badge-sm">
+                                      Hidden
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-base-content/70">
+                                  {room.userCount} member
+                                  {room.userCount !== 1 ? "s" : ""}
+                                </p>
                               </div>
-                              <p className="text-xs text-base-content/70">
-                                {room.userCount} member
-                                {room.userCount !== 1 ? "s" : ""}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2 flex-wrap justify-end">
-                              <span className="text-xs text-base-content/70">
-                                Join as:
-                              </span>
-                              <button
-                                onClick={() =>
-                                  handleJoinRoom(room.id, "band_member")
-                                }
-                                className="btn btn-xs btn-primary"
-                                disabled={
-                                  isConnecting ||
-                                  connectionState === ConnectionState.REQUESTING
-                                }
-                              >
-                                Band Member
-                              </button>
-                              <button
-                                onClick={() =>
-                                  handleJoinRoom(room.id, "audience")
-                                }
-                                className="btn btn-xs btn-outline"
-                                disabled={
-                                  isConnecting ||
-                                  connectionState === ConnectionState.REQUESTING
-                                }
-                              >
-                                Audience
-                              </button>
+                              <div className="flex items-center gap-2 flex-wrap justify-end">
+                                <span className="text-xs text-base-content/70">
+                                  Join as:
+                                </span>
+                                <button
+                                  onClick={() =>
+                                    handleJoinRoom(room.id, "band_member")
+                                  }
+                                  className="btn btn-xs btn-primary"
+                                  disabled={
+                                    isConnecting ||
+                                    connectionState === ConnectionState.REQUESTING
+                                  }
+                                >
+                                  Band Member
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    handleJoinRoom(room.id, "audience")
+                                  }
+                                  className="btn btn-xs btn-outline"
+                                  disabled={
+                                    isConnecting ||
+                                    connectionState === ConnectionState.REQUESTING
+                                  }
+                                >
+                                  Audience
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Invite URL Input */}
-          <InviteUrlInput />
+            <div className="flex flex-col gap-4">
+              {/* Invite URL Input */}
+              <InviteUrlInput />
 
-          {/* Technical Information Panel */}
-          <div className="card bg-base-100 shadow-xl mb-4">
-            <div className="card-body">
+              {/* Technical Information Panel */}
               <TechnicalInfoPanel />
             </div>
           </div>

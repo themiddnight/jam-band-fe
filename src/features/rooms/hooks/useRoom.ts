@@ -68,6 +68,13 @@ export const useRoom = () => {
     approveMember,
     rejectMember,
 
+    // Instrument swap functions
+    requestInstrumentSwap,
+    approveInstrumentSwap,
+    rejectInstrumentSwap,
+    cancelInstrumentSwap,
+    kickUser,
+
     onNoteReceived,
     onInstrumentChanged,
     onSynthParamsChanged,
@@ -80,6 +87,22 @@ export const useRoom = () => {
     onGuestCancelled,
     onMemberRejected,
     onStopAllNotes,
+    
+    // Swap event handlers
+    onSwapRequestReceived,
+    onSwapRequestSent,
+    onSwapApproved,
+    onSwapRejected,
+    onSwapCancelled,
+    onSwapCompleted,
+    onUserKicked,
+    
+    // Sequencer snapshot exchange
+    requestSequencerState,
+    sendSequencerState,
+    onSequencerStateRequested,
+    onSequencerStateReceived,
+    
     getActiveSocket,
     cleanup: socketCleanup,
   } = useRoomSocket();
@@ -922,6 +945,26 @@ export const useRoom = () => {
 
     // Instrument manager
     instrumentManager,
+
+    // Instrument swap and kick functions
+    requestInstrumentSwap,
+    approveInstrumentSwap,
+    rejectInstrumentSwap,
+    cancelInstrumentSwap,
+    kickUser,
+    onSwapRequestReceived,
+    onSwapRequestSent,
+    onSwapApproved,
+    onSwapRejected,
+    onSwapCancelled,
+    onSwapCompleted,
+    onUserKicked,
+
+    // Sequencer snapshot exchange
+    requestSequencerState,
+    sendSequencerState,
+    onSequencerStateRequested,
+    onSequencerStateReceived,
 
     // Socket connection
     socketRef,
