@@ -1,5 +1,8 @@
 import PlayingIndicator from "./PlayingIndicator";
+import UserActionsMenu from "./UserActionsMenu";
+import PendingSwapStatus from "./PendingSwapStatus";
 import { getInstrumentIcon } from "@/shared/constants/instruments";
+import { useUserStore } from "@/shared/stores";
 import type { RoomUser } from "@/shared/types";
 import { memo } from "react";
 
@@ -17,10 +20,24 @@ interface RoomMembersProps {
   voiceUsers?: VoiceUser[];
   onApproveMember: (userId: string) => void;
   onRejectMember: (userId: string) => void;
+  onSwapInstrument: (targetUserId: string) => void;
+  onKickUser: (targetUserId: string) => void;
+  pendingSwapTarget?: RoomUser | null;
+  onCancelSwap?: () => void;
 }
 
 const RoomMembers = memo(
-  ({ users, playingIndicators, voiceUsers = [] }: RoomMembersProps) => {
+  ({ 
+    users, 
+    playingIndicators, 
+    voiceUsers = [], 
+    onSwapInstrument,
+    onKickUser,
+    pendingSwapTarget,
+    onCancelSwap
+  }: RoomMembersProps) => {
+    const { userId: currentUserId } = useUserStore();
+    
     const sortedUsers = users.slice().sort((a, b) => {
       const roleOrder = {
         room_owner: 0,
@@ -29,6 +46,10 @@ const RoomMembers = memo(
       } as const;
       return (roleOrder[a.role] ?? 3) - (roleOrder[b.role] ?? 3);
     });
+
+    // Get current user's role for permission checks
+    const currentUser = users.find(user => user.id === currentUserId);
+    const currentUserRole = currentUser?.role || "";
 
     return (
       <div className="card bg-base-100 shadow-lg w-full">
@@ -39,6 +60,8 @@ const RoomMembers = memo(
             {sortedUsers.map((user) => {
               const playingIndicator = playingIndicators.get(user.id);
               const voiceUser = voiceUsers.find((v) => v.userId === user.id);
+              const isCurrentUser = user.id === currentUserId;
+              const hasPendingSwap = isCurrentUser && pendingSwapTarget;
 
               return (
                 <div
@@ -59,9 +82,20 @@ const RoomMembers = memo(
                     />
                   )}
                   {voiceUser?.isMuted && user.role !== "audience" && "🔇"}
+                  
+                  {/* Username or Pending Status */}
+                  <div className="flex flex-col gap-1">
                   <span className="font-medium text-sm whitespace-nowrap">
                     {user.username}
                   </span>
+                    {hasPendingSwap && onCancelSwap && (
+                      <PendingSwapStatus
+                        targetUser={pendingSwapTarget}
+                        onCancel={onCancelSwap}
+                      />
+                    )}
+                  </div>
+                  
                   <div className="flex gap-2 text-xs whitespace-nowrap">
                     {user.role === "band_member" ||
                     user.role === "room_owner" ? (
@@ -79,6 +113,16 @@ const RoomMembers = memo(
                       {user.currentInstrument.replace(/_/g, " ")}
                     </span>
                   ) : null}
+                  
+                  {/* User Actions Menu - only for other users */}
+                  {!isCurrentUser && (
+                    <UserActionsMenu
+                      user={user}
+                      currentUserRole={currentUserRole}
+                      onSwapInstrument={onSwapInstrument}
+                      onKickUser={onKickUser}
+                    />
+                  )}
                 </div>
               );
             })}

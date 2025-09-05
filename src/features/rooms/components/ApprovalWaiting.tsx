@@ -44,9 +44,6 @@ export const ApprovalWaiting: React.FC<ApprovalWaitingProps> = ({
               Cancel Request
             </button>
           </div>
-          <div className="text-xs text-base-content/50 mt-2">
-            Request will timeout automatically after 30 seconds
-          </div>
         </div>
       </div>
     </div>

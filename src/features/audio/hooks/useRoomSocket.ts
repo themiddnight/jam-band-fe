@@ -1002,6 +1002,77 @@ export const useRoomSocket = (instrumentManager?: any) => {
     [safeEmit],
   );
 
+  // Instrument swap functions
+  const requestInstrumentSwap = useCallback(
+    (targetUserId: string) => {
+      safeEmit("request_instrument_swap", { targetUserId });
+    },
+    [safeEmit],
+  );
+
+  const approveInstrumentSwap = useCallback(
+    (requesterId: string) => {
+      safeEmit("approve_instrument_swap", { requesterId });
+    },
+    [safeEmit],
+  );
+
+  const rejectInstrumentSwap = useCallback(
+    (requesterId: string) => {
+      safeEmit("reject_instrument_swap", { requesterId });
+    },
+    [safeEmit],
+  );
+
+  const cancelInstrumentSwap = useCallback(() => {
+    safeEmit("cancel_instrument_swap", {});
+  }, [safeEmit]);
+
+  // Sequencer snapshot exchange
+  const requestSequencerState = useCallback(
+    (targetUserId: string) => {
+      safeEmit("request_sequencer_state", { targetUserId });
+    },
+    [safeEmit],
+  );
+
+  const sendSequencerState = useCallback(
+    (targetUserId: string, snapshot: { banks: any; settings: any; currentBank: string }) => {
+      safeEmit("send_sequencer_state", { targetUserId, snapshot });
+    },
+    [safeEmit],
+  );
+
+  const onSequencerStateRequested = useCallback(
+    (callback: (data: { requesterId: string }) => void) => {
+      const socket = getActiveSocket();
+      if (!socket) return () => {};
+      const handler = (data: { requesterId: string }) => callback(data);
+      socket.on("sequencer_state_requested", handler);
+      return () => socket.off("sequencer_state_requested", handler);
+    },
+    [getActiveSocket],
+  );
+
+  const onSequencerStateReceived = useCallback(
+    (callback: (data: { fromUserId: string; snapshot: { banks: any; settings: any; currentBank: string } }) => void) => {
+      const socket = getActiveSocket();
+      if (!socket) return () => {};
+      const handler = (data: { fromUserId: string; snapshot: { banks: any; settings: any; currentBank: string } }) => callback(data);
+      socket.on("sequencer_state", handler);
+      return () => socket.off("sequencer_state", handler);
+    },
+    [getActiveSocket],
+  );
+
+  // Kick user function
+  const kickUser = useCallback(
+    (targetUserId: string) => {
+      safeEmit("kick_user", { targetUserId });
+    },
+    [safeEmit],
+  );
+
   // Event handler setters
   const onNoteReceived = useCallback(
     (callback: (data: NoteReceivedData) => void) => {
@@ -1199,6 +1270,161 @@ export const useRoomSocket = (instrumentManager?: any) => {
     memberRejectedCallbackRef.current = callback;
   }, []);
 
+  // Instrument swap event handlers
+  const onSwapRequestReceived = useCallback(
+    (callback: (data: { requesterId: string; requesterUsername: string }) => void) => {
+      const socket = getActiveSocket();
+      if (!socket) {
+        console.log("⚠️ No active socket for onSwapRequestReceived");
+        return () => {};
+      }
+
+      const handleSwapRequest = (data: { requesterId: string; requesterUsername: string }) => {
+        console.log("🔄 Swap request received:", data);
+        callback(data);
+      };
+
+      socket.on("swap_request_received", handleSwapRequest);
+
+      return () => {
+        socket.off("swap_request_received", handleSwapRequest);
+      };
+    },
+    [getActiveSocket],
+  );
+
+  const onSwapRequestSent = useCallback(
+    (callback: (data: { targetUserId: string }) => void) => {
+      const socket = getActiveSocket();
+      if (!socket) {
+        console.log("⚠️ No active socket for onSwapRequestSent");
+        return () => {};
+      }
+
+      const handleSwapRequestSent = (data: { targetUserId: string }) => {
+        console.log("🔄 Swap request sent:", data);
+        callback(data);
+      };
+
+      socket.on("swap_request_sent", handleSwapRequestSent);
+
+      return () => {
+        socket.off("swap_request_sent", handleSwapRequestSent);
+      };
+    },
+    [getActiveSocket],
+  );
+
+  const onSwapApproved = useCallback(
+    (callback: (data: any) => void) => {
+      const socket = getActiveSocket();
+      if (!socket) {
+        console.log("⚠️ No active socket for onSwapApproved");
+        return () => {};
+      }
+
+      const handleSwapApproved = (data: any) => {
+        console.log("🔄 Swap approved:", data);
+        callback(data);
+      };
+
+      socket.on("swap_approved", handleSwapApproved);
+
+      return () => {
+        socket.off("swap_approved", handleSwapApproved);
+      };
+    },
+    [getActiveSocket],
+  );
+
+  const onSwapRejected = useCallback(
+    (callback: () => void) => {
+      const socket = getActiveSocket();
+      if (!socket) {
+        console.log("⚠️ No active socket for onSwapRejected");
+        return () => {};
+      }
+
+      const handleSwapRejected = () => {
+        console.log("🔄 Swap rejected");
+        callback();
+      };
+
+      socket.on("swap_rejected", handleSwapRejected);
+
+      return () => {
+        socket.off("swap_rejected", handleSwapRejected);
+      };
+    },
+    [getActiveSocket],
+  );
+
+  const onSwapCancelled = useCallback(
+    (callback: () => void) => {
+      const socket = getActiveSocket();
+      if (!socket) {
+        console.log("⚠️ No active socket for onSwapCancelled");
+        return () => {};
+      }
+
+      const handleSwapCancelled = () => {
+        console.log("🔄 Swap cancelled");
+        callback();
+      };
+
+      socket.on("swap_cancelled", handleSwapCancelled);
+
+      return () => {
+        socket.off("swap_cancelled", handleSwapCancelled);
+      };
+    },
+    [getActiveSocket],
+  );
+
+  const onSwapCompleted = useCallback(
+    (callback: (data: any) => void) => {
+      const socket = getActiveSocket();
+      if (!socket) {
+        console.log("⚠️ No active socket for onSwapCompleted");
+        return () => {};
+      }
+
+      const handleSwapCompleted = (data: any) => {
+        console.log("🔄 Swap completed:", data);
+        callback(data);
+      };
+
+      socket.on("swap_completed", handleSwapCompleted);
+
+      return () => {
+        socket.off("swap_completed", handleSwapCompleted);
+      };
+    },
+    [getActiveSocket],
+  );
+
+  const onUserKicked = useCallback(
+    (callback: (data: { reason: string }) => void) => {
+      const socket = getActiveSocket();
+      if (!socket) {
+        console.log("⚠️ No active socket for onUserKicked");
+        return () => {};
+      }
+
+      const handleUserKicked = (data: { reason: string }) => {
+        console.log("🚫 User kicked:", data);
+        callback(data);
+      };
+
+      socket.on("user_kicked", handleUserKicked);
+
+      return () => {
+        socket.off("user_kicked", handleUserKicked);
+      };
+    },
+    [getActiveSocket],
+  );
+
   // Cleanup function
   const cleanup = useCallback(() => {
     if (batchTimeoutRef.current) {
@@ -1244,6 +1470,17 @@ export const useRoomSocket = (instrumentManager?: any) => {
     sendChatMessage,
     stopAllNotes,
 
+    // Instrument swap actions
+    requestInstrumentSwap,
+    approveInstrumentSwap,
+    rejectInstrumentSwap,
+    cancelInstrumentSwap,
+    requestSequencerState,
+    sendSequencerState,
+    onSequencerStateRequested,
+    onSequencerStateReceived,
+    kickUser,
+
     // Event handlers
     onNoteReceived,
     onRoomCreated,
@@ -1259,6 +1496,13 @@ export const useRoomSocket = (instrumentManager?: any) => {
     onSendSynthParamsToNewUserNow,
     onGuestCancelled,
     onMemberRejected,
+    onSwapRequestReceived,
+    onSwapRequestSent,
+    onSwapApproved,
+    onSwapRejected,
+    onSwapCancelled,
+    onSwapCompleted,
+    onUserKicked,
 
     // Utilities
     getActiveSocket,

@@ -1,9 +1,9 @@
-import { Modal } from "./shared/Modal";
-import React, { useState } from "react";
+// import { Modal } from "./shared/Modal";
+import React from "react";
 
 export const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
-  const [showAboutModal, setShowAboutModal] = useState(false);
+  // const [showAboutModal, setShowAboutModal] = useState(false);
 
   return (
     <>
@@ -37,26 +37,34 @@ export const Footer: React.FC = () => {
               </a>
               <span>•</span>
               <a
-                href="https://github.com/themiddnight/jam-band-fe"
+                href="https://jam-band-landing-page.vercel.app"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-primary transition-colors"
               >
-                GitHub
+                Home Page
               </a>
               <span>•</span>
-              <button
+              <a
+                href="https://jam-band-landing-page.vercel.app/about"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-primary transition-colors"
+              >
+                About
+              </a>
+              {/* <button
                 onClick={() => setShowAboutModal(true)}
                 className="hover:text-primary transition-colors"
               >
                 About
-              </button>
+              </button> */}
             </div>
           </div>
         </div>
       </footer>
 
-      <Modal
+      {/* <Modal
         open={showAboutModal}
         setOpen={setShowAboutModal}
         title="About COLLAB"
@@ -195,7 +203,7 @@ export const Footer: React.FC = () => {
             </p>
           </div>
         </div>
-      </Modal>
+      </Modal> */}
     </>
   );
 };

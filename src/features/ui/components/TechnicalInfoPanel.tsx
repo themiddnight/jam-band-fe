@@ -1,13 +1,10 @@
-import { useState } from 'react';
-
 export const TechnicalInfoPanel = () => {
-  const [isExpanded, setIsExpanded] = useState(false);
 
   const technicalInfo = [
     {
       icon: '🌐',
       title: 'WebRTC Mesh Network',
-      description: 'Currently using WebRTC mesh for low-latency (POC). Limited participants per session.',
+      description: 'Currently using WebRTC mesh for low-latency (POC). Max 10 participants recommended per session.',
       status: 'Current'
     },
     {
@@ -37,22 +34,13 @@ export const TechnicalInfoPanel = () => {
   ];
 
   return (
+    <div className="card bg-base-100 shadow-xl">
       <div className="card-body p-4">
-        <div 
-          className="flex items-center justify-between cursor-pointer"
-          onClick={() => setIsExpanded(!isExpanded)}
-        >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 mb-4">
             <span className="text-lg">ℹ️</span>
             <h3 className="card-title text-base">Technical Info</h3>
           </div>
-          <button className="btn btn-ghost btn-sm">
-            {isExpanded ? '−' : '+'}
-          </button>
-        </div>
-        
-        {isExpanded && (
-          <div className="mt-4 space-y-3">
+          <div className="space-y-3">
             {technicalInfo.map((info, index) => (
               <div key={index} className="flex items-start gap-3 p-3 bg-base-200 rounded-lg">
                 <span className="text-lg">{info.icon}</span>
@@ -72,7 +60,7 @@ export const TechnicalInfoPanel = () => {
                 <div className="text-xs text-base-content/80">
                   <p className="font-medium mb-1">Pro Tips:</p>
                   <ul className="space-y-1">
-                    <li>• Use headphones to avoid feedback</li>
+                    <li>• Use wired headphones for lowest latency and to avoid feedback</li>
                     <li>• Close unnecessary browser tabs</li>
                     <li>• Test audio before joining</li>
                   </ul>
@@ -80,7 +68,7 @@ export const TechnicalInfoPanel = () => {
               </div>
             </div>
           </div>
-        )}
       </div>
+    </div>
   );
 }; 
