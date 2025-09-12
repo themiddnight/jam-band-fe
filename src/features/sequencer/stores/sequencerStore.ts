@@ -138,9 +138,8 @@ const createDefaultBanks = (): Record<string, SequencerBank> => {
 // Initial state
 const initialState: SequencerState = {
   isPlaying: false,
-  isPaused: false,
   isRecording: false,
-  softStopRequested: false,
+  softStopRequested: false, // Indicates soft-stop was requested (what used to be "paused")
   currentBeat: 0,
   currentBank: "A",
   waitingForMetronome: false,
@@ -429,14 +428,13 @@ export const useSequencerStore = create<SequencerStore>()(
 
         // Playback control
         play: () => {
-          set({ isPlaying: true, isPaused: false, waitingForMetronome: true });
+          set({ isPlaying: true, waitingForMetronome: true });
         },
 
         // Note: This is now hardStop - immediate stop with note-off
         stop: () => {
           set({ 
             isPlaying: false, 
-            isPaused: false, 
             softStopRequested: false,
             currentBeat: 0,
             waitingForMetronome: false,
@@ -444,8 +442,9 @@ export const useSequencerStore = create<SequencerStore>()(
           });
         },
 
+        // Renamed: What was previously "pause" is now "soft stop" - stops at sequence end
         pause: () => {
-          set({ isPlaying: false, isPaused: true });
+          set({ softStopRequested: true });
         },
 
         softStop: () => {
@@ -459,7 +458,6 @@ export const useSequencerStore = create<SequencerStore>()(
         hardStop: () => {
           set({ 
             isPlaying: false, 
-            isPaused: false, 
             softStopRequested: false,
             currentBeat: 0,
             waitingForMetronome: false,
@@ -470,8 +468,10 @@ export const useSequencerStore = create<SequencerStore>()(
         togglePlayback: () => {
           const state = get();
           if (state.isPlaying) {
-            state.pause();
+            // If playing, trigger soft stop (wait for sequence end)
+            state.pause(); // This now triggers soft stop
           } else {
+            // If not playing, start playing
             state.play();
           }
         },

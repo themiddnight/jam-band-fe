@@ -191,17 +191,42 @@ export const useSequencer = ({
             
             // Process each beat's notes as a chord
             notesByBeat.forEach((beatNotes, beat) => {
-              // Calculate average velocity for new notes
-              const avgVelocity = beatNotes.reduce((sum, n) => sum + n.velocity, 0) / beatNotes.length;
+              // Deduplicate notes to prevent duplicate processing
+              const uniqueNotes = new Map<string, typeof beatNotes[0]>();
+              beatNotes.forEach(noteData => {
+                if (!uniqueNotes.has(noteData.note)) {
+                  uniqueNotes.set(noteData.note, noteData);
+                } else {
+                  console.warn(`🎵 Duplicate note detected: ${noteData.note} at beat ${beat} - skipping duplicate`);
+                }
+              });
               
-              // Process each note individually for legato logic
+              // Process each unique note individually for legato logic
+              const processedNotes = Array.from(uniqueNotes.values());
               const legatoNotes: string[] = [];
               const newNotes: string[] = [];
-              const newNoteStopData: Array<{note: string, gate: number, hasNext: boolean}> = [];
+              const newNoteStopData: Array<{note: string, gate: number, velocity: number, isLegatoStart: boolean}> = [];
               
-              beatNotes.forEach(noteData => {
-                const isLegatoContinuation = isPreviousBeatSameNote(noteData.step) && isPreviousStepFullGate(noteData.step);
-                const hasNextSameNote = hasNextBeatSameNote(noteData.step);
+              // Pre-calculate legato groups for all notes to avoid repeated calculations
+              const legatoAnalysis = new Map<string, ReturnType<typeof findLegatoGroup>>();
+              processedNotes.forEach(noteData => {
+                legatoAnalysis.set(noteData.note, findLegatoGroup(noteData.step));
+              });
+              
+              processedNotes.forEach(noteData => {
+                const legatoGroup = legatoAnalysis.get(noteData.note)!;
+                const isLegatoContinuation = legatoGroup.isInMiddleOfGroup;
+                
+                // Debug logging only once per note
+                console.log(`🎵 Legato analysis for ${noteData.note} at beat ${noteData.step.beat}:`, {
+                  isGroupStart: legatoGroup.isGroupStart,
+                  isGroupEnd: legatoGroup.isGroupEnd,
+                  isInMiddleOfGroup: legatoGroup.isInMiddleOfGroup,
+                  groupVelocity: legatoGroup.groupVelocity,
+                  groupLength: legatoGroup.groupLength,
+                  groupBeats: `${noteData.step.beat}`,
+                  gate: noteData.gate
+                });
                 
                 if (isLegatoContinuation) {
                   legatoNotes.push(noteData.note);
@@ -212,29 +237,78 @@ export const useSequencer = ({
                   newNoteStopData.push({
                     note: noteData.note,
                     gate: noteData.gate,
-                    hasNext: hasNextSameNote
+                    velocity: legatoGroup.groupVelocity, // Use velocity from first 100% gate note in group
+                    isLegatoStart: legatoGroup.isGroupStart
                   });
                 }
               });
               
               // Only trigger note-on for new notes (not legato continuations)
               if (newNotes.length > 0) {
+                // Calculate velocity for new notes - use individual note velocities
+                const noteVelocities = newNoteStopData.map(nd => nd.velocity);
+                const avgVelocity = noteVelocities.reduce((sum, v) => sum + v, 0) / noteVelocities.length;
+                
+                console.log(`🎵 Triggering ${newNotes.length} new notes:`, newNotes.map(note => {
+                  const noteData = processedNotes.find(pn => pn.note === note);
+                  const legato = legatoAnalysis.get(note);
+                  return {
+                    note,
+                    velocity: noteData?.velocity,
+                    gate: noteData?.gate,
+                    isGroupStart: legato?.isGroupStart,
+                    isGroupEnd: legato?.isGroupEnd
+                  };
+                }));
+                
                 onPlayNotesRef.current(newNotes, avgVelocity, true);
-                // Track playing notes for hard-stop
+                // Track playing notes for hard-stop AND legato management
                 newNotes.forEach(note => currentlyPlayingNotesRef.current.add(note));
               }
               
-              // Handle note stopping only for newly triggered notes
+              // Log legato continuations for debugging
+              if (legatoNotes.length > 0) {
+                console.log(`🎵 Legato continuations (no note-on):`, legatoNotes.map(note => {
+                  const noteData = processedNotes.find(pn => pn.note === note);
+                  const legato = legatoAnalysis.get(note);
+                  return {
+                    note,
+                    beat: noteData?.step?.beat,
+                    isGroupEnd: legato?.isGroupEnd
+                  };
+                }));
+              }
+              
+              // Handle note stopping for newly triggered notes AND legato group endings
               let maxGateTimeForSoftStop = 0; // Track longest gate time for soft-stop completion
               
-              newNoteStopData.forEach(noteData => {
+              // Process stopping logic for all notes in this beat (both new and legato continuations)
+              processedNotes.forEach(noteData => {
+                const legatoGroup = legatoAnalysis.get(noteData.note)!;
                 const isFullGate = noteData.gate >= 1.0;
-                const shouldDoLegato = isFullGate && noteData.hasNext;
+                const isNewNote = newNotes.includes(noteData.note);
+                const isLegatoContinuation = !isNewNote;
                 
-                if (!shouldDoLegato) {
-                  // Stop this note after its gate duration
+                // Determine if this note should continue (legato) or stop
+                const shouldDoLegato = isFullGate && legatoGroup && !legatoGroup.isGroupEnd;
+                
+                // Stop note if:
+                // 1. It's a new note with non-full gate
+                // 2. It's a new note with full gate but at group end  
+                // 3. It's a legato continuation but the group is ending
+                const shouldStopNote = !shouldDoLegato;
+                
+                if (shouldStopNote) {
+                  // Calculate gate time
                   const timing = SequencerService.calculateStepTiming(currentBPMRef.current, sequencerStoreRef.current.settings.speed);
-                  const gateTime = timing.stepInterval * noteData.gate * 1000;
+                  let gateTime = timing.stepInterval * noteData.gate * 1000;
+                  
+                  // For legato continuations ending, use the gate time of the current step
+                  if (isLegatoContinuation && legatoGroup.isGroupEnd) {
+                    // For legato group endings, use the current step's gate time
+                    gateTime = timing.stepInterval * noteData.gate * 1000;
+                    console.log(`🎵 Legato group ending for ${noteData.note} at beat ${noteData.step.beat}, using gate time: ${gateTime}ms`);
+                  }
                   
                   // Add minimum and maximum gate times to prevent issues
                   const minGateTime = 50; // Minimum 50ms to ensure notes are heard
@@ -246,22 +320,25 @@ export const useSequencer = ({
                     maxGateTimeForSoftStop = Math.max(maxGateTimeForSoftStop, safeGateTime);
                   }
                   
+                  // Schedule note stop after gate time
                   setTimeout(() => {
-                    console.log(`🎵 Stopping note after gate: ${noteData.note} (gate: ${noteData.gate})`);
+                    console.log(`🎵 Stopping note after gate: ${noteData.note} (gate: ${noteData.gate}, isNew: ${isNewNote}, isLegatoEnd: ${legatoGroup.isGroupEnd})`);
                     onStopNotesRef.current([noteData.note]);
                     // Remove from tracking when notes stop
                     currentlyPlayingNotesRef.current.delete(noteData.note);
                   }, safeGateTime);
                   
-                  // Emergency cleanup: force stop this note if still playing
-                  const emergencyTimeout = safeGateTime + 1000; // 1s extra buffer
+                  // Shorter emergency cleanup: force stop this note if still playing
+                  const emergencyTimeout = safeGateTime + 500; // Reduced from 1000ms to 500ms
                   setTimeout(() => {
                     if (currentlyPlayingNotesRef.current.has(noteData.note)) {
-                      console.warn(`🎵 Emergency cleanup: force stopping stuck note ${noteData.note} from beat ${beat}`);
+                      console.warn(`🎵 Emergency cleanup: force stopping stuck note ${noteData.note} from beat ${beat} (isNew: ${isNewNote}, isLegatoEnd: ${legatoGroup.isGroupEnd})`);
                       onStopNotesRef.current([noteData.note]);
                       currentlyPlayingNotesRef.current.delete(noteData.note);
                     }
                   }, emergencyTimeout);
+                } else if (isLegatoContinuation) {
+                  console.log(`🎵 Legato continuation: ${noteData.note} at beat ${noteData.step.beat} continues playing (groupEnd=${legatoGroup.isGroupEnd})`);
                 }
               });
               
@@ -290,75 +367,175 @@ export const useSequencer = ({
               }
             });
             
-            // Helper function to check if previous beat has the same note
-            function isPreviousBeatSameNote(currentStep: any): boolean {
-              const currentBankId = sequencerStoreRef.current.currentBank;
-              if (!currentBankId) return false;
-              
-              const currentBank = sequencerStoreRef.current.banks[currentBankId];
-              if (!currentBank) return false;
-              
-              // Bank isolation: No legato across bank boundaries (beat 0 = start of bank)
-              if (currentStep.beat === 0) {
-                console.log(`🎵 Legato check - Beat 0: no legato across bank boundaries`);
-                return false;
+            // Helper function to find legato group information for a step
+            // Implements the legato grouping rules:
+            // 1. Adjacent cells with 100% gate = one long legato note
+            // 2. Short gate notes break the chain but are included in current group
+            // 3. Each group uses velocity of first 100% gate note
+            function findLegatoGroup(currentStep: SequencerStep | undefined): {
+              isInMiddleOfGroup: boolean;
+              isGroupStart: boolean;
+              isGroupEnd: boolean;
+              groupVelocity: number;
+              groupLength: number;
+            } {
+              if (!currentStep) {
+                return {
+                  isInMiddleOfGroup: false,
+                  isGroupStart: true,
+                  isGroupEnd: true,
+                  groupVelocity: 1.0,
+                  groupLength: 1
+                };
               }
               
-              const prevBeat = currentStep.beat - 1; // Only check previous beat within the same bank cycle
-              
-              const prevStepWithSameNote = currentBank.steps.find(step => 
-                step.beat === prevBeat && 
-                step.note === currentStep.note &&
-                step.enabled
-              );
-              
-              const hasPrevNote = !!prevStepWithSameNote;
-              console.log(`🎵 Legato check - Previous beat: bank=${currentBankId}, beat=${prevBeat}, note=${currentStep.note}, hasPrevNote=${hasPrevNote}`);
-              
-              return hasPrevNote;
-            }
-            
-            // Helper function to check if previous step has full gate
-            function isPreviousStepFullGate(currentStep: any): boolean {
               const currentBankId = sequencerStoreRef.current.currentBank;
-              if (!currentBankId) return false;
-              
-              const currentBank = sequencerStoreRef.current.banks[currentBankId];
-              if (!currentBank) return false;
-              
-              // Bank isolation: No legato across bank boundaries (beat 0 = start of bank)
-              if (currentStep.beat === 0) {
-                return false;
+              if (!currentBankId) {
+                return {
+                  isInMiddleOfGroup: false,
+                  isGroupStart: true,
+                  isGroupEnd: true,
+                  groupVelocity: currentStep.velocity,
+                  groupLength: 1
+                };
               }
               
-              const prevBeat = currentStep.beat - 1; // Only check previous beat within the same bank cycle
-              
-              const prevStep = currentBank.steps.find(step => 
-                step.beat === prevBeat && 
-                step.note === currentStep.note &&
-                step.enabled
-              );
-              
-              return prevStep ? prevStep.gate >= 1.0 : false;
-            }
-            
-            // Helper function to check if next beat has the same note
-            function hasNextBeatSameNote(currentStep: any): boolean {
-              const currentBankId = sequencerStoreRef.current.currentBank;
-              if (!currentBankId) return false;
-              
               const currentBank = sequencerStoreRef.current.banks[currentBankId];
-              if (!currentBank) return false;
+              if (!currentBank) {
+                return {
+                  isInMiddleOfGroup: false,
+                  isGroupStart: true,
+                  isGroupEnd: true,
+                  groupVelocity: currentStep.velocity,
+                  groupLength: 1
+                };
+              }
               
-              const nextBeat = (currentStep.beat + 1) % sequencerStoreRef.current.settings.length;
+              // Get all steps for this note in the current bank, sorted by beat
+              const noteSteps = currentBank.steps
+                .filter(step => step.note === currentStep.note && step.enabled)
+                .sort((a, b) => a.beat - b.beat);
               
-              const nextStepWithSameNote = currentBank.steps.find(step => 
-                step.beat === nextBeat && 
-                step.note === currentStep.note &&
-                step.enabled
+              if (noteSteps.length === 0) {
+                return {
+                  isInMiddleOfGroup: false,
+                  isGroupStart: true,
+                  isGroupEnd: true,
+                  groupVelocity: currentStep.velocity,
+                  groupLength: 1
+                };
+              }
+              
+              // Find legato groups according to your rules
+              const groups: Array<{
+                startBeat: number;
+                endBeat: number;
+                velocity: number;
+                steps: SequencerStep[];
+              }> = [];
+              
+              let currentGroupSteps: SequencerStep[] = [];
+              let groupStartVelocity = noteSteps[0]?.velocity || 1.0;
+              
+              for (let i = 0; i < noteSteps.length; i++) {
+                const step = noteSteps[i];
+                const prevStep = noteSteps[i - 1];
+                const nextStep = noteSteps[i + 1];
+                
+                // Start a new group if:
+                // 1. This is the first step
+                // 2. There's a gap between this step and previous step
+                // 3. Previous step had less than 100% gate (breaking the legato chain)
+                const shouldStartNewGroup = 
+                  i === 0 || 
+                  !prevStep || 
+                  step.beat !== prevStep.beat + 1 ||
+                  prevStep.gate < 1.0;
+                
+                if (shouldStartNewGroup && currentGroupSteps.length > 0) {
+                  // Finish the previous group
+                  groups.push({
+                    startBeat: currentGroupSteps[0].beat,
+                    endBeat: currentGroupSteps[currentGroupSteps.length - 1].beat,
+                    velocity: groupStartVelocity,
+                    steps: [...currentGroupSteps]
+                  });
+                  currentGroupSteps = [];
+                }
+                
+                if (shouldStartNewGroup) {
+                  // Find the first 100% gate step in this potential group for velocity
+                  groupStartVelocity = step.velocity;
+                  for (let j = i; j < noteSteps.length; j++) {
+                    const futureStep = noteSteps[j];
+                    if (futureStep.beat !== step.beat + (j - i)) break; // No longer adjacent
+                    if (futureStep.gate >= 1.0) {
+                      groupStartVelocity = futureStep.velocity;
+                      break;
+                    }
+                  }
+                }
+                
+                currentGroupSteps.push(step);
+                
+                // End group if:
+                // 1. This is the last step
+                // 2. Next step has a gap
+                // 3. This step has less than 100% gate and we're not continuing
+                const shouldEndGroup = 
+                  i === noteSteps.length - 1 ||
+                  !nextStep ||
+                  nextStep.beat !== step.beat + 1 ||
+                  (step.gate < 1.0);
+                
+                if (shouldEndGroup && currentGroupSteps.length > 0) {
+                  groups.push({
+                    startBeat: currentGroupSteps[0].beat,
+                    endBeat: currentGroupSteps[currentGroupSteps.length - 1].beat,
+                    velocity: groupStartVelocity,
+                    steps: [...currentGroupSteps]
+                  });
+                  currentGroupSteps = [];
+                }
+              }
+              
+              // Find which group contains the current step
+              const matchingGroup = groups.find(group => 
+                group.steps.some(step => step.beat === currentStep.beat)
               );
               
-              return !!nextStepWithSameNote;
+              if (!matchingGroup) {
+                return {
+                  isInMiddleOfGroup: false,
+                  isGroupStart: true,
+                  isGroupEnd: true,
+                  groupVelocity: currentStep.velocity,
+                  groupLength: 1
+                };
+              }
+              
+              const isGroupStart = matchingGroup.startBeat === currentStep.beat;
+              const isGroupEnd = matchingGroup.endBeat === currentStep.beat;
+              const isInMiddleOfGroup = !isGroupStart && matchingGroup.steps.length > 1;
+              
+              // Debug logging for legato logic
+              console.log(`🎵 Legato analysis for ${currentStep.note} at beat ${currentStep.beat}:`, {
+                isGroupStart,
+                isGroupEnd,
+                isInMiddleOfGroup,
+                groupVelocity: matchingGroup.velocity,
+                groupLength: matchingGroup.steps.length,
+                groupBeats: `${matchingGroup.startBeat}-${matchingGroup.endBeat}`,
+                groupSteps: matchingGroup.steps.map(s => `${s.beat}:${s.gate}`)
+              });
+              
+              return {
+                isInMiddleOfGroup,
+                isGroupStart,
+                isGroupEnd,
+                groupVelocity: matchingGroup.velocity,
+                groupLength: matchingGroup.steps.length
+              };
             }
           },
           onMetronomeSync: () => {
@@ -391,6 +568,8 @@ export const useSequencer = ({
 
     initializeServices();
 
+    // Capture debounced ref value for cleanup
+    const debounced = debouncedServiceUpdate.current;
     // Cleanup on unmount only
     return () => {
       if (sequencerServiceRef.current) {
@@ -401,8 +580,8 @@ export const useSequencer = ({
         metronomeServiceRef.current.removeListeners();
         metronomeServiceRef.current = null;
       }
-      // Cancel any pending debounced calls
-      debouncedServiceUpdate.current.cancel();
+      // Cancel any pending debounced calls using captured ref
+      debounced.cancel();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty dependency array - only run once
@@ -477,14 +656,13 @@ export const useSequencer = ({
 
   // Update sequencer service when settings change
   useEffect(() => {
-    if (sequencerServiceRef.current && isInitialized) {
-      sequencerServiceRef.current.updateSettings(
-        currentBPM,
-        sequencerStoreRef.current.settings.speed,
-        sequencerStoreRef.current.settings.length
-      );
-    }
-  }, [currentBPM, isInitialized]);
+    const service = sequencerServiceRef.current;
+    if (!service || !isInitialized) return;
+
+    const { speed, length } = sequencerStoreRef.current.settings;
+    service.updateSettings(currentBPM, speed, length);
+    console.log("🎵 Sequencer settings applied to service", { bpm: currentBPM, speed, length });
+  }, [currentBPM, isInitialized, sequencerStore.settings.speed, sequencerStore.settings.length]);
 
   // Update sequencer service when steps change
   useEffect(() => {
@@ -528,6 +706,25 @@ export const useSequencer = ({
   const handleStop = useCallback(() => {
     if (!sequencerServiceRef.current) return;
 
+    // Stop all currently playing notes to prevent stuck notes
+    const playingNotes = Array.from(currentlyPlayingNotesRef.current);
+    if (playingNotes.length > 0) {
+      console.log(`🎵 Stop: cleaning up ${playingNotes.length} playing notes:`, playingNotes);
+      onStopNotesRef.current(playingNotes);
+      currentlyPlayingNotesRef.current.clear();
+    }
+
+    // Additional safety: Stop ALL possible notes to prevent phantom/stuck notes
+    // This is a brute-force approach to ensure nothing gets stuck
+    setTimeout(() => {
+      const remainingNotes = Array.from(currentlyPlayingNotesRef.current);
+      if (remainingNotes.length > 0) {
+        console.warn(`🎵 Stop: emergency cleanup of ${remainingNotes.length} remaining notes:`, remainingNotes);
+        onStopNotesRef.current(remainingNotes);
+        currentlyPlayingNotesRef.current.clear();
+      }
+    }, 100); // Small delay to catch any notes that might have been triggered just before stop
+
     hasStartedPlayingRef.current = false; // Reset for next playback
     sequencerStoreRef.current.stop();
     sequencerServiceRef.current.stopPlayback();
@@ -558,17 +755,28 @@ export const useSequencer = ({
       currentlyPlayingNotesRef.current.clear();
     }
 
+    // Additional safety: Multiple emergency stops to catch any missed notes
+    for (let i = 0; i < 3; i++) {
+      setTimeout(() => {
+        const remainingNotes = Array.from(currentlyPlayingNotesRef.current);
+        if (remainingNotes.length > 0) {
+          console.warn(`🎵 Hard-stop: emergency cleanup ${i + 1}/3 of ${remainingNotes.length} remaining notes:`, remainingNotes);
+          onStopNotesRef.current(remainingNotes);
+          currentlyPlayingNotesRef.current.clear();
+        }
+      }, (i + 1) * 50); // 50ms, 100ms, 150ms intervals
+    }
+
     hasStartedPlayingRef.current = false; // Reset for next playback
     sequencerStoreRef.current.hardStop();
     sequencerServiceRef.current.stopPlayback();
   }, []);
 
+  // Legacy pause handler - now redirects to soft stop for backward compatibility
   const handlePause = useCallback(() => {
-    if (!sequencerServiceRef.current) return;
-
-    sequencerStoreRef.current.pause();
-    sequencerServiceRef.current.pausePlayback();
-  }, []);
+    console.log("🎵 handlePause called - redirecting to soft stop");
+    handleSoftStop();
+  }, [handleSoftStop]);
 
   const handleTogglePlayback = useCallback(() => {
     if (sequencerStoreRef.current.isPlaying) {
@@ -746,7 +954,7 @@ export const useSequencer = ({
     currentBeat: sequencerStore.currentBeat,
     // Note: selectedBeat and editMode are now managed by the store
     isPlaying: sequencerStore.isPlaying,
-    isPaused: sequencerStore.isPaused,
+    isPaused: sequencerStore.softStopRequested, // isPaused now means "soft stop requested"
     isRecording: sequencerStore.isRecording,
     softStopRequested: sequencerStore.softStopRequested,
     waitingForMetronome: sequencerStore.waitingForMetronome,

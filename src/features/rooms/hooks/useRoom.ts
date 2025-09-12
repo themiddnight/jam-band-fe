@@ -382,6 +382,38 @@ export const useRoom = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onStopAllNotes, connectionState]);
 
+  // Automatically send user's current instrument preferences after joining room
+  useEffect(() => {
+    // Only send when we're connected to a room and have valid instrument data
+    if (connectionState !== ConnectionState.IN_ROOM || 
+        !currentInstrument || 
+        !currentCategory ||
+        currentUser?.role === 'audience') {
+      return;
+    }
+
+    // Only send if we don't already have an instrument set on the server
+    // (to avoid overwriting existing instrument data when user already has one)
+    if (!currentUser?.currentInstrument || !currentUser?.currentCategory) {
+      console.log("🎵 Automatically sending current instrument preferences to server:", {
+        instrument: currentInstrument,
+        category: currentCategory,
+        userRole: currentUser?.role
+      });
+      
+      // Send the current instrument preferences to the backend
+      // This ensures the user's stored preferences from localStorage are used
+      changeInstrument(currentInstrument, currentCategory);
+    } else {
+      console.log("🎵 User already has instrument set on server, skipping auto-send:", {
+        serverInstrument: currentUser.currentInstrument,
+        serverCategory: currentUser.currentCategory,
+        localInstrument: currentInstrument,
+        localCategory: currentCategory
+      });
+    }
+  }, [connectionState, currentInstrument, currentCategory, currentUser, changeInstrument]);
+
   // Set up synth params changed handler
   useEffect(() => {
     const unsubscribe = onSynthParamsChanged((data) => {

@@ -938,7 +938,12 @@ export class InstrumentEngine {
     }
 
     if (this.config.category === InstrumentCategory.Synthesizer) {
-      await this.playSynthNotes(notes, velocity, isKeyHeld);
+      // Filter out drum notes for synthesizers - only allow musical note names
+      const musicalNotes = notes.filter(note => this.isMusicalNote(note));
+      if (musicalNotes.length !== notes.length) {
+        console.log(`🎹 Synthesizer: filtered out ${notes.length - musicalNotes.length} drum notes, playing ${musicalNotes.length} musical notes:`, musicalNotes);
+      }
+      await this.playSynthNotes(musicalNotes, velocity, isKeyHeld);
     } else {
       await this.playTraditionalNotes(notes, velocity, isKeyHeld);
     }
@@ -1291,7 +1296,9 @@ export class InstrumentEngine {
     if (!this.isReady()) return;
 
     if (this.config.category === InstrumentCategory.Synthesizer) {
-      await this.stopSynthNotes(notes);
+      // Filter out drum notes for synthesizers - only stop musical notes
+      const musicalNotes = notes.filter(note => this.isMusicalNote(note));
+      await this.stopSynthNotes(musicalNotes);
     } else {
       await this.stopTraditionalNotes(notes);
     }
@@ -1609,6 +1616,17 @@ export class InstrumentEngine {
       return 16; // Reduced polyphony when WebRTC is active
     }
     return 32; // Normal polyphony
+  }
+
+  /**
+   * Check if a note string is a valid musical note (not a drum sample)
+   * Musical notes have the format: Letter + optional accidental + octave number
+   * Examples: C4, F#3, Bb2, etc.
+   */
+  private isMusicalNote(note: string): boolean {
+    // Pattern: Letter (A-G) + optional sharp/flat (# or b) + digit(s)
+    const musicalNotePattern = /^[A-Ga-g][#b]?\d+$/;
+    return musicalNotePattern.test(note);
   }
 
   dispose(): void {

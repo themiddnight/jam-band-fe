@@ -30,9 +30,8 @@ export interface SequencerClipboard {
 export interface SequencerState {
   // Playback state
   isPlaying: boolean;
-  isPaused: boolean;
   isRecording: boolean;
-  softStopRequested: boolean; // New: indicates soft-stop was requested
+  softStopRequested: boolean; // Indicates soft-stop was requested (replaces isPaused)
   currentBeat: number; // 0-15
   currentBank: string; // "A", "B", "C", "D"
   waitingForMetronome: boolean; // When play is pressed but waiting for next metronome tick
