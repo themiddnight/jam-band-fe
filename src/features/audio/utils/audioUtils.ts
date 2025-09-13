@@ -59,3 +59,26 @@ export const getSliderColorClass = (db: number): string => {
   if (db <= 24) return "range-error";
   return "range-error"; // Keep red for extreme levels
 };
+
+/**
+ * Default meter release factor for slow decay animation.
+ * Range: 0..1 (closer to 1 = slower decay). Suggested 0.85 - 0.98
+ */
+export const DEFAULT_METER_RELEASE = 0.95;
+
+/**
+ * Apply fast-attack / slow-release smoothing.
+ * - If nextLevel > prevLevel: snap immediately (fast attack)
+ * - Else: exponentially decay toward nextLevel using release factor
+ */
+export const applyFastAttackSlowRelease = (
+  prevLevel: number,
+  nextLevel: number,
+  release: number = DEFAULT_METER_RELEASE,
+): number => {
+  if (!isFinite(prevLevel)) prevLevel = 0;
+  if (!isFinite(nextLevel)) nextLevel = 0;
+  if (nextLevel > prevLevel) return nextLevel; // fast attack
+  const r = Math.max(0, Math.min(0.999, release));
+  return prevLevel * r + nextLevel * (1 - r);
+};

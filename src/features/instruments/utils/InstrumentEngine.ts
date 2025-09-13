@@ -403,7 +403,28 @@ export class InstrumentEngine {
         `✅ Successfully loaded ${this.config.instrumentName} for ${this.config.username}`,
       );
       return result;
-    } catch (error) {
+    } catch (error: any) {
+      // Background recovery for WebKit context mismatch
+      const message = String(error?.message || "");
+      const isContextMismatch = message.includes("Source and destination nodes belong to different audio contexts");
+      if (isContextMismatch) {
+        try {
+          console.warn("🔁 Detected context mismatch. Resetting mixer and retrying in background...");
+          const { resetGlobalMixer, getOrCreateGlobalMixer } = await import(
+            "../../audio/utils/effectsArchitecture"
+          );
+          // Ensure mixer matches the current instrument context
+          resetGlobalMixer();
+          await getOrCreateGlobalMixer();
+          // Retry once using the fallback loader
+          const retry = await this._loadInstrumentWithFallback();
+          this.isLoaded = true;
+          return retry;
+        } catch (e) {
+          console.error("❌ Recovery attempt failed:", e);
+        }
+      }
+
       console.error(
         `❌ Failed to load ${this.config.instrumentName} for ${this.config.username}:`,
         error,
@@ -537,15 +558,32 @@ export class InstrumentEngine {
 
     let newInstrument: any;
 
+    // Try to route through the global mixer per user
+    let destinationNode: AudioNode | null = null;
+    try {
+      const { getOrCreateGlobalMixer } = await import(
+        "../../audio/utils/effectsArchitecture"
+      );
+      const mixer = await getOrCreateGlobalMixer();
+      const existing = mixer.getChannel(this.config.userId);
+      const channel =
+        existing || mixer.createUserChannel(this.config.userId, this.config.username);
+      destinationNode = channel.inputGain;
+    } catch {
+      destinationNode = null; // Fallback: let smplr default to context.destination
+    }
+
     if (this.config.category === InstrumentCategory.DrumBeat) {
       newInstrument = new DrumMachine(this.audioContext!, {
         instrument: this.config.instrumentName,
         volume: 127,
+        ...(destinationNode ? { destination: destinationNode } : {}),
       });
     } else {
       newInstrument = new Soundfont(this.audioContext!, {
         instrument: this.config.instrumentName,
         volume: 127,
+        ...(destinationNode ? { destination: destinationNode } : {}),
       });
     }
 
@@ -635,7 +673,26 @@ export class InstrumentEngine {
       if (this.synthRef && this.filterRef && this.gainRef) {
         this.synthRef.connect(this.filterRef);
         this.filterRef.connect(this.gainRef);
-        this.gainRef.toDestination();
+        // Route to per-user mixer instead of directly to destination
+        try {
+          const { getOrCreateGlobalMixer } = await import(
+            "../../audio/utils/effectsArchitecture"
+          );
+          const mixer = await getOrCreateGlobalMixer();
+          // Ensure user channel exists
+          if (!mixer.getChannel(this.config.userId)) {
+            mixer.createUserChannel(this.config.userId, this.config.username);
+          }
+          // Connect Tone gain node into Web Audio mixer channel
+          // Tone.Gain implements AudioNode-compatible interface
+          mixer.routeInstrumentToChannel(
+            (this.gainRef as unknown as AudioNode),
+            this.config.userId,
+          );
+        } catch {
+          // Fallback: direct to destination if mixer not available
+          this.gainRef.toDestination();
+        }
       }
 
       console.log(

@@ -42,6 +42,21 @@ export class RoomAudioManager {
   private cleanupCallbacks = new Set<() => void>();
   private userInteractionListeners = new Set<() => void>();
   private errorRecoveryService: ErrorRecoveryService;
+  private ensureMixerChannels = async (users: RoomUser[]) => {
+    try {
+      const { getOrCreateGlobalMixer } = await import(
+        "../utils/effectsArchitecture"
+      );
+      const mixer = await getOrCreateGlobalMixer();
+      users.forEach((u) => {
+        if (!mixer.getChannel(u.id)) {
+          mixer.createUserChannel(u.id, u.username);
+        }
+      });
+    } catch {
+      // ignore if mixer not available
+    }
+  };
 
   constructor(instrumentManager?: any) {
     this.instrumentManager = instrumentManager;
@@ -217,6 +232,9 @@ export class RoomAudioManager {
       if (instrumentManager) {
         this.instrumentManager = instrumentManager;
       }
+
+      // Ensure mixer channels exist for current users
+      await this.ensureMixerChannels(roomUsers);
 
       // Initialize the dedicated instrument audio context with error handling
       try {

@@ -26,7 +26,7 @@ export const SpeedControl = memo(({
 
   return (
     <div className="flex items-center gap-1">
-      <span className="text-xs text-base-content/70">Speed:</span>
+      <span className="text-xs text-base-content/70">Beat Length:</span>
       <div className="dropdown dropdown-end">
         <button
           tabIndex={0}

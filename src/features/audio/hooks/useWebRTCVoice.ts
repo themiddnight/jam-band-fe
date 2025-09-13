@@ -407,7 +407,7 @@ export const useWebRTCVoice = ({
       (p) => p.isConnected,
     ).length;
 
-    console.log(`�️ MESH Network Status:
+    console.log(`🎙️ MESH Network Status:
       - Total peer connections: ${peerCount}/9 (max 10 users)
       - Connected peers: ${connectedCount}
       - Audio elements in DOM: ${activeElements.length}
@@ -658,6 +658,9 @@ export const useWebRTCVoice = ({
           const analyser = createAnalyser(context);
           source.connect(analyser);
           remoteAnalysersRef.current.set(userId, { analyser, source });
+
+          // Note: We intentionally do NOT route remote voice into the mixer now
+          // to keep the per-user slider instrument-only as requested.
 
           console.log(
             `🎙️ WebRTC: Created analyser for remote stream from ${userId}`,
@@ -1296,7 +1299,7 @@ export const useWebRTCVoice = ({
           existingPeer.connection.signalingState !== "stable"
         ) {
           console.log(
-            "�️ MESH: Connection already exists or in progress for",
+            "🔄 MESH: Connection already exists or in progress for",
             targetUserId,
           );
           return;

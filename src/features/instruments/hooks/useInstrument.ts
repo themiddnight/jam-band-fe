@@ -12,6 +12,7 @@ import {
 import { ControlType } from "@/shared/types";
 import { isSafari } from "@/shared/utils/webkitCompat";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useUserStore } from "@/shared/stores";
 
 export interface UseInstrumentOptions {
   initialInstrument?: string;
@@ -124,9 +125,10 @@ export const useInstrument = (
   const { setPreferences, getPreferences, clearPreferences } =
     useInstrumentPreferencesStore();
 
-  // Current user info (mock - in real app this would come from user context)
-  const currentUserId = useRef<string>("local-user");
-  const currentUsername = useRef<string>("Local User");
+  // Current user info
+  const { userId: storeUserId, username: storeUsername } = useUserStore();
+  const currentUserId = useRef<string>(storeUserId || "local-user");
+  const currentUsername = useRef<string>(storeUsername || "Local User");
 
   // Get preferences for current user
   const preferences = getPreferences(currentUserId.current);

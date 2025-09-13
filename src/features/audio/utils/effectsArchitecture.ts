@@ -71,6 +71,7 @@ export interface UserChannel {
   };
   sends: Map<string, GainNode>; // Send to aux buses
   panNode?: StereoPannerNode;
+  analyser?: AnalyserNode;
 }
 
 // Aux Bus Interface
@@ -575,6 +576,11 @@ export class MixerEngine {
     EffectsFactory.initialize(audioContext);
   }
 
+  // Expose the underlying AudioContext for sanity checks
+  public getAudioContext(): AudioContext {
+    return this.context;
+  }
+
   private initializeMasterSection(): void {
     const masterBus = AudioContextManager.getMasterBus();
     if (!masterBus) return;
@@ -606,6 +612,9 @@ export class MixerEngine {
     const inputGain = nodePool?.getGainNode() || this.context.createGain();
     const outputGain = nodePool?.getGainNode() || this.context.createGain();
     const panNode = this.context.createStereoPanner();
+    const analyser = this.context.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.85;
 
     // Connect channel
     inputGain.connect(panNode);
@@ -614,6 +623,9 @@ export class MixerEngine {
     if (this.masterSection) {
       outputGain.connect(this.masterSection.inputGain);
     }
+
+    // Tap output to analyser (post-volume)
+    outputGain.connect(analyser);
 
     const channel: UserChannel = {
       userId,
@@ -624,6 +636,7 @@ export class MixerEngine {
       soloMute: { solo: false, mute: false },
       sends: new Map(),
       panNode,
+      analyser,
     };
 
     this.userChannels.set(userId, channel);
@@ -675,6 +688,88 @@ export class MixerEngine {
   }
 
   /**
+   * Set per-user output volume (0..~4 for +12dB boost)
+   */
+  setUserVolume(userId: string, volume: number): void {
+    const channel = this.userChannels.get(userId);
+    if (!channel) return;
+    // Clamp to reasonable range: 0 to ~4 (equivalent to -∞dB to +12dB)
+    const v = Math.max(0, Math.min(4, volume));
+    channel.outputGain.gain.setValueAtTime(v, this.context.currentTime);
+  }
+
+  /**
+   * Get per-user output volume
+   */
+  getUserVolume(userId: string): number | null {
+    const channel = this.userChannels.get(userId);
+    if (!channel) return null;
+    return channel.outputGain.gain.value;
+  }
+
+  /**
+   * Get approximate output level (RMS) for user [0..1]
+   */
+  getUserOutputLevel(userId: string): number | null {
+    const channel = this.userChannels.get(userId);
+    if (!channel || !channel.analyser) return null;
+
+    // Safari-specific: Check if context is suspended and try to resume
+    if (this.context.state === "suspended") {
+      this.context.resume().catch(() => {
+        // Ignore resume errors - context might be resuming already
+      });
+      return null; // Return null for this frame, should work next frame
+    }
+
+    // Safari-specific: Check if context is still valid
+    if (this.context.state === "closed") {
+      return null; // Context was closed, meter will be recreated
+    }
+
+    const analyser = channel.analyser;
+    
+    try {
+      // Safari-specific: Verify analyser is still connected to a valid context
+      if (analyser.context !== this.context) {
+        return null; // Analyser belongs to old context, will be recreated
+      }
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      analyser.getByteTimeDomainData(dataArray);
+
+      // Safari-specific: Check for all-zero data (common Safari issue)
+      let hasNonZeroData = false;
+      for (let i = 0; i < Math.min(bufferLength, 10); i++) {
+        if (dataArray[i] !== 128) { // 128 is silence in byte domain
+          hasNonZeroData = true;
+          break;
+        }
+      }
+      
+      if (!hasNonZeroData && bufferLength > 0) {
+        // All data is silence - this might be a Safari issue or actual silence
+        // Return 0 but don't error out
+        return 0;
+      }
+
+      // Compute RMS in byte domain around 128 center
+      let sumSquares = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        const v = (dataArray[i] - 128) / 128; // -1..1
+        sumSquares += v * v;
+      }
+      const rms = Math.sqrt(sumSquares / bufferLength);
+      return Math.max(0, Math.min(1, rms));
+    } catch (error) {
+      // Safari-specific: AnalyserNode operations can throw in edge cases
+      console.warn("Analyser read failed (likely Safari context issue):", error);
+      return null;
+    }
+  }
+
+  /**
    * Cleanup mixer resources
    */
   cleanup(): void {
@@ -686,6 +781,7 @@ export class MixerEngine {
       channel.inputGain.disconnect();
       channel.outputGain.disconnect();
       channel.panNode?.disconnect();
+      channel.analyser?.disconnect();
     });
 
     // Cleanup aux buses
@@ -709,6 +805,44 @@ export class MixerEngine {
     this.auxBuses.clear();
     this.masterSection = null;
   }
+}
+
+// Singleton accessors for app-wide mixer instance
+let __globalMixer: MixerEngine | null = null;
+
+export async function getOrCreateGlobalMixer(): Promise<MixerEngine> {
+  const context = await AudioContextManager.getInstrumentContext();
+  // If a mixer exists but its context differs (e.g., Safari recreated context), rebuild it
+  if (__globalMixer) {
+    try {
+      if (__globalMixer.getAudioContext() !== context) {
+        __globalMixer.cleanup();
+        __globalMixer = new MixerEngine(context);
+      }
+    } catch {
+      // If anything goes wrong, recreate
+      __globalMixer = new MixerEngine(context);
+    }
+    return __globalMixer;
+  }
+  __globalMixer = new MixerEngine(context);
+  return __globalMixer;
+}
+
+export function getGlobalMixer(): MixerEngine | null {
+  return __globalMixer;
+}
+
+// Allow callers to force-recreate the mixer on next access
+export function resetGlobalMixer(): void {
+  if (__globalMixer) {
+    try {
+      __globalMixer.cleanup();
+    } catch {
+      // ignore cleanup errors during reset
+    }
+  }
+  __globalMixer = null;
 }
 
 /**

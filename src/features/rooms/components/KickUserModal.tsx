@@ -35,7 +35,7 @@ export default function KickUserModal({
         </p>
         
         <div className="bg-warning/10 border border-warning/20 p-3 rounded-lg">
-          <p className="text-sm text-warning-content">
+          <p className="text-sm text-error">
             ⚠️ This will remove them from the room immediately. They can rejoin if they want.
           </p>
         </div>
