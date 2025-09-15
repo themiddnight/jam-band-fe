@@ -57,7 +57,7 @@ export default function MidiStatus({
       setDevices(updatedDevices);
 
       if (!hasDevices && updatedDevices.length === 0) {
-        console.log("No MIDI devices found after refresh");
+        
       }
     }
   };

@@ -87,7 +87,7 @@ export const useRoom = () => {
     onGuestCancelled,
     onMemberRejected,
     onStopAllNotes,
-    
+
     // Swap event handlers
     onSwapRequestReceived,
     onSwapRequestSent,
@@ -96,13 +96,13 @@ export const useRoom = () => {
     onSwapCancelled,
     onSwapCompleted,
     onUserKicked,
-    
+
     // Sequencer snapshot exchange
     requestSequencerState,
     sendSequencerState,
     onSequencerStateRequested,
     onSequencerStateReceived,
-    
+
     getActiveSocket,
     cleanup: socketCleanup,
   } = useRoomSocket();
@@ -178,18 +178,16 @@ export const useRoom = () => {
     if (connectionState !== ConnectionState.IN_ROOM) {
       console.log(
         "🔧 Skipping onNoteReceived setup - not in room yet:",
-        connectionState,
+        connectionState
       );
       return;
     }
 
     console.log(
       "🔧 Setting up onNoteReceived handler - connection state:",
-      connectionState,
+      connectionState
     );
     const unsubscribe = onNoteReceived(async (data) => {
-      console.log("🎵 Received remote note:", data);
-
       // Handle received notes (this will be used by instrument components)
       if (data.eventType === "note_on") {
         setPlayingIndicators((prev) => {
@@ -222,7 +220,7 @@ export const useRoom = () => {
             "category:",
             data.category,
             "isKeyHeld:",
-            data.isKeyHeld,
+            data.isKeyHeld
           );
           // Use the remote user note playing system for proper sustain handling
           if (data.notes && data.notes.length > 0) {
@@ -242,7 +240,7 @@ export const useRoom = () => {
               data.velocity,
               data.instrument,
               data.category as InstrumentCategory,
-              data.isKeyHeld || false,
+              data.isKeyHeld || false
             );
           }
         } catch (error) {
@@ -256,14 +254,14 @@ export const useRoom = () => {
             "🛑 Stopping remote notes:",
             data.notes,
             "from user:",
-            data.userId,
+            data.userId
           );
           if (data.notes && data.notes.length > 0) {
             await stopRemoteUserNote(
               data.userId,
               data.notes,
               data.instrument,
-              data.category as InstrumentCategory,
+              data.category as InstrumentCategory
             );
           }
         } catch (error) {
@@ -271,26 +269,26 @@ export const useRoom = () => {
         }
       } else if (data.eventType === "sustain_on") {
         // Apply remote sustain for the remote user only
-        console.log("🎵 Remote sustain ON from user:", data.userId);
+
         try {
           setRemoteUserSustain(
             data.userId,
             true,
             data.instrument,
-            data.category as InstrumentCategory,
+            data.category as InstrumentCategory
           );
         } catch (error) {
           console.error("❌ Failed to set remote sustain on:", error);
         }
       } else if (data.eventType === "sustain_off") {
         // Release remote sustain for the remote user only
-        console.log("🎵 Remote sustain OFF from user:", data.userId);
+
         try {
           setRemoteUserSustain(
             data.userId,
             false,
             data.instrument,
-            data.category as InstrumentCategory,
+            data.category as InstrumentCategory
           );
         } catch (error) {
           console.error("❌ Failed to set remote sustain off:", error);
@@ -299,7 +297,7 @@ export const useRoom = () => {
     });
 
     return unsubscribe;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onNoteReceived, connectionState]);
 
   // Handle instrument change
@@ -310,24 +308,26 @@ export const useRoom = () => {
       instrument: string;
       category: string;
     }) => {
-      console.log("🎵 Instrument changed event received:", data);
-      
       // Stop all notes for this remote user before updating their instrument
       if (data.userId !== userId) {
-        console.log("🛑 Stopping all notes for remote user before instrument change:", data.username);
         // Stop all notes for this remote user
-        stopRemoteUserNote(data.userId, [], data.instrument, data.category as any);
+        stopRemoteUserNote(
+          data.userId,
+          [],
+          data.instrument,
+          data.category as any
+        );
       }
-      
+
       // Update the remote user's instrument
       updateRemoteUserInstrument(
         data.userId,
         data.username,
         data.instrument,
-        data.category as any,
+        data.category as any
       );
     },
-    [userId, updateRemoteUserInstrument, stopRemoteUserNote],
+    [userId, updateRemoteUserInstrument, stopRemoteUserNote]
   );
 
   // Handle stop all notes
@@ -338,15 +338,18 @@ export const useRoom = () => {
       instrument: string;
       category: string;
     }) => {
-      console.log("🛑 Stop all notes event received:", data);
       // Stop all notes for the remote user
       if (data.userId !== userId) {
-        console.log("🛑 Stopping all notes for remote user:", data.username);
         // Always stop all notes for this user, regardless of playing indicators
-        stopRemoteUserNote(data.userId, [], data.instrument, data.category as any);
+        stopRemoteUserNote(
+          data.userId,
+          [],
+          data.instrument,
+          data.category as any
+        );
       }
     },
-    [userId, stopRemoteUserNote],
+    [userId, stopRemoteUserNote]
   );
 
   useEffect(() => {
@@ -354,15 +357,14 @@ export const useRoom = () => {
     if (connectionState !== ConnectionState.IN_ROOM) {
       console.log(
         "🔧 Skipping onInstrumentChanged setup - not in room yet:",
-        connectionState,
+        connectionState
       );
       return;
     }
 
-    console.log("🔧 Setting up onInstrumentChanged handler");
     const unsubscribe = onInstrumentChanged(handleInstrumentChanged);
     return unsubscribe;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onInstrumentChanged, connectionState]);
 
   // Set up stop all notes handler
@@ -371,54 +373,67 @@ export const useRoom = () => {
     if (connectionState !== ConnectionState.IN_ROOM) {
       console.log(
         "🔧 Skipping onStopAllNotes setup - not in room yet:",
-        connectionState,
+        connectionState
       );
       return;
     }
 
-    console.log("🔧 Setting up onStopAllNotes handler");
     const unsubscribe = onStopAllNotes(handleStopAllNotes);
     return unsubscribe;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onStopAllNotes, connectionState]);
 
   // Automatically send user's current instrument preferences after joining room
   useEffect(() => {
     // Only send when we're connected to a room and have valid instrument data
-    if (connectionState !== ConnectionState.IN_ROOM || 
-        !currentInstrument || 
-        !currentCategory ||
-        currentUser?.role === 'audience') {
+    if (
+      connectionState !== ConnectionState.IN_ROOM ||
+      !currentInstrument ||
+      !currentCategory ||
+      currentUser?.role === "audience"
+    ) {
       return;
     }
 
     // Only send if we don't already have an instrument set on the server
     // (to avoid overwriting existing instrument data when user already has one)
     if (!currentUser?.currentInstrument || !currentUser?.currentCategory) {
-      console.log("🎵 Automatically sending current instrument preferences to server:", {
-        instrument: currentInstrument,
-        category: currentCategory,
-        userRole: currentUser?.role
-      });
-      
+      console.log(
+        "🎵 Automatically sending current instrument preferences to server:",
+        {
+          instrument: currentInstrument,
+          category: currentCategory,
+          userRole: currentUser?.role,
+        }
+      );
+
       // Send the current instrument preferences to the backend
       // This ensures the user's stored preferences from localStorage are used
       changeInstrument(currentInstrument, currentCategory);
     } else {
-      console.log("🎵 User already has instrument set on server, skipping auto-send:", {
-        serverInstrument: currentUser.currentInstrument,
-        serverCategory: currentUser.currentCategory,
-        localInstrument: currentInstrument,
-        localCategory: currentCategory
-      });
+      console.log(
+        "🎵 User already has instrument set on server, skipping auto-send:",
+        {
+          serverInstrument: currentUser.currentInstrument,
+          serverCategory: currentUser.currentCategory,
+          localInstrument: currentInstrument,
+          localCategory: currentCategory,
+        }
+      );
     }
-  }, [connectionState, currentInstrument, currentCategory, currentUser, changeInstrument]);
+  }, [
+    connectionState,
+    currentInstrument,
+    currentCategory,
+    currentUser,
+    changeInstrument,
+  ]);
 
   // Set up synth params changed handler
   useEffect(() => {
     const unsubscribe = onSynthParamsChanged((data) => {
       // Handle synth parameter changes from other users
-      console.log("Synth params changed:", data);
+
       try {
         // Update synth parameters for the remote user
         updateRemoteUserSynthParams(
@@ -426,7 +441,7 @@ export const useRoom = () => {
           data.username,
           data.instrument,
           data.category as InstrumentCategory,
-          data.params,
+          data.params
         );
       } catch (error) {
         console.error("❌ Failed to update remote synth params:", error);
@@ -438,97 +453,114 @@ export const useRoom = () => {
 
   // Set up request synth params response handler
   useEffect(() => {
-    const unsubscribe = onRequestSynthParamsResponse((data) => {
+    const unsubscribe = onRequestSynthParamsResponse(() => {
       // Handle requests for synth parameters
-      console.log("Synth params requested:", data);
-      
+
       // Send current synth parameters if we're using a synthesizer
-      if (currentCategory === InstrumentCategory.Synthesizer && synthState && Object.keys(synthState).length > 0) {
-        console.log("🎛️ Sending current synth params in response to request:", synthState);
+      if (
+        currentCategory === InstrumentCategory.Synthesizer &&
+        synthState &&
+        Object.keys(synthState).length > 0
+      ) {
         updateSynthParams(synthState);
       }
     });
 
     return unsubscribe;
-  }, [onRequestSynthParamsResponse, currentCategory, synthState, updateSynthParams]);
+  }, [
+    onRequestSynthParamsResponse,
+    currentCategory,
+    synthState,
+    updateSynthParams,
+  ]);
 
   // Set up auto send synth params to new user handler
   useEffect(() => {
-    const unsubscribe = onAutoSendSynthParamsToNewUser((data) => {
-      console.log("🎛️ [DEBUG] Auto-send synth params to new user requested:", data);
-      console.log("🎛️ [DEBUG] Current category:", currentCategory);
-      console.log("🎛️ [DEBUG] Current synthState:", synthState);
-      
+    const unsubscribe = onAutoSendSynthParamsToNewUser(() => {
       // Send current synth parameters if we're using a synthesizer
-      if (currentCategory === InstrumentCategory.Synthesizer && synthState && Object.keys(synthState).length > 0) {
-        console.log("🎛️ Auto-sending current synth params to new user:", synthState);
+      if (
+        currentCategory === InstrumentCategory.Synthesizer &&
+        synthState &&
+        Object.keys(synthState).length > 0
+      ) {
         updateSynthParams(synthState);
-      } else {
-        console.log("🎛️ [DEBUG] Not sending synth params - not using synthesizer or no synth state");
       }
     });
 
     return unsubscribe;
-  }, [onAutoSendSynthParamsToNewUser, currentCategory, synthState, updateSynthParams]);
+  }, [
+    onAutoSendSynthParamsToNewUser,
+    currentCategory,
+    synthState,
+    updateSynthParams,
+  ]);
 
   // Set up send current synth params to new user handler
   useEffect(() => {
-    const unsubscribe = onSendCurrentSynthParamsToNewUser((data) => {
-      console.log("🎛️ [DEBUG] Send current synth params to new user:", data);
-      console.log("🎛️ [DEBUG] Current category:", currentCategory);
-      console.log("🎛️ [DEBUG] Current synthState:", synthState);
-      
+    const unsubscribe = onSendCurrentSynthParamsToNewUser(() => {
       // Send current synth parameters if we're using a synthesizer
-      if (currentCategory === InstrumentCategory.Synthesizer && synthState && Object.keys(synthState).length > 0) {
-        console.log("🎛️ Sending current synth params to new user:", synthState);
+      if (
+        currentCategory === InstrumentCategory.Synthesizer &&
+        synthState &&
+        Object.keys(synthState).length > 0
+      ) {
         updateSynthParams(synthState);
-      } else {
-        console.log("🎛️ [DEBUG] Not sending synth params - not using synthesizer or no synth state");
       }
     });
 
     return unsubscribe;
-  }, [onSendCurrentSynthParamsToNewUser, currentCategory, synthState, updateSynthParams]);
+  }, [
+    onSendCurrentSynthParamsToNewUser,
+    currentCategory,
+    synthState,
+    updateSynthParams,
+  ]);
 
   // Set up request current synth params for new user handler
   useEffect(() => {
     const unsubscribe = onRequestCurrentSynthParamsForNewUser((data) => {
-      console.log("🎛️ [DEBUG] Request current synth params for new user:", data);
-      console.log("🎛️ [DEBUG] Current category:", currentCategory);
-      console.log("🎛️ [DEBUG] Current synthState:", synthState);
-      console.log("🎛️ [DEBUG] My userId:", userId);
-      
       // Only respond if this request is for us and we're using a synthesizer
-      if (data.synthUserId === userId && currentCategory === InstrumentCategory.Synthesizer && synthState && Object.keys(synthState).length > 0) {
-        console.log("🎛️ Responding to synth params request for new user:", synthState);
+      if (
+        data.synthUserId === userId &&
+        currentCategory === InstrumentCategory.Synthesizer &&
+        synthState &&
+        Object.keys(synthState).length > 0
+      ) {
         updateSynthParams(synthState);
-      } else {
-        console.log("🎛️ [DEBUG] Not responding to synth params request - not for us or not using synthesizer");
       }
     });
 
     return unsubscribe;
-  }, [onRequestCurrentSynthParamsForNewUser, currentCategory, synthState, updateSynthParams, userId]);
+  }, [
+    onRequestCurrentSynthParamsForNewUser,
+    currentCategory,
+    synthState,
+    updateSynthParams,
+    userId,
+  ]);
 
   // Set up send synth params to new user now handler
   useEffect(() => {
     const unsubscribe = onSendSynthParamsToNewUserNow((data) => {
-      console.log("🎛️ [DEBUG] Send synth params to new user now:", data);
-      console.log("🎛️ [DEBUG] Current category:", currentCategory);
-      console.log("🎛️ [DEBUG] Current synthState:", synthState);
-      console.log("🎛️ [DEBUG] My userId:", userId);
-      
       // Only respond if this request is for us and we're using a synthesizer
-      if (data.synthUserId === userId && currentCategory === InstrumentCategory.Synthesizer && synthState && Object.keys(synthState).length > 0) {
-        console.log("🎛️ Immediately sending synth params to new user:", synthState);
+      if (
+        data.synthUserId === userId &&
+        currentCategory === InstrumentCategory.Synthesizer &&
+        synthState &&
+        Object.keys(synthState).length > 0
+      ) {
         updateSynthParams(synthState);
-      } else {
-        console.log("🎛️ [DEBUG] Not immediately sending synth params - not for us or not using synthesizer");
       }
     });
 
     return unsubscribe;
-  }, [onSendSynthParamsToNewUserNow, currentCategory, synthState, updateSynthParams, userId]);
+  }, [
+    onSendSynthParamsToNewUserNow,
+    currentCategory,
+    synthState,
+    updateSynthParams,
+    userId,
+  ]);
 
   // Set up user left handler
   useEffect(() => {
@@ -546,9 +578,8 @@ export const useRoom = () => {
 
   // Set up guest cancelled handler
   useEffect(() => {
-    const unsubscribe = onGuestCancelled((userId) => {
+    const unsubscribe = onGuestCancelled(() => {
       // Handle when a guest cancels their approval request
-      console.log("Guest cancelled:", userId);
     });
 
     return unsubscribe;
@@ -556,9 +587,8 @@ export const useRoom = () => {
 
   // Set up member rejected handler
   useEffect(() => {
-    const unsubscribe = onMemberRejected((userId) => {
+    const unsubscribe = onMemberRejected(() => {
       // Handle when a member is rejected
-      console.log("Member rejected:", userId);
     });
 
     return unsubscribe;
@@ -570,22 +600,13 @@ export const useRoom = () => {
       notes: string[],
       velocity: number,
       eventType: "note_on" | "note_off" | "sustain_on" | "sustain_off",
-      isKeyHeld?: boolean,
+      isKeyHeld?: boolean
     ) => {
-      console.log("🎵 handlePlayNote called:", {
-        notes,
-        velocity,
-        eventType,
-        isKeyHeld,
-        isConnected,
-      });
-
       // Always play locally first
       try {
         if (eventType === "note_on") {
-          console.log("🎵 Playing locally:", { notes, velocity, isKeyHeld });
           await playLocalNote(notes, velocity, isKeyHeld || false);
-          
+
           // Set local playing indicator immediately for local user
           if (userId) {
             setPlayingIndicators((prev) => {
@@ -596,7 +617,7 @@ export const useRoom = () => {
               });
               return newMap;
             });
-            
+
             // Clear local playing indicator after a short delay
             setTimeout(() => {
               setPlayingIndicators((prev) => {
@@ -607,7 +628,6 @@ export const useRoom = () => {
             }, 200);
           }
         } else if (eventType === "note_off") {
-          console.log("🛑 Stopping locally:", { notes });
           await stopLocalNotes(notes);
         }
       } catch (error) {
@@ -629,7 +649,6 @@ export const useRoom = () => {
         isKeyHeld,
       };
 
-      console.log("🎵 Sending noteData to playNote:", noteData);
       playNote(noteData);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -640,7 +659,7 @@ export const useRoom = () => {
       playNote,
       playLocalNote,
       stopLocalNotes,
-    ],
+    ]
   );
 
   const handleStopNote = useCallback(
@@ -648,14 +667,14 @@ export const useRoom = () => {
       const notesArray = Array.isArray(notes) ? notes : [notes];
       handlePlayNote(notesArray, 0, "note_off");
     },
-    [handlePlayNote],
+    [handlePlayNote]
   );
 
   const handleReleaseKeyHeldNote = useCallback(
     (note: string) => {
       handlePlayNote([note], 0, "note_off", false);
     },
-    [handlePlayNote],
+    [handlePlayNote]
   );
 
   const handleSustainChange = useCallback(
@@ -667,14 +686,14 @@ export const useRoom = () => {
       if (!isConnected) return;
       handlePlayNote([], 0, sustained ? "sustain_on" : "sustain_off");
     },
-    [isConnected, handlePlayNote, setSustainState],
+    [isConnected, handlePlayNote, setSustainState]
   );
 
   const handleSustainToggleChange = useCallback(
     (sustained: boolean) => {
       handleSustainChange(sustained);
     },
-    [handleSustainChange],
+    [handleSustainChange]
   );
 
   // MIDI controller (defined after handlers)
@@ -730,14 +749,14 @@ export const useRoom = () => {
     (userId: string) => {
       approveMember(userId);
     },
-    [approveMember],
+    [approveMember]
   );
 
   const handleRejectMember = useCallback(
     (userId: string) => {
       rejectMember(userId);
     },
-    [rejectMember],
+    [rejectMember]
   );
 
   // Leave room handlers
@@ -778,18 +797,16 @@ export const useRoom = () => {
         "🎵 Instrument change wrapper called:",
         instrument,
         "category:",
-        currentCategory,
+        currentCategory
       );
 
       // Stop all notes before switching instruments
       if (isConnected) {
-        console.log("🛑 Sending stop all notes to remote users before instrument switch");
         stopAllNotes(currentInstrument, currentCategory);
       }
 
       // Stop sequencer playback if it's playing
       if (sequencerStore.isPlaying) {
-        console.log("🛑 Stopping sequencer playback before instrument switch");
         sequencerStore.hardStop();
       }
 
@@ -798,24 +815,19 @@ export const useRoom = () => {
         console.log(
           "🎵 Sending instrument change to remote users:",
           instrument,
-          currentCategory,
+          currentCategory
         );
         changeInstrument(instrument, currentCategory);
 
         // Send current synth parameters as preset for the new instrument
         console.log(
           "🎛️ Sending current synth preset for new instrument:",
-          instrument,
+          instrument
         );
-        console.log("🎛️ Current synthState:", synthState);
+
         if (synthState && Object.keys(synthState).length > 0) {
-          console.log("🎛️ Sending synth preset to remote users:", synthState);
           updateSynthParams(synthState);
-        } else {
-          console.log("🎛️ No synth state to send as preset");
         }
-      } else {
-        console.log("🎵 Not connected, skipping remote instrument change send");
       }
     },
     [
@@ -828,69 +840,66 @@ export const useRoom = () => {
       sequencerStore,
       stopAllNotes,
       currentInstrument,
-    ],
+    ]
   );
 
   const handleCategoryChangeWrapper = useCallback(
     (category: string) => {
-      console.log("🎵 Category change wrapper called:", category);
-      
       // Stop all notes before changing category
       if (isConnected) {
-        console.log("🛑 Sending stop all notes to remote users before category change");
         stopAllNotes(currentInstrument, currentCategory);
       }
 
       // Stop sequencer playback if it's playing
       if (sequencerStore.isPlaying) {
-        console.log("🛑 Stopping sequencer playback before category change");
         sequencerStore.hardStop();
       }
-      
+
       handleCategoryChange(category as any);
       // Don't send remote change here - let the subsequent instrument change handle it
       // The local category change will trigger an instrument change to the default instrument
       // of that category, and handleInstrumentChangeWrapper will send the correct instrument
       console.log(
-        "🎵 Category changed locally, waiting for instrument change to sync to remote",
+        "🎵 Category changed locally, waiting for instrument change to sync to remote"
       );
     },
-    [handleCategoryChange, isConnected, stopAllNotes, currentInstrument, currentCategory, sequencerStore],
+    [
+      handleCategoryChange,
+      isConnected,
+      stopAllNotes,
+      currentInstrument,
+      currentCategory,
+      sequencerStore,
+    ]
   );
 
   // Synth parameter update
   const updateSynthParamsWrapper = useCallback(
     (params: any) => {
-      console.log("🎛️ updateSynthParamsWrapper called with params:", params);
-      console.log("🎛️ isConnected:", isConnected);
-      console.log("🎛️ Calling local instrumentUpdateSynthParams...");
       instrumentUpdateSynthParams(params);
       if (isConnected) {
         console.log(
           "🎛️ Connected - sending synth params to remote users:",
-          params,
+          params
         );
         updateSynthParams(params);
-      } else {
-        console.log("🎛️ Not connected, skipping remote synth params send");
       }
     },
-    [instrumentUpdateSynthParams, isConnected, updateSynthParams],
+    [instrumentUpdateSynthParams, isConnected, updateSynthParams]
   );
 
   // Broadcast full preset parameters as well
   const loadPresetParamsWrapper = useCallback(
     (params: any) => {
-      console.log("🎛️ loadPresetParamsWrapper called with params:", params);
       instrumentUpdateSynthParams(params);
       if (isConnected) {
         console.log(
-          "🎛️ Connected - broadcasting preset synth params to remote users",
+          "🎛️ Connected - broadcasting preset synth params to remote users"
         );
         updateSynthParams(params);
       }
     },
-    [instrumentUpdateSynthParams, isConnected, updateSynthParams],
+    [instrumentUpdateSynthParams, isConnected, updateSynthParams]
   );
 
   // Chat message handler
@@ -899,7 +908,7 @@ export const useRoom = () => {
       if (!currentRoom?.id) return;
       sendChatMessage(message, currentRoom.id);
     },
-    [currentRoom?.id, sendChatMessage],
+    [currentRoom?.id, sendChatMessage]
   );
 
   // Notification handlers

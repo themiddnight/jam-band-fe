@@ -27,7 +27,7 @@ export default function Invite() {
       return;
     }
 
-    console.log(`🎭 Valid role parameter found: ${role}`);
+    
 
     // Ensure user has username set
     if (!username || !userId) {

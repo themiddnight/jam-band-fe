@@ -34,7 +34,7 @@ export class SocketAuthGuard {
         }
 
         // Socket is connected, consider it authenticated
-        console.log('🔐 SocketAuthGuard: Socket is connected and ready');
+        
         resolve(true);
       };
 

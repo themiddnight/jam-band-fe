@@ -323,9 +323,9 @@ export const useSequencerStore = create<SequencerStore>()(
 
         // Bank management
         switchBank: (bankId) => {
-          console.log(`🎵 switchBank: changing from ${get().currentBank} to ${bankId}`);
+          
           set({ currentBank: bankId });
-          console.log(`🎵 switchBank: changed to ${get().currentBank}`);
+          
         },
 
         toggleBankEnabled: (bankId) => {
@@ -379,7 +379,7 @@ export const useSequencerStore = create<SequencerStore>()(
           };
           
           set({ clipboard: copiedBankData });
-          console.log(`🎵 Copied bank ${bankId} with ${bank.steps.length} steps`);
+          
         },
 
         pasteBank: (bankId) => {
@@ -388,14 +388,14 @@ export const useSequencerStore = create<SequencerStore>()(
           if (!bank) return;
 
           if (!state.clipboard) {
-            console.log('🎵 No copied bank data found');
+            
             return;
           }
 
           // Check if clipboard is still valid (within 1 hour)
           const clipboardAge = Date.now() - state.clipboard.timestamp;
           if (clipboardAge > 60 * 60 * 1000) {
-            console.log('🎵 Clipboard data expired, clearing');
+            
             set({ clipboard: null });
             return;
           }
@@ -416,7 +416,7 @@ export const useSequencerStore = create<SequencerStore>()(
               },
             }));
 
-            console.log(`🎵 Pasted ${copiedSteps.length} steps to bank ${bankId}`);
+            
           } catch (error) {
             console.error('🎵 Error pasting bank data:', error);
           }
@@ -477,9 +477,9 @@ export const useSequencerStore = create<SequencerStore>()(
         },
 
         setCurrentBeat: (beat) => {
-          console.log(`🎵 setCurrentBeat: updating from ${get().currentBeat} to ${beat}`);
+          
           set({ currentBeat: Math.max(0, Math.min(get().settings.length - 1, beat)) });
-          console.log(`🎵 setCurrentBeat: updated to ${get().currentBeat}`);
+          
         },
 
         nextBeat: () => {
@@ -675,10 +675,10 @@ export const useSequencerStore = create<SequencerStore>()(
           
           // Get all enabled banks in order
           const enabledBanks = bankNames.filter(name => state.banks[name]?.enabled);
-          console.log(`🎵 getNextEnabledBank: current=${state.currentBank}, enabled=[${enabledBanks.join(', ')}]`);
+          
           
           if (enabledBanks.length === 0) {
-            console.log(`🎵 No enabled banks found`);
+            
             return null;
           }
           
@@ -687,14 +687,14 @@ export const useSequencerStore = create<SequencerStore>()(
           
           if (currentIndex === -1) {
             // Current bank is not enabled, return first enabled bank
-            console.log(`🎵 Current bank ${state.currentBank} not enabled, returning first enabled: ${enabledBanks[0]}`);
+            
             return enabledBanks[0];
           }
           
           // Get next enabled bank (cycle back to first if at end)
           const nextIndex = (currentIndex + 1) % enabledBanks.length;
           const nextBank = enabledBanks[nextIndex];
-          console.log(`🎵 Next enabled bank: ${nextBank} (position ${nextIndex}/${enabledBanks.length})`);
+          
           
           return nextBank;
         },

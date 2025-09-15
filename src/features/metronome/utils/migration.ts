@@ -21,7 +21,7 @@ export const migrateMetronomeSettings = () => {
       const volume = parseFloat(oldVolume);
       if (!isNaN(volume)) {
         store.setVolume(Math.max(0, Math.min(1, volume)));
-        console.log("Migrated metronome volume from localStorage to Zustand");
+        
       }
     }
 
@@ -29,7 +29,7 @@ export const migrateMetronomeSettings = () => {
       // Default is true
       const isMuted = oldIsMuted === "true";
       store.setIsMuted(isMuted);
-      console.log("Migrated metronome mute state from localStorage to Zustand");
+      
     }
 
     // Clean up old localStorage keys after migration

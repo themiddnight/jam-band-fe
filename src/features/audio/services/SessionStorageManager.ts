@@ -55,7 +55,7 @@ export class SessionStorageManager {
       // Check if session has expired
       const now = Date.now();
       if (now - sessionData.timestamp > this.SESSION_EXPIRY_MS) {
-        console.log("⏰ Room session data expired, clearing");
+        
         this.clearRoomSession();
         return null;
       }
@@ -93,7 +93,7 @@ export class SessionStorageManager {
       };
 
       sessionStorage.setItem(this.SESSION_KEY, JSON.stringify(updated));
-      console.log("🔄 Updated room session data:", updates);
+      
     } catch (error) {
       console.warn("⚠️ Failed to update room session data:", error);
     }
@@ -105,7 +105,7 @@ export class SessionStorageManager {
   static clearRoomSession(): void {
     try {
       sessionStorage.removeItem(this.SESSION_KEY);
-      console.log("🗑️ Cleared room session data");
+      
     } catch (error) {
       console.warn("⚠️ Failed to clear room session data:", error);
     }

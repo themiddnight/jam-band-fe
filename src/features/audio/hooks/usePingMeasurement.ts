@@ -11,7 +11,7 @@ interface PingMeasurement {
 }
 
 interface UsePingMeasurementOptions {
-  socket?: Socket | null;
+  socket: Socket | null;
   enabled?: boolean;
   interval?: number;
   maxHistory?: number;
@@ -35,6 +35,10 @@ export function usePingMeasurement({
   const updateTimerRef = useRef<number | null>(null);
   const UI_THROTTLE = PING_UI_THROTTLE_MS;
 
+  // Track the current socket ID to avoid unnecessary resets
+  const currentSocketIdRef = useRef<string | null>(null);
+  const lastConnectedStateRef = useRef<boolean>(false);
+
   // Calculate average ping from history
   const calculateAveragePing = useCallback(() => {
     const history = pingHistoryRef.current;
@@ -47,7 +51,6 @@ export function usePingMeasurement({
   // Send ping measurement
   const sendPing = useCallback(() => {
     if (!socket || !socket.connected || !enabled) {
-      // Ping skipped - socket not ready
       return;
     }
 
@@ -55,7 +58,6 @@ export function usePingMeasurement({
     const timestamp = Date.now();
 
     pendingPingsRef.current.set(pingId, timestamp);
-    // Sending ping measurement
     socket.emit("ping_measurement", { pingId, timestamp });
 
     // Clean up old pending pings (older than 30 seconds)
@@ -70,10 +72,14 @@ export function usePingMeasurement({
   // Handle ping response
   const handlePingResponse = useCallback(
     (data: { pingId: string; timestamp: number }) => {
-      if (!data || !data.pingId) return;
+      if (!data || !data.pingId) {
+        return;
+      }
 
       const sendTime = pendingPingsRef.current.get(data.pingId);
-      if (!sendTime) return;
+      if (!sendTime) {
+        return;
+      }
 
       const now = Date.now();
       const pingTime = now - sendTime;
@@ -83,6 +89,7 @@ export function usePingMeasurement({
 
       // Buffer update (throttle UI updates to ~500ms)
       bufferedPingRef.current = pingTime;
+      
       if (!updateTimerRef.current) {
         updateTimerRef.current = window.setTimeout(() => {
           setCurrentPing(bufferedPingRef.current);
@@ -112,7 +119,9 @@ export function usePingMeasurement({
 
   // Start ping measurements
   const startPingMeasurement = useCallback(() => {
-    if (intervalRef.current) return;
+    if (intervalRef.current) {
+      return;
+    }
 
     // Send initial ping
     sendPing();
@@ -150,55 +159,94 @@ export function usePingMeasurement({
   useEffect(() => {
     if (!socket) {
       // No socket provided
+      currentSocketIdRef.current = null;
+      lastConnectedStateRef.current = false;
       return;
     }
 
-    // Setting up ping measurement
+    // Check if this is the same socket connection
+    const socketId = socket.id || null;
+    const wasConnected = lastConnectedStateRef.current;
+    const isCurrentlyConnected = socket.connected;
+    const isSameSocket = currentSocketIdRef.current === socketId && socketId !== null;
+    
+    // Update refs
+    currentSocketIdRef.current = socketId;
+    lastConnectedStateRef.current = isCurrentlyConnected;
 
+    // Only reset listeners if the socket ID actually changed or connection state changed
+    const previousSocketId = currentSocketIdRef.current;
+    const shouldReset = !isSameSocket || (wasConnected !== isCurrentlyConnected) || 
+                       (previousSocketId === null && socketId !== null);
+    
+    // Define handlers inline to avoid dependency issues
     const handleConnect = () => {
-      // Socket connected, starting ping measurement
       setIsConnected(true);
+      lastConnectedStateRef.current = true;
       if (enabled) {
         // Small delay to ensure connection is stable
-        setTimeout(startPingMeasurement, 1000);
+        setTimeout(() => {
+          if (!intervalRef.current) {
+            // Send initial ping
+            sendPing();
+            // Set up interval
+            intervalRef.current = window.setInterval(sendPing, interval);
+          }
+        }, 1000);
       }
     };
 
     const handleDisconnect = () => {
       setIsConnected(false);
-      stopPingMeasurement();
-      resetPingMeasurement();
+      lastConnectedStateRef.current = false;
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      pendingPingsRef.current.clear();
+      if (updateTimerRef.current) {
+        clearTimeout(updateTimerRef.current);
+        updateTimerRef.current = null;
+      }
+      setCurrentPing(null);
+      setAveragePing(null);
+      pingHistoryRef.current = [];
     };
 
     const handleSocketPingResponse = (data: any) => {
-      // Received ping response
       handlePingResponse(data);
     };
 
-    // Add listeners
-    socket.on("connect", handleConnect);
-    socket.on("disconnect", handleDisconnect);
-    socket.on("ping_response", handleSocketPingResponse);
+    // Only setup new listeners if we need to reset
+    if (shouldReset) {
+      // Remove old listeners first (in case of socket ID change)
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+      socket.off("ping_response", handleSocketPingResponse);
+      
+      // Add new listeners
+      socket.on("connect", handleConnect);
+      socket.on("disconnect", handleDisconnect);
+      socket.on("ping_response", handleSocketPingResponse);
+    }
 
     // Check current connection state
-    if (socket.connected) {
+    if (socket.connected && !isConnected) {
       handleConnect();
+    } else if (!socket.connected && isConnected) {
+      handleDisconnect();
     }
 
     return () => {
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
       socket.off("ping_response", handleSocketPingResponse);
-      stopPingMeasurement();
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
     };
-  }, [
-    socket,
-    enabled,
-    startPingMeasurement,
-    stopPingMeasurement,
-    resetPingMeasurement,
-    handlePingResponse,
-  ]);
+  }, [socket, enabled, handlePingResponse, sendPing, interval, isConnected]);
 
   // Handle enabled state changes
   useEffect(() => {
@@ -208,40 +256,43 @@ export function usePingMeasurement({
     } else if (socket?.connected) {
       startPingMeasurement();
     }
-  }, [
-    enabled,
-    socket?.connected,
-    startPingMeasurement,
-    stopPingMeasurement,
-    resetPingMeasurement,
-  ]);
+  }, [enabled, socket?.connected, stopPingMeasurement, resetPingMeasurement, startPingMeasurement]);
 
-  // Add socket health monitoring
+  // Add socket health monitoring and connection state synchronization
   useEffect(() => {
     if (!socket || !enabled) return;
 
-    const healthCheck = setInterval(() => {
-      if (socket.connected && intervalRef.current) {
-        // Check if we haven't received a ping response in a while
-        const now = Date.now();
-        const oldestPending = Math.min(...Array.from(pendingPingsRef.current.values()));
-        
-        if (pendingPingsRef.current.size > 0 && now - oldestPending > 10000) {
-          console.warn('🏓 Ping responses seem stale, clearing pending pings');
-          pendingPingsRef.current.clear();
+    const healthCheckInterval = setInterval(() => {
+      // Sync connection state
+      if (socket.connected !== isConnected) {
+        if (socket.connected && !isConnected) {
+          setIsConnected(true);
+          if (!intervalRef.current) {
+            startPingMeasurement();
+          }
+        } else if (!socket.connected && isConnected) {
+          setIsConnected(false);
+          stopPingMeasurement();
+          resetPingMeasurement();
         }
       }
-    }, 15000); // Check every 15 seconds
+      
+      // If socket is connected but we haven't received a ping response recently,
+      // try sending a health check ping
+      if (socket.connected && pendingPingsRef.current.size === 0 && intervalRef.current) {
+        sendPing();
+      }
+    }, 5000); // Check every 5 seconds
 
-    return () => clearInterval(healthCheck);
-  }, [socket, enabled]);
+    return () => clearInterval(healthCheckInterval);
+  }, [socket, enabled, isConnected, startPingMeasurement, stopPingMeasurement, resetPingMeasurement, sendPing]);
 
   return {
     currentPing,
     averagePing,
     isConnected,
-    isEnabled: enabled,
+    startPingMeasurement,
+    stopPingMeasurement,
     resetPingMeasurement,
-    sendPing,
   };
 }

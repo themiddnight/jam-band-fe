@@ -53,7 +53,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({ currentUserId, onSendMessage }) => {
   const handleIncomingMessage = useCallback((message: ChatMessage) => {
     // Check if we've already processed this message
     if (processedMessageIds.current.has(message.id)) {
-      console.log("Duplicate message received, skipping:", message.id);
+      
       return;
     }
 

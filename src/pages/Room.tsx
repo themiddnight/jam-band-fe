@@ -186,6 +186,30 @@ const Room = memo(() => {
   // Track last seen peer ids to diff additions/removals
   const lastSeenPeerIdsRef = useRef<Set<string>>(new Set());
 
+  // Auto-enable audio reception for audience members when they join the room
+  useEffect(() => {
+    // Only auto-enable for audience members who can't transmit but can receive
+    if (
+      isVoiceEnabled &&
+      !canTransmit &&
+      !isAudioEnabled &&
+      currentUser?.role === "audience" &&
+      currentRoom?.id
+    ) {
+      console.log("🎧 Auto-enabling audio reception for audience member");
+      enableAudioReception().catch((error) => {
+        console.warn("⚠️ Failed to auto-enable audio reception:", error);
+      });
+    }
+  }, [
+    isVoiceEnabled,
+    canTransmit,
+    isAudioEnabled,
+    currentUser?.role,
+    currentRoom?.id,
+    enableAudioReception,
+  ]);
+
   // Copy room URL to clipboard with role selection
   const [isInvitePopupOpen, setIsInvitePopupOpen] = useState(false);
   const inviteBtnRef = useRef<HTMLButtonElement>(null);
@@ -394,7 +418,7 @@ const Room = memo(() => {
     ) {
       // Try to auto-enable audio after a short delay to ensure room is fully loaded
       const timer = setTimeout(() => {
-        console.log("🎧 Auto-attempting to enable audio for audience member");
+        
         enableAudioReception().catch((error) => {
           console.log(
             "🎧 Auto audio enable failed (user gesture required):",
@@ -411,7 +435,7 @@ const Room = memo(() => {
   // Sequencer hook for recording integration
   useEffect(() => {
     const unsubscribeSwapRequestReceived = onSwapRequestReceived((data) => {
-      console.log("🔄 Swap request received:", data);
+      
       // Find the requester user in current room
       const requesterUser = currentRoom?.users.find(user => user.id === data.requesterId);
       if (requesterUser) {
@@ -422,31 +446,26 @@ const Room = memo(() => {
       }
     });
 
-    const unsubscribeSwapRequestSent = onSwapRequestSent((data) => {
-      console.log("🔄 Swap request sent to:", data.targetUserId);
+    const unsubscribeSwapRequestSent = onSwapRequestSent(() => {
       // Request was successfully sent - pending status is already set
     });
 
-    const unsubscribeSwapApproved = onSwapApproved((data) => {
-      console.log("🔄 Swap approved:", data);
+    const unsubscribeSwapApproved = onSwapApproved(() => {
       // Clear pending swap status - the swap will be executed
       setPendingSwapTarget(null);
     });
 
     const unsubscribeSwapRejected = onSwapRejected(() => {
-      console.log("🔄 Swap rejected");
       // Clear pending swap status
       setPendingSwapTarget(null);
     });
 
     const unsubscribeSwapCancelled = onSwapCancelled(() => {
-      console.log("🔄 Swap cancelled");
       // Close swap modal if open
       setSwapRequestData({ requester: null, isModalOpen: false });
     });
 
     const unsubscribeSwapCompleted = onSwapCompleted(async (data) => {
-      console.log("🔄 Swap completed:", data);
       // Clear any pending states
       setPendingSwapTarget(null);
       setSwapRequestData({ requester: null, isModalOpen: false });
@@ -479,7 +498,7 @@ const Room = memo(() => {
           setTimeout(async () => {
             try {
               await updateSynthParams(myData.synthParams);
-              console.log("✅ Synth parameters applied successfully");
+              
             } catch (error) {
               console.error("❌ Failed to apply synth parameters:", error);
             }
@@ -488,7 +507,7 @@ const Room = memo(() => {
 
         // Request sequencer snapshot from the other user
         if (otherData.userId) {
-          console.log("🔄 Requesting sequencer snapshot from:", otherData.userId);
+          
           requestSequencerState(otherData.userId);
         }
       }
@@ -502,7 +521,7 @@ const Room = memo(() => {
           settings: useSequencerStore.getState().settings,
           currentBank: useSequencerStore.getState().currentBank,
         };
-        console.log("🎵 Sending sequencer snapshot to:", requesterId);
+        
         sendSequencerState(requesterId, snapshot);
       } catch (e) {
         console.error("❌ Failed to capture/send sequencer snapshot:", e);
@@ -510,9 +529,9 @@ const Room = memo(() => {
     });
 
     // When we receive a snapshot, apply it
-    const unsubscribeSequencerReceived = onSequencerStateReceived(({ fromUserId, snapshot }: { fromUserId: string; snapshot: { banks: any; settings: any; currentBank: string } }) => {
+    const unsubscribeSequencerReceived = onSequencerStateReceived(({ snapshot }: { snapshot: { banks: any; settings: any; currentBank: string } }) => {
       try {
-        console.log("🎵 Applying sequencer snapshot from:", fromUserId);
+        
         // Stop if playing, then load snapshot, and reset beat to 0
         if (sequencer.isPlaying) {
           useSequencerStore.getState().hardStop();
@@ -530,7 +549,7 @@ const Room = memo(() => {
     });
 
     const unsubscribeUserKicked = onUserKicked((data) => {
-      console.log("🚫 User kicked:", data);
+      
       // Redirect immediately to lobby and pass reason in state
       navigate("/", { state: { kicked: true, reason: data.reason } });
     });
@@ -1054,29 +1073,41 @@ const Room = memo(() => {
                         <div className="flex items-center gap-2">
                           <div
                             className={`w-3 h-3 rounded-full ${
-                              peerConnections.size > 0
+                              // For audience members (can't transmit), show connected if audio is enabled
+                              !canTransmit && isAudioEnabled
                                 ? "bg-success"
-                                : isConnecting
-                                  ? "bg-warning"
-                                  : "bg-error"
+                                : // For band members, show based on peer connections
+                                  peerConnections.size > 0
+                                  ? "bg-success"
+                                  : isConnecting
+                                    ? "bg-warning"
+                                    : "bg-error"
                             }`}
                           ></div>
                           <span
                             className={
-                              peerConnections.size > 0
+                              // For audience members (can't transmit), show connected if audio is enabled
+                              !canTransmit && isAudioEnabled
                                 ? "text-success"
-                                : isConnecting
-                                  ? "text-warning"
-                                  : "text-error"
+                                : // For band members, show based on peer connections
+                                  peerConnections.size > 0
+                                  ? "text-success"
+                                  : isConnecting
+                                    ? "text-warning"
+                                    : "text-error"
                             }
                           >
-                            {peerConnections.size > 0
-                              ? `Connected (${peerConnections.size} peer${
-                                  peerConnections.size === 1 ? "" : "s"
-                                })`
-                              : isConnecting
-                                ? "Connecting..."
-                                : "Not Connected"}
+                            {!canTransmit && isAudioEnabled
+                              ? "Connected (Listen-only)"
+                              : !canTransmit && !isAudioEnabled
+                                ? "Audio Not Enabled"
+                                : peerConnections.size > 0
+                                  ? `Connected (${peerConnections.size} peer${
+                                      peerConnections.size === 1 ? "" : "s"
+                                    })`
+                                  : isConnecting
+                                    ? "Connecting..."
+                                    : "Not Connected"}
                           </span>
                         </div>
                       </div>

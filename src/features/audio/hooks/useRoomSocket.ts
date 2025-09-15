@@ -207,7 +207,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
     // Requirements: 5.7 - WebRTC mesh restoration after page refresh or reconnection
     const unsubscribeReconnection = socketManagerRef.current.onReconnection(
       () => {
-        console.log("🔄 Socket reconnected, restoring state...");
+        
 
         // WebRTC reconnection is handled by useWebRTCVoice in Room.tsx
 
@@ -215,7 +215,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
         const storedInstrumentState =
           socketManagerRef.current?.getStoredInstrumentState();
         if (storedInstrumentState && instrumentManager) {
-          console.log("🎵 Restoring instrument state:", storedInstrumentState);
+          
           // The instrument restoration will be handled by the useRoom hook
         }
       },
@@ -317,18 +317,18 @@ export const useRoomSocket = (instrumentManager?: any) => {
           event === "leave_room" ||
           event === "update_synth_params"
         ) {
-          console.log(`📤 Emitting ${event} to backend:`, data);
+          
           socket.emit(event, data);
         } else {
-          console.log(`📥 Queueing ${event}:`, data);
+          
           queueMessage(event, data);
         }
       } else {
-        console.log(`⏳ Socket not connected, queueing ${event}:`, data);
+        
         pendingOperationsRef.current.push(() => {
           const currentSocket = getActiveSocket();
           if (currentSocket?.connected) {
-            console.log(`📤 Emitting queued ${event}:`, data);
+            
             currentSocket.emit(event, data);
           }
         });
@@ -341,7 +341,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
   const throttledEmit = useMemo(
     () =>
       throttle((event: string, data: any) => {
-        console.log("🎛️ throttledEmit called with:", event, data);
+        
         safeEmit(event, data);
       }, 10),
     [safeEmit],
@@ -447,8 +447,8 @@ export const useRoomSocket = (instrumentManager?: any) => {
       );
 
       on("user_joined", async (data: { user: any }) => {
-        console.log("🎵 user_joined event received:", data);
-        console.log("🎛️ [DEBUG] New user joined, checking for synth parameter synchronization");
+        
+        
         addUser(data.user);
 
         // Preload the new user's instrument if they have one
@@ -579,7 +579,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
           instrument: string;
           category: string;
         }) => {
-          console.log("🎵 instrument_changed event received:", data);
+          
           updateUserInstrument(data.userId, data.instrument, data.category);
           // Handle real-time instrument preloading - Requirement 10.3
           try {
@@ -606,7 +606,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
             );
             instrumentChangedCallbackRef.current(data);
           } else {
-            console.log("⚠️ No instrumentChangedCallback registered");
+            
           }
         },
       );
@@ -629,11 +629,11 @@ export const useRoomSocket = (instrumentManager?: any) => {
       on(
         "auto_send_synth_params_to_new_user",
         (data: { newUserId: string; newUsername: string }) => {
-          console.log("🎛️ [DEBUG] Received auto_send_synth_params_to_new_user event:", data);
+          
           if (autoSendSynthParamsToNewUserCallbackRef.current) {
             autoSendSynthParamsToNewUserCallbackRef.current(data);
           } else {
-            console.log("🎛️ [DEBUG] No callback registered for auto_send_synth_params_to_new_user");
+            
           }
         },
       );
@@ -641,11 +641,11 @@ export const useRoomSocket = (instrumentManager?: any) => {
       on(
         "send_current_synth_params_to_new_user",
         (data: { newUserId: string; newUsername: string }) => {
-          console.log("🎛️ [DEBUG] Received send_current_synth_params_to_new_user event:", data);
+          
           if (sendCurrentSynthParamsToNewUserCallbackRef.current) {
             sendCurrentSynthParamsToNewUserCallbackRef.current(data);
           } else {
-            console.log("🎛️ [DEBUG] No callback registered for send_current_synth_params_to_new_user");
+            
           }
         },
       );
@@ -653,11 +653,11 @@ export const useRoomSocket = (instrumentManager?: any) => {
       on(
         "request_current_synth_params_for_new_user",
         (data: { newUserId: string; newUsername: string; synthUserId: string; synthUsername: string }) => {
-          console.log("🎛️ [DEBUG] Received request_current_synth_params_for_new_user event:", data);
+          
           if (requestCurrentSynthParamsForNewUserCallbackRef.current) {
             requestCurrentSynthParamsForNewUserCallbackRef.current(data);
           } else {
-            console.log("🎛️ [DEBUG] No callback registered for request_current_synth_params_for_new_user");
+            
           }
         },
       );
@@ -665,11 +665,11 @@ export const useRoomSocket = (instrumentManager?: any) => {
       on(
         "send_synth_params_to_new_user_now",
         (data: { newUserId: string; newUsername: string; synthUserId: string; synthUsername: string }) => {
-          console.log("🎛️ [DEBUG] Received send_synth_params_to_new_user_now event:", data);
+          
           if (sendSynthParamsToNewUserNowCallbackRef.current) {
             sendSynthParamsToNewUserNowCallbackRef.current(data);
           } else {
-            console.log("🎛️ [DEBUG] No callback registered for send_synth_params_to_new_user_now");
+            
           }
         },
       );
@@ -877,7 +877,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
         );
         return;
       }
-      console.log("➡️ Emitting join_room", { roomId, username, userId, role });
+      
       safeEmit("join_room", { roomId, username, userId, role });
     },
     [safeEmit, setError],
@@ -978,14 +978,14 @@ export const useRoomSocket = (instrumentManager?: any) => {
 
   const updateSynthParams = useCallback(
     (params: Partial<SynthState>) => {
-      console.log("🎛️ updateSynthParams called in useRoomSocket:", params);
+      
       const socket = getActiveSocket();
       console.log("🎛️ Current socket state:", {
         socket: !!socket,
         connected: socket?.connected,
         id: socket?.id,
       });
-      console.log("🎛️ About to call throttledEmit with update_synth_params");
+      
       throttledEmit("update_synth_params", { params });
     },
     [throttledEmit, getActiveSocket],
@@ -1078,21 +1078,21 @@ export const useRoomSocket = (instrumentManager?: any) => {
     (callback: (data: NoteReceivedData) => void) => {
       const socket = getActiveSocket();
       if (!socket) {
-        console.log("⚠️ No active socket for onNoteReceived");
+        
         return () => {};
       }
 
-      console.log("🔧 Setting up note_played listener on socket:", socket.id);
+      
 
       const handleNoteReceived = (data: NoteReceivedData) => {
-        console.log("🎵 Raw note_played event received:", data);
+        
         callback(data);
       };
 
       socket.on("note_played", handleNoteReceived);
 
       return () => {
-        console.log("🧹 Removing note_played listener");
+        
         socket.off("note_played", handleNoteReceived);
       };
     },
@@ -1122,7 +1122,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
     ) => {
       const socket = getActiveSocket();
       if (!socket) {
-        console.log("⚠️ No active socket for onInstrumentChanged");
+        
         return () => {};
       }
 
@@ -1137,14 +1137,14 @@ export const useRoomSocket = (instrumentManager?: any) => {
         instrument: string;
         category: string;
       }) => {
-        console.log("🎵 Instrument changed event received:", data);
+        
         callback(data);
       };
 
       socket.on("instrument_changed", handleInstrumentChanged);
 
       return () => {
-        console.log("🧹 Removing instrument_changed listener");
+        
         socket.off("instrument_changed", handleInstrumentChanged);
       };
     },
@@ -1162,7 +1162,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
     ) => {
       const socket = getActiveSocket();
       if (!socket) {
-        console.log("⚠️ No active socket for onStopAllNotes");
+        
         return () => {};
       }
 
@@ -1177,14 +1177,14 @@ export const useRoomSocket = (instrumentManager?: any) => {
         instrument: string;
         category: string;
       }) => {
-        console.log("🛑 Stop all notes event received:", data);
+        
         callback(data);
       };
 
       socket.on("stop_all_notes", handleStopAllNotes);
 
       return () => {
-        console.log("🧹 Removing stop_all_notes listener");
+        
         socket.off("stop_all_notes", handleStopAllNotes);
       };
     },
@@ -1275,12 +1275,12 @@ export const useRoomSocket = (instrumentManager?: any) => {
     (callback: (data: { requesterId: string; requesterUsername: string }) => void) => {
       const socket = getActiveSocket();
       if (!socket) {
-        console.log("⚠️ No active socket for onSwapRequestReceived");
+        
         return () => {};
       }
 
       const handleSwapRequest = (data: { requesterId: string; requesterUsername: string }) => {
-        console.log("🔄 Swap request received:", data);
+        
         callback(data);
       };
 
@@ -1297,12 +1297,12 @@ export const useRoomSocket = (instrumentManager?: any) => {
     (callback: (data: { targetUserId: string }) => void) => {
       const socket = getActiveSocket();
       if (!socket) {
-        console.log("⚠️ No active socket for onSwapRequestSent");
+        
         return () => {};
       }
 
       const handleSwapRequestSent = (data: { targetUserId: string }) => {
-        console.log("🔄 Swap request sent:", data);
+        
         callback(data);
       };
 
@@ -1319,12 +1319,12 @@ export const useRoomSocket = (instrumentManager?: any) => {
     (callback: (data: any) => void) => {
       const socket = getActiveSocket();
       if (!socket) {
-        console.log("⚠️ No active socket for onSwapApproved");
+        
         return () => {};
       }
 
       const handleSwapApproved = (data: any) => {
-        console.log("🔄 Swap approved:", data);
+        
         callback(data);
       };
 
@@ -1341,12 +1341,12 @@ export const useRoomSocket = (instrumentManager?: any) => {
     (callback: () => void) => {
       const socket = getActiveSocket();
       if (!socket) {
-        console.log("⚠️ No active socket for onSwapRejected");
+        
         return () => {};
       }
 
       const handleSwapRejected = () => {
-        console.log("🔄 Swap rejected");
+        
         callback();
       };
 
@@ -1363,12 +1363,12 @@ export const useRoomSocket = (instrumentManager?: any) => {
     (callback: () => void) => {
       const socket = getActiveSocket();
       if (!socket) {
-        console.log("⚠️ No active socket for onSwapCancelled");
+        
         return () => {};
       }
 
       const handleSwapCancelled = () => {
-        console.log("🔄 Swap cancelled");
+        
         callback();
       };
 
@@ -1385,12 +1385,12 @@ export const useRoomSocket = (instrumentManager?: any) => {
     (callback: (data: any) => void) => {
       const socket = getActiveSocket();
       if (!socket) {
-        console.log("⚠️ No active socket for onSwapCompleted");
+        
         return () => {};
       }
 
       const handleSwapCompleted = (data: any) => {
-        console.log("🔄 Swap completed:", data);
+        
         callback(data);
       };
 
@@ -1407,12 +1407,12 @@ export const useRoomSocket = (instrumentManager?: any) => {
     (callback: (data: { reason: string }) => void) => {
       const socket = getActiveSocket();
       if (!socket) {
-        console.log("⚠️ No active socket for onUserKicked");
+        
         return () => {};
       }
 
       const handleUserKicked = (data: { reason: string }) => {
-        console.log("🚫 User kicked:", data);
+        
         callback(data);
       };
 

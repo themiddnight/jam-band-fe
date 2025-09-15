@@ -93,7 +93,7 @@ export const useAudioStream = ({
           "../../../constants/audioConfig"
         );
         audioContextRef.current = await AudioContextManager.getWebRTCContext();
-        console.log("🎤 VoiceInput: Using separated WebRTC AudioContext");
+        
       } catch (error) {
         console.warn(
           "Failed to get WebRTC AudioContext, creating fallback:",
@@ -180,16 +180,16 @@ export const useAudioStream = ({
 
   // Cleanup function
   const cleanup = useCallback(() => {
-    console.log("🧹 AudioStream hook cleaning up");
+    
     if (mediaStreamRef.current) {
-      console.log("🛑 Stopping processed media stream tracks");
+      
       mediaStreamRef.current.getTracks().forEach((track) => track.stop());
       mediaStreamRef.current = null;
       onStreamRemoved?.();
     }
 
     if (originalStreamRef.current) {
-      console.log("🛑 Stopping original media stream tracks");
+      
       originalStreamRef.current.getTracks().forEach((track) => track.stop());
       originalStreamRef.current = null;
     }

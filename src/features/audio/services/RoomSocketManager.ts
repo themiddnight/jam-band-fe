@@ -40,6 +40,7 @@ export class RoomSocketManager {
   private isInGracePeriod = false;
   private reconnectionAttempts = 0;
   private readonly MAX_RECONNECTION_ATTEMPTS = 3;
+  private isIntentionalDisconnect = false;
 
   // Error recovery service
   private errorRecoveryService: ErrorRecoveryService;
@@ -150,6 +151,35 @@ export class RoomSocketManager {
   }
 
   /**
+   * Clear all connection state and prepare for fresh connection
+   * Prevents ghost connections and state conflicts
+   */
+  private clearConnectionState(): void {
+    // Clear grace period
+    if (this.gracePeriodTimeoutId) {
+      clearTimeout(this.gracePeriodTimeoutId);
+      this.gracePeriodTimeoutId = null;
+    }
+    this.isInGracePeriod = false;
+    this.reconnectionAttempts = 0;
+    
+    // Clear approval state
+    if (this.approvalTimeoutId) {
+      clearTimeout(this.approvalTimeoutId);
+      this.approvalTimeoutId = null;
+    }
+    this.currentApprovalRequest = null;
+    
+    // Clear connection health monitoring
+    if (this.connectionHealthCheckInterval) {
+      clearInterval(this.connectionHealthCheckInterval);
+      this.connectionHealthCheckInterval = null;
+    }
+    
+    console.log("🧹 Connection state cleared");
+  }
+
+  /**
    * Connect to room namespace
    * Requirements: 6.6 - Session data storage for room reconnection after page refresh
    */
@@ -159,6 +189,10 @@ export class RoomSocketManager {
     userId?: string,
     username?: string,
   ): Promise<void> {
+    // Clear any previous connection state to prevent conflicts
+    this.clearConnectionState();
+    this.isIntentionalDisconnect = false;
+
     // Store session data for reconnection
     if (userId && username) {
       SessionStorageManager.storeRoomSession({
@@ -210,16 +244,50 @@ export class RoomSocketManager {
    * Leave current room and return to lobby
    */
   async leaveRoom(): Promise<void> {
+    console.log("🚪 RoomSocketManager: Leaving room");
+    
+    // Mark as intentional disconnect to prevent grace period issues
+    this.isIntentionalDisconnect = true;
+    
+    // Clear any ongoing grace period
+    if (this.gracePeriodTimeoutId) {
+      clearTimeout(this.gracePeriodTimeoutId);
+      this.gracePeriodTimeoutId = null;
+    }
+    this.isInGracePeriod = false;
+    this.reconnectionAttempts = 0;
+
     if (
       this.currentState === ConnectionState.IN_ROOM &&
       this.roomSocket?.connected
     ) {
+      // Emit leave with isIntendedLeave flag and wait for confirmation
       this.roomSocket.emit("leave_room", { isIntendedLeave: true });
+      
+      // Wait for leave confirmation or timeout
+      await new Promise<void>((resolve) => {
+        const timeout = setTimeout(() => {
+          console.log("⏰ Leave confirmation timeout, proceeding anyway");
+          resolve();
+        }, 3000); // 3 second timeout
+
+        if (this.roomSocket) {
+          this.roomSocket.once("leave_confirmed", () => {
+            clearTimeout(timeout);
+            console.log("✅ Leave confirmed by server");
+            resolve();
+          });
+        } else {
+          clearTimeout(timeout);
+          resolve();
+        }
+      });
     }
 
     // Clear session data when intentionally leaving
     SessionStorageManager.clearRoomSession();
 
+    // Transition to lobby
     await this.connectToLobby();
   }
 
@@ -433,7 +501,7 @@ export class RoomSocketManager {
 
         case RecoveryAction.NO_ACTION:
           // Do nothing, just log
-          console.log("🔧 RoomSocketManager: No recovery action needed");
+          
           break;
 
         default:
@@ -461,7 +529,7 @@ export class RoomSocketManager {
       throw new Error("No current configuration to retry");
     }
 
-    console.log("🔄 RoomSocketManager: Retrying current connection");
+    
 
     // Clean up current connections
     await this.cleanupCurrentConnections();
@@ -474,7 +542,7 @@ export class RoomSocketManager {
    * Fallback to HTTP mode (disable real-time features)
    */
   private async fallbackToHttpMode(): Promise<void> {
-    console.log("🔄 RoomSocketManager: Falling back to HTTP mode");
+    
 
     // Disconnect all socket connections
     await this.cleanupCurrentConnections();
@@ -493,7 +561,7 @@ export class RoomSocketManager {
    * Force reconnection with state cleanup
    */
   private async forceReconnection(): Promise<void> {
-    console.log("🔄 RoomSocketManager: Force reconnecting");
+    
 
     // Clear error recovery state
     this.errorRecoveryService.clearRecoveryState();
@@ -515,7 +583,7 @@ export class RoomSocketManager {
    * Clear state and reconnect
    */
   private async clearStateAndReconnect(): Promise<void> {
-    console.log("🔄 RoomSocketManager: Clearing state and reconnecting");
+    
 
     // Clear all state
     SessionStorageManager.clearRoomSession();
@@ -529,7 +597,7 @@ export class RoomSocketManager {
    * Return to lobby
    */
   private async returnToLobby(): Promise<void> {
-    console.log("🔄 RoomSocketManager: Returning to lobby");
+    
 
     // Clear session data
     SessionStorageManager.clearRoomSession();
@@ -542,7 +610,7 @@ export class RoomSocketManager {
    * Reload page as last resort
    */
   private reloadPage(): void {
-    console.log("🔄 RoomSocketManager: Reloading page");
+    
     window.location.reload();
   }
 
@@ -740,7 +808,7 @@ export class RoomSocketManager {
 
         socket.on("connect", () => {
           clearTimeout(timeout);
-          console.log("✅ RoomSocketManager: Connected to", config.namespace);
+          
 
           // Clear any previous error recovery state for successful connection
           this.errorRecoveryService.clearRetryCount({
@@ -850,7 +918,7 @@ export class RoomSocketManager {
    */
   private setupCommonEventHandlers(socket: Socket): void {
     socket.on("disconnect", (reason) => {
-      console.log("🔌 RoomSocketManager: Socket disconnected", reason);
+      
 
       // Handle different disconnect reasons
       if (
@@ -1112,18 +1180,25 @@ export class RoomSocketManager {
       reason,
     );
 
+    // Skip grace period for intentional disconnects
+    if (this.isIntentionalDisconnect) {
+      console.log("🔌 RoomSocketManager: Intentional disconnect, skipping grace period");
+      this.isIntentionalDisconnect = false; // Reset for next time
+      return;
+    }
+
     if (
       this.currentState === ConnectionState.IN_ROOM &&
       !this.isInGracePeriod
     ) {
-      console.log("🔄 Entering grace period for room connection");
+      
 
       this.isInGracePeriod = true;
       this.gracePeriodStartTime = Date.now();
 
       // Set grace period timeout
       this.gracePeriodTimeoutId = setTimeout(() => {
-        console.log("⏰ Grace period expired");
+        
         this.isInGracePeriod = false;
         this.gracePeriodStartTime = null;
         this.reconnectionAttempts = 0;
@@ -1143,7 +1218,7 @@ export class RoomSocketManager {
       this.attemptReconnection();
     } else if (this.currentState === ConnectionState.REQUESTING) {
       // Handle approval disconnection
-      console.log("🔄 Approval connection lost");
+      
 
       this.errorRecoveryService.handleError({
         errorType: ErrorType.APPROVAL_TIMEOUT,
@@ -1155,7 +1230,7 @@ export class RoomSocketManager {
       });
     } else {
       // Handle other disconnections
-      console.log("🔄 Connection lost in state", this.currentState);
+      
 
       this.errorRecoveryService.handleError({
         errorType: ErrorType.NAMESPACE_CONNECTION_FAILED,
@@ -1180,7 +1255,7 @@ export class RoomSocketManager {
     this.reconnectionAttempts++;
 
     if (this.reconnectionAttempts > this.MAX_RECONNECTION_ATTEMPTS) {
-      console.log("❌ Max reconnection attempts reached");
+      
       return;
     }
 
@@ -1201,7 +1276,7 @@ export class RoomSocketManager {
       this.isInGracePeriod = false;
       this.reconnectionAttempts = 0;
 
-      console.log("✅ Reconnection successful");
+      
 
       // Notify reconnection handlers
       this.notifyReconnection();
@@ -1308,7 +1383,7 @@ export class RoomSocketManager {
    * Complete cleanup of the service
    */
   async cleanup(): Promise<void> {
-    console.log("🧹 RoomSocketManager: Complete cleanup");
+    
 
     // Stop all monitoring
     this.stopConnectionHealthMonitoring();
@@ -1329,6 +1404,6 @@ export class RoomSocketManager {
     this.errorHandlers.length = 0;
     this.reconnectionHandlers.length = 0;
 
-    console.log("✅ RoomSocketManager: Cleanup complete");
+    
   }
 }

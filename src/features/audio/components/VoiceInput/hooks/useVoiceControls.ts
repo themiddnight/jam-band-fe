@@ -38,13 +38,13 @@ export const useVoiceControls = ({
 
     if (!newMutedState && (!micPermission || !mediaStream)) {
       // Unmuting but no stream available - initialize audio stream
-      console.log("🎤 Initializing audio stream for unmute");
+      
       await initializeAudioStream();
       // The new stream will be created with track disabled, so we need to enable it
       // This will be handled by the effect in the parent component
     } else if (!newMutedState && micPermission && mediaStream) {
       // Already have permission and stream, just enable the track
-      console.log("🔊 Enabling existing audio track");
+      
       const audioTrack = mediaStream.getAudioTracks()[0];
       if (audioTrack) {
         audioTrack.enabled = true;
@@ -52,7 +52,7 @@ export const useVoiceControls = ({
       startInputLevelMonitoring();
     } else if (newMutedState && mediaStream) {
       // Muting - disable track but don't destroy stream
-      console.log("🔇 Disabling audio track (keeping stream alive)");
+      
       const audioTrack = mediaStream.getAudioTracks()[0];
       if (audioTrack) {
         audioTrack.enabled = false;
@@ -90,7 +90,7 @@ export const useVoiceControls = ({
     try {
       if (!isSelfMonitoring) {
         // Enable self-monitoring: add monitoring connection to speakers
-        console.log("🔊 Enabling self-monitoring");
+        
 
         // Create a monitoring gain node to control self-monitoring volume
         // This allows hearing yourself at the input gain level but with volume control
@@ -111,7 +111,7 @@ export const useVoiceControls = ({
         );
       } else {
         // Disable self-monitoring: remove only the monitoring connection
-        console.log("🔇 Disabling self-monitoring");
+        
 
         if (monitoringConnectionRef.current) {
           // Only disconnect the monitoring path, keep WebRTC path intact
@@ -119,9 +119,9 @@ export const useVoiceControls = ({
           monitoringConnectionRef.current.disconnect(audioContext.destination);
           monitoringConnectionRef.current = null;
 
-          console.log("✅ Self-monitoring disabled - WebRTC path preserved");
+          
         } else {
-          console.log("⚠️  No monitoring connection found to disconnect");
+          
         }
       }
     } catch (error) {

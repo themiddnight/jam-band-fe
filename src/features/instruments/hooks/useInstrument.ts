@@ -468,7 +468,7 @@ export const useInstrument = (
       try {
         // Stop all currently playing notes before switching instruments
         if (instrumentManager.isReady()) {
-          console.log("🛑 Stopping all notes before instrument switch");
+          
           await instrumentManager.stopAllLocalNotes();
         }
 
@@ -525,9 +525,9 @@ export const useInstrument = (
             if (actualSamples.length === 0) {
               // If no samples available immediately, wait for them
               try {
-                console.log("Waiting for drum machine samples to load...");
+                
                 actualSamples = await localEngine.waitForSamples(3000); // Wait up to 3 seconds
-                console.log("Drum machine samples loaded:", actualSamples);
+                
               } catch (error) {
                 console.warn("Error waiting for drum machine samples:", error);
               }
@@ -902,7 +902,7 @@ export const useInstrument = (
         !needsUserGesture &&
         !audioContextError
       ) {
-        console.log("🎵 Attempting auto-initialization of audio context");
+        
         try {
           await initializeAudioContext();
         } catch {

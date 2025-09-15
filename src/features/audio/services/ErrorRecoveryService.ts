@@ -251,7 +251,7 @@ export class ErrorRecoveryService {
     const recoveryKey = this.getRecoveryKey(context);
 
     if (this.activeRecoveries.has(recoveryKey)) {
-      console.log("🔄 Recovery already in progress for", recoveryKey);
+      
       return;
     }
 

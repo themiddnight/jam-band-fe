@@ -205,14 +205,14 @@ export const useWebRTCVoice = ({
       sendHeartbeat();
     }, HEARTBEAT_INTERVAL) as unknown as number;
 
-    console.log("💓 WebRTC: Started heartbeat monitoring");
+    
   }, [sendHeartbeat]);
 
   const stopHeartbeat = useCallback(() => {
     if (heartbeatInterval.current) {
       clearInterval(heartbeatInterval.current);
       heartbeatInterval.current = null;
-      console.log("🛑 WebRTC: Stopped heartbeat monitoring");
+      
     }
   }, []);
 
@@ -246,7 +246,7 @@ export const useWebRTCVoice = ({
           (existingPeer.reconnectAttempts || 0) < MAX_RECONNECT_ATTEMPTS;
 
         if (shouldAttempt) {
-          console.log(`🤝 WebRTC: Attempting to reconnect to ${userId}`);
+          
           setTimeout(() => {
             initiateVoiceCallRef.current?.(userId);
           }, Math.random() * 1000); // Random delay to avoid thundering herd
@@ -263,14 +263,14 @@ export const useWebRTCVoice = ({
       checkForMissingConnections();
     }, RECONNECTION_RETRY_INTERVAL) as unknown as number;
 
-    console.log("🔄 WebRTC: Started connection retry monitoring");
+    
   }, [checkForMissingConnections]);
 
   const stopConnectionRetryMonitoring = useCallback(() => {
     if (reconnectionRetryInterval.current) {
       clearInterval(reconnectionRetryInterval.current);
       reconnectionRetryInterval.current = null;
-      console.log("🛑 WebRTC: Stopped connection retry monitoring");
+      
     }
   }, []);
 
@@ -359,7 +359,7 @@ export const useWebRTCVoice = ({
         });
       }
 
-      console.log("🔊 Audio reception enabled for audience member");
+      
     } catch (error) {
       console.error("Failed to enable audio reception:", error);
       setConnectionError("Failed to enable audio reception");
@@ -579,14 +579,14 @@ export const useWebRTCVoice = ({
       });
     }, HEALTH_CHECK_INTERVAL) as unknown as number;
 
-    console.log("🩺 WebRTC: Started connection health monitoring");
+    
   }, [checkConnectionHealth]);
 
   const stopHealthMonitoring = useCallback(() => {
     if (healthCheckInterval.current) {
       clearInterval(healthCheckInterval.current);
       healthCheckInterval.current = null;
-      console.log("🛑 WebRTC: Stopped connection health monitoring");
+      
     }
   }, []);
 
@@ -1059,7 +1059,7 @@ export const useWebRTCVoice = ({
 
       try {
         setIsConnecting(true);
-        console.log("📞 WebRTC: Handling voice offer from", data.fromUsername);
+        
 
         const peerConnection = createPeerConnection(data.fromUserId);
 
@@ -1097,13 +1097,45 @@ export const useWebRTCVoice = ({
         audioElement.style.display = "none"; // Hidden audio element
         audioElement.crossOrigin = "anonymous";
 
+        // WebKit volume control fix: Route voice through mixer for volume control
+        // This ensures volume controls work on Safari/iOS while maintaining low latency
+        let voiceAudioSource: MediaElementAudioSourceNode | null = null;
+        const setupVoiceMixerRouting = async () => {
+          try {
+            // Get or create the global mixer to route voice through it
+            const { getOrCreateGlobalMixer } = await import("../utils/effectsArchitecture");
+            const mixer = await getOrCreateGlobalMixer();
+            const audioContext = mixer.getAudioContext();
+            
+            // Create a user channel in the mixer if it doesn't exist
+            if (!mixer.getChannel(data.fromUserId)) {
+              mixer.createUserChannel(data.fromUserId, data.fromUsername);
+            }
+            
+            // Connect the audio element to the mixer through Web Audio API
+            voiceAudioSource = audioContext.createMediaElementSource(audioElement);
+            
+            // Route to the user's channel in the mixer
+            mixer.routeInstrumentToChannel(voiceAudioSource, data.fromUserId);
+            
+            console.log(`🔄 WebKit Voice Fix: Routed ${data.fromUsername}'s voice through mixer for volume control`);
+          } catch (error) {
+            console.warn("Failed to route voice through mixer, using direct audio:", error);
+            // Fallback: connect audio element directly to speakers (original behavior)
+            // This maintains compatibility if mixer setup fails
+          }
+        };
+
+        // Setup the voice routing after the audio element receives the stream
+        setupVoiceMixerRouting();
+
         // Ultra-low latency event handlers
         audioElement.onloadstart = () =>
-          console.log(`🔊 ${data.fromUserId}: Audio load started`);
+          
         audioElement.oncanplay = () =>
-          console.log(`🔊 ${data.fromUserId}: Audio can play`);
+          
         audioElement.onplaying = () =>
-          console.log(`🔊 ${data.fromUserId}: Audio playing started`);
+          
         audioElement.onstalled = () =>
           console.warn(`⚠️ ${data.fromUserId}: Audio stalled`);
         audioElement.onwaiting = () =>
@@ -1135,7 +1167,7 @@ export const useWebRTCVoice = ({
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
 
-        console.log("📤 WebRTC: Sending answer to", data.fromUsername);
+        
         socket.emit("voice_answer", {
           answer: answer,
           targetUserId: data.fromUserId,
@@ -1193,7 +1225,7 @@ export const useWebRTCVoice = ({
             // Clean up and restart connection after a short delay
             setTimeout(async () => {
               if (peer.connection.connectionState !== "connected") {
-                console.log("🔄 WebRTC: Restarting connection negotiation");
+                
                 if (initiateVoiceCallRef.current) {
                   await initiateVoiceCallRef.current(data.fromUserId);
                 }
@@ -1217,7 +1249,7 @@ export const useWebRTCVoice = ({
         );
         setTimeout(async () => {
           if (peer.connection.connectionState !== "connected") {
-            console.log("🔄 WebRTC: Restarting connection after answer error");
+            
             cleanupPeerConnection(data.fromUserId);
             if (initiateVoiceCallRef.current) {
               await initiateVoiceCallRef.current(data.fromUserId);
@@ -1313,7 +1345,7 @@ export const useWebRTCVoice = ({
 
       try {
         setIsConnecting(true);
-        console.log("📞 WebRTC: Initiating voice call to", targetUserId);
+        
 
         const peerConnection = createPeerConnection(targetUserId);
 
@@ -1351,13 +1383,45 @@ export const useWebRTCVoice = ({
         audioElement.style.display = "none"; // Hidden audio element
         audioElement.crossOrigin = "anonymous";
 
+        // WebKit volume control fix: Route voice through mixer for volume control
+        // This ensures volume controls work on Safari/iOS while maintaining low latency
+        let voiceAudioSource: MediaElementAudioSourceNode | null = null;
+        const setupVoiceMixerRouting = async () => {
+          try {
+            // Get or create the global mixer to route voice through it
+            const { getOrCreateGlobalMixer } = await import("../utils/effectsArchitecture");
+            const mixer = await getOrCreateGlobalMixer();
+            const audioContext = mixer.getAudioContext();
+            
+            // Create a user channel in the mixer if it doesn't exist
+            if (!mixer.getChannel(targetUserId)) {
+              mixer.createUserChannel(targetUserId, targetUserId);
+            }
+            
+            // Connect the audio element to the mixer through Web Audio API
+            voiceAudioSource = audioContext.createMediaElementSource(audioElement);
+            
+            // Route to the user's channel in the mixer
+            mixer.routeInstrumentToChannel(voiceAudioSource, targetUserId);
+            
+            console.log(`🔄 WebKit Voice Fix: Routed ${targetUserId}'s voice through mixer for volume control`);
+          } catch (error) {
+            console.warn("Failed to route voice through mixer, using direct audio:", error);
+            // Fallback: connect audio element directly to speakers (original behavior)
+            // This maintains compatibility if mixer setup fails
+          }
+        };
+
+        // Setup the voice routing after the audio element receives the stream
+        setupVoiceMixerRouting();
+
         // Ultra-low latency event handlers
         audioElement.onloadstart = () =>
-          console.log(`🔊 ${targetUserId}: Audio load started`);
+          
         audioElement.oncanplay = () =>
-          console.log(`🔊 ${targetUserId}: Audio can play`);
+          
         audioElement.onplaying = () =>
-          console.log(`🔊 ${targetUserId}: Audio playing started`);
+          
         audioElement.onstalled = () =>
           console.warn(`⚠️ ${targetUserId}: Audio stalled`);
         audioElement.onwaiting = () =>
@@ -1389,7 +1453,7 @@ export const useWebRTCVoice = ({
           throw new Error("Socket not authenticated for WebRTC offer");
         }
 
-        console.log("📤 WebRTC: Sending offer to", targetUserId);
+        
         socket.emit("voice_offer", {
           offer: offer,
           targetUserId,
@@ -1414,7 +1478,7 @@ export const useWebRTCVoice = ({
   // Handle user joining voice
   const handleUserJoinedVoice = useCallback(
     (data: { userId: string; username: string }) => {
-      console.log("👋 WebRTC: User joined voice", data);
+      
 
       // Add to voice users list
       setVoiceUsers((prev) => {
@@ -1555,7 +1619,7 @@ export const useWebRTCVoice = ({
       console.log(
         `🕸️ MESH: New peer detected - ${data.username} (${data.userId})`,
       );
-      console.log(`🕸️ MESH: Should initiate: ${data.shouldInitiate}`);
+      
 
       // Add to voice users list if not already present
       setVoiceUsers((prev) => {
@@ -1961,7 +2025,7 @@ export const useWebRTCVoice = ({
     };
 
     const handleSocketDisconnection = () => {
-      console.log("🔌 WebRTC: Socket disconnected");
+      
       // Don't immediately clean up - let the grace period handle it
     };
 
@@ -2001,7 +2065,7 @@ export const useWebRTCVoice = ({
       missingConnections.forEach((user, index) => {
         setTimeout(() => {
           if (initiateVoiceCallRef.current && !peersRef.current[user.userId]) {
-            console.log(`🤝 WebRTC: Reconnecting to ${user.userId}`);
+            
             initiateVoiceCallRef.current(user.userId);
           }
         }, index * 500); // 500ms delay between each connection attempt
@@ -2217,7 +2281,7 @@ export const useWebRTCVoice = ({
 
   // Function to perform intentional cleanup (can be called from parent)
   const performIntentionalCleanup = useCallback(() => {
-    console.log("🧹 WebRTC: Performing intentional cleanup");
+    
     isIntentionalDisconnectRef.current = true;
 
     // Clean up all peer connections immediately
@@ -2311,7 +2375,7 @@ export const useWebRTCVoice = ({
             currentUsername &&
             roomId
           ) {
-            console.log("🎤 WebRTC: Sending fresh join_voice announcement");
+            
             socket.emit("join_voice", {
               roomId,
               userId: currentUserId,
@@ -2434,7 +2498,7 @@ export const useWebRTCVoice = ({
         // Announce voice join
         setTimeout(() => {
           if (socket && socket.connected) {
-            console.log("📢 WebRTC: Delayed voice join announcement");
+            
             socket.emit("join_voice", {
               roomId,
               userId: currentUserId,

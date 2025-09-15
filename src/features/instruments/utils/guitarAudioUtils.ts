@@ -95,11 +95,4 @@ export const playStrumEffect = async (
 
   // For now, just play all notes together
   // In a real implementation, you'd space them out based on the strum speed
-  for (const note of notes) {
-    // Play each note with a slight delay based on strum direction and speed
-    setTimeout(() => {
-      // TODO: Play individual note
-      console.log(`Playing note: ${note}`);
-    }, 0);
-  }
 };

@@ -74,7 +74,7 @@ export const useSequencer = ({
         // Initialize sequencer service
         sequencerServiceRef.current = new SequencerService({
           onBeatChange: (beat) => {
-            console.log(`🎵 onBeatChange called for beat ${beat}`);
+            
             sequencerStoreRef.current.setCurrentBeat(beat);
             
             // Track that we've started playing (after the first beat)
@@ -85,7 +85,7 @@ export const useSequencer = ({
             // Check for soft-stop at the last beat of the sequence
             const isLastBeat = beat === (sequencerStoreRef.current.settings.length - 1);
             if (isLastBeat && sequencerStoreRef.current.softStopRequested && hasStartedPlayingRef.current) {
-              console.log(`🎵 Soft-stop requested: at last beat ${beat} - will stop after notes finish playing according to their gate values`);
+              
               // Continue processing to let onPlayStep handle the final beat and set up completion logic
               // Don't return early - we need the final beat to be processed
             }
@@ -94,7 +94,7 @@ export const useSequencer = ({
             if (beat === 0 && hasStartedPlayingRef.current) {
               // Check soft-stop request FIRST to prevent bank switching after soft-stop
               if (sequencerStoreRef.current.softStopRequested) {
-                console.log(`🎵 Soft-stop requested: stopping at beat 0 - soft-stop should have been handled at the last beat`);
+                
                 // This should not happen anymore since we handle soft-stop at the last beat
                 // But if we reach here, it means the completion logic didn't work, so stop immediately
                 sequencerStoreRef.current.stop(); // Clean stop without cutting notes
@@ -104,17 +104,17 @@ export const useSequencer = ({
                 return; // Exit early to prevent further processing
               }
               
-              console.log(`🎵 Processing bank switching logic for beat 0`);
+              
               
               // Priority 1: Handle queued bank changes (both single and continuous modes)
               if (sequencerStoreRef.current.waitingBankChange) {
                 const waitingBank = sequencerStoreRef.current.waitingBankChange;
-                console.log(`🎵 Executing queued bank change to ${waitingBank} at beat 0`);
+                
                 
                 // Bank isolation: Stop all playing notes when changing banks
                 const playingNotes = Array.from(currentlyPlayingNotesRef.current);
                 if (playingNotes.length > 0) {
-                  console.log(`🎵 Bank change: stopping ${playingNotes.length} playing notes for clean bank transition:`, playingNotes);
+                  
                   onStopNotesRef.current(playingNotes);
                   currentlyPlayingNotesRef.current.clear();
                 }
@@ -133,12 +133,12 @@ export const useSequencer = ({
               else if (sequencerStoreRef.current.settings.bankMode === "continuous") {
                 const nextBank = sequencerStoreRef.current.getNextEnabledBank();
                 if (nextBank && nextBank !== sequencerStoreRef.current.currentBank) {
-                  console.log(`🎵 Continuous mode: switching from ${sequencerStoreRef.current.currentBank} to ${nextBank} at beat 0`);
+                  
                   
                   // Bank isolation: Stop all playing notes when changing banks
                   const playingNotes = Array.from(currentlyPlayingNotesRef.current);
                   if (playingNotes.length > 0) {
-                    console.log(`🎵 Continuous mode bank change: stopping ${playingNotes.length} playing notes for clean bank transition:`, playingNotes);
+                    
                     onStopNotesRef.current(playingNotes);
                     currentlyPlayingNotesRef.current.clear();
                   }
@@ -148,13 +148,13 @@ export const useSequencer = ({
                   // Update the sequencer service with the new bank's steps
                   const newBank = sequencerStoreRef.current.banks[nextBank];
                   if (newBank && sequencerServiceRef.current) {
-                    console.log(`🎵 Setting sequencer service steps for bank ${nextBank}:`, newBank.steps.length, 'steps');
+                    
                     sequencerServiceRef.current.setSteps(newBank.steps);
                   }
                 }
               }
             }
-            console.log(`🎵 onBeatChange completed for beat ${beat}`);
+            
           },
           onPlayStep: (steps: SequencerStep[]) => {
             const currentBank = sequencerStoreRef.current.currentBank;
@@ -307,7 +307,7 @@ export const useSequencer = ({
                   if (isLegatoContinuation && legatoGroup.isGroupEnd) {
                     // For legato group endings, use the current step's gate time
                     gateTime = timing.stepInterval * noteData.gate * 1000;
-                    console.log(`🎵 Legato group ending for ${noteData.note} at beat ${noteData.step.beat}, using gate time: ${gateTime}ms`);
+                    
                   }
                   
                   // Add minimum and maximum gate times to prevent issues
@@ -322,7 +322,7 @@ export const useSequencer = ({
                   
                   // Schedule note stop after gate time
                   setTimeout(() => {
-                    console.log(`🎵 Stopping note after gate: ${noteData.note} (gate: ${noteData.gate}, isNew: ${isNewNote}, isLegatoEnd: ${legatoGroup.isGroupEnd})`);
+                    
                     onStopNotesRef.current([noteData.note]);
                     // Remove from tracking when notes stop
                     currentlyPlayingNotesRef.current.delete(noteData.note);
@@ -338,7 +338,7 @@ export const useSequencer = ({
                     }
                   }, emergencyTimeout);
                 } else if (isLegatoContinuation) {
-                  console.log(`🎵 Legato continuation: ${noteData.note} at beat ${noteData.step.beat} continues playing (groupEnd=${legatoGroup.isGroupEnd})`);
+                  
                 }
               });
               
@@ -346,15 +346,15 @@ export const useSequencer = ({
               if (isLastBeat && isSoftStopRequested) {
                 // Ensure at least a minimum delay to let final beat notes start playing
                 const completionDelay = Math.max(maxGateTimeForSoftStop, 50) + 100; // Add small buffer
-                console.log(`🎵 Soft-stop: sequencer will complete in ${completionDelay}ms after final notes finish (maxGateTime: ${maxGateTimeForSoftStop})`);
+                
                 
                 setTimeout(() => {
-                  console.log(`🎵 Soft-stop complete: stopping sequencer and any remaining notes`);
+                  
                   
                   // Stop any notes that are still playing (including legato notes)
                   const remainingNotes = Array.from(currentlyPlayingNotesRef.current);
                   if (remainingNotes.length > 0) {
-                    console.log(`🎵 Soft-stop: stopping ${remainingNotes.length} remaining notes:`, remainingNotes);
+                    
                     onStopNotesRef.current(remainingNotes);
                     currentlyPlayingNotesRef.current.clear();
                   }
@@ -551,10 +551,10 @@ export const useSequencer = ({
 
         // Initialize metronome service if socket is available
         if (socket) {
-          console.log("🎵 Creating metronome service with socket");
+          
           metronomeServiceRef.current = new MetronomeSocketService(socket);
         } else {
-          console.log("🎵 No socket available for metronome service");
+          
         }
 
         setIsInitialized(true);
@@ -590,11 +590,11 @@ export const useSequencer = ({
   useEffect(() => {
     if (!metronomeServiceRef.current || !sequencerServiceRef.current || !isInitialized) return;
 
-    console.log("🎵 Setting up metronome listeners...");
+    
 
     const cleanupMetronomeState = metronomeServiceRef.current.onMetronomeState(
       ({ bpm }) => {
-        console.log("🎵 Metronome state received:", { bpm });
+        
         setCurrentBPM(bpm);
         if (sequencerServiceRef.current) {
           sequencerServiceRef.current.updateSettings(bpm, sequencerStoreRef.current.settings.speed, sequencerStoreRef.current.settings.length);
@@ -606,7 +606,7 @@ export const useSequencer = ({
       ({ timestamp, bpm }) => {
         // Only log occasionally to reduce spam
         if (Math.random() < 0.1) {
-          console.log("🎵 Metronome tick received:", { timestamp, bpm });
+          
         }
         setCurrentBPM(bpm);
         if (sequencerServiceRef.current) {
@@ -617,7 +617,7 @@ export const useSequencer = ({
 
     const cleanupMetronomeUpdated = metronomeServiceRef.current.onMetronomeUpdated(
       ({ bpm }) => {
-        console.log("🎵 Metronome updated:", { bpm });
+        
         setCurrentBPM(bpm);
         if (sequencerServiceRef.current) {
           sequencerServiceRef.current.updateSettings(bpm, sequencerStoreRef.current.settings.speed, sequencerStoreRef.current.settings.length);
@@ -626,11 +626,11 @@ export const useSequencer = ({
     );
 
     // Request current metronome state
-    console.log("🎵 Requesting metronome state...");
+    
     metronomeServiceRef.current.requestMetronomeState();
 
     return () => {
-      console.log("🎵 Cleaning up metronome listeners");
+      
       cleanupMetronomeState();
       cleanupMetronomeTick();
       cleanupMetronomeUpdated();
@@ -640,15 +640,15 @@ export const useSequencer = ({
   // Handle socket changes and create metronome service when available
   useEffect(() => {
     if (socket && !metronomeServiceRef.current) {
-      console.log("🎵 Socket became available, creating metronome service");
+      
       metronomeServiceRef.current = new MetronomeSocketService(socket);
       
       // Set up metronome listeners immediately
       if (sequencerServiceRef.current && isInitialized) {
-        console.log("🎵 Setting up metronome listeners immediately...");
+        
 
         // Request current metronome state
-        console.log("🎵 Requesting metronome state (immediate)...");
+        
         metronomeServiceRef.current.requestMetronomeState();
       }
     }
@@ -661,7 +661,7 @@ export const useSequencer = ({
 
     const { speed, length } = sequencerStoreRef.current.settings;
     service.updateSettings(currentBPM, speed, length);
-    console.log("🎵 Sequencer settings applied to service", { bpm: currentBPM, speed, length });
+    
   }, [currentBPM, isInitialized, sequencerStore.settings.speed, sequencerStore.settings.length]);
 
   // Update sequencer service when steps change
@@ -685,7 +685,7 @@ export const useSequencer = ({
     }
 
     try {
-      console.log("🎵 Starting sequencer playback (waiting for next metronome tick)...");
+      
       // Reset playhead to beat 0 (first column) for consistent start
       sequencerStoreRef.current.setCurrentBeat(0);
       // Reset for fresh start
@@ -709,7 +709,7 @@ export const useSequencer = ({
     // Stop all currently playing notes to prevent stuck notes
     const playingNotes = Array.from(currentlyPlayingNotesRef.current);
     if (playingNotes.length > 0) {
-      console.log(`🎵 Stop: cleaning up ${playingNotes.length} playing notes:`, playingNotes);
+      
       onStopNotesRef.current(playingNotes);
       currentlyPlayingNotesRef.current.clear();
     }
@@ -750,7 +750,7 @@ export const useSequencer = ({
     // Stop all currently playing notes immediately
     const playingNotes = Array.from(currentlyPlayingNotesRef.current);
     if (playingNotes.length > 0) {
-      console.log(`🎵 Hard-stop: stopping ${playingNotes.length} playing notes:`, playingNotes);
+      
       onStopNotesRef.current(playingNotes);
       currentlyPlayingNotesRef.current.clear();
     }
@@ -774,7 +774,7 @@ export const useSequencer = ({
 
   // Legacy pause handler - now redirects to soft stop for backward compatibility
   const handlePause = useCallback(() => {
-    console.log("🎵 handlePause called - redirecting to soft stop");
+    
     handleSoftStop();
   }, [handleSoftStop]);
 

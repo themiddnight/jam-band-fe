@@ -50,8 +50,8 @@ export const useErrorRecovery = (options: UseErrorRecoveryOptions) => {
 
       // Handle socket recovery
       const unsubscribeSocketRecovery = errorRecoveryService.onRecovery(
-        ({ action, context }) => {
-          handleServiceRecovery("Socket", action, context);
+        ({ action }) => {
+          handleServiceRecovery("Socket", action);
         },
       );
 
@@ -86,8 +86,8 @@ export const useErrorRecovery = (options: UseErrorRecoveryOptions) => {
 
       // Handle audio recovery
       const unsubscribeAudioRecovery = errorRecoveryService.onRecovery(
-        ({ action, context }) => {
-          handleServiceRecovery("Audio", action, context);
+        ({ action }) => {
+          handleServiceRecovery("Audio", action);
         },
       );
 
@@ -181,8 +181,8 @@ export const useErrorRecovery = (options: UseErrorRecoveryOptions) => {
    * Handle recovery actions from any service
    */
   const handleServiceRecovery = useCallback(
-    (serviceName: string, action: RecoveryAction, context: any) => {
-      console.log(`🔧 ${serviceName} Recovery:`, action, context.errorType);
+    (serviceName: string, action: RecoveryAction) => {
+      
 
       // Show recovery status to user
       let recoveryMessage = "";

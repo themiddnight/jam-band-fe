@@ -625,7 +625,7 @@ export const useInstrumentManager = (): UseInstrumentManagerReturn => {
         engine.setWebRTCOptimization(true);
       });
     } else if (!isWebRTCActive) {
-      console.log("🎵 WebRTC inactive - restoring full instrument performance");
+      
 
       // Disable WebRTC optimization
       if (localEngine.current) {

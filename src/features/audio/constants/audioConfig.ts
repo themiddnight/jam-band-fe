@@ -309,7 +309,7 @@ class MasterAudioBus {
     this.masterGain = context.createGain();
     this.masterGain.gain.value = AUDIO_CONFIG.MASTER_BUS.masterGainLevel;
     this.masterGain.connect(context.destination);
-    console.log("🎛️ Master Audio Bus initialized");
+    
   }
 
   // Get the master gain node for routing

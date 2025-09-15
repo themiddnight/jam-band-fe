@@ -35,7 +35,7 @@ export function useAdaptiveAudio({
           onConfigChange(config);
         }
 
-        console.log("🎵 Adaptive audio configuration changed:", config);
+        
       });
 
       initializedRef.current = true;
@@ -86,7 +86,7 @@ export function useAdaptiveAudio({
   const forceQualityReduction = useCallback(() => {
     // This would trigger the quality reduction logic
     // In a real implementation, you might want to simulate poor performance
-    console.log("🧪 Force quality reduction triggered");
+    
   }, []);
 
   // Get configuration summary

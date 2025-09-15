@@ -80,7 +80,7 @@ export const useRoomStore = create<RoomState>((set, get) => ({
       (existingUser) => existingUser.id === user.id,
     );
     if (userExists) {
-      console.log("User already exists in room, skipping add:", user.id);
+      
       return;
     }
 

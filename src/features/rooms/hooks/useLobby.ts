@@ -50,21 +50,10 @@ export const useLobby = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getActiveSocket, connectionState]);
 
-  // Additional effect to handle socket reconnection scenarios
+  // Temporarily disabled socket health check for debugging
   useEffect(() => {
-    const checkSocketHealth = () => {
-      const currentSocket = getActiveSocket();
-      if (currentSocket && currentSocket !== activeSocket) {
-        // Socket changed during health check, update reference
-        setActiveSocket(currentSocket);
-      }
-    };
-
-    // Check socket health periodically when in lobby
-    if (connectionState === ConnectionState.LOBBY) {
-      const healthCheckInterval = setInterval(checkSocketHealth, 5000);
-      return () => clearInterval(healthCheckInterval);
-    }
+    // Disabled to test if this is causing ping measurement issues
+    
   }, [connectionState, activeSocket, getActiveSocket]);
 
   // Room query for HTTP-based room list

@@ -41,13 +41,17 @@ const RoomMembers = memo(
   }: RoomMembersProps) => {
     const { userId: currentUserId } = useUserStore();
 
-    const sortedUsers = users.slice().sort((a, b) => {
-      const roleOrder = {
+    // Separate users by role
+    const performers = users.filter(user => user.role === "room_owner" || user.role === "band_member");
+    const audience = users.filter(user => user.role === "audience");
+
+    // Sort performers by role (room_owner first, then band_member)
+    const sortedPerformers = performers.slice().sort((a, b) => {
+      const roleOrder: Record<string, number> = {
         room_owner: 0,
         band_member: 1,
-        audience: 2,
-      } as const;
-      return (roleOrder[a.role] ?? 3) - (roleOrder[b.role] ?? 3);
+      };
+      return (roleOrder[a.role] ?? 2) - (roleOrder[b.role] ?? 2);
     });
 
     // Get current user's role for permission checks
@@ -59,13 +63,122 @@ const RoomMembers = memo(
 
     const handleResetAllVolumes = async () => {
       const mixer = getGlobalMixer() || (await getOrCreateGlobalMixer());
-      for (const u of users) {
+      for (const u of performers) { // Only reset volumes for performers
         if (!mixer.getChannel(u.id)) {
           mixer.createUserChannel(u.id, u.username);
         }
         mixer.setUserVolume(u.id, dbToGain(0));
       }
       setResetSignal((s) => s + 1);
+    };
+
+    const renderUser = (user: RoomUser, showVolumeControls: boolean = true) => {
+      const playingIndicator = playingIndicators.get(user.id);
+      const voiceUser = voiceUsers.find((v) => v.userId === user.id);
+      const isCurrentUser = user.id === currentUserId;
+      const hasPendingSwap = pendingSwapTarget && user.id === pendingSwapTarget.id;
+      const isAudience = user.role === "audience";
+      
+      // Check if current user can see three-dot menu
+      const canSeeActionsMenu = !isCurrentUser && 
+        (currentUserRole === "room_owner" || currentUserRole === "band_member") && 
+        !isAudience;
+
+      // For audience members, use compact inline layout
+      if (isAudience) {
+        return (
+          <div 
+            key={user.id}
+            className="flex items-center gap-1 p-1.5 bg-base-200 rounded-lg border-2"
+            style={{
+              borderColor:
+                voiceUser?.audioLevel && voiceUser.audioLevel > 0.01
+                  ? "hsl(30, 100%, 60%)"
+                  : "transparent",
+            }}
+          >
+            <div>👥</div>
+            <span className="font-medium text-xs whitespace-nowrap">
+              {user.username}
+            </span>
+            {voiceUser?.isMuted && "🔇"}
+          </div>
+        );
+      }
+
+      // For performers, use the existing full layout
+      return (
+        <div 
+          key={user.id}
+          className="flex flex-col items-center gap-2 p-2 bg-base-200 rounded-lg w-full border-2"
+          style={{
+            borderColor:
+              voiceUser?.audioLevel && voiceUser.audioLevel > 0.01
+                ? "hsl(30, 100%, 60%)"
+                : "transparent",
+          }}
+        >
+          <div
+            className="flex justify-between items-center min-w-fit w-full"
+          >
+            <div className="flex items-center gap-2 flex-wrap">
+              {user.role === "room_owner" && <div>👑</div>}
+              {user.role !== "audience" && (
+                <PlayingIndicator
+                  velocity={playingIndicator?.velocity || 0}
+                  mode="pulse"
+                />
+              )}
+              {voiceUser?.isMuted && user.role !== "audience" && "🔇"}
+
+              {/* Username or Pending Status */}
+              <div className="flex flex-col gap-1">
+                <span className="font-medium text-sm whitespace-nowrap">
+                  {user.username}
+                </span>
+              </div>
+
+              <div className="flex gap-2 text-xs whitespace-nowrap">
+                {user.role === "band_member" ||
+                  user.role === "room_owner" ? (
+                  user.currentInstrument ? (
+                    getInstrumentIcon(user.currentInstrument)
+                  ) : (
+                    <div>🎸</div>
+                  )
+                ) : (
+                  <div>👥</div>
+                )}
+              </div>
+              {user.role !== "audience" && user.currentInstrument ? (
+                <span className="text-xs text-base-content/60 bg-base-300 px-2 py-1 rounded whitespace-nowrap">
+                  {user.currentInstrument.replace(/_/g, " ")}
+                </span>
+              ) : null}
+              {hasPendingSwap && onCancelSwap && (
+                <PendingSwapStatus
+                  targetUser={pendingSwapTarget}
+                  onCancel={onCancelSwap}
+                />
+              )}
+            </div>
+
+            {/* User Actions Menu - only show based on role permissions */}
+            {canSeeActionsMenu && (
+              <UserActionsMenu
+                user={user}
+                currentUserRole={currentUserRole}
+                onSwapInstrument={onSwapInstrument}
+                onKickUser={onKickUser}
+              />
+            )}
+          </div>
+          {/* Volume controls only for performers */}
+          {showVolumeControls && (
+            <UserVolumeControls userId={user.id} userRole={user.role} resetSignal={resetSignal} />
+          )}
+        </div>
+      );
     };
 
     return (
@@ -75,84 +188,26 @@ const RoomMembers = memo(
             <h3 className="card-title">Room Members</h3>
             <button className="btn btn-xs" onClick={handleResetAllVolumes} aria-label="reset-all-volumes">Reset</button>
           </div>
-          {/* Active Members - Compact List */}
-          <div className="flex flex-wrap gap-2">
-            {sortedUsers.map((user) => {
-              const playingIndicator = playingIndicators.get(user.id);
-              const voiceUser = voiceUsers.find((v) => v.userId === user.id);
-              const isCurrentUser = user.id === currentUserId;
-              const hasPendingSwap = pendingSwapTarget && user.id === pendingSwapTarget.id;
+          
+          {/* Performers Section */}
+          {sortedPerformers.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-base-content/70">Performers</h4>
+              <div className="flex flex-wrap gap-2">
+                {sortedPerformers.map((user) => renderUser(user, true))}
+              </div>
+            </div>
+          )}
 
-              return (
-                <div className="flex flex-col items-center gap-2 p-2 bg-base-200 rounded-lg  w-full border-2"
-                  style={{
-                    borderColor:
-                      voiceUser?.audioLevel && voiceUser.audioLevel > 0.01
-                        ? "hsl(30, 100%, 60%)"
-                        : "transparent",
-                  }}>
-                  <div
-                    key={user.id}
-                    className="flex justify-between items-center min-w-fit w-full"
-                  >
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {user.role === "room_owner" && <div>👑</div>}
-                      {user.role !== "audience" && (
-                        <PlayingIndicator
-                          velocity={playingIndicator?.velocity || 0}
-                          mode="pulse"
-                        />
-                      )}
-                      {voiceUser?.isMuted && user.role !== "audience" && "🔇"}
-
-                      {/* Username or Pending Status */}
-                      <div className="flex flex-col gap-1">
-                        <span className="font-medium text-sm whitespace-nowrap">
-                          {user.username}
-                        </span>
-                      </div>
-
-                      <div className="flex gap-2 text-xs whitespace-nowrap">
-                        {user.role === "band_member" ||
-                          user.role === "room_owner" ? (
-                          user.currentInstrument ? (
-                            getInstrumentIcon(user.currentInstrument)
-                          ) : (
-                            <div>🎸</div>
-                          )
-                        ) : (
-                          <div>👥</div>
-                        )}
-                      </div>
-                      {user.role !== "audience" && user.currentInstrument ? (
-                        <span className="text-xs text-base-content/60 bg-base-300 px-2 py-1 rounded whitespace-nowrap">
-                          {user.currentInstrument.replace(/_/g, " ")}
-                        </span>
-                      ) : null}
-                      {hasPendingSwap && onCancelSwap && (
-                        <PendingSwapStatus
-                          targetUser={pendingSwapTarget}
-                          onCancel={onCancelSwap}
-                        />
-                      )}
-                    </div>
-
-                    {/* User Actions Menu - only for other users */}
-                    {!isCurrentUser && (
-                      <UserActionsMenu
-                        user={user}
-                        currentUserRole={currentUserRole}
-                        onSwapInstrument={onSwapInstrument}
-                        onKickUser={onKickUser}
-                      />
-                    )}
-                  </div>
-                  {/* Unified per-user volume + meter */}
-                  <UserVolumeControls userId={user.id} userRole={user.role} resetSignal={resetSignal} />
-                </div>
-              );
-            })}
-          </div>
+          {/* Audience Section */}
+          {audience.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-base-content/70">Audience</h4>
+              <div className="flex flex-row flex-wrap gap-2">
+                {audience.map((user) => renderUser(user, false))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -228,10 +283,21 @@ function UserVolumeControls({ userId, userRole, resetSignal }: { userId: string;
   }, [userId, release]);
 
   // Debounce mixer volume writes
-  const applyGainDebounced = useMemo(() => debounce((uid: string, gainValue: number) => {
-    const mx = mixerRef.current || getGlobalMixer();
-    if (mx) mx.setUserVolume(uid, gainValue);
-  }, 25), []);
+  const applyGainDebounced = useMemo(() => {
+    const isWebKit = /webkit/i.test(navigator.userAgent);
+    return debounce((uid: string, gainValue: number) => {
+      const mx = mixerRef.current || getGlobalMixer();
+      if (mx) {
+        // WebKit/Safari-specific fix: Apply volume change immediately for better responsiveness
+        if (isWebKit) {
+          // For WebKit, set volume immediately to avoid delay
+          mx.setUserVolume(uid, gainValue);
+        } else {
+          mx.setUserVolume(uid, gainValue);
+        }
+      }
+    }, isWebKit ? 10 : 25);
+  }, []);
   useEffect(() => {
     return () => {
       applyGainDebounced.cancel();

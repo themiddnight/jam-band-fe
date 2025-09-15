@@ -165,11 +165,8 @@ export const useBatchedUpdates = () => {
 /**
  * Performance monitoring utility
  */
-export const measurePerformance = (name: string, fn: () => void) => {
-  const start = performance.now();
+export const measurePerformance = (fn: () => void) => {
   fn();
-  const end = performance.now();
-  console.log(`${name} took ${(end - start).toFixed(2)}ms`);
 };
 
 /**

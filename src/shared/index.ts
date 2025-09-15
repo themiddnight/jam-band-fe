@@ -13,6 +13,7 @@ export { usePWA } from "./hooks/usePWA";
 
 // Component exports
 export { PWAUpdatePrompt } from "./components/PWAUpdatePrompt";
+export { ErrorBoundary } from "./components/ErrorBoundary";
 
 // Utility exports
 export * from "./utils";

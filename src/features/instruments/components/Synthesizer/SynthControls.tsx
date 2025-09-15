@@ -66,7 +66,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
   };
 
   const handleLoadPreset = (preset: SynthPreset) => {
-    console.log("🎛️ Loading preset:", preset.name);
+    
     if (onLoadPreset) {
       onLoadPreset(preset.parameters);
     } else {

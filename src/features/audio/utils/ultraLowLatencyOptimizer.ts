@@ -179,7 +179,7 @@ export class UltraLowLatencyOptimizer {
   public cleanup(): void {
     this.stopBufferOptimization();
     this.optimizedElements.clear();
-    console.log("🧹 UltraLowLatencyOptimizer: Cleanup completed");
+    
   }
 }
 

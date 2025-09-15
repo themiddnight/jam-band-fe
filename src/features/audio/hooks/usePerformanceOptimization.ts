@@ -45,7 +45,7 @@ export const usePerformanceOptimization = () => {
       monitorPerformance,
       2000,
     ) as unknown as number;
-    console.log("🔍 Performance: Started audio performance monitoring");
+    
   }, [monitorPerformance]);
 
   // Stop performance monitoring
@@ -53,7 +53,7 @@ export const usePerformanceOptimization = () => {
     if (performanceMonitorRef.current) {
       clearInterval(performanceMonitorRef.current);
       performanceMonitorRef.current = null;
-      console.log("🛑 Performance: Stopped audio performance monitoring");
+      
     }
   }, []);
 
@@ -73,7 +73,7 @@ export const usePerformanceOptimization = () => {
   const resumeInstruments = useCallback(async () => {
     try {
       await AudioContextManager.resumeInstrumentContext();
-      console.log("▶️ Performance: Resumed instrument audio context");
+      
     } catch (error) {
       console.warn("Failed to resume instrument context:", error);
     }

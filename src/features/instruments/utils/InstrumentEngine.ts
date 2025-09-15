@@ -998,7 +998,7 @@ export class InstrumentEngine {
       // Filter out drum notes for synthesizers - only allow musical note names
       const musicalNotes = notes.filter(note => this.isMusicalNote(note));
       if (musicalNotes.length !== notes.length) {
-        console.log(`🎹 Synthesizer: filtered out ${notes.length - musicalNotes.length} drum notes, playing ${musicalNotes.length} musical notes:`, musicalNotes);
+        
       }
       await this.playSynthNotes(musicalNotes, velocity, isKeyHeld);
     } else {
@@ -1056,7 +1056,7 @@ export class InstrumentEngine {
           }
         });
         
-        console.log(`🎹 Polyphony cleanup: removed ${notesToRemove} notes, ${this.activeNotes.size} remaining`);
+        
       }
 
       // Release existing note to avoid stacking - more thorough cleanup
@@ -1337,7 +1337,7 @@ export class InstrumentEngine {
         }
       }
       
-      console.log("✅ Emergency cleanup completed");
+      
     } catch (error) {
       console.error("Error during emergency cleanup:", error);
       // Even if emergency cleanup fails, clear the tracking

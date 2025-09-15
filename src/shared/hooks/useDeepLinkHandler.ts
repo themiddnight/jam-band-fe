@@ -15,7 +15,7 @@ export const useDeepLinkHandler = () => {
             `${window.location.origin}/invite/%s`
           );
         } catch (error) {
-          console.log('Protocol handler registration not supported or failed:', error);
+          
         }
       }
     };
@@ -57,7 +57,7 @@ export const useDeepLinkHandler = () => {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.has('share-target')) {
         // Handle shared content if needed
-        console.log('App launched as share target');
+        
       }
     };
 

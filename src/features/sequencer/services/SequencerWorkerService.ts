@@ -40,7 +40,7 @@ export class SequencerWorkerService {
       // Clean up URL
       URL.revokeObjectURL(workerUrl);
       
-      console.log('🎵 SequencerWorkerService initialized successfully');
+      
     } catch (error) {
       console.error('Failed to initialize SequencerWorker:', error);
       // Fallback: disable worker functionality
@@ -59,7 +59,7 @@ export class SequencerWorkerService {
           this.settings = { speed: 0.25, length: 16, displayMode: 'full' };
           this.currentBank = 'A';
           this.stepsData = [];
-          console.log('🎵 SequencerWorker initialized in background thread');
+          
         }
 
         /**
@@ -74,7 +74,7 @@ export class SequencerWorkerService {
           );
           
           const endTime = performance.now();
-          console.log('🎵 Worker processed beat ' + beat + ' with ' + steps.length + ' steps in ' + (endTime - startTime).toFixed(2) + 'ms');
+          
           
           return steps;
         }
@@ -113,7 +113,7 @@ export class SequencerWorkerService {
           });
           
           const endTime = performance.now();
-          console.log('🎵 Worker batch processed ' + beats.length + ' beats in ' + (endTime - startTime).toFixed(2) + 'ms');
+          
           
           return results;
         }
@@ -124,22 +124,22 @@ export class SequencerWorkerService {
         updateState(newState) {
           if (newState.banks) {
             this.banks = newState.banks;
-            console.log('🎵 Worker updated banks:', Object.keys(this.banks));
+            
           }
           
           if (newState.settings) {
             this.settings = { ...this.settings, ...newState.settings };
-            console.log('🎵 Worker updated settings:', this.settings);
+            
           }
           
           if (newState.currentBank) {
             this.currentBank = newState.currentBank;
-            console.log('🎵 Worker switched to bank:', this.currentBank);
+            
           }
           
           if (newState.stepsData) {
             this.stepsData = newState.stepsData;
-            console.log('🎵 Worker updated steps data:', this.stepsData.length + ' total steps');
+            
           }
         }
 
@@ -170,7 +170,7 @@ export class SequencerWorkerService {
           }
           
           const endTime = performance.now();
-          console.log('🎵 Worker preprocessed sequence in ' + (endTime - startTime).toFixed(2) + 'ms');
+          
           
           return beatLookup;
         }
@@ -237,7 +237,7 @@ export class SequencerWorkerService {
 
     if (type === 'READY') {
       this.isReady = true;
-      console.log('🎵 SequencerWorker is ready');
+      
       return;
     }
 
@@ -324,7 +324,7 @@ export class SequencerWorkerService {
     // Simple fallback implementations for when worker fails
     switch (type) {
       case 'PROCESS_BEAT_STEPS':
-        console.log('🎵 Fallback: processing beat steps on main thread');
+        
         return []; // Return empty for fallback
       case 'PROCESS_BEAT_CHANGE':
         return { 
@@ -464,7 +464,7 @@ export class SequencerWorkerService {
     }
     this.pendingRequests.clear();
     this.isReady = false;
-    console.log('🎵 SequencerWorkerService destroyed');
+    
   }
 }
 

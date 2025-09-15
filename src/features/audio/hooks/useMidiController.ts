@@ -185,7 +185,7 @@ export const useMidiController = ({
         );
 
       if (hasStateChange) {
-        console.log("Window focused - refreshing MIDI devices");
+        
         refreshMidiDevices();
       }
     }
@@ -205,7 +205,7 @@ export const useMidiController = ({
         );
 
       if (hasStateChange) {
-        console.log("Tab became visible - refreshing MIDI devices");
+        
         refreshMidiDevices();
       }
     }

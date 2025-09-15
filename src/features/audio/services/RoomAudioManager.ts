@@ -83,10 +83,6 @@ export class RoomAudioManager {
     this.errorRecoveryService.onRecovery(({ action, context }) => {
       this.handleAudioRecovery(action, context);
     });
-
-    this.errorRecoveryService.onUserFeedback((message, type) => {
-      console.log(`🎵 RoomAudioManager ${type.toUpperCase()}: ${message}`);
-    });
   }
 
   /**
@@ -123,7 +119,7 @@ export class RoomAudioManager {
           break;
 
         case RecoveryAction.NO_ACTION:
-          console.log("🔧 RoomAudioManager: No recovery action needed");
+          
           break;
 
         default:
@@ -142,7 +138,7 @@ export class RoomAudioManager {
    * Retry audio initialization
    */
   private async retryAudioInitialization(): Promise<void> {
-    console.log("🔄 RoomAudioManager: Retrying audio initialization");
+    
 
     try {
       // Reset initialization state
@@ -157,7 +153,7 @@ export class RoomAudioManager {
       }
 
       this.isInitialized = true;
-      console.log("✅ RoomAudioManager: Audio initialization retry successful");
+      
     } catch (error) {
       console.error(
         "❌ RoomAudioManager: Audio initialization retry failed",
@@ -171,7 +167,7 @@ export class RoomAudioManager {
    * Fallback to basic audio mode
    */
   private async fallbackToBasicAudio(): Promise<void> {
-    console.log("🔄 RoomAudioManager: Falling back to basic audio mode");
+    
 
     try {
       // Try to create a basic AudioContext
@@ -187,7 +183,7 @@ export class RoomAudioManager {
       }
 
       this.isInitialized = true;
-      console.log("✅ RoomAudioManager: Basic audio mode initialized");
+      
     } catch (error) {
       console.error("❌ RoomAudioManager: Basic audio fallback failed", error);
       throw error;
@@ -198,7 +194,7 @@ export class RoomAudioManager {
    * Reinitialize entire audio system
    */
   private async reinitializeAudioSystem(): Promise<void> {
-    console.log("🔄 RoomAudioManager: Reinitializing audio system");
+    
 
     // Clean up current state
     this.cleanup();
@@ -780,7 +776,7 @@ export class RoomAudioManager {
    * Clean up when leaving room - Requirement 10.4
    */
   cleanup(): void {
-    console.log("🎵 RoomAudioManager: Cleaning up room audio resources");
+    
 
     // Clear all tracking data
     this.roomUsers.clear();
@@ -813,7 +809,7 @@ export class RoomAudioManager {
     this.audioContext = null;
     this.isInitialized = false;
 
-    console.log("✅ RoomAudioManager: Cleanup completed");
+    
   }
 
   /**
@@ -822,7 +818,7 @@ export class RoomAudioManager {
   async suspend(): Promise<void> {
     if (this.audioContext && this.audioContext.state === "running") {
       await this.audioContext.suspend();
-      console.log("🎵 RoomAudioManager: Audio context suspended");
+      
     }
   }
 
@@ -832,7 +828,7 @@ export class RoomAudioManager {
   async resume(): Promise<void> {
     if (this.audioContext && this.audioContext.state === "suspended") {
       await this.audioContext.resume();
-      console.log("🎵 RoomAudioManager: Audio context resumed");
+      
     }
   }
 }

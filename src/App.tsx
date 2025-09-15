@@ -1,5 +1,5 @@
 import { routes, type AppRoute } from "./app-config";
-import { useUserStore, PWAUpdatePrompt } from "@/shared";
+import { useUserStore, PWAUpdatePrompt, ErrorBoundary } from "@/shared";
 import { useDeepLinkHandler } from "./shared/hooks/useDeepLinkHandler";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useLayoutEffect } from "react";
@@ -19,13 +19,15 @@ export default function App() {
   }, [ensureUserId]);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <Routes>
-        {routes.map(({ path, component: Component }: AppRoute) => (
-          <Route key={path} path={path} element={<Component />} />
-        ))}
-      </Routes>
-      <PWAUpdatePrompt />
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <Routes>
+          {routes.map(({ path, component: Component }: AppRoute) => (
+            <Route key={path} path={path} element={<Component />} />
+          ))}
+        </Routes>
+        <PWAUpdatePrompt />
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

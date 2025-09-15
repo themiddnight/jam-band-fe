@@ -53,7 +53,7 @@ export class AdaptiveAudioManager {
     // Start performance monitoring
     this.startPerformanceMonitoring();
 
-    console.log("🎵 AdaptiveAudioManager initialized");
+    
   }
 
   // Update user count and automatically adjust configuration
@@ -273,7 +273,7 @@ export class AdaptiveAudioManager {
       this.performanceMonitorInterval = null;
     }
 
-    console.log("🎵 AdaptiveAudioManager cleaned up");
+    
   }
 }
 

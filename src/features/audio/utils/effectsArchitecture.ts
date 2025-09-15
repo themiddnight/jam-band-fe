@@ -695,7 +695,31 @@ export class MixerEngine {
     if (!channel) return;
     // Clamp to reasonable range: 0 to ~4 (equivalent to -∞dB to +12dB)
     const v = Math.max(0, Math.min(4, volume));
-    channel.outputGain.gain.setValueAtTime(v, this.context.currentTime);
+    
+    // WebKit-specific handling for volume changes
+    const isWebKit = /webkit/i.test(navigator.userAgent);
+    
+    if (isWebKit) {
+      // Safari/WebKit fix: Set immediate value first, then schedule change
+      // This ensures the value is set even if timing is problematic
+      try {
+        // Cancel any pending automation to avoid InvalidStateError
+        channel.outputGain.gain.cancelScheduledValues(this.context.currentTime);
+        
+        // Set value immediately for WebKit
+        channel.outputGain.gain.value = v;
+        
+        // Also schedule the change slightly in the future for consistency
+        channel.outputGain.gain.setValueAtTime(v, this.context.currentTime + 0.01);
+      } catch (error) {
+        // Fallback: just set the value directly if scheduling fails
+        console.warn("WebKit volume scheduling failed, using direct assignment:", error);
+        channel.outputGain.gain.value = v;
+      }
+    } else {
+      // Standard implementation for other browsers
+      channel.outputGain.gain.setValueAtTime(v, this.context.currentTime);
+    }
   }
 
   /**

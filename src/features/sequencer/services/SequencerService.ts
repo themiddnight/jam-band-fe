@@ -42,7 +42,7 @@ export class SequencerService {
       // Mark as initialized even if AudioContext isn't ready yet
       // AudioContext will be started when needed (e.g., on play button click)
       this.isInitialized = true;
-      console.log("🎵 Sequencer Service initialized (AudioContext will start on user interaction)");
+      
     } catch (error) {
       const errorMessage = `Failed to initialize sequencer: ${error}`;
       console.error(errorMessage);
@@ -54,7 +54,7 @@ export class SequencerService {
    * Update sequencer settings
    */
   updateSettings(bpm: number, speed: SequencerSpeed, length: number): void {
-    console.log(`🎵 SequencerService: Updating settings - BPM: ${bpm}, Speed: ${speed}, Length: ${length}`);
+    
     const lengthChanged = this.sequenceLength !== length;
     
     this.currentBPM = bpm;
@@ -85,7 +85,7 @@ export class SequencerService {
     });
     
     this.stepsData = steps;
-    console.log("🎵 Steps data updated, stepsData length:", this.stepsData.length);
+    
     
     // Precompute beat data for fast access during playback (main thread optimization)
     this.precomputeBeatData();
@@ -133,8 +133,6 @@ export class SequencerService {
    * This moves the heavy computation out of the critical timing path
    */
   private precomputeBeatData(): void {
-    const startTime = performance.now();
-    
     // Clear existing cache
     this.beatStepsCache.clear();
     
@@ -145,9 +143,6 @@ export class SequencerService {
       );
       this.beatStepsCache.set(beat, stepsForBeat);
     }
-    
-    const endTime = performance.now();
-    console.log(`🎵 Precomputed beat data for ${this.sequenceLength} beats in ${(endTime - startTime).toFixed(2)}ms`);
   }
 
   /**
@@ -173,7 +168,7 @@ export class SequencerService {
     
     // Check if Tone.js context is ready
     if (Tone.getContext().state !== "running") {
-      console.log("🎵 Tone.js context not ready, starting audio context...");
+      
       await Tone.start();
     }
 
@@ -190,7 +185,7 @@ export class SequencerService {
       // Ignore transport assignment errors in environments where it's immutable
     }
 
-    console.log("🎵 Tone.js context state:", Tone.getContext().state);
+    
 
     try {
       // Stop any existing sequence
@@ -210,7 +205,7 @@ export class SequencerService {
         // Manual scheduling mode aligned to websocket ticks
         this.isPlaying = true;
         this.currentBeatIndex = 0;
-        console.log("🎵 Manual sequencer: ready, waiting for metronome tick...");
+        
         // Actual start happens in syncWithMetronome when startOnNextTick is true
       } else {
         // Tone.Sequence mode (fallback)
@@ -258,18 +253,18 @@ export class SequencerService {
         if (typeof nextStartOffsetSeconds === "number" && nextStartOffsetSeconds > 0) {
           this.scheduledStartTime = Tone.now() + nextStartOffsetSeconds;
           this.sequence.start(`+${nextStartOffsetSeconds}`);
-          console.log(`🎵 Sequencer scheduled to start in: +${nextStartOffsetSeconds}s (at ~${this.scheduledStartTime}), current time: ${Tone.now()}`);
+          
         } else {
           this.scheduledStartTime = null;
           this.sequence.start();
-          console.log("🎵 Sequencer started immediately at:", Tone.now());
+          
         }
 
-        console.log("🎵 Sequence started successfully");
+        
         this.isPlaying = true;
       }
 
-      console.log(`🎵 Sequencer playback started - Mode: ${this.useManualScheduling ? 'manual' : 'sequence'}, Interval: ${stepInterval}s`);
+      
 
     } catch (error) {
       const errorMessage = `Failed to start sequencer: ${error}`;
@@ -296,7 +291,7 @@ export class SequencerService {
     
     this.isPlaying = false;
     this.scheduledStartTime = null;
-    console.log("🎵 Sequencer playback stopped");
+    
   }
 
   /**
@@ -307,7 +302,7 @@ export class SequencerService {
       this.sequence.stop();
     }
     this.isPlaying = false;
-    console.log("🎵 Sequencer playback paused");
+    
   }
 
   /**
@@ -317,7 +312,7 @@ export class SequencerService {
     if (this.sequence) {
       this.sequence.start();
       this.isPlaying = true;
-      console.log("🎵 Sequencer playback resumed");
+      
     }
   }
 
@@ -325,11 +320,6 @@ export class SequencerService {
    * Synchronize with metronome tick
    */
   syncWithMetronome(metronomeTime: number, bpm: number): void {
-    // Only log occasionally to reduce spam
-    if (Math.random() < 0.05) {
-      console.log("🎵 Syncing with metronome:", { metronomeTime, bpm, wasWaiting: !this.isPlaying && this.scheduledStartTime });
-    }
-    
     this.lastMetronomeTime = metronomeTime;
     this.currentBPM = bpm;
 
@@ -341,7 +331,7 @@ export class SequencerService {
       const speedConfig = SEQUENCER_SPEEDS.find(s => s.value === this.currentSpeed)!;
       const stepsPerBeat = speedConfig.bpmMultiplier; // e.g., 8 for 1/8, 4 for 1/4
       
-      console.log(`🎵 DEBUG: speed=${this.currentSpeed}, stepsPerBeat=${stepsPerBeat}, isPlaying=${this.isPlaying}`);
+      
       
       // Start on this tick if requested
       if (this.startOnNextTick) {
@@ -349,7 +339,7 @@ export class SequencerService {
         this.currentBeatIndex = 0;
         this.tickCounter = 0; // Reset tick counter on start
         this.previousSpeed = this.currentSpeed;
-        console.log(`🎵 Starting sequencer: currentBeatIndex=${this.currentBeatIndex}`);
+        
       }
       
       // Reset tick counter if speed changed during playback (for instant speed changes)
@@ -370,7 +360,7 @@ export class SequencerService {
         const beatsThisTick = Math.round(stepsPerBeat);
         const subInterval = (60 / this.currentBPM) / beatsThisTick; // Time between beats within this tick
         
-        console.log(`🎵 Fast speed path: playing ${beatsThisTick} beats sequentially this tick`);
+        
         
         // Use RAF-based scheduling for better timing precision
         const startTime = performance.now();
@@ -386,13 +376,13 @@ export class SequencerService {
             const timeDiff = targetTime - currentTime;
             
             if (timeDiff <= 16.67) { // Within one frame (60fps = 16.67ms)
-              console.log(`🎵 Fast beat ${i+1}/${beatsThisTick}: beat=${beat} (RAF scheduled)`);
+              
               
               // For beat 0, notify beat change FIRST to allow bank switching before playing steps
               if (beat === 0) {
-                console.log(`🎵 Beat 0: calling onBeatChange first`);
+                
                 this.events.onBeatChange(beat);
-                console.log(`🎵 Beat 0: onBeatChange completed, now calling onPlayStep`);
+                
                 
                 // Use queueMicrotask to ensure state updates are processed before playing steps
                 const playStepsAfterBankSwitch = () => {
@@ -413,7 +403,7 @@ export class SequencerService {
               } else {
                 // For non-zero beats, play steps first then notify beat change (normal order)
                 const stepsForBeat = this.getStepsForBeatSync(beat);
-                console.log(`🎵 Found ${stepsForBeat.length} steps for beat ${beat}`);
+                
                 if (stepsForBeat.length > 0) {
                   this.events.onPlayStep(stepsForBeat);
                 }
@@ -433,18 +423,18 @@ export class SequencerService {
         
         // Advance beat index by the number of beats we played
         this.currentBeatIndex = (this.currentBeatIndex + beatsThisTick) % this.sequenceLength;
-        console.log(`🎵 Advanced by ${beatsThisTick} beats: currentBeatIndex=${this.currentBeatIndex}`);
+        
       } else {
         // Slow speeds: Wait multiple ticks before advancing one step
         const ticksPerBeat = Math.round(1 / stepsPerBeat); // e.g., speed 4 = wait 4 ticks per beat
         
-        console.log(`🎵 Slow speed path: waiting ${ticksPerBeat} ticks per beat (current tick ${this.tickCounter})`);
+        
         
         if (this.tickCounter % ticksPerBeat === 0) {
           // Time to play a beat
           const beat = this.currentBeatIndex % this.sequenceLength;
           
-          console.log(`🎵 Slow beat: playing beat=${beat} after ${ticksPerBeat} ticks`);
+          
           
           // For beat 0, notify beat change FIRST to allow bank switching before playing steps
           if (beat === 0) {
@@ -469,7 +459,7 @@ export class SequencerService {
           } else {
             // For non-zero beats, play steps first then notify beat change (normal order)
             const stepsForBeat = this.getStepsForBeatSync(beat);
-            console.log(`🎵 Found ${stepsForBeat.length} steps for beat ${beat}`);
+            
             if (stepsForBeat.length > 0) {
               this.events.onPlayStep(stepsForBeat);
             }
@@ -480,7 +470,7 @@ export class SequencerService {
           
           // Advance to next beat
           this.currentBeatIndex = (this.currentBeatIndex + 1) % this.sequenceLength;
-          console.log(`🎵 Advanced to next beat: currentBeatIndex=${this.currentBeatIndex}`);
+          
         }
       }
 
@@ -490,7 +480,7 @@ export class SequencerService {
 
     // If we're waiting to start, begin immediately on this tick (Tone.Sequence mode)
     if (!this.isPlaying && this.startOnNextTick) {
-      console.log("🎵 Starting playback on metronome tick");
+      
       this.startOnNextTick = false;
       this.startPlayback();
     }
@@ -527,17 +517,6 @@ export class SequencerService {
 
     const speedConfig = SEQUENCER_SPEEDS.find(s => s.value === this.currentSpeed);
     if (!speedConfig) return;
-
-    const baseInterval = 60 / this.currentBPM;
-    const stepInterval = baseInterval / speedConfig.bpmMultiplier;
-
-    // Need to recreate sequence with new interval since Tone.js doesn't allow direct interval updates
-    // For now, we'll handle this in the main sequencer hook when settings change
-    
-    // Only log occasionally to reduce spam
-    if (Math.random() < 0.02) {
-      console.log(`🎵 Sequencer settings updated - BPM: ${this.currentBPM}, Speed: ${speedConfig.label}, Interval: ${stepInterval}s`);
-    }
   }
 
   /**
@@ -546,7 +525,7 @@ export class SequencerService {
   private updateSequenceSteps(): void {
     // Note: For Tone.js sequences, we can't dynamically update the callback easily,
     // so we rely on the stepsData being updated and the callback reading from it
-    console.log(`🎵 Sequencer steps updated - ${this.stepsData.length} total steps`);
+    
   }
 
   /**
@@ -604,6 +583,6 @@ export class SequencerService {
   dispose(): void {
     this.stopPlayback();
     this.isInitialized = false;
-    console.log("🎵 Sequencer Service disposed");
+    
   }
 } 
