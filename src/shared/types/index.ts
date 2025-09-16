@@ -13,6 +13,7 @@ export interface RoomUser {
   currentInstrument?: string;
   currentCategory?: string;
   isReady: boolean;
+  followRoomOwner?: boolean;
 }
 
 export interface Room {
@@ -24,6 +25,10 @@ export interface Room {
   isPrivate: boolean;
   isHidden: boolean;
   createdAt: Date;
+  ownerScale?: {
+    rootNote: string;
+    scale: Scale;
+  };
 }
 
 // Music-related types
@@ -43,4 +48,28 @@ export interface Instrument {
   type?: string;
   polyphony?: string;
   icon?: string;
+}
+
+// Scale follow event types
+export interface RoomOwnerScaleChangeData {
+  rootNote: string;
+  scale: Scale;
+}
+
+export interface RoomOwnerScaleChangedEvent {
+  rootNote: string;
+  scale: Scale;
+  ownerId: string;
+}
+
+export interface ToggleFollowRoomOwnerData {
+  followRoomOwner: boolean;
+}
+
+export interface FollowRoomOwnerToggledEvent {
+  followRoomOwner: boolean;
+  ownerScale?: {
+    rootNote: string;
+    scale: Scale;
+  };
 }

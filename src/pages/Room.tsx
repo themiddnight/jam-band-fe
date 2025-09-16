@@ -125,6 +125,10 @@ const Room = memo(() => {
     onSequencerStateRequested,
     onSequencerStateReceived,
 
+    // Scale follow handlers
+    handleRoomOwnerScaleChange,
+    handleToggleFollowRoomOwner,
+
     // Socket connection
     getActiveSocket,
   } = useRoom();
@@ -607,10 +611,44 @@ const Room = memo(() => {
     }
   }, [initialize, getSelectedSlot, scaleState]);
 
+  // Initialize room owner's scale in backend when room owner joins
+  useEffect(() => {
+    // Only run for room owners and when connected to room
+    if (
+      currentUser?.role === 'room_owner' && 
+      isConnected && 
+      scaleState.rootNote && 
+      scaleState.scale &&
+      connectionState === ConnectionState.IN_ROOM
+    ) {
+      // Check if room doesn't have owner scale set yet
+      if (!currentRoom?.ownerScale) {
+        console.log("🎵 Initializing room owner scale in backend:", {
+          rootNote: scaleState.rootNote,
+          scale: scaleState.scale
+        });
+        handleRoomOwnerScaleChange(scaleState.rootNote, scaleState.scale);
+      }
+    }
+  }, [
+    currentUser?.role, 
+    isConnected, 
+    connectionState, 
+    scaleState.rootNote, 
+    scaleState.scale, 
+    currentRoom?.ownerScale, 
+    handleRoomOwnerScaleChange
+  ]);
+
   // Setup scale slot keyboard shortcuts
   useScaleSlotKeyboard((rootNote, scale) => {
     scaleState.setRootNote(rootNote);
     scaleState.setScale(scale);
+    
+    // If user is room owner, broadcast the scale change
+    if (currentUser?.role === 'room_owner') {
+      handleRoomOwnerScaleChange(rootNote, scale);
+    }
   });
 
   // Computed values
@@ -1002,7 +1040,18 @@ const Room = memo(() => {
                   onSlotSelect={(rootNote, scale) => {
                     scaleState.setRootNote(rootNote);
                     scaleState.setScale(scale);
+                    
+                    // If user is room owner, broadcast the scale change
+                    if (currentUser?.role === 'room_owner') {
+                      handleRoomOwnerScaleChange(rootNote, scale);
+                    }
                   }}
+                  currentUser={currentUser}
+                  isRoomOwner={currentUser?.role === 'room_owner'}
+                  followRoomOwner={currentUser?.followRoomOwner || false}
+                  onToggleFollowRoomOwner={handleToggleFollowRoomOwner}
+                  disabled={currentUser?.followRoomOwner || false}
+                  ownerScale={currentRoom?.ownerScale}
                 />
 
                 <InstrumentCategorySelector

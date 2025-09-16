@@ -606,7 +606,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
             );
             instrumentChangedCallbackRef.current(data);
           } else {
-            
+            console.log("🔧 No instrument changed callback set");
           }
         },
       );
@@ -633,7 +633,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
           if (autoSendSynthParamsToNewUserCallbackRef.current) {
             autoSendSynthParamsToNewUserCallbackRef.current(data);
           } else {
-            
+            console.log("🔧 No autoSendSynthParamsToNewUser callback set");
           }
         },
       );
@@ -645,7 +645,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
           if (sendCurrentSynthParamsToNewUserCallbackRef.current) {
             sendCurrentSynthParamsToNewUserCallbackRef.current(data);
           } else {
-            
+            console.log("🔧 No sendCurrentSynthParamsToNewUser callback set");
           }
         },
       );
@@ -657,7 +657,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
           if (requestCurrentSynthParamsForNewUserCallbackRef.current) {
             requestCurrentSynthParamsForNewUserCallbackRef.current(data);
           } else {
-            
+            console.log("🔧 No requestCurrentSynthParamsForNewUser callback set");
           }
         },
       );
@@ -669,7 +669,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
           if (sendSynthParamsToNewUserNowCallbackRef.current) {
             sendSynthParamsToNewUserNowCallbackRef.current(data);
           } else {
-            
+            console.log("🔧 No sendSynthParamsToNewUserNow callback set");
           }
         },
       );
@@ -1073,6 +1073,21 @@ export const useRoomSocket = (instrumentManager?: any) => {
     [safeEmit],
   );
 
+  // Scale follow functions
+  const changeRoomOwnerScale = useCallback(
+    (rootNote: string, scale: import('../../../shared/types').Scale) => {
+      safeEmit("room_owner_scale_change", { rootNote, scale });
+    },
+    [safeEmit],
+  );
+
+  const toggleFollowRoomOwner = useCallback(
+    (followRoomOwner: boolean) => {
+      safeEmit("toggle_follow_room_owner", { followRoomOwner });
+    },
+    [safeEmit],
+  );
+
   // Event handler setters
   const onNoteReceived = useCallback(
     (callback: (data: NoteReceivedData) => void) => {
@@ -1425,6 +1440,57 @@ export const useRoomSocket = (instrumentManager?: any) => {
     [getActiveSocket],
   );
 
+  // Scale follow event handlers
+  const onRoomOwnerScaleChanged = useCallback(
+    (callback: (data: import('../../../shared/types').RoomOwnerScaleChangedEvent) => void) => {
+      const socket = getActiveSocket();
+      if (!socket) {
+        console.log("🔧 No active socket for onRoomOwnerScaleChanged");
+        return () => {};
+      }
+
+      console.log("🎵 Setting up room_owner_scale_changed listener on socket:", socket.id);
+
+      const handleRoomOwnerScaleChanged = (data: import('../../../shared/types').RoomOwnerScaleChangedEvent) => {
+        console.log("🎵 Room owner scale changed:", data);
+        callback(data);
+      };
+
+      socket.on("room_owner_scale_changed", handleRoomOwnerScaleChanged);
+
+      return () => {
+        console.log("🔧 Cleaning up room_owner_scale_changed listener");
+        socket.off("room_owner_scale_changed", handleRoomOwnerScaleChanged);
+      };
+    },
+    [getActiveSocket],
+  );
+
+  const onFollowRoomOwnerToggled = useCallback(
+    (callback: (data: import('../../../shared/types').FollowRoomOwnerToggledEvent) => void) => {
+      const socket = getActiveSocket();
+      if (!socket) {
+        console.log("🔧 No active socket for onFollowRoomOwnerToggled");
+        return () => {};
+      }
+
+      console.log("🎵 Setting up follow_room_owner_toggled listener on socket:", socket.id);
+
+      const handleFollowRoomOwnerToggled = (data: import('../../../shared/types').FollowRoomOwnerToggledEvent) => {
+        console.log("🎵 Follow room owner toggled:", data);
+        callback(data);
+      };
+
+      socket.on("follow_room_owner_toggled", handleFollowRoomOwnerToggled);
+
+      return () => {
+        console.log("🔧 Cleaning up follow_room_owner_toggled listener");
+        socket.off("follow_room_owner_toggled", handleFollowRoomOwnerToggled);
+      };
+    },
+    [getActiveSocket],
+  );
+
   // Cleanup function
   const cleanup = useCallback(() => {
     if (batchTimeoutRef.current) {
@@ -1503,6 +1569,12 @@ export const useRoomSocket = (instrumentManager?: any) => {
     onSwapCancelled,
     onSwapCompleted,
     onUserKicked,
+    onRoomOwnerScaleChanged,
+    onFollowRoomOwnerToggled,
+
+    // Scale functions
+    changeRoomOwnerScale,
+    toggleFollowRoomOwner,
 
     // Utilities
     getActiveSocket,

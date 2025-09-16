@@ -6,6 +6,7 @@ import { useRoomStore } from "@/features/rooms";
 import { useScaleState } from "@/features/ui";
 import { InstrumentCategory } from "@/shared/constants/instruments";
 import { useUserStore } from "@/shared/stores/userStore";
+import { useScaleSlotsStore } from "@/shared/stores/scaleSlotsStore";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import type { Socket } from "socket.io-client";
@@ -103,13 +104,25 @@ export const useRoom = () => {
     onSequencerStateRequested,
     onSequencerStateReceived,
 
+    // Scale follow handlers
+    onRoomOwnerScaleChanged,
+    onFollowRoomOwnerToggled,
+    changeRoomOwnerScale,
+    toggleFollowRoomOwner,
+
     getActiveSocket,
     cleanup: socketCleanup,
   } = useRoomSocket();
 
   // Room store
-  const { currentRoom, currentUser, pendingApproval, clearRoom } =
-    useRoomStore();
+  const { 
+    currentRoom, 
+    currentUser, 
+    pendingApproval, 
+    clearRoom,
+    updateOwnerScale,
+    updateUserFollowMode,
+  } = useRoomStore();
 
   // Sequencer store
   const sequencerStore = useSequencerStore();
@@ -125,6 +138,9 @@ export const useRoom = () => {
 
   // Scale state
   const scaleState = useScaleState();
+  
+  // Scale slots store
+  const { setSlot, getSelectedSlot } = useScaleSlotsStore();
 
   // Socket ref for ping measurement - needs to be updated when active socket changes
   const socketRef = useRef<Socket | null>(getActiveSocket());
@@ -916,6 +932,84 @@ export const useRoom = () => {
     setFallbackNotification(null);
   }, []);
 
+  // Scale event handlers
+  useEffect(() => {
+    if (connectionState !== ConnectionState.IN_ROOM) {
+      console.log("🎵 Skipping scale event handlers setup - not in room yet:", connectionState);
+      return;
+    }
+
+    console.log("🎵 Setting up scale event handlers");
+    
+    const unsubscribeOwnerScaleChanged = onRoomOwnerScaleChanged((data) => {
+      console.log("🎵 Room owner scale changed received:", data);
+      updateOwnerScale(data.rootNote, data.scale);
+      
+      // If current user is following room owner, update their scale too
+      if (currentUser?.followRoomOwner) {
+        scaleState.setRootNote(data.rootNote);
+        scaleState.setScale(data.scale);
+        
+        // Also update the current scale slot to match the new scale
+        const selectedSlot = getSelectedSlot();
+        if (selectedSlot) {
+          setSlot(selectedSlot.id, data.rootNote, data.scale);
+        }
+      }
+    });
+
+    const unsubscribeFollowToggled = onFollowRoomOwnerToggled((data) => {
+      console.log("🎵 Follow room owner toggled:", data);
+      if (currentUser) {
+        updateUserFollowMode(currentUser.id, data.followRoomOwner);
+        
+        // If user just turned ON follow mode and there's an owner scale, sync immediately
+        if (data.followRoomOwner && data.ownerScale) {
+          console.log("🎵 Syncing to room owner scale:", data.ownerScale);
+          scaleState.setRootNote(data.ownerScale.rootNote);
+          scaleState.setScale(data.ownerScale.scale);
+          
+          // Also update the current scale slot to match
+          const selectedSlot = getSelectedSlot();
+          if (selectedSlot) {
+            setSlot(selectedSlot.id, data.ownerScale.rootNote, data.ownerScale.scale);
+          }
+        }
+      }
+    });
+
+    return () => {
+      unsubscribeOwnerScaleChanged();
+      unsubscribeFollowToggled();
+    };
+  }, [connectionState, onRoomOwnerScaleChanged, onFollowRoomOwnerToggled, updateOwnerScale, updateUserFollowMode, currentUser, scaleState, getSelectedSlot, setSlot]);
+
+  // Scale handlers
+  const handleRoomOwnerScaleChange = useCallback((rootNote: string, scale: import('../../../shared/types').Scale) => {
+    if (currentUser?.role === 'room_owner') {
+      changeRoomOwnerScale(rootNote, scale);
+    }
+  }, [currentUser?.role, changeRoomOwnerScale]);
+
+  const handleToggleFollowRoomOwner = useCallback((follow: boolean) => {
+    if (currentUser?.role === 'band_member') {
+      toggleFollowRoomOwner(follow);
+      
+      // If turning ON follow mode and room owner has a scale, sync immediately
+      if (follow && currentRoom?.ownerScale) {
+        console.log("🎵 Immediately syncing to room owner scale:", currentRoom.ownerScale);
+        scaleState.setRootNote(currentRoom.ownerScale.rootNote);
+        scaleState.setScale(currentRoom.ownerScale.scale);
+        
+        // Also update the current scale slot to match
+        const selectedSlot = getSelectedSlot();
+        if (selectedSlot) {
+          setSlot(selectedSlot.id, currentRoom.ownerScale.rootNote, currentRoom.ownerScale.scale);
+        }
+      }
+    }
+  }, [currentUser?.role, toggleFollowRoomOwner, currentRoom?.ownerScale, scaleState, getSelectedSlot, setSlot]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -1006,6 +1100,10 @@ export const useRoom = () => {
     sendSequencerState,
     onSequencerStateRequested,
     onSequencerStateReceived,
+
+    // Scale follow handlers
+    handleRoomOwnerScaleChange,
+    handleToggleFollowRoomOwner,
 
     // Socket connection
     socketRef,

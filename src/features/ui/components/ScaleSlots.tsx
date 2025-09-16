@@ -5,7 +5,7 @@ import {
   getScaleSlotLabel,
 } from "@/shared/constants/scaleSlots";
 import { useScaleSlotsStore } from "@/shared/stores/scaleSlotsStore";
-import type { Scale } from "@/shared/types";
+import type { Scale, RoomUser } from "@/shared/types";
 import { useRef, useState } from "react";
 import type {
   MouseEvent as ReactMouseEvent,
@@ -14,9 +14,26 @@ import type {
 
 export interface ScaleSlotsProps {
   onSlotSelect: (rootNote: string, scale: Scale) => void;
+  currentUser?: RoomUser | null;
+  isRoomOwner?: boolean;
+  followRoomOwner?: boolean;
+  onToggleFollowRoomOwner?: (follow: boolean) => void;
+  disabled?: boolean;
+  ownerScale?: {
+    rootNote: string;
+    scale: Scale;
+  } | null;
 }
 
-export default function ScaleSlots({ onSlotSelect }: ScaleSlotsProps) {
+export default function ScaleSlots({
+  onSlotSelect,
+  currentUser,
+  isRoomOwner = false,
+  followRoomOwner = false,
+  onToggleFollowRoomOwner,
+  disabled = false,
+  ownerScale = null
+}: ScaleSlotsProps) {
   const { slots, selectedSlotId, selectSlot, setSlot } = useScaleSlotsStore();
   const [showPopup, setShowPopup] = useState(false);
   const [editingSlot, setEditingSlot] = useState<number | null>(null);
@@ -31,6 +48,8 @@ export default function ScaleSlots({ onSlotSelect }: ScaleSlotsProps) {
   const anchorRef = useRef<HTMLElement | null>(null);
 
   const handleSlotClick = (slotId: number) => {
+    if (disabled) return;
+
     const slot = slots.find((s) => s.id === slotId);
     if (slot) {
       selectSlot(slotId);
@@ -96,39 +115,70 @@ export default function ScaleSlots({ onSlotSelect }: ScaleSlotsProps) {
     }
   };
 
+  // Show follow checkbox only for band members (not room owner or audience)
+  const showFollowCheckbox = currentUser?.role === 'band_member' && !isRoomOwner;
+
   return (
     <>
       <div className="card bg-base-100 shadow-lg grow">
         <div className="card-body p-3">
-          <div className="flex justify-center items-center gap-2 my-auto">
+          <div className="flex justify-center items-center gap-3 my-auto">
             <label className="label py-1">
               <span className="label-text hidden lg:block text-xs">Scale</span>
             </label>
-            <div className="join flex-wrap">
-              {Array.from({ length: SCALE_SLOT_COUNT }, (_, index) => {
-                const slotId = index + 1;
-                const slot = slots.find((s) => s.id === slotId);
-                const isSelected = selectedSlotId === slotId;
 
-                return (
-                  <button
-                    key={slotId}
-                    onClick={() => handleSlotClick(slotId)}
-                    onDoubleClick={(e) => handleSlotDoubleClick(slotId, e)}
-                    onTouchEnd={(e) => handleSlotTouch(slotId, e)}
-                    className={`btn btn-xs lg:btn-sm join-item ${
-                      isSelected ? "btn-accent" : "btn-outline"
-                    }`}
-                    title={`Slot ${slotId}: ${slot ? getScaleSlotLabel(slot.rootNote, slot.scale) : ""} (Press ${slotId}, Double-click/tap to edit)`}
-                  >
-                    <span className="text-xs">
-                      {slot ? getScaleSlotLabel(slot.rootNote, slot.scale) : ""}
-                      <kbd className="kbd kbd-xs ml-1">{slotId}</kbd>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+            {/* Show room owner's scale when following */}
+            {followRoomOwner && ownerScale ? (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-accent">
+                    Following: {getScaleSlotLabel(ownerScale.rootNote, ownerScale.scale)}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              /* Show regular scale slots when not following */
+              <div className="join flex-wrap">
+                {Array.from({ length: SCALE_SLOT_COUNT }, (_, index) => {
+                  const slotId = index + 1;
+                  const slot = slots.find((s) => s.id === slotId);
+                  const isSelected = selectedSlotId === slotId;
+
+                  return (
+                    <button
+                      key={slotId}
+                      onClick={() => handleSlotClick(slotId)}
+                      onDoubleClick={(e) => disabled ? undefined : handleSlotDoubleClick(slotId, e)}
+                      onTouchEnd={(e) => disabled ? undefined : handleSlotTouch(slotId, e)}
+                      disabled={disabled}
+                      className={`btn btn-xs lg:btn-sm join-item ${isSelected ? "btn-accent" : "btn-outline"
+                        } ${disabled ? "btn-disabled" : ""}`}
+                      title={disabled ? "Following room owner's scale" : `Slot ${slotId}: ${slot ? getScaleSlotLabel(slot.rootNote, slot.scale) : ""} (Press ${slotId}, Double-click/tap to edit)`}
+                    >
+                      <span className="text-xs">
+                        {slot ? getScaleSlotLabel(slot.rootNote, slot.scale) : ""}
+                        <kbd className="kbd kbd-xs ml-1">{slotId}</kbd>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Follow Room Owner Checkbox */}
+            {showFollowCheckbox && (
+              <div className="flex justify-center items-center gap-1">
+                <label className="label cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={followRoomOwner}
+                    onChange={(e) => onToggleFollowRoomOwner?.(e.target.checked)}
+                    className="checkbox checkbox-sm"
+                  />
+                  <span className="label-text text-xs ml-2">Follow Room Owner</span>
+                </label>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import type { Room, RoomUser } from "../../../shared/types";
+import type { Room, RoomUser, Scale } from "../../../shared/types";
 import { ConnectionState } from "../../audio/types/connectionState";
 import { create } from "zustand";
 
@@ -26,6 +26,8 @@ interface RoomState {
   removePendingMember: (userId: string) => void;
 
   transferOwnership: (newOwnerId: string) => void;
+  updateOwnerScale: (rootNote: string, scale: Scale) => void;
+  updateUserFollowMode: (userId: string, followRoomOwner: boolean) => void;
   clearRoom: () => void;
 }
 
@@ -164,6 +166,36 @@ export const useRoomStore = create<RoomState>((set, get) => ({
         users: updatedUsers,
       },
       currentUser: updatedCurrentUser,
+    });
+  },
+
+  updateOwnerScale: (rootNote: string, scale: Scale) => {
+    const { currentRoom } = get();
+    if (!currentRoom) return;
+
+    set({
+      currentRoom: {
+        ...currentRoom,
+        ownerScale: { rootNote, scale },
+      },
+    });
+  },
+
+  updateUserFollowMode: (userId: string, followRoomOwner: boolean) => {
+    const { currentRoom, currentUser } = get();
+    if (!currentRoom) return;
+
+    const updatedUsers = currentRoom.users.map((user) =>
+      user.id === userId
+        ? { ...user, followRoomOwner }
+        : user,
+    );
+
+    set({
+      currentRoom: { ...currentRoom, users: updatedUsers },
+      currentUser: currentUser?.id === userId 
+        ? { ...currentUser, followRoomOwner }
+        : currentUser,
     });
   },
 
