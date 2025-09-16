@@ -23,7 +23,7 @@ export default function Invite() {
       console.log(
         `🎭 Invalid role parameter "${role}", defaulting to audience`,
       );
-      navigate(`/room/${roomId}`, { state: { role: "audience" } });
+      navigate(`/perform/${roomId}`, { state: { role: "audience" } });
       return;
     }
 
@@ -44,7 +44,7 @@ export default function Invite() {
     }
 
     // Redirect to room with specified role
-    navigate(`/room/${roomId}`, {
+    navigate(`/perform/${roomId}`, {
       state: { role: role as "band_member" | "audience" },
     });
   }, [roomId, searchParams, navigate, username, userId]);

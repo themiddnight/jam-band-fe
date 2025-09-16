@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { debounce } from "lodash";
 import type { Socket } from "socket.io-client";
+import type { RoomType } from "@/shared/types";
 
 /**
  * Lobby hook using the RoomSocketManager for namespace-based connections
@@ -67,6 +68,8 @@ export const useLobby = () => {
   const [tempUsername, setTempUsername] = useState("");
   const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
+  const [newRoomDescription, setNewRoomDescription] = useState("");
+  const [newRoomType, setNewRoomType] = useState<RoomType>("perform");
   const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [rejectionMessage, setRejectionMessage] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
@@ -136,7 +139,7 @@ export const useLobby = () => {
           // For public rooms or audience members, join directly
           await connectToRoom(roomId, role);
           // Navigate to room page
-          navigate(`/room/${roomId}`, { state: { role } });
+          navigate(`/perform/${roomId}`, { state: { role } });
         }
       } catch (error) {
         console.error("Failed to join room:", error);
@@ -279,14 +282,21 @@ export const useLobby = () => {
         userId,
         isPrivate,
         isHidden,
+        newRoomDescription.trim() || undefined,
+        newRoomType,
       );
 
       if (result.success) {
         // Refresh room list to show the new room
         fetchRooms();
 
-        // Navigate to the new room
-        navigate(`/room/${result.room.id}`);
+        // Navigate to the new room based on room type
+        if (result.room.roomType === "perform") {
+          navigate(`/perform/${result.room.id}`);
+        } else {
+          // For now, produce rooms redirect to perform since produce is not implemented yet
+          navigate(`/perform/${result.room.id}`);
+        }
       }
     } catch (error) {
       console.error("Failed to create room:", error);
@@ -295,10 +305,14 @@ export const useLobby = () => {
 
     setShowCreateRoomModal(false);
     setNewRoomName("");
+    setNewRoomDescription("");
+    setNewRoomType("perform");
     setIsPrivate(false);
     setIsHidden(false);
   }, [
     newRoomName,
+    newRoomDescription,
+    newRoomType,
     username,
     userId,
     isPrivate,
@@ -310,6 +324,8 @@ export const useLobby = () => {
   const handleCreateRoomModalClose = useCallback(() => {
     setShowCreateRoomModal(false);
     setNewRoomName("");
+    setNewRoomDescription("");
+    setNewRoomType("perform");
     setIsPrivate(false);
     setIsHidden(false);
   }, []);
@@ -329,6 +345,8 @@ export const useLobby = () => {
     tempUsername,
     showCreateRoomModal,
     newRoomName,
+    newRoomDescription,
+    newRoomType,
     showRejectionModal,
     rejectionMessage,
     isConnected: connectionState === ConnectionState.LOBBY,
@@ -353,6 +371,8 @@ export const useLobby = () => {
     // Setters
     setTempUsername,
     setNewRoomName,
+    setNewRoomDescription,
+    setNewRoomType,
     setIsPrivate,
     setIsHidden,
     setSearchQuery,

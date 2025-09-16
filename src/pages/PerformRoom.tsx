@@ -42,7 +42,7 @@ import { useNavigate } from "react-router-dom";
 /**
  * Room page using the RoomSocketManager for namespace-based connections
  */
-const Room = memo(() => {
+const PerformRoom = memo(() => {
   const navigate = useNavigate();
   const {
     // Room state
@@ -1365,6 +1365,6 @@ const Room = memo(() => {
   }
 });
 
-Room.displayName = "Room";
+PerformRoom.displayName = "Room";
 
-export default Room;
+export default PerformRoom;

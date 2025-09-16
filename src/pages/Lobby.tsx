@@ -18,6 +18,8 @@ export default function Lobby() {
     tempUsername,
     showCreateRoomModal,
     newRoomName,
+    newRoomDescription,
+    newRoomType,
     showRejectionModal,
     rejectionMessage,
     isConnected,
@@ -41,6 +43,8 @@ export default function Lobby() {
     // Setters
     setTempUsername,
     setNewRoomName,
+    setNewRoomDescription,
+    setNewRoomType,
     setIsPrivate,
     setIsHidden,
     setSearchQuery,
@@ -209,9 +213,12 @@ export default function Lobby() {
                         <div key={room.id} className="card bg-base-200">
                           <div className="card-body p-4">
                             <div className="flex justify-between items-start">
-                              <div>
-                                <div className="flex items-center gap-2">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <h3 className="font-semibold">{room.name}</h3>
+                                  <span className={`badge badge-sm ${room.roomType === "perform" ? "badge-primary" : "badge-secondary"}`}>
+                                    {room.roomType === "perform" ? "Perform" : "Produce"}
+                                  </span>
                                   {room.isPrivate && (
                                     <span className="badge badge-warning badge-sm">
                                       Private
@@ -223,7 +230,12 @@ export default function Lobby() {
                                     </span>
                                   )}
                                 </div>
-                                <p className="text-xs text-base-content/70">
+                                {room.description && (
+                                  <p className="text-sm text-base-content/80 mt-1">
+                                    {room.description}
+                                  </p>
+                                )}
+                                <p className="text-xs text-base-content/70 mt-1">
                                   {room.userCount} member
                                   {room.userCount !== 1 ? "s" : ""}
                                 </p>
@@ -334,6 +346,7 @@ export default function Lobby() {
             okText="Create Room"
             cancelText="Cancel"
             showOkButton={!!newRoomName.trim()}
+            size="xl"
           >
             <form
               onSubmit={(e) => {
@@ -355,6 +368,50 @@ export default function Lobby() {
                     autoFocus
                     required
                   />
+                </div>
+
+                <div className="form-control">
+                  <label className="label" htmlFor="newRoomDescription">
+                    Description (Optional)
+                  </label>
+                  <textarea
+                    id="newRoomDescription"
+                    placeholder="Describe your room..."
+                    className="textarea textarea-bordered w-full"
+                    value={newRoomDescription}
+                    onChange={(e) => setNewRoomDescription(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+
+                <div className="form-control">
+                  <label className="label">
+                    Room Type
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div 
+                      className={`card cursor-pointer transition-all ${newRoomType === "perform" ? "bg-primary text-primary-content" : "bg-base-200 hover:bg-base-300"}`}
+                      onClick={() => setNewRoomType("perform")}
+                    >
+                      <div className="card-body p-4">
+                        <h4 className="card-title text-sm">Perform Room</h4>
+                        <p className="text-xs opacity-70">
+                          Real-time jamming with instruments and voice chat
+                        </p>
+                      </div>
+                    </div>
+                    <div 
+                      className={`card cursor-not-allowed opacity-50 ${newRoomType === "produce" ? "bg-primary text-primary-content" : "bg-base-200"}`}
+                      title="Coming soon!"
+                    >
+                      <div className="card-body p-4">
+                        <h4 className="card-title text-sm">Produce Room</h4>
+                        <p className="text-xs opacity-70">
+                          Multi-track production with async editing (Coming Soon)
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="form-control">

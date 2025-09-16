@@ -5,6 +5,8 @@ import { endpoints } from "../../../shared/utils/endpoints";
 export interface Room {
   id: string;
   name: string;
+  description?: string;
+  roomType: "perform" | "produce";
   owner: string;
   isPrivate: boolean;
   isHidden: boolean;
@@ -54,6 +56,8 @@ export async function createRoom(
   userId: string,
   isPrivate: boolean = false,
   isHidden: boolean = false,
+  description?: string,
+  roomType: "perform" | "produce" = "perform",
 ): Promise<{ success: boolean; room: Room; user: User }> {
   const response = await axiosInstance.post(endpoints.createRoom, {
     name,
@@ -61,6 +65,8 @@ export async function createRoom(
     userId,
     isPrivate,
     isHidden,
+    description,
+    roomType,
   });
   return response.data;
 }

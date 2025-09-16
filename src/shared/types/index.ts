@@ -16,9 +16,13 @@ export interface RoomUser {
   followRoomOwner?: boolean;
 }
 
+export type RoomType = "perform" | "produce";
+
 export interface Room {
   id: string;
   name: string;
+  description?: string;
+  roomType: RoomType;
   owner: string;
   users: RoomUser[];
   pendingMembers: RoomUser[];

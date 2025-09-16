@@ -1,11 +1,12 @@
 import Invite from "../../pages/Invite";
 import Lobby from "../../pages/Lobby";
-import Room from "../../pages/Room";
+import PerformRoom from "../../pages/PerformRoom";
 
 export const routes = [
   { path: "/", component: Lobby },
-  { path: "/room/:roomId", component: Room },
+  { path: "/perform/:roomId", component: PerformRoom },
   { path: "/invite/:roomId", component: Invite },
+  { path: "/room/:roomId", component: PerformRoom }, // Legacy redirect support
   { path: "*", component: Lobby }, // Fallback route
 ];
 
