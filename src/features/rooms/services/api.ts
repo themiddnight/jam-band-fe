@@ -81,3 +81,29 @@ export async function leaveRoom(
   });
   return response.data;
 }
+
+// Update room settings endpoint
+export interface UpdateRoomSettingsRequest {
+  name?: string;
+  description?: string;
+  isPrivate?: boolean;
+  isHidden?: boolean;
+  updatedBy: string;
+}
+
+export interface UpdateRoomSettingsResponse {
+  success: boolean;
+  message: string;
+  room: Room & {
+    users: any[];
+    pendingMembers: any[];
+  };
+}
+
+export async function updateRoomSettings(
+  roomId: string,
+  settings: UpdateRoomSettingsRequest,
+): Promise<UpdateRoomSettingsResponse> {
+  const response = await axiosInstance.put(`/api/rooms/${roomId}/settings`, settings);
+  return response.data;
+}

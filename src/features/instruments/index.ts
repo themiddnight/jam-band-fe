@@ -10,6 +10,7 @@ export { default as Drumset } from "./components/Drumset";
 export { SynthControls } from "./components/Synthesizer/SynthControls";
 export { LatencyControls } from "./components/Synthesizer/LatencyControls";
 export { default as InstrumentCategorySelector } from "./components/InstrumentCategorySelector";
+export { InstrumentMute } from "./components/InstrumentMute";
 export * from "./components/LazyComponents";
 
 // Hooks exports
@@ -20,6 +21,7 @@ export { useInstrument } from "./hooks/useInstrument";
 export { useVelocityControl } from "./hooks/useVelocityControl";
 export { useInstrumentKeyboard } from "./hooks/useInstrumentKeyboard";
 export { useKeyboardHandler } from "./hooks/useKeyboardHandler";
+export { useInstrumentMute } from "./hooks/useInstrumentMute";
 
 // Constants exports - using aliases to avoid naming conflicts
 export {

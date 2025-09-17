@@ -5,4 +5,5 @@ export const endpoints = {
   listRooms: `${apiURL}/rooms`,
   createRoom: `${apiURL}/rooms`,
   leaveRoom: (roomId: string) => `${apiURL}/rooms/${roomId}/leave`,
+  updateRoomSettings: (roomId: string) => `${apiURL}/rooms/${roomId}/settings`,
 };

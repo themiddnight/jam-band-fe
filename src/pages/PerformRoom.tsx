@@ -8,7 +8,11 @@ import {
   useCombinedLatency,
 } from "@/features/audio";
 import { ConnectionState } from "@/features/audio/types/connectionState";
-import { InstrumentCategorySelector } from "@/features/instruments";
+import {
+  InstrumentCategorySelector,
+  InstrumentMute,
+  useInstrumentMute,
+} from "@/features/instruments";
 import {
   LazyKeyboardWrapper as Keyboard,
   LazyGuitarWrapper as Guitar,
@@ -23,7 +27,12 @@ import { useSequencer } from "@/features/sequencer/hooks/useSequencer";
 import { useSequencerStore } from "@/features/sequencer/stores/sequencerStore";
 
 import { ChatBox, ApprovalWaiting } from "@/features/rooms";
-import { RoomMembers, SwapInstrumentModal, KickUserModal } from "@/features/rooms";
+import {
+  RoomMembers,
+  SwapInstrumentModal,
+  KickUserModal,
+  RoomSettingsModal,
+} from "@/features/rooms";
 import { useRoom } from "@/features/rooms";
 import { Footer } from "@/features/ui";
 import { ScaleSlots } from "@/features/ui";
@@ -44,6 +53,10 @@ import { useNavigate } from "react-router-dom";
  */
 const PerformRoom = memo(() => {
   const navigate = useNavigate();
+  // Instrument mute state (defined before useRoom)
+  const { isMuted: isInstrumentMuted, setMuted: setInstrumentMuted } =
+    useInstrumentMute(false);
+
   const {
     // Room state
     currentRoom,
@@ -81,7 +94,7 @@ const PerformRoom = memo(() => {
     midiController,
 
     // Handlers
-    handlePlayNote,
+    createPlayNoteHandler,
     handleStopNote,
     handleReleaseKeyHeldNote,
     handleSustainChange,
@@ -129,14 +142,17 @@ const PerformRoom = memo(() => {
     handleRoomOwnerScaleChange,
     handleToggleFollowRoomOwner,
 
+    // Room settings
+    handleUpdateRoomSettings,
+
     // Socket connection
     getActiveSocket,
-  } = useRoom();
+  } = useRoom({ isInstrumentMuted });
 
   // All hooks must be called before any early returns
   // Get the current active socket directly instead of using a ref
   const activeSocket = getActiveSocket();
-  
+
   const { currentPing } = usePingMeasurement({
     socket: activeSocket,
     enabled: isConnected,
@@ -219,7 +235,9 @@ const PerformRoom = memo(() => {
   const inviteBtnRef = useRef<HTMLButtonElement>(null);
 
   // Instrument swap state
-  const [pendingSwapTarget, setPendingSwapTarget] = useState<RoomUser | null>(null);
+  const [pendingSwapTarget, setPendingSwapTarget] = useState<RoomUser | null>(
+    null
+  );
   const [swapRequestData, setSwapRequestData] = useState<{
     requester: RoomUser | null;
     isModalOpen: boolean;
@@ -236,6 +254,10 @@ const PerformRoom = memo(() => {
     targetUser: null,
     isModalOpen: false,
   });
+
+  // Room settings state
+  const [showRoomSettingsModal, setShowRoomSettingsModal] = useState(false);
+  const [isUpdatingRoomSettings, setIsUpdatingRoomSettings] = useState(false);
 
   // Initialize scale slots store and apply selected slot
   const { initialize, getSelectedSlot } = useScaleSlotsStore();
@@ -274,19 +296,20 @@ const PerformRoom = memo(() => {
     (stream: MediaStream) => {
       addLocalStream(stream);
     },
-    [addLocalStream],
+    [addLocalStream]
   );
 
   const handleStreamRemoved = useCallback(() => {
     removeLocalStream();
   }, [removeLocalStream]);
 
-  // Wrapper function to adapt onPlayNotes signature to handlePlayNote
+  // Wrapper function to adapt onPlayNotes signature to handlePlayNote (respects mute state)
   const handlePlayNotesWrapper = useCallback(
     (notes: string[], velocity: number, isKeyHeld: boolean) => {
-      handlePlayNote(notes, velocity, "note_on", isKeyHeld);
+      const playNoteHandler = createPlayNoteHandler(isInstrumentMuted);
+      playNoteHandler(notes, velocity, "note_on", isKeyHeld);
     },
-    [handlePlayNote],
+    [createPlayNoteHandler, isInstrumentMuted]
   );
 
   // Wrapper function for note stop
@@ -294,19 +317,21 @@ const PerformRoom = memo(() => {
     (notes: string[]) => {
       handleStopNote(notes);
     },
-    [handleStopNote],
+    [handleStopNote]
   );
 
   // Instrument swap handlers
   const handleSwapInstrument = useCallback(
     (targetUserId: string) => {
-      const targetUser = currentRoom?.users.find(user => user.id === targetUserId);
+      const targetUser = currentRoom?.users.find(
+        (user) => user.id === targetUserId
+      );
       if (targetUser) {
         setPendingSwapTarget(targetUser);
         requestInstrumentSwap(targetUserId);
       }
     },
-    [currentRoom?.users, requestInstrumentSwap],
+    [currentRoom?.users, requestInstrumentSwap]
   );
 
   const handleCancelSwap = useCallback(() => {
@@ -331,12 +356,14 @@ const PerformRoom = memo(() => {
   // Kick user handlers
   const handleKickUser = useCallback(
     (targetUserId: string) => {
-      const targetUser = currentRoom?.users.find(user => user.id === targetUserId);
+      const targetUser = currentRoom?.users.find(
+        (user) => user.id === targetUserId
+      );
       if (targetUser) {
         setKickUserData({ targetUser, isModalOpen: true });
       }
     },
-    [currentRoom?.users],
+    [currentRoom?.users]
   );
 
   const handleConfirmKick = useCallback(() => {
@@ -350,6 +377,36 @@ const PerformRoom = memo(() => {
     setKickUserData({ targetUser: null, isModalOpen: false });
   }, []);
 
+  // Room settings handlers
+  const handleOpenRoomSettings = useCallback(() => {
+    setShowRoomSettingsModal(true);
+  }, []);
+
+  const handleCloseRoomSettings = useCallback(() => {
+    setShowRoomSettingsModal(false);
+  }, []);
+
+  const handleSaveRoomSettings = useCallback(
+    async (settings: {
+      name: string;
+      description: string;
+      isPrivate: boolean;
+      isHidden: boolean;
+    }) => {
+      setIsUpdatingRoomSettings(true);
+      try {
+        await handleUpdateRoomSettings(settings);
+        // Modal will be closed by the component after successful save
+      } catch (error) {
+        console.error("Failed to update room settings:", error);
+        // You could add a toast notification here
+      } finally {
+        setIsUpdatingRoomSettings(false);
+      }
+    },
+    [handleUpdateRoomSettings]
+  );
+
   // Sequencer hook for recording integration
   const sequencer = useSequencer({
     socket: activeSocket,
@@ -359,24 +416,32 @@ const PerformRoom = memo(() => {
   });
 
   // Get sequencer UI state from store
-  const { settings, setSelectedBeat, setEditMode, resetUI } = useSequencerStore();
+  const { settings, setSelectedBeat, setEditMode, resetUI } =
+    useSequencerStore();
 
-  // Enhanced note playing wrapper that also handles recording
+  // Enhanced note playing wrapper that also handles recording (respects mute state)
   const handlePlayNotesWithRecording = useCallback(
     (notes: string[], velocity: number, isKeyHeld: boolean) => {
-      // Always play the note
-      handlePlayNote(notes, velocity, "note_on", isKeyHeld);
-      
+      // Always play the note (respecting mute state)
+      const playNoteHandler = createPlayNoteHandler(isInstrumentMuted);
+      playNoteHandler(notes, velocity, "note_on", isKeyHeld);
+
       // Also record to sequencer if recording is enabled
       if (sequencer.isRecording) {
-        notes.forEach(note => {
+        notes.forEach((note) => {
           // Determine if this is realtime recording (while sequencer is playing)
           const isRealtime = sequencer.isPlaying;
           sequencer.handleRecordNote(note, velocity, undefined, isRealtime);
         });
       }
     },
-    [handlePlayNote, sequencer.isRecording, sequencer.handleRecordNote],
+    [
+      createPlayNoteHandler,
+      isInstrumentMuted,
+      sequencer.isRecording,
+      sequencer.handleRecordNote,
+      sequencer.isPlaying,
+    ]
   );
 
   // Memoize commonProps to prevent child component re-renders
@@ -422,11 +487,10 @@ const PerformRoom = memo(() => {
     ) {
       // Try to auto-enable audio after a short delay to ensure room is fully loaded
       const timer = setTimeout(() => {
-        
         enableAudioReception().catch((error) => {
           console.log(
             "🎧 Auto audio enable failed (user gesture required):",
-            error,
+            error
           );
           // This is expected on mobile - user will need to click the button
         });
@@ -434,18 +498,25 @@ const PerformRoom = memo(() => {
 
       return () => clearTimeout(timer);
     }
-  }, [currentUser?.role, isVoiceEnabled, isAudioEnabled, currentRoom, enableAudioReception]);
+  }, [
+    currentUser?.role,
+    isVoiceEnabled,
+    isAudioEnabled,
+    currentRoom,
+    enableAudioReception,
+  ]);
 
   // Sequencer hook for recording integration
   useEffect(() => {
     const unsubscribeSwapRequestReceived = onSwapRequestReceived((data) => {
-      
       // Find the requester user in current room
-      const requesterUser = currentRoom?.users.find(user => user.id === data.requesterId);
+      const requesterUser = currentRoom?.users.find(
+        (user) => user.id === data.requesterId
+      );
       if (requesterUser) {
         setSwapRequestData({
           requester: requesterUser,
-          isModalOpen: true
+          isModalOpen: true,
         });
       }
     });
@@ -473,11 +544,11 @@ const PerformRoom = memo(() => {
       // Clear any pending states
       setPendingSwapTarget(null);
       setSwapRequestData({ requester: null, isModalOpen: false });
-      
+
       const currentUserId = currentUser?.id;
       let myData = null;
       let otherData = null;
-      
+
       if (data.userA.userId === currentUserId) {
         myData = data.userA;
         otherData = data.userB;
@@ -485,24 +556,23 @@ const PerformRoom = memo(() => {
         myData = data.userB;
         otherData = data.userA;
       }
-      
+
       if (myData && otherData) {
         console.log("🔄 Applying swap data for current user:", {
           myUserId: myData.userId,
           newInstrument: myData.instrumentName,
           newCategory: myData.category,
-          hasSynthParams: !!myData.synthParams
+          hasSynthParams: !!myData.synthParams,
         });
-        
+
         // Change instrument first
         await handleInstrumentChange(myData.instrumentName);
-        
+
         // Apply synth parameters if provided
         if (myData.synthParams && Object.keys(myData.synthParams).length > 0) {
           setTimeout(async () => {
             try {
               await updateSynthParams(myData.synthParams);
-              
             } catch (error) {
               console.error("❌ Failed to apply synth parameters:", error);
             }
@@ -511,49 +581,54 @@ const PerformRoom = memo(() => {
 
         // Request sequencer snapshot from the other user
         if (otherData.userId) {
-          
           requestSequencerState(otherData.userId);
         }
       }
     });
 
     // When someone requests our sequencer state, send them a snapshot
-    const unsubscribeSequencerRequested = onSequencerStateRequested(({ requesterId }: { requesterId: string }) => {
-      try {
-        const snapshot = {
-          banks: useSequencerStore.getState().banks,
-          settings: useSequencerStore.getState().settings,
-          currentBank: useSequencerStore.getState().currentBank,
-        };
-        
-        sendSequencerState(requesterId, snapshot);
-      } catch (e) {
-        console.error("❌ Failed to capture/send sequencer snapshot:", e);
+    const unsubscribeSequencerRequested = onSequencerStateRequested(
+      ({ requesterId }: { requesterId: string }) => {
+        try {
+          const snapshot = {
+            banks: useSequencerStore.getState().banks,
+            settings: useSequencerStore.getState().settings,
+            currentBank: useSequencerStore.getState().currentBank,
+          };
+
+          sendSequencerState(requesterId, snapshot);
+        } catch (e) {
+          console.error("❌ Failed to capture/send sequencer snapshot:", e);
+        }
       }
-    });
+    );
 
     // When we receive a snapshot, apply it
-    const unsubscribeSequencerReceived = onSequencerStateReceived(({ snapshot }: { snapshot: { banks: any; settings: any; currentBank: string } }) => {
-      try {
-        
-        // Stop if playing, then load snapshot, and reset beat to 0
-        if (sequencer.isPlaying) {
-          useSequencerStore.getState().hardStop();
+    const unsubscribeSequencerReceived = onSequencerStateReceived(
+      ({
+        snapshot,
+      }: {
+        snapshot: { banks: any; settings: any; currentBank: string };
+      }) => {
+        try {
+          // Stop if playing, then load snapshot, and reset beat to 0
+          if (sequencer.isPlaying) {
+            useSequencerStore.getState().hardStop();
+          }
+          useSequencerStore.setState({
+            banks: snapshot.banks,
+            settings: snapshot.settings,
+            currentBeat: 0,
+            selectedBeat: 0,
+            currentBank: snapshot.currentBank,
+          });
+        } catch (e) {
+          console.error("❌ Failed to apply sequencer snapshot:", e);
         }
-        useSequencerStore.setState({
-          banks: snapshot.banks,
-          settings: snapshot.settings,
-          currentBeat: 0,
-          selectedBeat: 0,
-          currentBank: snapshot.currentBank,
-        });
-      } catch (e) {
-        console.error("❌ Failed to apply sequencer snapshot:", e);
       }
-    });
+    );
 
     const unsubscribeUserKicked = onUserKicked((data) => {
-      
       // Redirect immediately to lobby and pass reason in state
       navigate("/", { state: { kicked: true, reason: data.reason } });
     });
@@ -615,9 +690,9 @@ const PerformRoom = memo(() => {
   useEffect(() => {
     // Only run for room owners and when connected to room
     if (
-      currentUser?.role === 'room_owner' && 
-      isConnected && 
-      scaleState.rootNote && 
+      currentUser?.role === "room_owner" &&
+      isConnected &&
+      scaleState.rootNote &&
       scaleState.scale &&
       connectionState === ConnectionState.IN_ROOM
     ) {
@@ -625,28 +700,28 @@ const PerformRoom = memo(() => {
       if (!currentRoom?.ownerScale) {
         console.log("🎵 Initializing room owner scale in backend:", {
           rootNote: scaleState.rootNote,
-          scale: scaleState.scale
+          scale: scaleState.scale,
         });
         handleRoomOwnerScaleChange(scaleState.rootNote, scaleState.scale);
       }
     }
   }, [
-    currentUser?.role, 
-    isConnected, 
-    connectionState, 
-    scaleState.rootNote, 
-    scaleState.scale, 
-    currentRoom?.ownerScale, 
-    handleRoomOwnerScaleChange
+    currentUser?.role,
+    isConnected,
+    connectionState,
+    scaleState.rootNote,
+    scaleState.scale,
+    currentRoom?.ownerScale,
+    handleRoomOwnerScaleChange,
   ]);
 
   // Setup scale slot keyboard shortcuts
   useScaleSlotKeyboard((rootNote, scale) => {
     scaleState.setRootNote(rootNote);
     scaleState.setScale(scale);
-    
+
     // If user is room owner, broadcast the scale change
-    if (currentUser?.role === 'room_owner') {
+    if (currentUser?.role === "room_owner") {
       handleRoomOwnerScaleChange(rootNote, scale);
     }
   });
@@ -667,9 +742,9 @@ const PerformRoom = memo(() => {
 
   const handleCopyInviteUrl = async (role: "band_member" | "audience") => {
     if (!currentRoom?.id) return;
-    
+
     const inviteUrl = generateInviteUrl(currentRoom.id, role);
-    
+
     try {
       await navigator.clipboard.writeText(inviteUrl);
       showSuccessMessage(`copy-invite-${role}`, "Copied!");
@@ -688,10 +763,10 @@ const PerformRoom = memo(() => {
 
   const handleShareInviteUrl = async (role: "band_member" | "audience") => {
     if (!currentRoom?.id) return;
-    
+
     const inviteUrl = generateInviteUrl(currentRoom.id, role);
     const roleText = role === "band_member" ? "Band Member" : "Audience";
-    
+
     if (navigator.share) {
       try {
         await navigator.share({
@@ -700,7 +775,7 @@ const PerformRoom = memo(() => {
           url: inviteUrl,
         });
       } catch (error: unknown) {
-        if (error instanceof Error && error.name !== 'AbortError') {
+        if (error instanceof Error && error.name !== "AbortError") {
           console.error("Failed to share invite URL:", error);
           // Fallback to copy
           handleCopyInviteUrl(role);
@@ -800,6 +875,16 @@ const PerformRoom = memo(() => {
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl font-bold">{currentRoom?.name}</h1>
+                {/* Room Settings Button - Only for room owner */}
+                {currentUser?.role === "room_owner" && (
+                  <button
+                    onClick={handleOpenRoomSettings}
+                    className="btn btn-xs btn-ghost"
+                    title="Room Settings"
+                  >
+                    ⚙️
+                  </button>
+                )}
                 <div className="relative">
                   <button
                     ref={inviteBtnRef}
@@ -828,7 +913,9 @@ const PerformRoom = memo(() => {
                       </div>
                       <div className="space-y-3">
                         <div>
-                          <p className="text-xs text-base-content/60 mb-2">Band Member</p>
+                          <p className="text-xs text-base-content/60 mb-2">
+                            Band Member
+                          </p>
                           <div className="flex gap-2">
                             <button
                               id="copy-invite-band_member"
@@ -840,7 +927,9 @@ const PerformRoom = memo(() => {
                             </button>
                             <button
                               id="share-invite-band_member"
-                              onClick={() => handleShareInviteUrl("band_member")}
+                              onClick={() =>
+                                handleShareInviteUrl("band_member")
+                              }
                               className="btn btn-sm btn-outline"
                               title="Share link for band member invitation"
                             >
@@ -849,7 +938,9 @@ const PerformRoom = memo(() => {
                           </div>
                         </div>
                         <div>
-                          <p className="text-xs text-base-content/60 mb-2">Audience</p>
+                          <p className="text-xs text-base-content/60 mb-2">
+                            Audience
+                          </p>
                           <div className="flex gap-2">
                             <button
                               id="copy-invite-audience"
@@ -996,14 +1087,16 @@ const PerformRoom = memo(() => {
             {/* Instrument Controls */}
             {(currentUser?.role === "room_owner" ||
               currentUser?.role === "band_member") && (
-              <MidiStatus
-                isConnected={midiController.isConnected}
-                getMidiInputs={midiController.getMidiInputs}
-                onRequestAccess={midiController.requestMidiAccess}
-                connectionError={midiController.connectionError}
-                isRequesting={midiController.isRequesting}
-                refreshMidiDevices={midiController.refreshMidiDevices}
-              />
+              <>
+                <MidiStatus
+                  isConnected={midiController.isConnected}
+                  getMidiInputs={midiController.getMidiInputs}
+                  onRequestAccess={midiController.requestMidiAccess}
+                  connectionError={midiController.connectionError}
+                  isRequesting={midiController.isRequesting}
+                  refreshMidiDevices={midiController.refreshMidiDevices}
+                />
+              </>
             )}
 
             {/* Voice Communication - Only for users who can transmit */}
@@ -1027,6 +1120,12 @@ const PerformRoom = memo(() => {
             {(currentUser?.role === "room_owner" ||
               currentUser?.role === "band_member") && (
               <>
+                {/* Virtual Instrument Mute Control */}
+                <InstrumentMute
+                  isMuted={isInstrumentMuted}
+                  onMuteChange={setInstrumentMuted}
+                />
+
                 {/* Metronome Controls */}
                 <MetronomeControls
                   socket={activeSocket}
@@ -1040,14 +1139,14 @@ const PerformRoom = memo(() => {
                   onSlotSelect={(rootNote, scale) => {
                     scaleState.setRootNote(rootNote);
                     scaleState.setScale(scale);
-                    
+
                     // If user is room owner, broadcast the scale change
-                    if (currentUser?.role === 'room_owner') {
+                    if (currentUser?.role === "room_owner") {
                       handleRoomOwnerScaleChange(rootNote, scale);
                     }
                   }}
                   currentUser={currentUser}
-                  isRoomOwner={currentUser?.role === 'room_owner'}
+                  isRoomOwner={currentUser?.role === "room_owner"}
                   followRoomOwner={currentUser?.followRoomOwner || false}
                   onToggleFollowRoomOwner={handleToggleFollowRoomOwner}
                   disabled={currentUser?.followRoomOwner || false}
@@ -1083,18 +1182,38 @@ const PerformRoom = memo(() => {
                     currentCategory={currentCategory}
                     availableSamples={availableSamples}
                     scaleNotes={[
-                      ...scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, 2),
-                      ...scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, 3),
-                      ...scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, 4),
-                      ...scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, 5),
-                      ...scaleState.getScaleNotes(scaleState.rootNote, scaleState.scale, 6),
+                      ...scaleState.getScaleNotes(
+                        scaleState.rootNote,
+                        scaleState.scale,
+                        2
+                      ),
+                      ...scaleState.getScaleNotes(
+                        scaleState.rootNote,
+                        scaleState.scale,
+                        3
+                      ),
+                      ...scaleState.getScaleNotes(
+                        scaleState.rootNote,
+                        scaleState.scale,
+                        4
+                      ),
+                      ...scaleState.getScaleNotes(
+                        scaleState.rootNote,
+                        scaleState.scale,
+                        5
+                      ),
+                      ...scaleState.getScaleNotes(
+                        scaleState.rootNote,
+                        scaleState.scale,
+                        6
+                      ),
                     ]}
                     rootNote={scaleState.rootNote}
                     onPlayNotes={handlePlayNotesWrapper}
                     onStopNotes={handleStopNotesWrapper}
-                                editMode={settings.editMode}
-            onSelectedBeatChange={setSelectedBeat}
-            onEditModeChange={setEditMode}
+                    editMode={settings.editMode}
+                    onSelectedBeatChange={setSelectedBeat}
+                    onEditModeChange={setEditMode}
                   />
                 </div>
 
@@ -1227,7 +1346,9 @@ const PerformRoom = memo(() => {
       {/* Instrument Swap Modal */}
       <SwapInstrumentModal
         open={swapRequestData.isModalOpen}
-        onClose={() => setSwapRequestData({ requester: null, isModalOpen: false })}
+        onClose={() =>
+          setSwapRequestData({ requester: null, isModalOpen: false })
+        }
         requesterUser={swapRequestData.requester}
         onApprove={handleApproveSwap}
         onReject={handleRejectSwap}
@@ -1239,6 +1360,15 @@ const PerformRoom = memo(() => {
         onClose={handleCancelKick}
         targetUser={kickUserData.targetUser}
         onConfirm={handleConfirmKick}
+      />
+
+      {/* Room Settings Modal */}
+      <RoomSettingsModal
+        open={showRoomSettingsModal}
+        onClose={handleCloseRoomSettings}
+        room={currentRoom}
+        onSave={handleSaveRoomSettings}
+        isLoading={isUpdatingRoomSettings}
       />
 
       <Footer />

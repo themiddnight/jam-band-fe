@@ -3,6 +3,8 @@ import { useRoomSocket } from "@/features/audio/hooks/useRoomSocket";
 import { ConnectionState } from "@/features/audio/types/connectionState";
 import { useInstrument } from "@/features/instruments/hooks/useInstrument";
 import { useRoomStore } from "@/features/rooms";
+import { updateRoomSettings } from "@/features/rooms/services/api";
+import type { UpdateRoomSettingsRequest } from "@/features/rooms/services/api";
 import { useScaleState } from "@/features/ui";
 import { InstrumentCategory } from "@/shared/constants/instruments";
 import { useUserStore } from "@/shared/stores/userStore";
@@ -15,7 +17,8 @@ import { useSequencerStore } from "@/features/sequencer";
 /**
  * Room hook using the RoomSocketManager for namespace-based connections
  */
-export const useRoom = () => {
+export const useRoom = (options?: { isInstrumentMuted?: boolean }) => {
+  const { isInstrumentMuted = false } = options || {};
   const { roomId } = useParams<{ roomId: string }>();
   const location = useLocation();
   // const navigate = useNavigate();
@@ -115,10 +118,10 @@ export const useRoom = () => {
   } = useRoomSocket();
 
   // Room store
-  const { 
-    currentRoom, 
-    currentUser, 
-    pendingApproval, 
+  const {
+    currentRoom,
+    currentUser,
+    pendingApproval,
     clearRoom,
     updateOwnerScale,
     updateUserFollowMode,
@@ -138,7 +141,7 @@ export const useRoom = () => {
 
   // Scale state
   const scaleState = useScaleState();
-  
+
   // Scale slots store
   const { setSlot, getSelectedSlot } = useScaleSlotsStore();
 
@@ -678,6 +681,60 @@ export const useRoom = () => {
     ]
   );
 
+  // Muted version of handlePlayNote - only plays locally, no socket messages
+  const handlePlayNoteMuted = useCallback(
+    async (
+      notes: string[],
+      velocity: number,
+      eventType: "note_on" | "note_off" | "sustain_on" | "sustain_off",
+      isKeyHeld?: boolean
+    ) => {
+      // Only play locally, no socket messages sent
+      try {
+        if (eventType === "note_on") {
+          await playLocalNote(notes, velocity, isKeyHeld || false);
+
+          // Set local playing indicator immediately for local user (visual feedback)
+          if (userId) {
+            setPlayingIndicators((prev) => {
+              const newMap = new Map(prev);
+              newMap.set(userId, {
+                velocity: velocity,
+                timestamp: Date.now(),
+              });
+              return newMap;
+            });
+
+            // Clear local playing indicator after a short delay
+            setTimeout(() => {
+              setPlayingIndicators((prev) => {
+                const newMap = new Map(prev);
+                newMap.delete(userId);
+                return newMap;
+              });
+            }, 200);
+          }
+        } else if (eventType === "note_off") {
+          await stopLocalNotes(notes);
+        }
+      } catch (error) {
+        console.error("❌ Failed to play locally (muted mode):", error);
+      }
+
+      // No socket messages sent in muted mode
+      console.log("🔇 Instrument muted - playing locally only");
+    },
+    [playLocalNote, stopLocalNotes, userId]
+  );
+
+  // Factory function to create the appropriate play note handler based on mute state
+  const createPlayNoteHandler = useCallback(
+    (isMuted: boolean) => {
+      return isMuted ? handlePlayNoteMuted : handlePlayNote;
+    },
+    [handlePlayNoteMuted, handlePlayNote]
+  );
+
   const handleStopNote = useCallback(
     (notes: string[] | string) => {
       const notesArray = Array.isArray(notes) ? notes : [notes];
@@ -714,8 +771,8 @@ export const useRoom = () => {
 
   // MIDI controller (defined after handlers)
   const midiController = useMidiController({
-    onNoteOn: (note: number, velocity: number) => {
-      // Convert MIDI note number to note name and call handlePlayNote
+    onNoteOn: useCallback((note: number, velocity: number) => {
+      // Convert MIDI note number to note name and call appropriate handler based on mute state
       const noteNames = [
         "C",
         "C#",
@@ -733,9 +790,10 @@ export const useRoom = () => {
       const octave = Math.floor(note / 12) - 1;
       const noteName = noteNames[note % 12] + octave;
       // velocity is already normalized (0-1) from useMidiController, don't divide by 127 again
-      handlePlayNote([noteName], velocity, "note_on", true);
-    },
-    onNoteOff: (note: number) => {
+      const playNoteHandler = createPlayNoteHandler(isInstrumentMuted);
+      playNoteHandler([noteName], velocity, "note_on", true);
+    }, [createPlayNoteHandler, isInstrumentMuted]),
+    onNoteOff: useCallback((note: number) => {
       // Convert MIDI note number to note name and call handleStopNote
       const noteNames = [
         "C",
@@ -754,9 +812,9 @@ export const useRoom = () => {
       const octave = Math.floor(note / 12) - 1;
       const noteName = noteNames[note % 12] + octave;
       handleStopNote([noteName]);
-    },
-    onControlChange: () => {}, // Not used in this context
-    onPitchBend: () => {}, // Not used in this context
+    }, [handleStopNote]),
+    onControlChange: () => { }, // Not used in this context
+    onPitchBend: () => { }, // Not used in this context
     onSustainChange: handleSustainChange,
   });
 
@@ -935,21 +993,17 @@ export const useRoom = () => {
   // Scale event handlers
   useEffect(() => {
     if (connectionState !== ConnectionState.IN_ROOM) {
-      console.log("🎵 Skipping scale event handlers setup - not in room yet:", connectionState);
       return;
     }
 
-    console.log("🎵 Setting up scale event handlers");
-    
     const unsubscribeOwnerScaleChanged = onRoomOwnerScaleChanged((data) => {
-      console.log("🎵 Room owner scale changed received:", data);
       updateOwnerScale(data.rootNote, data.scale);
-      
+
       // If current user is following room owner, update their scale too
       if (currentUser?.followRoomOwner) {
         scaleState.setRootNote(data.rootNote);
         scaleState.setScale(data.scale);
-        
+
         // Also update the current scale slot to match the new scale
         const selectedSlot = getSelectedSlot();
         if (selectedSlot) {
@@ -959,16 +1013,14 @@ export const useRoom = () => {
     });
 
     const unsubscribeFollowToggled = onFollowRoomOwnerToggled((data) => {
-      console.log("🎵 Follow room owner toggled:", data);
       if (currentUser) {
         updateUserFollowMode(currentUser.id, data.followRoomOwner);
-        
+
         // If user just turned ON follow mode and there's an owner scale, sync immediately
         if (data.followRoomOwner && data.ownerScale) {
-          console.log("🎵 Syncing to room owner scale:", data.ownerScale);
           scaleState.setRootNote(data.ownerScale.rootNote);
           scaleState.setScale(data.ownerScale.scale);
-          
+
           // Also update the current scale slot to match
           const selectedSlot = getSelectedSlot();
           if (selectedSlot) {
@@ -982,7 +1034,7 @@ export const useRoom = () => {
       unsubscribeOwnerScaleChanged();
       unsubscribeFollowToggled();
     };
-  }, [connectionState, onRoomOwnerScaleChanged, onFollowRoomOwnerToggled, updateOwnerScale, updateUserFollowMode, currentUser, scaleState, getSelectedSlot, setSlot]);
+  }, [connectionState, onRoomOwnerScaleChanged, onFollowRoomOwnerToggled, updateOwnerScale, currentUser, scaleState, getSelectedSlot, setSlot, updateUserFollowMode]);
 
   // Scale handlers
   const handleRoomOwnerScaleChange = useCallback((rootNote: string, scale: import('../../../shared/types').Scale) => {
@@ -994,13 +1046,13 @@ export const useRoom = () => {
   const handleToggleFollowRoomOwner = useCallback((follow: boolean) => {
     if (currentUser?.role === 'band_member') {
       toggleFollowRoomOwner(follow);
-      
+
       // If turning ON follow mode and room owner has a scale, sync immediately
       if (follow && currentRoom?.ownerScale) {
         console.log("🎵 Immediately syncing to room owner scale:", currentRoom.ownerScale);
         scaleState.setRootNote(currentRoom.ownerScale.rootNote);
         scaleState.setScale(currentRoom.ownerScale.scale);
-        
+
         // Also update the current scale slot to match
         const selectedSlot = getSelectedSlot();
         if (selectedSlot) {
@@ -1016,6 +1068,39 @@ export const useRoom = () => {
       socketCleanup();
     };
   }, [socketCleanup]);
+
+  // Room settings handler
+  const handleUpdateRoomSettings = useCallback(async (settings: {
+    name?: string;
+    description?: string;
+    isPrivate?: boolean;
+    isHidden?: boolean;
+  }) => {
+    if (!currentRoom?.id || !userId) {
+      throw new Error("Room ID or user ID not available");
+    }
+
+    if (currentUser?.role !== "room_owner") {
+      throw new Error("Only room owner can update settings");
+    }
+
+    const updateRequest: UpdateRoomSettingsRequest = {
+      ...settings,
+      updatedBy: userId,
+    };
+
+    try {
+      const response = await updateRoomSettings(currentRoom.id, updateRequest);
+
+      // The room state will be updated via socket events from the server
+      // No need to manually update the store here
+
+      return response;
+    } catch (error) {
+      console.error("Failed to update room settings:", error);
+      throw error;
+    }
+  }, [currentRoom?.id, userId, currentUser?.role]);
 
   return {
     // Room state
@@ -1055,6 +1140,8 @@ export const useRoom = () => {
 
     // Handlers
     handlePlayNote,
+    handlePlayNoteMuted,
+    createPlayNoteHandler,
     handleStopNote,
     handleReleaseKeyHeldNote,
     handleSustainChange,
@@ -1104,6 +1191,9 @@ export const useRoom = () => {
     // Scale follow handlers
     handleRoomOwnerScaleChange,
     handleToggleFollowRoomOwner,
+
+    // Room settings
+    handleUpdateRoomSettings,
 
     // Socket connection
     socketRef,

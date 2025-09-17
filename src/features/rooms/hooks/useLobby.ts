@@ -30,6 +30,7 @@ export const useLobby = () => {
     getActiveSocket,
     onRoomCreated,
     onRoomClosed,
+    onRoomUpdated,
   } = useRoomSocket();
 
   // Room store
@@ -202,7 +203,12 @@ export const useLobby = () => {
       // Refresh room list when a room is closed
       fetchRooms();
     });
-  }, [onRoomCreated, onRoomClosed, fetchRooms]);
+
+    onRoomUpdated(() => {
+      // Refresh room list when a room is updated
+      fetchRooms();
+    });
+  }, [onRoomCreated, onRoomClosed, onRoomUpdated, fetchRooms]);
 
   // Handle errors
   useEffect(() => {

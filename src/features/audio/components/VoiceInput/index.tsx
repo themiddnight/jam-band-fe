@@ -267,7 +267,9 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
         <div className="card-body p-3">
           <div className="flex flex-wrap justify-center items-center gap-3">
             <div className="flex items-center gap-2">
-              <p className="text-sm">Input</p>
+              <label className="label">
+                <span className="text-xs">Input</span>
+              </label>
               {/* Connection Status */}
               <div
                 className={`w-2 h-2 rounded-full ${voiceState.isConnected ? "bg-green-500" : "bg-red-500"}`}

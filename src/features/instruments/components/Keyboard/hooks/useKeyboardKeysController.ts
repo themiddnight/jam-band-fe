@@ -106,8 +106,8 @@ export const useKeyboardKeysController = (
         target.contentEditable === "true" ||
         target.closest('input, textarea, [contenteditable="true"]');
 
-      // Only skip for input elements if it's not a control key
-      if (isInputElement && !controlKeys.has(key)) {
+      // Skip ALL keyboard shortcuts when user is typing in input fields
+      if (isInputElement) {
         return;
       }
 
@@ -177,8 +177,8 @@ export const useKeyboardKeysController = (
         target.contentEditable === "true" ||
         target.closest('input, textarea, [contenteditable="true"]');
 
-      // Only skip for input elements if it's not a control key
-      if (isInputElement && !controlKeys.has(key)) {
+      // Skip ALL keyboard shortcuts when user is typing in input fields
+      if (isInputElement) {
         return;
       }
 

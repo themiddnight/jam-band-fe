@@ -9,6 +9,7 @@ export { default as UserActionsMenu } from "./components/UserActionsMenu";
 export { default as SwapInstrumentModal } from "./components/SwapInstrumentModal";
 export { default as KickUserModal } from "./components/KickUserModal";
 export { default as PendingSwapStatus } from "./components/PendingSwapStatus";
+export { default as RoomSettingsModal } from "./components/RoomSettingsModal";
 export { ApprovalWaiting } from "./components/ApprovalWaiting";
 export { InviteUrlInput } from "./components/InviteUrlInput";
 
