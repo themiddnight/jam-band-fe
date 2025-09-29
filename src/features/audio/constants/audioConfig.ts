@@ -358,7 +358,7 @@ export class AudioContextManager {
         navigator.userAgent,
       );
 
-      if (isSafari) {
+  if (isSafari) {
         // Import Safari compatibility utility
         const { createWebKitCompatibleAudioContext } = await import(
           "../../../shared/utils/webkitCompat"
@@ -382,6 +382,23 @@ export class AudioContextManager {
 
       // Add performance monitoring
       this.setupPerformanceMonitoring();
+
+      // Ensure Tone.js uses this context for all Tone nodes
+      try {
+        const Tone = await import("tone");
+        const toneCtx = (Tone as any).getContext?.();
+        if (!toneCtx || toneCtx.rawContext !== this.instrumentContext) {
+          (Tone as any).setContext?.(this.instrumentContext);
+        }
+        // Apply Tone timing preferences
+        if ((Tone as any).getContext) {
+          const ctx = (Tone as any).getContext();
+          ctx.lookAhead = config.TONE_CONTEXT.lookAhead;
+          ctx.updateInterval = config.TONE_CONTEXT.updateInterval;
+        }
+      } catch {
+        // Tone not available or failed to set context; ignore
+      }
     }
 
     if (this.instrumentContext.state === "suspended") {
@@ -411,7 +428,7 @@ export class AudioContextManager {
         navigator.userAgent,
       );
 
-      if (isSafari) {
+  if (isSafari) {
         // Import Safari compatibility utility
         const { createWebKitCompatibleAudioContext } = await import(
           "../../../shared/utils/webkitCompat"
@@ -438,6 +455,8 @@ export class AudioContextManager {
 
       // Adjust instrument performance when WebRTC becomes active
       this.notifyWebRTCStateChange();
+
+  // Keep Tone context on instrument context; do not switch to WebRTC context to avoid breaking music engine
     }
 
     if (this.webrtcContext.state === "suspended") {
