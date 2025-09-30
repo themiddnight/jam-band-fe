@@ -1,5 +1,5 @@
 import { ConnectionState } from "../../types/connectionState";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 
 /**
  * Connection Status Display Component
@@ -16,7 +16,7 @@ interface ConnectionStatusProps {
   onClearErrors?: () => void;
 }
 
-interface StatusMessage {
+export interface StatusMessage {
   id: string;
   message: string;
   type: "error" | "warning" | "info" | "success";
@@ -27,6 +27,10 @@ interface StatusMessage {
     onClick: () => void;
   };
 }
+
+export type StatusMessageInput = Omit<StatusMessage, "id" | "timestamp">;
+
+const STYLE_ELEMENT_ID = "connection-status-display-style";
 
 export const ConnectionStatusDisplay: React.FC<ConnectionStatusProps> = ({
   connectionState,
@@ -41,7 +45,17 @@ export const ConnectionStatusDisplay: React.FC<ConnectionStatusProps> = ({
   const [isVisible, setIsVisible] = useState(false);
 
   // Add message to display
-  const addMessage = (message: Omit<StatusMessage, "id" | "timestamp">) => {
+  const removeMessage = useCallback((id: string) => {
+    setMessages((prev) => {
+      const filtered = prev.filter((msg) => msg.id !== id);
+      if (filtered.length === 0) {
+        setIsVisible(false);
+      }
+      return filtered;
+    });
+  }, []);
+
+  const addMessage = useCallback((message: StatusMessageInput) => {
     const newMessage: StatusMessage = {
       ...message,
       id: `msg-${Date.now()}-${Math.random()}`,
@@ -60,25 +74,29 @@ export const ConnectionStatusDisplay: React.FC<ConnectionStatusProps> = ({
         removeMessage(newMessage.id);
       }, 5000);
     }
-  };
+  }, [removeMessage]);
 
   // Remove message
-  const removeMessage = (id: string) => {
-    setMessages((prev) => {
-      const filtered = prev.filter((msg) => msg.id !== id);
-      if (filtered.length === 0) {
-        setIsVisible(false);
-      }
-      return filtered;
-    });
-  };
-
-  // Clear all messages
-  const clearAllMessages = () => {
+  const clearAllMessages = useCallback(() => {
     setMessages([]);
     setIsVisible(false);
     onClearErrors?.();
-  };
+  }, [onClearErrors]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    if (document.getElementById(STYLE_ELEMENT_ID)) {
+      return;
+    }
+
+    const styleSheet = document.createElement("style");
+    styleSheet.id = STYLE_ELEMENT_ID;
+    styleSheet.textContent = styles;
+    document.head.appendChild(styleSheet);
+  }, []);
 
   // Update status based on connection state
   useEffect(() => {
@@ -113,6 +131,7 @@ export const ConnectionStatusDisplay: React.FC<ConnectionStatusProps> = ({
     isInGracePeriod,
     reconnectionAttempts,
     onRetry,
+    addMessage,
   ]);
 
   // Expose addMessage function globally for error recovery service
@@ -121,7 +140,7 @@ export const ConnectionStatusDisplay: React.FC<ConnectionStatusProps> = ({
     return () => {
       delete (window as any).addConnectionStatusMessage;
     };
-  }, []);
+  }, [addMessage]);
 
   if (!isVisible || messages.length === 0) {
     return null;
@@ -248,42 +267,6 @@ export const ConnectionStatusDisplay: React.FC<ConnectionStatusProps> = ({
     </div>
   );
 };
-
-// Hook for using connection status display
-export const useConnectionStatusDisplay = () => {
-  const addMessage = (message: Omit<StatusMessage, "id" | "timestamp">) => {
-    if ((window as any).addConnectionStatusMessage) {
-      (window as any).addConnectionStatusMessage(message);
-    }
-  };
-
-  const showError = (
-    message: string,
-    action?: { label: string; onClick: () => void },
-  ) => {
-    addMessage({ message, type: "error", autoHide: false, action });
-  };
-
-  const showWarning = (message: string, autoHide = true) => {
-    addMessage({ message, type: "warning", autoHide });
-  };
-
-  const showInfo = (message: string, autoHide = true) => {
-    addMessage({ message, type: "info", autoHide });
-  };
-
-  const showSuccess = (message: string, autoHide = true) => {
-    addMessage({ message, type: "success", autoHide });
-  };
-
-  return {
-    showError,
-    showWarning,
-    showInfo,
-    showSuccess,
-  };
-};
-
 // CSS for animations (add to your global CSS)
 const styles = `
 @keyframes slide-in {
@@ -301,10 +284,3 @@ const styles = `
   animation: slide-in 0.3s ease-out;
 }
 `;
-
-// Inject styles
-if (typeof document !== "undefined") {
-  const styleSheet = document.createElement("style");
-  styleSheet.textContent = styles;
-  document.head.appendChild(styleSheet);
-}

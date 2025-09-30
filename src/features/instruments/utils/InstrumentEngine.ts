@@ -998,7 +998,10 @@ export class InstrumentEngine {
       // Filter out drum notes for synthesizers - only allow musical note names
       const musicalNotes = notes.filter(note => this.isMusicalNote(note));
       if (musicalNotes.length !== notes.length) {
-        
+        console.debug("Filtered non-musical notes from synthesizer playback", {
+          original: notes,
+          filtered: musicalNotes,
+        });
       }
       await this.playSynthNotes(musicalNotes, velocity, isKeyHeld);
     } else {

@@ -57,7 +57,8 @@ export default function MidiStatus({
       setDevices(updatedDevices);
 
       if (!hasDevices && updatedDevices.length === 0) {
-        
+        // Keep the popup open so the user can see the no-device guidance
+        setIsPopupOpen(true);
       }
     }
   };
