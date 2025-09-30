@@ -1,4 +1,4 @@
-import { useConnectionStatusDisplay } from "../components/ConnectionStatusDisplay";
+import { useConnectionStatusDisplay } from "../components/ConnectionStatusDisplay/useConnectionStatusDisplay";
 import { ErrorType, RecoveryAction } from "../services/ErrorRecoveryService";
 import { RoomAudioManager } from "../services/RoomAudioManager";
 import { RoomSocketManager } from "../services/RoomSocketManager";

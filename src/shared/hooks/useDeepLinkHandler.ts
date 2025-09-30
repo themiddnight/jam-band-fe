@@ -15,7 +15,7 @@ export const useDeepLinkHandler = () => {
             `${window.location.origin}/invite/%s`
           );
         } catch (error) {
-          
+          console.error('Failed to register protocol handler', error);
         }
       }
     };
@@ -57,7 +57,8 @@ export const useDeepLinkHandler = () => {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.has('share-target')) {
         // Handle shared content if needed
-        
+        const sharedData = urlParams.get('share-target');
+        console.info('Share target detected', sharedData);
       }
     };
 

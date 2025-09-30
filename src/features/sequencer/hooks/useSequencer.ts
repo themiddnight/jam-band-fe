@@ -337,8 +337,6 @@ export const useSequencer = ({
                       currentlyPlayingNotesRef.current.delete(noteData.note);
                     }
                   }, emergencyTimeout);
-                } else if (isLegatoContinuation) {
-                  
                 }
               });
               
@@ -551,10 +549,9 @@ export const useSequencer = ({
 
         // Initialize metronome service if socket is available
         if (socket) {
-          
           metronomeServiceRef.current = new MetronomeSocketService(socket);
         } else {
-          
+          console.warn("Metronome socket unavailable; skipping service initialization");
         }
 
         setIsInitialized(true);
@@ -606,7 +603,7 @@ export const useSequencer = ({
       ({ timestamp, bpm }) => {
         // Only log occasionally to reduce spam
         if (Math.random() < 0.1) {
-          
+          console.debug("Metronome tick", { timestamp, bpm });
         }
         setCurrentBPM(bpm);
         if (sequencerServiceRef.current) {
