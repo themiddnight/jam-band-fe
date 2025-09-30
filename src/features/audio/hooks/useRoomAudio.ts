@@ -1,6 +1,13 @@
-import { RoomAudioManager, type RoomUser } from "../services/RoomAudioManager";
+import {
+  RoomAudioManager,
+  type RoomUser,
+} from "../services/RoomAudioManager";
 import { ConnectionState } from "../types/connectionState";
 import { useRef, useCallback, useEffect } from "react";
+import type {
+  EffectChainState,
+  EffectChainType,
+} from "@/shared/types";
 
 export interface UseRoomAudioOptions {
   connectionState: ConnectionState;
@@ -18,6 +25,12 @@ export interface UseRoomAudioReturn {
   ) => Promise<void>;
   handleUserLeft: (userId: string) => void;
   isAudioContextReady: () => boolean;
+  applyUserEffectChains: (
+    userId: string,
+    chains?: Record<EffectChainType, EffectChainState>,
+    username?: string,
+    options?: { applyToMixer?: boolean },
+  ) => Promise<void>;
   cleanup: () => void;
 }
 
@@ -113,6 +126,32 @@ export const useRoomAudio = ({
     roomAudioManagerRef.current.handleUserLeft(userId);
   }, []);
 
+  const applyUserEffectChains = useCallback(
+    async (
+      userId: string,
+      chains?: Record<EffectChainType, EffectChainState>,
+      username?: string,
+      options?: { applyToMixer?: boolean },
+    ) => {
+      if (!roomAudioManagerRef.current) {
+        console.warn("⚠️ RoomAudioManager not initialized for effect chain sync");
+        return;
+      }
+
+      try {
+        await roomAudioManagerRef.current.applyUserEffectChains(
+          userId,
+          chains,
+          username,
+          options,
+        );
+      } catch (error) {
+        console.error("❌ Failed to apply user effect chains:", error);
+      }
+    },
+    [],
+  );
+
   // Check if audio context is ready
   const isAudioContextReady = useCallback(() => {
     return roomAudioManagerRef.current?.isAudioContextReady() ?? false;
@@ -138,6 +177,7 @@ export const useRoomAudio = ({
     handleUserInstrumentChange,
     handleUserLeft,
     isAudioContextReady,
+    applyUserEffectChains,
     cleanup,
   };
 };

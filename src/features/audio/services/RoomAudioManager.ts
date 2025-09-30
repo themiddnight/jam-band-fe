@@ -6,12 +6,17 @@ import {
   type ErrorContext,
 } from "./ErrorRecoveryService";
 import { InstrumentCategory } from "@/shared/constants/instruments";
+import type {
+  EffectChainState,
+  EffectChainType,
+} from "@/shared/types";
 
 export interface RoomUser {
   id: string;
   username: string;
   currentInstrument?: string;
   currentCategory?: string;
+  effectChains?: Record<EffectChainType, EffectChainState>;
 }
 
 export interface InstrumentPreloadData {
@@ -318,6 +323,15 @@ export class RoomAudioManager {
         );
       }
 
+      try {
+        await this.applyEffectChainsForUsers(roomUsers);
+      } catch (error) {
+        console.error(
+          "❌ RoomAudioManager: Failed to apply initial effect chains:",
+          error,
+        );
+      }
+
       console.log(
         "✅ RoomAudioManager: Audio context initialized and instruments preloaded",
       );
@@ -392,7 +406,13 @@ export class RoomAudioManager {
     }
 
     // Update user data
+    const existingUser = this.roomUsers.get(userId) || {
+      id: userId,
+      username,
+    };
+
     this.roomUsers.set(userId, {
+      ...existingUser,
       id: userId,
       username,
       currentInstrument: instrument,
@@ -422,12 +442,96 @@ export class RoomAudioManager {
           category: category as InstrumentCategory,
         },
       ]);
+
+      // Reapply effect chains after instrument changes to ensure routing
+      const user = this.roomUsers.get(userId);
+      if (user?.effectChains) {
+        await this.applyUserEffectChains(userId, user.effectChains);
+      }
     } catch (error) {
       console.error(
         `❌ RoomAudioManager: Failed to preload instrument for ${username}:`,
         error,
       );
       // Fallback handling is implemented in the preloadInstruments method
+    }
+  }
+
+  async applyEffectChainsForUsers(roomUsers: RoomUser[]): Promise<void> {
+    if (!roomUsers.length) return;
+
+    await Promise.all(
+      roomUsers.map((user) =>
+        this.applyUserEffectChains(user.id, user.effectChains, user.username),
+      ),
+    );
+  }
+
+  async applyUserEffectChains(
+    userId: string,
+    chains?: Record<EffectChainType, EffectChainState>,
+    username?: string,
+    options?: { applyToMixer?: boolean },
+  ): Promise<void> {
+    try {
+      const storedUser = this.roomUsers.get(userId);
+      if (chains) {
+        if (storedUser) {
+          storedUser.effectChains = chains;
+          if (username) {
+            storedUser.username = username;
+          }
+          this.roomUsers.set(userId, storedUser);
+        } else {
+          this.roomUsers.set(userId, {
+            id: userId,
+            username: username || userId,
+            effectChains: chains,
+          });
+        }
+      } else if (storedUser) {
+        storedUser.effectChains = undefined;
+        this.roomUsers.set(userId, storedUser);
+      }
+
+      if (options?.applyToMixer === false) {
+        return;
+      }
+
+      const { getOrCreateGlobalMixer } = await import(
+        "../utils/effectsArchitecture"
+      );
+      const mixer = await getOrCreateGlobalMixer();
+      const userRecord = this.roomUsers.get(userId);
+      const existingChannel = Boolean(mixer.getChannel(userId));
+
+      const instrumentChain = chains?.virtual_instrument;
+
+      if (instrumentChain) {
+        if (!existingChannel) {
+          await this.ensureMixerChannels([
+            {
+              id: userId,
+              username: userRecord?.username || username || userId,
+            },
+          ]);
+        }
+
+        mixer.applyEffectChainState(userId, instrumentChain.effects, {
+          username: userRecord?.username || username,
+          createIfMissing: true,
+        });
+      } else if (existingChannel) {
+        mixer.applyEffectChainState(userId, [], {
+          username: userRecord?.username || username,
+          createIfMissing: false,
+        });
+      }
+    } catch (error) {
+      console.error(
+        `❌ RoomAudioManager: Failed to apply effect chains for user ${userId}:`,
+        error,
+      );
     }
   }
 
@@ -639,6 +743,19 @@ export class RoomAudioManager {
     if (this.instrumentManager && this.instrumentManager.cleanupRemoteUser) {
       this.instrumentManager.cleanupRemoteUser(userId);
     }
+
+    // Clear mixer channel/effects for this user
+    import("../utils/effectsArchitecture")
+      .then(async ({ getOrCreateGlobalMixer }) => {
+        const mixer = await getOrCreateGlobalMixer();
+        mixer.removeUserChannel(userId);
+      })
+      .catch((error) => {
+        console.warn(
+          `⚠️ RoomAudioManager: Failed to clear effect chains for user ${userId}:`,
+          error,
+        );
+      });
 
     if (user) {
       console.log(

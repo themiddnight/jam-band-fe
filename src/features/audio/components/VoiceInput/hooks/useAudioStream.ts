@@ -1,4 +1,5 @@
 import { useRef, useCallback, useEffect } from "react";
+import { audioInputEffectsManager } from "@/features/audio/services/audioInputEffectsManager";
 
 interface UseAudioStreamProps {
   gain: number;
@@ -10,6 +11,7 @@ interface UseAudioStreamReturn {
   mediaStream: MediaStream | null;
   audioContext: AudioContext | null;
   gainNode: GainNode | null;
+  processedOutputNode: AudioNode | null;
   analyser: AnalyserNode | null;
   micPermission: boolean;
   initializeAudioStream: () => Promise<void>;
@@ -26,6 +28,7 @@ export const useAudioStream = ({
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
+  const processedOutputNodeRef = useRef<AudioNode | null>(null);
   const micPermissionRef = useRef<boolean>(false);
 
   // Initialize audio context and stream
@@ -42,13 +45,18 @@ export const useAudioStream = ({
         originalStreamRef.current = null;
       }
 
-      if (
-        audioContextRef.current &&
-        audioContextRef.current.state !== "closed"
-      ) {
-        await audioContextRef.current.close();
-        audioContextRef.current = null;
+      audioInputEffectsManager.detachSource();
+
+      if (gainNodeRef.current) {
+        try {
+          gainNodeRef.current.disconnect();
+        } catch {
+          /* noop */
+        }
+        gainNodeRef.current = null;
       }
+
+      processedOutputNodeRef.current = null;
 
       // Request microphone with ultra-low latency constraints optimized for music
       const constraints: MediaStreamConstraints = {
@@ -87,27 +95,30 @@ export const useAudioStream = ({
       originalStreamRef.current = stream;
       micPermissionRef.current = true;
 
-      // Use the separated WebRTC audio context instead of creating a new one
+      // Get the shared instrument audio context to align with effect processing chain
       try {
         const { AudioContextManager } = await import(
           "../../../constants/audioConfig"
         );
-        audioContextRef.current = await AudioContextManager.getWebRTCContext();
-        
+        audioContextRef.current = await AudioContextManager.getInstrumentContext();
       } catch (error) {
         console.warn(
-          "Failed to get WebRTC AudioContext, creating fallback:",
+          "Failed to get instrument AudioContext, creating fallback:",
           error,
         );
-        // Fallback: create own context
         audioContextRef.current = new (window.AudioContext ||
           (window as any).webkitAudioContext)({
           sampleRate: 48000,
-          latencyHint: "interactive", // Prioritize low latency for real-time voice
+          latencyHint: "interactive",
         });
       }
 
       const audioContext = audioContextRef.current;
+      if (!audioContext) {
+        throw new Error("AudioContext unavailable for voice input");
+      }
+
+      await audioInputEffectsManager.initialize(audioContext);
 
       const source = audioContext.createMediaStreamSource(stream);
 
@@ -123,12 +134,24 @@ export const useAudioStream = ({
       // Create a destination node to capture the processed audio
       const destination = audioContext.createMediaStreamDestination();
 
-      // Connect the audio graph: source -> gain -> analyser -> destination
+      // Build the processing graph: source -> gain -> effects -> analyser -> destination
       source.connect(gainNodeRef.current);
-      gainNodeRef.current.connect(analyserRef.current);
-      gainNodeRef.current.connect(destination); // Also route to destination for WebRTC
 
-      // Use the processed stream for WebRTC (includes gain processing)
+      audioInputEffectsManager.attachSource(gainNodeRef.current);
+      const effectsOutputNode = audioInputEffectsManager.getOutputNode();
+
+      try {
+        effectsOutputNode.disconnect();
+      } catch {
+        // ignore if no previous connections
+      }
+
+      effectsOutputNode.connect(analyserRef.current);
+      analyserRef.current.connect(destination);
+
+      processedOutputNodeRef.current = effectsOutputNode;
+
+      // Use the processed stream for WebRTC (includes local effects)
       const processedStream = destination.stream;
 
       // Copy video tracks if any (shouldn't be any for audio-only, but just in case)
@@ -175,6 +198,8 @@ export const useAudioStream = ({
       audioContextRef.current = null;
       analyserRef.current = null;
       gainNodeRef.current = null;
+      processedOutputNodeRef.current = null;
+      audioInputEffectsManager.detachSource();
     }
   }, [gain, onStreamReady]);
 
@@ -194,16 +219,26 @@ export const useAudioStream = ({
       originalStreamRef.current = null;
     }
 
+    audioInputEffectsManager.detachSource();
+
     // DON'T close the audioContext because it's shared via AudioContextManager
     // The AudioContextManager will handle context lifecycle
     console.log(
-      "🎤 Not closing shared WebRTC AudioContext (managed by AudioContextManager)",
+      "🎤 Not closing shared instrument AudioContext (managed by AudioContextManager)",
     );
 
     // Reset all refs to null after cleanup
+    if (analyserRef.current) {
+      try {
+        analyserRef.current.disconnect();
+      } catch {
+        /* noop */
+      }
+    }
     audioContextRef.current = null;
     analyserRef.current = null;
     gainNodeRef.current = null;
+    processedOutputNodeRef.current = null;
     micPermissionRef.current = false; // Reset mic permission state
   }, [onStreamRemoved]);
 
@@ -216,6 +251,7 @@ export const useAudioStream = ({
     mediaStream: mediaStreamRef.current,
     audioContext: audioContextRef.current,
     gainNode: gainNodeRef.current,
+    processedOutputNode: processedOutputNodeRef.current,
     analyser: analyserRef.current,
     micPermission: micPermissionRef.current,
     initializeAudioStream,

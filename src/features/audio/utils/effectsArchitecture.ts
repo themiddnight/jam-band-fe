@@ -12,6 +12,107 @@
  * 5. Real-time parameter automation support
  */
 import { AudioContextManager } from "../constants/audioConfig";
+import type { EffectInstanceState } from "@/shared/types";
+import * as Tone from "tone";
+
+const EFFECT_PARAMETER_NAME_MAP: Record<string, Record<string, string>> = {
+  reverb: {
+    room_size: "roomSize",
+    decay_time: "decayTime",
+    pre_delay: "preDelay",
+    dry_wet: "wetLevel",
+    wet: "wetLevel",
+  },
+  delay: {
+    time: "delayTime",
+    delay_time: "delayTime",
+    feedback: "feedback",
+    dry_wet: "wetLevel",
+    wet: "wetLevel",
+  },
+  chorus: {
+    frequency: "frequency",
+    delay_time: "delayTime",
+    depth: "depth",
+    spread: "spread",
+    dry_wet: "wetLevel",
+  },
+  compressor: {
+    threshold: "threshold",
+    ratio: "ratio",
+    attack: "attack",
+    release: "release",
+    dry_wet: "wetLevel",
+  },
+  filter: {
+    frequency: "frequency",
+    resonance: "Q",
+    q: "Q",
+    type: "type",
+    dry_wet: "wetLevel",
+  },
+  distortion: {
+    distortion: "distortion",
+    oversample: "oversample",
+    dry_wet: "wetLevel",
+  },
+  autofilter: {
+    frequency: "frequency",
+    base_frequency: "baseFrequency",
+    octaves: "octaves",
+    filter_type: "type",
+    type: "type",
+    dry_wet: "wetLevel",
+  },
+  autopanner: {
+    frequency: "frequency",
+    depth: "depth",
+    dry_wet: "wetLevel",
+  },
+  autowah: {
+    base_frequency: "baseFrequency",
+    octaves: "octaves",
+    sensitivity: "sensitivity",
+    q: "Q",
+    dry_wet: "wetLevel",
+  },
+  bitcrusher: {
+    bits: "bits",
+    dry_wet: "wetLevel",
+  },
+  phaser: {
+    frequency: "frequency",
+    octaves: "octaves",
+    base_frequency: "baseFrequency",
+    stages: "stages",
+    q: "Q",
+    dry_wet: "wetLevel",
+  },
+  pingpongdelay: {
+    delay_time: "delayTime",
+    feedback: "feedback",
+    dry_wet: "wetLevel",
+    wet: "wetLevel",
+  },
+  stereowidener: {
+    width: "width",
+    dry_wet: "wetLevel",
+  },
+  tremolo: {
+    frequency: "frequency",
+    depth: "depth",
+    spread: "spread",
+    dry_wet: "wetLevel",
+  },
+  vibrato: {
+    frequency: "frequency",
+    depth: "depth",
+    dry_wet: "wetLevel",
+  },
+};
+
+const normalizeParamName = (name: string): string =>
+  name.toLowerCase().replace(/[^a-z0-9]+/g, "_");
 
 // Effect Types
 export enum EffectType {
@@ -21,8 +122,15 @@ export enum EffectType {
   COMPRESSOR = "compressor",
   FILTER = "filter",
   DISTORTION = "distortion",
-  EQUALIZER = "equalizer",
-  LIMITER = "limiter",
+  AUTOFILTER = "autofilter",
+  AUTOPANNER = "autopanner",
+  AUTOWAH = "autowah",
+  BITCRUSHER = "bitcrusher",
+  PHASER = "phaser",
+  PINGPONGDELAY = "pingpongdelay",
+  STEREOWIDENER = "stereowidener",
+  TREMOLO = "tremolo",
+  VIBRATO = "vibrato",
 }
 
 // Effect Parameter Interface
@@ -62,16 +170,18 @@ export interface AudioEffect {
 export interface UserChannel {
   userId: string;
   username: string;
+  // Bridge node for native AudioNode sources (smplr, Tone native nodes)
   inputGain: GainNode;
+  // Tone-based per-user channel (pan/volume)
+  toneChannel?: Tone.Channel;
   effectChain: AudioEffect[];
-  outputGain: GainNode;
   soloMute: {
     solo: boolean;
     mute: boolean;
   };
   sends: Map<string, GainNode>; // Send to aux buses
-  panNode?: StereoPannerNode;
-  analyser?: AnalyserNode;
+  // Tone analyser for metering
+  analyser?: Tone.Analyser;
 }
 
 // Aux Bus Interface
@@ -100,9 +210,66 @@ export class EffectsFactory {
   private static effectPool = new Map<EffectType, AudioEffect[]>();
   private static context: AudioContext | null = null;
 
-  static initialize(audioContext: AudioContext): void {
+  static async initialize(audioContext: AudioContext): Promise<void> {
     this.context = audioContext;
+    // Ensure Tone uses the same AudioContext so nodes interconnect seamlessly
+    try {
+      console.log("[Effects] Setting Tone.js context to match effects context...");
+      Tone.setContext(audioContext);
+      
+      // Wait a bit for context to be set
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Start Tone.js to enable all Tone effects
+      console.log("[Effects] Starting Tone.js...");
+      await Tone.start();
+      console.log("[Effects] Tone.js started successfully, context state:", Tone.getContext().state);
+      console.log("[Effects] Tone context matches effects context:", Tone.getContext().rawContext === audioContext);
+    } catch (error) {
+      console.warn("[Effects] Failed to initialize Tone.js:", error);
+    }
   }
+
+  /**
+   * Helper to connect Tone.js effects safely
+   */
+  private static connectToneEffect(
+    inputGain: GainNode,
+    toneEffect: any,
+    wetGain: GainNode,
+    dryGain: GainNode,
+    outputGain: GainNode
+  ): void {
+    try {
+      // Connect dry path
+      inputGain.connect(dryGain);
+      dryGain.connect(outputGain);
+      
+      // Connect wet path through Tone effect
+      // Try different connection methods based on Tone.js version
+      if (toneEffect.input?.input) {
+        // Newer Tone.js structure
+        inputGain.connect(toneEffect.input.input);
+        toneEffect.output.output.connect(wetGain);
+      } else if (toneEffect.input && toneEffect.output) {
+        // Older structure or direct nodes
+        inputGain.connect(toneEffect.input);
+        toneEffect.output.connect(wetGain);
+      } else {
+        throw new Error("Cannot determine Tone.js input/output structure");
+      }
+      
+      wetGain.connect(outputGain);
+      console.log("[Effects] Tone effect connected successfully");
+    } catch (error) {
+      console.error("[Effects] Failed to connect Tone effect:", error);
+      // Fallback: bypass Tone effect
+      inputGain.connect(dryGain);
+      dryGain.connect(outputGain);
+    }
+  }
+
+
 
   /**
    * Create a new effect instance
@@ -128,6 +295,28 @@ export class EffectsFactory {
         return this.createCompressorEffect(id);
       case EffectType.FILTER:
         return this.createFilterEffect(id);
+      case EffectType.AUTOFILTER:
+        return this.createAutoFilterEffect(id);
+      case EffectType.AUTOPANNER:
+        return this.createAutoPannerEffect(id);
+      case EffectType.AUTOWAH:
+        return this.createAutoWahEffect(id);
+      case EffectType.BITCRUSHER:
+        return this.createBitCrusherEffect(id);
+      case EffectType.CHORUS:
+        return this.createChorusEffect(id);
+      case EffectType.DISTORTION:
+        return this.createDistortionEffect(id);
+      case EffectType.PHASER:
+        return this.createPhaserEffect(id);
+      case EffectType.PINGPONGDELAY:
+        return this.createPingPongDelayEffect(id);
+      case EffectType.STEREOWIDENER:
+        return this.createStereoWidenerEffect(id);
+      case EffectType.TREMOLO:
+        return this.createTremoloEffect(id);
+      case EffectType.VIBRATO:
+        return this.createVibratoEffect(id);
       default:
         console.warn(`Effect type ${type} not implemented yet`);
         return null;
@@ -138,59 +327,56 @@ export class EffectsFactory {
    * Return effect to pool for reuse
    */
   static releaseEffect(effect: AudioEffect): void {
-    effect.cleanup();
+    try {
+      effect.cleanup();
+    } catch (error) {
+      console.warn("[Effects] Error during effect cleanup", error);
+    }
+
     effect.enabled = false;
 
-    const pool = this.effectPool.get(effect.type) || [];
-    if (pool.length < 5) {
-      // Limit pool size
-      pool.push(effect);
-      this.effectPool.set(effect.type, pool);
-    }
+    // Pooling is temporarily disabled to avoid reusing disposed Tone nodes
+    // which caused silent chains after remote parameter updates.
   }
 
   private static createReverbEffect(id?: string): AudioEffect {
     const context = this.context!;
-    const nodePool = AudioContextManager.getNodePool();
-
-    // Create convolution reverb
-    const convolver = context.createConvolver();
-    const inputGain = nodePool?.getGainNode() || context.createGain();
-    const outputGain = nodePool?.getGainNode() || context.createGain();
-    const wetGain = nodePool?.getGainNode() || context.createGain();
-    const dryGain = nodePool?.getGainNode() || context.createGain();
-
-    // Create impulse response (simple room simulation)
-    const impulseLength = context.sampleRate * 2; // 2 seconds
-    const impulse = context.createBuffer(2, impulseLength, context.sampleRate);
-
-    for (let channel = 0; channel < 2; channel++) {
-      const channelData = impulse.getChannelData(channel);
-      for (let i = 0; i < impulseLength; i++) {
-        channelData[i] =
-          (Math.random() * 2 - 1) * Math.pow(1 - i / impulseLength, 2);
-      }
-    }
-    convolver.buffer = impulse;
-
-    // Wire up the effect
-    inputGain.connect(dryGain);
-    inputGain.connect(convolver);
-    convolver.connect(wetGain);
-    dryGain.connect(outputGain);
-    wetGain.connect(outputGain);
+    // Create Tone Reverb with reasonable defaults
+    const reverb = new Tone.Reverb({ 
+      decay: 2,
+      wet: 0.3
+    });
+    
+    // Properly connect to Tone.js nodes
+    // Tone.js effects have special .input and .output properties
+    const inputNode = reverb.input as any;
+    const outputNode = reverb.output as any;
 
     const parameters = new Map<string, EffectParameter>();
-    parameters.set("wetLevel", {
-      name: "Wet Level",
-      value: 0.3,
+    parameters.set("roomSize", {
+      name: "Room Size",
+      value: 0.7,
       min: 0,
       max: 1,
-      unit: "%",
+      unit: "",
     });
-    parameters.set("dryLevel", {
-      name: "Dry Level",
-      value: 0.7,
+    parameters.set("decayTime", {
+      name: "Decay Time",
+      value: 2,
+      min: 0.1,
+      max: 10,
+      unit: "s",
+    });
+    parameters.set("preDelay", {
+      name: "Pre-Delay",
+      value: 0.01,
+      min: 0,
+      max: 0.1,
+      unit: "s",
+    });
+    parameters.set("wetLevel", {
+      name: "Wet Level",
+      value: reverb.wet.value,
       min: 0,
       max: 1,
       unit: "%",
@@ -202,10 +388,11 @@ export class EffectsFactory {
       name: "Reverb",
       enabled: true,
       parameters,
-      inputNode: inputGain,
-      outputNode: outputGain,
-      wetGainNode: wetGain,
-      dryGainNode: dryGain,
+      inputNode,
+      outputNode,
+      // Placeholders to satisfy interface; Tone handles wet internally
+      wetGainNode: outputNode,
+      dryGainNode: inputNode,
       bypass: false,
 
       process(input: AudioNode): AudioNode {
@@ -215,16 +402,30 @@ export class EffectsFactory {
 
       setParameter(name: string, value: number): void {
         const param = this.parameters.get(name);
-        if (!param) return;
-
-        param.value = Math.max(param.min, Math.min(param.max, value));
-
+        if (!param) {
+          console.warn(`[Reverb Effect] Parameter ${name} not found`);
+          return;
+        }
+        const v = Math.max(param.min, Math.min(param.max, value));
+        param.value = v;
         switch (name) {
           case "wetLevel":
-            this.wetGainNode.gain.setValueAtTime(value, context.currentTime);
+            reverb.wet.setValueAtTime(v, context.currentTime);
             break;
-          case "dryLevel":
-            this.dryGainNode.gain.setValueAtTime(value, context.currentTime);
+          case "decayTime":
+            // Update decay time - this affects room size perception
+            reverb.decay = v;
+            break;
+          case "roomSize": {
+            // Simulate room size by adjusting decay time
+            const currentDecay = this.parameters.get("decayTime")?.value || 2;
+            const roomDecay = currentDecay * (0.5 + v * 1.5); // Scale decay based on room size
+            reverb.decay = roomDecay;
+            break;
+          }
+          case "preDelay":
+            // For pre-delay, we'll need to use a delay node before the reverb
+            // For now, just store the value - could be implemented with additional delay node
             break;
         }
       },
@@ -235,68 +436,73 @@ export class EffectsFactory {
 
       enable(): void {
         this.enabled = true;
-        this.outputNode.gain.setValueAtTime(1, context.currentTime);
+        // Restore wet level from parameters
+        const wetLevel = this.parameters.get("wetLevel")?.value || 0.5;
+        reverb.wet.setValueAtTime(wetLevel, context.currentTime);
       },
 
       disable(): void {
         this.enabled = false;
-        this.outputNode.gain.setValueAtTime(0, context.currentTime);
+        reverb.wet.setValueAtTime(0, context.currentTime);
       },
 
       cleanup(): void {
-        this.inputNode.disconnect();
-        this.outputNode.disconnect();
-        this.wetGainNode.disconnect();
-        this.dryGainNode.disconnect();
-        convolver.disconnect();
+        try {
+          (reverb as any).dispose?.();
+        } catch {
+          // ignore
+        }
       },
     };
   }
 
   private static createDelayEffect(id?: string): AudioEffect {
     const context = this.context!;
-    const nodePool = AudioContextManager.getNodePool();
-
-    const delay = context.createDelay(1.0); // Max 1 second delay
-    const feedback = nodePool?.getGainNode() || context.createGain();
-    const inputGain = nodePool?.getGainNode() || context.createGain();
-    const outputGain = nodePool?.getGainNode() || context.createGain();
-    const wetGain = nodePool?.getGainNode() || context.createGain();
-    const dryGain = nodePool?.getGainNode() || context.createGain();
-
-    // Wire up delay with feedback
-    inputGain.connect(dryGain);
-    inputGain.connect(delay);
-    delay.connect(feedback);
-    delay.connect(wetGain);
-    feedback.connect(delay);
-    dryGain.connect(outputGain);
-    wetGain.connect(outputGain);
-
+    
+    // Create native Web Audio nodes for delay effect
+    const inputGain = context.createGain();
+    const delayNode = context.createDelay(1.0);
+    const feedbackGain = context.createGain();
+    const wetGain = context.createGain();
+    const dryGain = context.createGain();
+    const outputGain = context.createGain();
+    
     // Set initial values
-    delay.delayTime.value = 0.25; // 250ms
-    feedback.gain.value = 0.3;
+    delayNode.delayTime.value = 0.25;
+    feedbackGain.gain.value = 0.3;
     wetGain.gain.value = 0.3;
     dryGain.gain.value = 0.7;
+    
+    // Connect delay network
+    inputGain.connect(delayNode);
+    inputGain.connect(dryGain);
+    delayNode.connect(feedbackGain);
+    feedbackGain.connect(delayNode);
+    delayNode.connect(wetGain);
+    wetGain.connect(outputGain);
+    dryGain.connect(outputGain);
+    
+    const inputNode = inputGain;
+    const outputNode = outputGain;
 
     const parameters = new Map<string, EffectParameter>();
     parameters.set("delayTime", {
       name: "Delay Time",
-      value: 0.25,
+      value: delayNode.delayTime.value,
       min: 0.01,
       max: 1.0,
       unit: "s",
     });
     parameters.set("feedback", {
       name: "Feedback",
-      value: 0.3,
+      value: feedbackGain.gain.value,
       min: 0,
-      max: 0.9,
+      max: 0.95,
       unit: "%",
     });
     parameters.set("wetLevel", {
       name: "Wet Level",
-      value: 0.3,
+      value: wetGain.gain.value,
       min: 0,
       max: 1,
       unit: "%",
@@ -308,6 +514,395 @@ export class EffectsFactory {
       name: "Delay",
       enabled: true,
       parameters,
+      inputNode,
+      outputNode,
+      wetGainNode: wetGain,
+      dryGainNode: dryGain,
+      bypass: false,
+
+      process(input: AudioNode): AudioNode {
+        input.connect(this.inputNode);
+        return this.outputNode;
+      },
+
+      setParameter(name: string, value: number): void {
+        const param = this.parameters.get(name);
+        if (!param) {
+          console.warn(`[Delay Effect] Parameter ${name} not found`);
+          return;
+        }
+        const v = Math.max(param.min, Math.min(param.max, value));
+        param.value = v;
+        switch (name) {
+          case "delayTime":
+            delayNode.delayTime.setValueAtTime(v, context.currentTime);
+            break;
+          case "feedback":
+            feedbackGain.gain.setValueAtTime(v, context.currentTime);
+            break;
+          case "wetLevel":
+            wetGain.gain.setValueAtTime(v, context.currentTime);
+            dryGain.gain.setValueAtTime(1 - v, context.currentTime);
+            break;
+        }
+      },
+
+      getParameter(name: string): number | undefined {
+        return this.parameters.get(name)?.value;
+      },
+
+      enable(): void {
+        this.enabled = true;
+        // Restore wet/dry levels from parameters
+        const wetLevel = this.parameters.get("wetLevel")?.value || 0.5;
+        const dryLevel = this.parameters.get("dryLevel")?.value || 0.5;
+        wetGain.gain.setValueAtTime(wetLevel, context.currentTime);
+        dryGain.gain.setValueAtTime(dryLevel, context.currentTime);
+      },
+
+      disable(): void {
+        this.enabled = false;
+        wetGain.gain.setValueAtTime(0, context.currentTime);
+        dryGain.gain.setValueAtTime(1, context.currentTime);
+      },
+
+      cleanup(): void {
+        try {
+          inputGain.disconnect();
+          delayNode.disconnect();
+          feedbackGain.disconnect();
+          wetGain.disconnect();
+          dryGain.disconnect();
+          outputGain.disconnect();
+        } catch {
+          // ignore
+        }
+      },
+    };
+  }
+
+  private static createCompressorEffect(id?: string): AudioEffect {
+    const context = this.context!;
+    const compressor = new Tone.Compressor({
+      threshold: -24,
+      ratio: 4,
+      attack: 0.003,
+      release: 0.25,
+    });
+    
+    // Create dry/wet mixing nodes
+    const inputGain = context.createGain();
+    const wetGain = context.createGain();
+    const dryGain = context.createGain();
+    const outputGain = context.createGain();
+    
+    // Set initial dry/wet balance (100% wet for compressor)
+    wetGain.gain.value = 1;
+    dryGain.gain.value = 0;
+    
+    // Connect the network
+    inputGain.connect(compressor.input as any);
+    inputGain.connect(dryGain);
+    (compressor.output as any).connect(wetGain);
+    wetGain.connect(outputGain);
+    dryGain.connect(outputGain);
+    
+    const inputNode = inputGain;
+    const outputNode = outputGain;
+
+    const parameters = new Map<string, EffectParameter>();
+    parameters.set("threshold", {
+      name: "Threshold",
+      value: compressor.threshold.value as number,
+      min: -100,
+      max: 0,
+      unit: "dB",
+    });
+    parameters.set("ratio", {
+      name: "Ratio",
+      value: compressor.ratio.value as number,
+      min: 1,
+      max: 20,
+      unit: ":1",
+    });
+    parameters.set("attack", {
+      name: "Attack",
+      value: compressor.attack.value as number,
+      min: 0,
+      max: 1,
+      unit: "s",
+    });
+    parameters.set("release", {
+      name: "Release",
+      value: compressor.release.value as number,
+      min: 0,
+      max: 1,
+      unit: "s",
+    });
+    parameters.set("wetLevel", {
+      name: "Wet Level",
+      value: 1, // Compressor is typically 100% wet
+      min: 0,
+      max: 1,
+      unit: "%",
+    });
+
+    return {
+      id: id || `compressor_${Date.now()}`,
+      type: EffectType.COMPRESSOR,
+      name: "Compressor",
+      enabled: true,
+      parameters,
+      inputNode,
+      outputNode,
+      wetGainNode: outputNode,
+      dryGainNode: inputNode,
+      bypass: false,
+
+      process(input: AudioNode): AudioNode {
+        input.connect(this.inputNode);
+        return this.outputNode;
+      },
+
+      setParameter(name: string, value: number): void {
+        const param = this.parameters.get(name);
+        if (!param) return;
+        const v = Math.max(param.min, Math.min(param.max, value));
+        param.value = v;
+
+        switch (name) {
+          case "threshold":
+            compressor.threshold.setValueAtTime(v, context.currentTime);
+            break;
+          case "ratio":
+            compressor.ratio.setValueAtTime(v, context.currentTime);
+            break;
+          case "attack":
+            compressor.attack.setValueAtTime(v, context.currentTime);
+            break;
+          case "release":
+            compressor.release.setValueAtTime(v, context.currentTime);
+            break;
+          case "wetLevel":
+            wetGain.gain.setValueAtTime(v, context.currentTime);
+            dryGain.gain.setValueAtTime(1 - v, context.currentTime);
+            break;
+        }
+      },
+
+      getParameter(name: string): number | undefined {
+        return this.parameters.get(name)?.value;
+      },
+
+      enable(): void {
+        this.enabled = true;
+      },
+
+      disable(): void {
+        this.enabled = false;
+      },
+
+      cleanup(): void {
+        try {
+          (compressor as any).dispose?.();
+          inputGain.disconnect();
+          wetGain.disconnect();
+          dryGain.disconnect();
+          outputGain.disconnect();
+        } catch {
+          // ignore
+        }
+      },
+    };
+  }
+
+  private static createFilterEffect(id?: string): AudioEffect {
+    const context = this.context!;
+    const filter = new Tone.Filter({ type: "lowpass", frequency: 1000, Q: 1 });
+    
+    // Create dry/wet mixing nodes
+    const inputGain = context.createGain();
+    const wetGain = context.createGain();
+    const dryGain = context.createGain();
+    const outputGain = context.createGain();
+    
+    // Set initial dry/wet balance (100% wet for filter)
+    wetGain.gain.value = 1;
+    dryGain.gain.value = 0;
+    
+    // Connect the network
+    inputGain.connect(filter.input as any);
+    inputGain.connect(dryGain);
+    (filter.output as any).connect(wetGain);
+    wetGain.connect(outputGain);
+    dryGain.connect(outputGain);
+    
+    const inputNode = inputGain;
+    const outputNode = outputGain;
+
+    const parameters = new Map<string, EffectParameter>();
+    parameters.set("frequency", {
+      name: "Frequency",
+      value: filter.frequency.value as number,
+      min: 20,
+      max: 20000,
+      unit: "Hz",
+      curve: "logarithmic",
+    });
+    parameters.set("Q", {
+      name: "Resonance",  
+      value: filter.Q.value as number,
+      min: 0.1,
+      max: 30,
+      unit: "Q",
+    });
+    parameters.set("type", {
+      name: "Type",
+      value: 0, // 0=lowpass, 1=highpass, 2=bandpass
+      min: 0,
+      max: 2,
+      unit: "",
+    });
+    parameters.set("wetLevel", {
+      name: "Wet Level",
+      value: 1, // Filter is typically 100% wet
+      min: 0,
+      max: 1,
+      unit: "%",
+    });
+
+    return {
+      id: id || `filter_${Date.now()}`,
+      type: EffectType.FILTER,
+      name: "Filter",
+      enabled: true,
+      parameters,
+      inputNode,
+      outputNode,
+      wetGainNode: outputNode,
+      dryGainNode: inputNode,
+      bypass: false,
+
+      process(input: AudioNode): AudioNode {
+        input.connect(this.inputNode);
+        return this.outputNode;
+      },
+
+      setParameter(name: string, value: number): void {
+        const param = this.parameters.get(name);
+        if (!param) return;
+        const v = Math.max(param.min, Math.min(param.max, value));
+        param.value = v;
+        switch (name) {
+          case "frequency":
+            filter.frequency.setValueAtTime(v, context.currentTime);
+            break;
+          case "Q":
+            filter.Q.setValueAtTime(v, context.currentTime);
+            break;
+          case "type": {
+            const types = ["lowpass", "highpass", "bandpass"];
+            const typeIndex = Math.round(v);
+            if (typeIndex >= 0 && typeIndex < types.length) {
+              filter.type = types[typeIndex] as any;
+            }
+            break;
+          }
+          case "wetLevel":
+            wetGain.gain.setValueAtTime(v, context.currentTime);
+            dryGain.gain.setValueAtTime(1 - v, context.currentTime);
+            break;
+        }
+      },
+
+      getParameter(name: string): number | undefined {
+        return this.parameters.get(name)?.value;
+      },
+
+      enable(): void {
+        this.enabled = true;
+      },
+
+      disable(): void {
+        this.enabled = false;
+      },
+
+      cleanup(): void {
+        try {
+          (filter as any).dispose?.();
+          inputGain.disconnect();
+          wetGain.disconnect();
+          dryGain.disconnect();
+          outputGain.disconnect();
+        } catch {
+          // ignore
+        }
+      },
+    };
+  }
+
+  private static createAutoFilterEffect(id?: string): AudioEffect {
+    const context = this.context!;
+    console.log("[Effects] Creating AutoFilter effect...");
+    const autoFilter = new Tone.AutoFilter(1, 400, 2.6);
+    console.log("[Effects] AutoFilter created:", autoFilter, "Tone context state:", Tone.getContext().state);
+
+    // Create dry/wet mixing nodes
+    const inputGain = context.createGain();
+    const wetGain = context.createGain();
+    const dryGain = context.createGain();
+    const outputGain = context.createGain();
+
+    // Set initial dry/wet balance
+    wetGain.gain.value = 0.5;
+    dryGain.gain.value = 0.5;
+
+    // Connect the network using helper
+    this.connectToneEffect(inputGain, autoFilter, wetGain, dryGain, outputGain);
+
+    const parameters = new Map<string, EffectParameter>();
+    parameters.set("frequency", {
+      name: "Frequency",
+      value: 1,
+      min: 1,
+      max: 20,
+      unit: "Hz",
+    });
+    parameters.set("baseFrequency", {
+      name: "Base Frequency",
+      value: 400,
+      min: 50,
+      max: 2000,
+      unit: "Hz",
+    });
+    parameters.set("octaves", {
+      name: "Octaves",
+      value: 2.6,
+      min: 0.5,
+      max: 8,
+      unit: "",
+    });
+    parameters.set("type", {
+      name: "Filter Type",
+      value: 0,
+      min: 0,
+      max: 2,
+      unit: "",
+    });
+    parameters.set("wetLevel", {
+      name: "Wet Level",
+      value: 0.5,
+      min: 0,
+      max: 1,
+      unit: "%",
+    });
+
+    return {
+      id: id || `autofilter_${Date.now()}`,
+      type: EffectType.AUTOFILTER,
+      name: "AutoFilter",
+      enabled: true,
+      parameters,
       inputNode: inputGain,
       outputNode: outputGain,
       wetGainNode: wetGain,
@@ -322,18 +917,35 @@ export class EffectsFactory {
       setParameter(name: string, value: number): void {
         const param = this.parameters.get(name);
         if (!param) return;
-
-        param.value = Math.max(param.min, Math.min(param.max, value));
-
+        const v = Math.max(param.min, Math.min(param.max, value));
+        param.value = v;
         switch (name) {
-          case "delayTime":
-            delay.delayTime.setValueAtTime(value, context.currentTime);
+          case "frequency":
+            console.log("[Effects] Setting AutoFilter frequency:", v);
+            autoFilter.frequency.setValueAtTime(v, context.currentTime);
             break;
-          case "feedback":
-            feedback.gain.setValueAtTime(value, context.currentTime);
+          case "baseFrequency":
+            console.log("[Effects] Setting AutoFilter baseFrequency:", v);
+            autoFilter.baseFrequency = v;
             break;
+          case "octaves":
+            console.log("[Effects] Setting AutoFilter octaves:", v);
+            autoFilter.octaves = v;
+            break;
+          case "type": {
+            const types = ["lowpass", "highpass", "bandpass"];
+            const typeIndex = Math.round(v);
+            if (typeIndex >= 0 && typeIndex < types.length) {
+              console.log("[Effects] Setting AutoFilter type:", types[typeIndex]);
+              // AutoFilter uses filter.type, not the effect itself
+              autoFilter.filter.type = types[typeIndex] as any;
+            }
+            break;
+          }
           case "wetLevel":
-            this.wetGainNode.gain.setValueAtTime(value, context.currentTime);
+            console.log("[Effects] Setting AutoFilter wetLevel:", v);
+            wetGain.gain.setValueAtTime(v, context.currentTime);
+            dryGain.gain.setValueAtTime(1 - v, context.currentTime);
             break;
         }
       },
@@ -344,177 +956,109 @@ export class EffectsFactory {
 
       enable(): void {
         this.enabled = true;
-        this.outputNode.gain.setValueAtTime(1, context.currentTime);
+        console.log("[Effects] Enabling AutoFilter, starting...");
+        autoFilter.start();
+        console.log("[Effects] AutoFilter started");
       },
 
       disable(): void {
         this.enabled = false;
-        this.outputNode.gain.setValueAtTime(0, context.currentTime);
+        autoFilter.stop();
       },
 
       cleanup(): void {
-        this.inputNode.disconnect();
-        this.outputNode.disconnect();
-        this.wetGainNode.disconnect();
-        this.dryGainNode.disconnect();
-        delay.disconnect();
-        feedback.disconnect();
-      },
-    };
-  }
-
-  private static createCompressorEffect(id?: string): AudioEffect {
-    const context = this.context!;
-    const nodePool = AudioContextManager.getNodePool();
-
-    const compressor = context.createDynamicsCompressor();
-    const inputGain = nodePool?.getGainNode() || context.createGain();
-    const outputGain = nodePool?.getGainNode() || context.createGain();
-
-    inputGain.connect(compressor);
-    compressor.connect(outputGain);
-
-    // Set initial compressor values
-    compressor.threshold.value = -24;
-    compressor.knee.value = 30;
-    compressor.ratio.value = 4;
-    compressor.attack.value = 0.003;
-    compressor.release.value = 0.25;
-
-    const parameters = new Map<string, EffectParameter>();
-    parameters.set("threshold", {
-      name: "Threshold",
-      value: -24,
-      min: -100,
-      max: 0,
-      unit: "dB",
-    });
-    parameters.set("ratio", {
-      name: "Ratio",
-      value: 4,
-      min: 1,
-      max: 20,
-      unit: ":1",
-    });
-    parameters.set("attack", {
-      name: "Attack",
-      value: 0.003,
-      min: 0,
-      max: 1,
-      unit: "s",
-    });
-    parameters.set("release", {
-      name: "Release",
-      value: 0.25,
-      min: 0,
-      max: 1,
-      unit: "s",
-    });
-
-    return {
-      id: id || `compressor_${Date.now()}`,
-      type: EffectType.COMPRESSOR,
-      name: "Compressor",
-      enabled: true,
-      parameters,
-      inputNode: inputGain,
-      outputNode: outputGain,
-      wetGainNode: outputGain, // Compressor doesn't have wet/dry
-      dryGainNode: inputGain,
-      bypass: false,
-
-      process(input: AudioNode): AudioNode {
-        input.connect(this.inputNode);
-        return this.outputNode;
-      },
-
-      setParameter(name: string, value: number): void {
-        const param = this.parameters.get(name);
-        if (!param) return;
-
-        param.value = Math.max(param.min, Math.min(param.max, value));
-
-        switch (name) {
-          case "threshold":
-            compressor.threshold.setValueAtTime(value, context.currentTime);
-            break;
-          case "ratio":
-            compressor.ratio.setValueAtTime(value, context.currentTime);
-            break;
-          case "attack":
-            compressor.attack.setValueAtTime(value, context.currentTime);
-            break;
-          case "release":
-            compressor.release.setValueAtTime(value, context.currentTime);
-            break;
+        try {
+          (autoFilter as any).dispose?.();
+          inputGain.disconnect();
+          wetGain.disconnect();
+          dryGain.disconnect();
+          outputGain.disconnect();
+        } catch {
+          // ignore
         }
       },
-
-      getParameter(name: string): number | undefined {
-        return this.parameters.get(name)?.value;
-      },
-
-      enable(): void {
-        this.enabled = true;
-        this.outputNode.gain.setValueAtTime(1, context.currentTime);
-      },
-
-      disable(): void {
-        this.enabled = false;
-        this.outputNode.gain.setValueAtTime(0, context.currentTime);
-      },
-
-      cleanup(): void {
-        this.inputNode.disconnect();
-        this.outputNode.disconnect();
-        compressor.disconnect();
-      },
     };
   }
 
-  private static createFilterEffect(id?: string): AudioEffect {
+  private static createAutoPannerEffect(id?: string): AudioEffect {
     const context = this.context!;
-    const nodePool = AudioContextManager.getNodePool();
+    const autoPanner = new Tone.AutoPanner({
+      frequency: 1,
+      depth: 1
+    });
 
-    const filter = context.createBiquadFilter();
-    const inputGain = nodePool?.getGainNode() || context.createGain();
-    const outputGain = nodePool?.getGainNode() || context.createGain();
+    // Create dry/wet mixing nodes
+    const inputGain = context.createGain();
+    const wetGain = context.createGain();
+    const dryGain = context.createGain();
+    const outputGain = context.createGain();
 
-    inputGain.connect(filter);
-    filter.connect(outputGain);
+    // Create stereo enhancement for mono-to-stereo panning
+    const splitter = context.createChannelSplitter(2);
+    const merger = context.createChannelMerger(2);
+    
+    // Set initial dry/wet balance
+    wetGain.gain.value = 0.5;
+    dryGain.gain.value = 0.5;
 
-    // Set initial filter values
-    filter.type = "lowpass";
-    filter.frequency.value = 1000;
-    filter.Q.value = 1;
+    // Enhanced stereo routing for auto-panning
+    try {
+      // Route input to dry path
+      inputGain.connect(dryGain);
+      
+      // Split mono to stereo for panner processing
+      inputGain.connect(splitter);
+      splitter.connect(merger, 0, 0); // Left channel
+      splitter.connect(merger, 0, 1); // Right channel (same signal)
+      
+      // Process through auto-panner for stereo movement
+      merger.connect(autoPanner.input as any);
+      (autoPanner.output as any).connect(wetGain);
+      
+      // Mix dry (centered) and wet (panned) signals
+      dryGain.connect(outputGain);
+      wetGain.connect(outputGain);
+      
+      console.log("[Effects] AutoPanner connected with stereo movement enhancement");
+    } catch (error) {
+      console.error("[Effects] Failed to connect AutoPanner with enhancement:", error);
+      // Fallback to helper method
+      this.connectToneEffect(inputGain, autoPanner, wetGain, dryGain, outputGain);
+    }
 
     const parameters = new Map<string, EffectParameter>();
     parameters.set("frequency", {
       name: "Frequency",
-      value: 1000,
-      min: 20,
-      max: 20000,
-      unit: "Hz",
-      curve: "logarithmic",
-    });
-    parameters.set("Q", {
-      name: "Resonance",
       value: 1,
       min: 0.1,
-      max: 30,
-      unit: "Q",
+      max: 20,
+      unit: "Hz",
+    });
+    parameters.set("depth", {
+      name: "Depth",
+      value: 1,
+      min: 0,
+      max: 1,
+      unit: "",
+    });
+    parameters.set("wetLevel", {
+      name: "Wet Level",
+      value: 0.5,
+      min: 0,
+      max: 1,
+      unit: "%",
     });
 
     return {
-      id: id || `filter_${Date.now()}`,
-      type: EffectType.FILTER,
-      name: "Filter",
+      id: id || `autopanner_${Date.now()}`,
+      type: EffectType.AUTOPANNER,
+      name: "AutoPanner",
       enabled: true,
       parameters,
       inputNode: inputGain,
       outputNode: outputGain,
-      wetGainNode: outputGain,
-      dryGainNode: inputGain,
+      wetGainNode: wetGain,
+      dryGainNode: dryGain,
       bypass: false,
 
       process(input: AudioNode): AudioNode {
@@ -525,15 +1069,18 @@ export class EffectsFactory {
       setParameter(name: string, value: number): void {
         const param = this.parameters.get(name);
         if (!param) return;
-
-        param.value = Math.max(param.min, Math.min(param.max, value));
-
+        const v = Math.max(param.min, Math.min(param.max, value));
+        param.value = v;
         switch (name) {
           case "frequency":
-            filter.frequency.setValueAtTime(value, context.currentTime);
+            autoPanner.frequency.setValueAtTime(v, context.currentTime);
             break;
-          case "Q":
-            filter.Q.setValueAtTime(value, context.currentTime);
+          case "depth":
+            autoPanner.depth.setValueAtTime(v, context.currentTime);
+            break;
+          case "wetLevel":
+            wetGain.gain.setValueAtTime(v, context.currentTime);
+            dryGain.gain.setValueAtTime(1 - v, context.currentTime);
             break;
         }
       },
@@ -544,18 +1091,1160 @@ export class EffectsFactory {
 
       enable(): void {
         this.enabled = true;
-        this.outputNode.gain.setValueAtTime(1, context.currentTime);
+        autoPanner.start();
       },
 
       disable(): void {
         this.enabled = false;
-        this.outputNode.gain.setValueAtTime(0, context.currentTime);
+        autoPanner.stop();
       },
 
       cleanup(): void {
-        this.inputNode.disconnect();
-        this.outputNode.disconnect();
-        filter.disconnect();
+        try {
+          (autoPanner as any).dispose?.();
+          inputGain.disconnect();
+          wetGain.disconnect();
+          dryGain.disconnect();
+          outputGain.disconnect();
+        } catch {
+          // ignore
+        }
+      },
+    };
+  }
+
+  private static createAutoWahEffect(id?: string): AudioEffect {
+    const context = this.context!;
+    const autoWah = new Tone.AutoWah({
+      baseFrequency: 100,
+      octaves: 6,
+      sensitivity: 0,
+      Q: 2
+    });
+
+    // AutoWah is an analysis-based effect that doesn't need explicit starting
+
+    // Create dry/wet mixing nodes
+    const inputGain = context.createGain();
+    const wetGain = context.createGain();
+    const dryGain = context.createGain();
+    const outputGain = context.createGain();
+
+    // Set initial dry/wet balance
+    wetGain.gain.value = 0.5;
+    dryGain.gain.value = 0.5;
+
+    // Connect the network using the helper
+    this.connectToneEffect(inputGain, autoWah, wetGain, dryGain, outputGain);
+
+    const parameters = new Map<string, EffectParameter>();
+    parameters.set("baseFrequency", {
+      name: "Base Frequency",
+      value: 100,
+      min: 50,
+      max: 1000,
+      unit: "Hz",
+    });
+    parameters.set("octaves", {
+      name: "Octaves",
+      value: 6,
+      min: 1,
+      max: 8,
+      unit: "",
+    });
+    parameters.set("sensitivity", {
+      name: "Sensitivity",
+      value: 0,
+      min: -40,
+      max: 0,
+      unit: "dB",
+    });
+    parameters.set("Q", {
+      name: "Q",
+      value: 2,
+      min: 0.1,
+      max: 30,
+      unit: "",
+    });
+    parameters.set("wetLevel", {
+      name: "Wet Level",
+      value: 0.5,
+      min: 0,
+      max: 1,
+      unit: "%",
+    });
+
+    return {
+      id: id || `autowah_${Date.now()}`,
+      type: EffectType.AUTOWAH,
+      name: "AutoWah",
+      enabled: true,
+      parameters,
+      inputNode: inputGain,
+      outputNode: outputGain,
+      wetGainNode: wetGain,
+      dryGainNode: dryGain,
+      bypass: false,
+
+      process(input: AudioNode): AudioNode {
+        input.connect(this.inputNode);
+        return this.outputNode;
+      },
+
+      setParameter(name: string, value: number): void {
+        const param = this.parameters.get(name);
+        if (!param) return;
+        const v = Math.max(param.min, Math.min(param.max, value));
+        param.value = v;
+        switch (name) {
+          case "baseFrequency":
+            autoWah.baseFrequency = v;
+            break;
+          case "octaves":
+            autoWah.octaves = v;
+            break;
+          case "sensitivity":
+            autoWah.sensitivity = v;
+            break;
+          case "Q":
+            autoWah.Q.setValueAtTime(v, context.currentTime);
+            break;
+          case "wetLevel":
+            wetGain.gain.setValueAtTime(v, context.currentTime);
+            dryGain.gain.setValueAtTime(1 - v, context.currentTime);
+            break;
+        }
+      },
+
+      getParameter(name: string): number | undefined {
+        return this.parameters.get(name)?.value;
+      },
+
+      enable(): void {
+        this.enabled = true;
+      },
+
+      disable(): void {
+        this.enabled = false;
+      },
+
+      cleanup(): void {
+        try {
+          (autoWah as any).dispose?.();
+          inputGain.disconnect();
+          wetGain.disconnect();
+          dryGain.disconnect();
+          outputGain.disconnect();
+        } catch {
+          // ignore
+        }
+      },
+    };
+  }
+
+  private static createBitCrusherEffect(id?: string): AudioEffect {
+    const context = this.context!;
+    let bitCrusher = new Tone.BitCrusher(8);
+
+    // Create dry/wet mixing nodes
+    const inputGain = context.createGain();
+    const wetGain = context.createGain();
+    const dryGain = context.createGain();
+    const outputGain = context.createGain();
+
+    // Set initial dry/wet balance
+    wetGain.gain.value = 0.5;
+    dryGain.gain.value = 0.5;
+
+    // Connect the network using the helper
+    this.connectToneEffect(inputGain, bitCrusher, wetGain, dryGain, outputGain);
+
+    const parameters = new Map<string, EffectParameter>();
+    parameters.set("bits", {
+      name: "Bits",
+      value: 8,
+      min: 1,
+      max: 16,
+      unit: "",
+    });
+    parameters.set("wetLevel", {
+      name: "Wet Level",
+      value: 0.5,
+      min: 0,
+      max: 1,
+      unit: "%",
+    });
+
+    return {
+      id: id || `bitcrusher_${Date.now()}`,
+      type: EffectType.BITCRUSHER,
+      name: "BitCrusher",
+      enabled: true,
+      parameters,
+      inputNode: inputGain,
+      outputNode: outputGain,
+      wetGainNode: wetGain,
+      dryGainNode: dryGain,
+      bypass: false,
+
+      process(input: AudioNode): AudioNode {
+        input.connect(this.inputNode);
+        return this.outputNode;
+      },
+
+      setParameter(name: string, value: number): void {
+        const param = this.parameters.get(name);
+        if (!param) return;
+        const v = Math.max(param.min, Math.min(param.max, value));
+        param.value = v;
+        switch (name) {
+          case "bits":
+            // BitCrusher bits needs recreation - disconnect old, create new
+            try {
+              (bitCrusher.output as any).disconnect();
+              inputGain.disconnect(bitCrusher.input as any);
+              (bitCrusher as any).dispose?.();
+              
+              // Create new BitCrusher with new bits value
+              bitCrusher = new Tone.BitCrusher(Math.round(v));
+              
+              // Reconnect using the helper
+              EffectsFactory.connectToneEffect(inputGain, bitCrusher, wetGain, dryGain, outputGain);
+            } catch (error) {
+              console.warn('[BitCrusher] Failed to update bits parameter:', error);
+            }
+            break;
+          case "wetLevel":
+            wetGain.gain.setValueAtTime(v, context.currentTime);
+            dryGain.gain.setValueAtTime(1 - v, context.currentTime);
+            break;
+        }
+      },
+
+      getParameter(name: string): number | undefined {
+        return this.parameters.get(name)?.value;
+      },
+
+      enable(): void {
+        this.enabled = true;
+      },
+
+      disable(): void {
+        this.enabled = false;
+      },
+
+      cleanup(): void {
+        try {
+          (bitCrusher as any).dispose?.();
+          inputGain.disconnect();
+          wetGain.disconnect();
+          dryGain.disconnect();
+          outputGain.disconnect();
+        } catch {
+          // ignore
+        }
+      },
+    };
+  }
+
+  private static createChorusEffect(id?: string): AudioEffect {
+    const context = this.context!;
+    console.log("[Effects] Creating Chorus effect...");
+    const chorus = new Tone.Chorus({
+      frequency: 1.5,
+      delayTime: 3.5,
+      depth: 0.7,
+      spread: 180
+    });
+    console.log("[Effects] Chorus created:", chorus, "Tone context state:", Tone.getContext().state);
+
+    // Create dry/wet mixing nodes
+    const inputGain = context.createGain();
+    const wetGain = context.createGain();
+    const dryGain = context.createGain();
+    const outputGain = context.createGain();
+
+    // Create stereo enhancement for chorus effect
+    const splitter = context.createChannelSplitter(2);
+    const merger = context.createChannelMerger(2);
+    
+    // Set initial dry/wet balance
+    wetGain.gain.value = 0.5;
+    dryGain.gain.value = 0.5;
+
+    // Enhanced stereo routing for chorus (spread parameter already creates stereo width)
+    try {
+      // Route input to dry path
+      inputGain.connect(dryGain);
+      
+      // Create stereo from mono for chorus processing
+      inputGain.connect(splitter);
+      splitter.connect(merger, 0, 0); // Left channel
+      splitter.connect(merger, 0, 1); // Right channel (same signal)
+      
+      // Process through chorus (spread=180 creates stereo width)
+      merger.connect(chorus.input as any);
+      (chorus.output as any).connect(wetGain);
+      
+      // Mix dry and wet
+      dryGain.connect(outputGain);
+      wetGain.connect(outputGain);
+      
+      console.log("[Effects] Chorus connected with stereo spread enhancement");
+    } catch (error) {
+      console.error("[Effects] Failed to connect Chorus with enhancement:", error);
+      // Fallback to helper method
+      this.connectToneEffect(inputGain, chorus, wetGain, dryGain, outputGain);
+    }
+
+    const parameters = new Map<string, EffectParameter>();
+    parameters.set("frequency", {
+      name: "Frequency",
+      value: 1.5,
+      min: 0.01,
+      max: 20,
+      unit: "Hz",
+    });
+    parameters.set("delayTime", {
+      name: "Delay Time",
+      value: 3.5,
+      min: 1,
+      max: 20,
+      unit: "ms",
+    });
+    parameters.set("depth", {
+      name: "Depth",
+      value: 0.7,
+      min: 0,
+      max: 1,
+      unit: "",
+    });
+    parameters.set("spread", {
+      name: "Spread",
+      value: 180,
+      min: 0,
+      max: 180,
+      unit: "°",
+    });
+    parameters.set("wetLevel", {
+      name: "Wet Level",
+      value: 0.5,
+      min: 0,
+      max: 1,
+      unit: "%",
+    });
+
+    return {
+      id: id || `chorus_${Date.now()}`,
+      type: EffectType.CHORUS,
+      name: "Chorus",
+      enabled: true,
+      parameters,
+      inputNode: inputGain,
+      outputNode: outputGain,
+      wetGainNode: wetGain,
+      dryGainNode: dryGain,
+      bypass: false,
+
+      process(input: AudioNode): AudioNode {
+        input.connect(this.inputNode);
+        return this.outputNode;
+      },
+
+      setParameter(name: string, value: number): void {
+        const param = this.parameters.get(name);
+        if (!param) return;
+        const v = Math.max(param.min, Math.min(param.max, value));
+        param.value = v;
+        switch (name) {
+          case "frequency":
+            chorus.frequency.setValueAtTime(v, context.currentTime);
+            break;
+          case "delayTime":
+            chorus.delayTime = v;
+            break;
+          case "depth":
+            chorus.depth = v;
+            break;
+          case "spread":
+            chorus.spread = v;
+            break;
+          case "wetLevel":
+            wetGain.gain.setValueAtTime(v, context.currentTime);
+            dryGain.gain.setValueAtTime(1 - v, context.currentTime);
+            break;
+        }
+      },
+
+      getParameter(name: string): number | undefined {
+        return this.parameters.get(name)?.value;
+      },
+
+      enable(): void {
+        this.enabled = true;
+        console.log("[Effects] Enabling Chorus, starting...");
+        chorus.start();
+        console.log("[Effects] Chorus started");
+      },
+
+      disable(): void {
+        this.enabled = false;
+        chorus.stop();
+      },
+
+      cleanup(): void {
+        try {
+          (chorus as any).dispose?.();
+          inputGain.disconnect();
+          wetGain.disconnect();
+          dryGain.disconnect();
+          outputGain.disconnect();
+        } catch {
+          // ignore
+        }
+      },
+    };
+  }
+
+  private static createDistortionEffect(id?: string): AudioEffect {
+    const context = this.context!;
+    const distortion = new Tone.Distortion({
+      distortion: 0.4,
+      oversample: "none"
+    });
+
+    // Create dry/wet mixing nodes
+    const inputGain = context.createGain();
+    const wetGain = context.createGain();
+    const dryGain = context.createGain();
+    const outputGain = context.createGain();
+
+    // Set initial dry/wet balance
+    wetGain.gain.value = 0.5;
+    dryGain.gain.value = 0.5;
+
+    // Connect the network using the helper
+    this.connectToneEffect(inputGain, distortion, wetGain, dryGain, outputGain);
+
+    const parameters = new Map<string, EffectParameter>();
+    parameters.set("distortion", {
+      name: "Distortion",
+      value: 0.4,
+      min: 0,
+      max: 1,
+      unit: "",
+    });
+    parameters.set("oversample", {
+      name: "Oversample",
+      value: 0,
+      min: 0,
+      max: 2,
+      unit: "",
+    });
+    parameters.set("wetLevel", {
+      name: "Wet Level",
+      value: 0.5,
+      min: 0,
+      max: 1,
+      unit: "%",
+    });
+
+    return {
+      id: id || `distortion_${Date.now()}`,
+      type: EffectType.DISTORTION,
+      name: "Distortion",
+      enabled: true,
+      parameters,
+      inputNode: inputGain,
+      outputNode: outputGain,
+      wetGainNode: wetGain,
+      dryGainNode: dryGain,
+      bypass: false,
+
+      process(input: AudioNode): AudioNode {
+        input.connect(this.inputNode);
+        return this.outputNode;
+      },
+
+      setParameter(name: string, value: number): void {
+        const param = this.parameters.get(name);
+        if (!param) return;
+        const v = Math.max(param.min, Math.min(param.max, value));
+        param.value = v;
+        switch (name) {
+          case "distortion":
+            distortion.distortion = v;
+            break;
+          case "oversample": {
+            const oversampleModes = ["none", "2x", "4x"];
+            const modeIndex = Math.round(v);
+            if (modeIndex >= 0 && modeIndex < oversampleModes.length) {
+              distortion.oversample = oversampleModes[modeIndex] as any;
+            }
+            break;
+          }
+          case "wetLevel":
+            wetGain.gain.setValueAtTime(v, context.currentTime);
+            dryGain.gain.setValueAtTime(1 - v, context.currentTime);
+            break;
+        }
+      },
+
+      getParameter(name: string): number | undefined {
+        return this.parameters.get(name)?.value;
+      },
+
+      enable(): void {
+        this.enabled = true;
+      },
+
+      disable(): void {
+        this.enabled = false;
+      },
+
+      cleanup(): void {
+        try {
+          (distortion as any).dispose?.();
+          inputGain.disconnect();
+          wetGain.disconnect();
+          dryGain.disconnect();
+          outputGain.disconnect();
+        } catch {
+          // ignore
+        }
+      },
+    };
+  }
+
+  private static createPhaserEffect(id?: string): AudioEffect {
+    const context = this.context!;
+    const phaser = new Tone.Phaser({
+      frequency: 0.5,
+      octaves: 3,
+      baseFrequency: 350,
+      stages: 4,
+      Q: 10
+    });
+
+    // Create dry/wet mixing nodes
+    const inputGain = context.createGain();
+    const wetGain = context.createGain();
+    const dryGain = context.createGain();
+    const outputGain = context.createGain();
+
+    // Set initial dry/wet balance
+    wetGain.gain.value = 0.5;
+    dryGain.gain.value = 0.5;
+
+    // Connect the network using the helper
+    this.connectToneEffect(inputGain, phaser, wetGain, dryGain, outputGain);
+
+    const parameters = new Map<string, EffectParameter>();
+    parameters.set("frequency", {
+      name: "Frequency",
+      value: 0.5,
+      min: 0.01,
+      max: 10,
+      unit: "Hz",
+    });
+    parameters.set("octaves", {
+      name: "Octaves",
+      value: 3,
+      min: 0.5,
+      max: 8,
+      unit: "",
+    });
+    parameters.set("baseFrequency", {
+      name: "Base Frequency",
+      value: 350,
+      min: 50,
+      max: 2000,
+      unit: "Hz",
+    });
+    parameters.set("stages", {
+      name: "Stages",
+      value: 4,
+      min: 2,
+      max: 8,
+      unit: "",
+    });
+    parameters.set("Q", {
+      name: "Q",
+      value: 10,
+      min: 0.1,
+      max: 30,
+      unit: "",
+    });
+    parameters.set("wetLevel", {
+      name: "Wet Level",
+      value: 0.5,
+      min: 0,
+      max: 1,
+      unit: "%",
+    });
+
+    return {
+      id: id || `phaser_${Date.now()}`,
+      type: EffectType.PHASER,
+      name: "Phaser",
+      enabled: true,
+      parameters,
+      inputNode: inputGain,
+      outputNode: outputGain,
+      wetGainNode: wetGain,
+      dryGainNode: dryGain,
+      bypass: false,
+
+      process(input: AudioNode): AudioNode {
+        input.connect(this.inputNode);
+        return this.outputNode;
+      },
+
+      setParameter(name: string, value: number): void {
+        const param = this.parameters.get(name);
+        if (!param) return;
+        const v = Math.max(param.min, Math.min(param.max, value));
+        param.value = v;
+        switch (name) {
+          case "frequency":
+            phaser.frequency.setValueAtTime(v, context.currentTime);
+            break;
+          case "octaves":
+            phaser.octaves = v;
+            break;
+          case "baseFrequency":
+            phaser.baseFrequency = v;
+            break;
+          case "stages":
+            // Phaser stages is read-only, store value for reference
+            break;
+          case "Q":
+            phaser.Q.setValueAtTime(v, context.currentTime);
+            break;
+          case "wetLevel":
+            wetGain.gain.setValueAtTime(v, context.currentTime);
+            dryGain.gain.setValueAtTime(1 - v, context.currentTime);
+            break;
+        }
+      },
+
+      getParameter(name: string): number | undefined {
+        return this.parameters.get(name)?.value;
+      },
+
+      enable(): void {
+        this.enabled = true;
+        // Phaser doesn't have start/stop methods
+      },
+
+      disable(): void {
+        this.enabled = false;
+        // Phaser doesn't have start/stop methods
+      },
+
+      cleanup(): void {
+        try {
+          (phaser as any).dispose?.();
+          inputGain.disconnect();
+          wetGain.disconnect();
+          dryGain.disconnect();
+          outputGain.disconnect();
+        } catch {
+          // ignore
+        }
+      },
+    };
+  }
+
+  private static createPingPongDelayEffect(id?: string): AudioEffect {
+    const context = this.context!;
+    const pingPongDelay = new Tone.PingPongDelay({
+      delayTime: 0.25,
+      feedback: 0.3
+    });
+
+    // Create dry/wet mixing nodes
+    const inputGain = context.createGain();
+    const wetGain = context.createGain();
+    const dryGain = context.createGain();
+    const outputGain = context.createGain();
+
+    // Create stereo splitter for mono-to-stereo conversion
+    const splitter = context.createChannelSplitter(2);
+    const merger = context.createChannelMerger(2);
+    
+    // Set initial dry/wet balance
+    wetGain.gain.value = 0.5;
+    dryGain.gain.value = 0.5;
+
+    // Enhanced stereo routing for ping-pong effect
+    try {
+      // Route input to both dry path and ping-pong delay
+      inputGain.connect(dryGain);
+      inputGain.connect(splitter);
+      
+      // Connect splitter to ping-pong delay input (ensures stereo processing)
+      splitter.connect(pingPongDelay.input as any, 0, 0); // Left channel
+      splitter.connect(pingPongDelay.input as any, 0, 1); // Right channel (same mono signal)
+      
+      // Connect ping-pong output to wet gain
+      (pingPongDelay.output as any).connect(wetGain);
+      
+      // Mix dry and wet to stereo merger
+      dryGain.connect(merger, 0, 0); // Dry to left
+      dryGain.connect(merger, 0, 1); // Dry to right
+      wetGain.connect(merger, 0, 0); // Wet to left
+      wetGain.connect(merger, 0, 1); // Wet to right
+      
+      // Connect merger to output
+      merger.connect(outputGain);
+      
+      console.log("[Effects] PingPongDelay connected with stereo enhancement");
+    } catch (error) {
+      console.error("[Effects] Failed to connect PingPongDelay with stereo enhancement:", error);
+      // Fallback to helper method
+      this.connectToneEffect(inputGain, pingPongDelay, wetGain, dryGain, outputGain);
+    }
+
+    const parameters = new Map<string, EffectParameter>();
+    parameters.set("delayTime", {
+      name: "Delay Time",
+      value: 0.25,
+      min: 0.01,
+      max: 1,
+      unit: "s",
+    });
+    parameters.set("feedback", {
+      name: "Feedback",
+      value: 0.3,
+      min: 0,
+      max: 0.95,
+      unit: "",
+    });
+    parameters.set("wetLevel", {
+      name: "Wet Level",
+      value: 0.5,
+      min: 0,
+      max: 1,
+      unit: "%",
+    });
+
+    return {
+      id: id || `pingpongdelay_${Date.now()}`,
+      type: EffectType.PINGPONGDELAY,
+      name: "Ping Pong Delay",
+      enabled: true,
+      parameters,
+      inputNode: inputGain,
+      outputNode: outputGain,
+      wetGainNode: wetGain,
+      dryGainNode: dryGain,
+      bypass: false,
+
+      process(input: AudioNode): AudioNode {
+        input.connect(this.inputNode);
+        return this.outputNode;
+      },
+
+      setParameter(name: string, value: number): void {
+        const param = this.parameters.get(name);
+        if (!param) return;
+        const v = Math.max(param.min, Math.min(param.max, value));
+        param.value = v;
+        switch (name) {
+          case "delayTime":
+            pingPongDelay.delayTime.setValueAtTime(v, context.currentTime);
+            break;
+          case "feedback":
+            pingPongDelay.feedback.setValueAtTime(v, context.currentTime);
+            break;
+          case "wetLevel":
+            wetGain.gain.setValueAtTime(v, context.currentTime);
+            dryGain.gain.setValueAtTime(1 - v, context.currentTime);
+            break;
+        }
+      },
+
+      getParameter(name: string): number | undefined {
+        return this.parameters.get(name)?.value;
+      },
+
+      enable(): void {
+        this.enabled = true;
+      },
+
+      disable(): void {
+        this.enabled = false;
+      },
+
+      cleanup(): void {
+        try {
+          (pingPongDelay as any).dispose?.();
+          inputGain.disconnect();
+          wetGain.disconnect();
+          dryGain.disconnect();
+          outputGain.disconnect();
+        } catch {
+          // ignore
+        }
+      },
+    };
+  }
+
+  private static createStereoWidenerEffect(id?: string): AudioEffect {
+    const context = this.context!;
+    const stereoWidener = new Tone.StereoWidener(0.5);
+
+    // Create dry/wet mixing nodes
+    const inputGain = context.createGain();
+    const wetGain = context.createGain();
+    const dryGain = context.createGain();
+    const outputGain = context.createGain();
+
+    // Create stereo enhancement components for mono-to-stereo conversion
+    const splitter = context.createChannelSplitter(2);
+    const merger = context.createChannelMerger(2);
+    const leftDelay = context.createDelay(0.1);
+    const rightDelay = context.createDelay(0.1);
+    
+    // Set initial dry/wet balance
+    wetGain.gain.value = 0.5;
+    dryGain.gain.value = 0.5;
+
+    // Set subtle delays for stereo width enhancement (Haas effect)
+    leftDelay.delayTime.value = 0.001; // 1ms delay on left
+    rightDelay.delayTime.value = 0.002; // 2ms delay on right
+
+    // Enhanced stereo routing
+    try {
+      // Split mono input into stereo channels with slight delays
+      inputGain.connect(splitter);
+      splitter.connect(leftDelay, 0, 0);
+      splitter.connect(rightDelay, 0, 0);
+      
+      // Merge delays back to stereo for widener processing
+      leftDelay.connect(merger, 0, 0);
+      rightDelay.connect(merger, 0, 1);
+      
+      // Process through stereo widener
+      merger.connect(stereoWidener.input as any);
+      (stereoWidener.output as any).connect(wetGain);
+      
+      // Dry path with stereo split
+      inputGain.connect(dryGain);
+      
+      // Mix dry and wet to output
+      dryGain.connect(outputGain);
+      wetGain.connect(outputGain);
+      
+      console.log("[Effects] StereoWidener connected with mono-to-stereo enhancement");
+    } catch (error) {
+      console.error("[Effects] Failed to connect StereoWidener with enhancement:", error);
+      // Fallback to helper method
+      this.connectToneEffect(inputGain, stereoWidener, wetGain, dryGain, outputGain);
+    }
+
+    const parameters = new Map<string, EffectParameter>();
+    parameters.set("width", {
+      name: "Width",
+      value: 0.5,
+      min: 0,
+      max: 1,
+      unit: "",
+    });
+    parameters.set("wetLevel", {
+      name: "Wet Level",
+      value: 0.5,
+      min: 0,
+      max: 1,
+      unit: "%",
+    });
+
+    return {
+      id: id || `stereowidener_${Date.now()}`,
+      type: EffectType.STEREOWIDENER,
+      name: "Stereo Widener",
+      enabled: true,
+      parameters,
+      inputNode: inputGain,
+      outputNode: outputGain,
+      wetGainNode: wetGain,
+      dryGainNode: dryGain,
+      bypass: false,
+
+      process(input: AudioNode): AudioNode {
+        input.connect(this.inputNode);
+        return this.outputNode;
+      },
+
+      setParameter(name: string, value: number): void {
+        const param = this.parameters.get(name);
+        if (!param) return;
+        const v = Math.max(param.min, Math.min(param.max, value));
+        param.value = v;
+        switch (name) {
+          case "width":
+            stereoWidener.width.setValueAtTime(v, context.currentTime);
+            break;
+          case "wetLevel":
+            wetGain.gain.setValueAtTime(v, context.currentTime);
+            dryGain.gain.setValueAtTime(1 - v, context.currentTime);
+            break;
+        }
+      },
+
+      getParameter(name: string): number | undefined {
+        return this.parameters.get(name)?.value;
+      },
+
+      enable(): void {
+        this.enabled = true;
+      },
+
+      disable(): void {
+        this.enabled = false;
+      },
+
+      cleanup(): void {
+        try {
+          (stereoWidener as any).dispose?.();
+          inputGain.disconnect();
+          wetGain.disconnect();
+          dryGain.disconnect();
+          outputGain.disconnect();
+        } catch {
+          // ignore
+        }
+      },
+    };
+  }
+
+  private static createTremoloEffect(id?: string): AudioEffect {
+    const context = this.context!;
+    const tremolo = new Tone.Tremolo({
+      frequency: 10,
+      depth: 0.5,
+      spread: 40
+    });
+
+    // Start the tremolo LFO immediately
+    tremolo.start();
+
+    // Create dry/wet mixing nodes
+    const inputGain = context.createGain();
+    const wetGain = context.createGain();
+    const dryGain = context.createGain();
+    const outputGain = context.createGain();
+
+    // Set initial dry/wet balance
+    wetGain.gain.value = 0.5;
+    dryGain.gain.value = 0.5;
+
+    // Connect the network using the helper
+    this.connectToneEffect(inputGain, tremolo, wetGain, dryGain, outputGain);
+
+    const parameters = new Map<string, EffectParameter>();
+    parameters.set("frequency", {
+      name: "Frequency",
+      value: 10,
+      min: 0.1,
+      max: 20,
+      unit: "Hz",
+    });
+    parameters.set("depth", {
+      name: "Depth",
+      value: 0.5,
+      min: 0,
+      max: 1,
+      unit: "",
+    });
+    parameters.set("spread", {
+      name: "Spread",
+      value: 40,
+      min: 0,
+      max: 180,
+      unit: "°",
+    });
+    parameters.set("wetLevel", {
+      name: "Wet Level",
+      value: 0.5,
+      min: 0,
+      max: 1,
+      unit: "%",
+    });
+
+    return {
+      id: id || `tremolo_${Date.now()}`,
+      type: EffectType.TREMOLO,
+      name: "Tremolo",
+      enabled: true,
+      parameters,
+      inputNode: inputGain,
+      outputNode: outputGain,
+      wetGainNode: wetGain,
+      dryGainNode: dryGain,
+      bypass: false,
+
+      process(input: AudioNode): AudioNode {
+        input.connect(this.inputNode);
+        return this.outputNode;
+      },
+
+      setParameter(name: string, value: number): void {
+        const param = this.parameters.get(name);
+        if (!param) return;
+        const v = Math.max(param.min, Math.min(param.max, value));
+        param.value = v;
+        switch (name) {
+          case "frequency":
+            tremolo.frequency.setValueAtTime(v, context.currentTime);
+            break;
+          case "depth":
+            tremolo.depth.setValueAtTime(v, context.currentTime);
+            break;
+          case "spread":
+            tremolo.spread = v;
+            break;
+          case "wetLevel":
+            wetGain.gain.setValueAtTime(v, context.currentTime);
+            dryGain.gain.setValueAtTime(1 - v, context.currentTime);
+            break;
+        }
+      },
+
+      getParameter(name: string): number | undefined {
+        return this.parameters.get(name)?.value;
+      },
+
+      enable(): void {
+        this.enabled = true;
+        tremolo.start();
+      },
+
+      disable(): void {
+        this.enabled = false;
+        tremolo.stop();
+      },
+
+      cleanup(): void {
+        try {
+          (tremolo as any).dispose?.();
+          inputGain.disconnect();
+          wetGain.disconnect();
+          dryGain.disconnect();
+          outputGain.disconnect();
+        } catch {
+          // ignore
+        }
+      },
+    };
+  }
+
+  private static createVibratoEffect(id?: string): AudioEffect {
+    const context = this.context!;
+    const vibrato = new Tone.Vibrato({
+      frequency: 5,
+      depth: 0.1
+    });
+
+    // Note: Vibrato is automatically active when created
+
+    // Create dry/wet mixing nodes
+    const inputGain = context.createGain();
+    const wetGain = context.createGain();
+    const dryGain = context.createGain();
+    const outputGain = context.createGain();
+
+    // Set initial dry/wet balance
+    wetGain.gain.value = 0.5;
+    dryGain.gain.value = 0.5;
+
+    // Connect the network using the helper
+    this.connectToneEffect(inputGain, vibrato, wetGain, dryGain, outputGain);
+
+    const parameters = new Map<string, EffectParameter>();
+    parameters.set("frequency", {
+      name: "Frequency",
+      value: 5,
+      min: 0.1,
+      max: 20,
+      unit: "Hz",
+    });
+    parameters.set("depth", {
+      name: "Depth",
+      value: 0.1,
+      min: 0,
+      max: 1,
+      unit: "",
+    });
+    parameters.set("wetLevel", {
+      name: "Wet Level",
+      value: 0.5,
+      min: 0,
+      max: 1,
+      unit: "%",
+    });
+
+    return {
+      id: id || `vibrato_${Date.now()}`,
+      type: EffectType.VIBRATO,
+      name: "Vibrato",
+      enabled: true,
+      parameters,
+      inputNode: inputGain,
+      outputNode: outputGain,
+      wetGainNode: wetGain,
+      dryGainNode: dryGain,
+      bypass: false,
+
+      process(input: AudioNode): AudioNode {
+        input.connect(this.inputNode);
+        return this.outputNode;
+      },
+
+      setParameter(name: string, value: number): void {
+        const param = this.parameters.get(name);
+        if (!param) return;
+        const v = Math.max(param.min, Math.min(param.max, value));
+        param.value = v;
+        switch (name) {
+          case "frequency":
+            vibrato.frequency.setValueAtTime(v, context.currentTime);
+            break;
+          case "depth":
+            vibrato.depth.setValueAtTime(v, context.currentTime);
+            break;
+          case "wetLevel":
+            wetGain.gain.setValueAtTime(v, context.currentTime);
+            dryGain.gain.setValueAtTime(1 - v, context.currentTime);
+            break;
+        }
+      },
+
+      getParameter(name: string): number | undefined {
+        return this.parameters.get(name)?.value;
+      },
+
+      enable(): void {
+        this.enabled = true;
+        // Vibrato doesn't have start/stop methods
+      },
+
+      disable(): void {
+        this.enabled = false;
+        // Vibrato doesn't have start/stop methods
+      },
+
+      cleanup(): void {
+        try {
+          (vibrato as any).dispose?.();
+          inputGain.disconnect();
+          wetGain.disconnect();
+          dryGain.disconnect();
+          outputGain.disconnect();
+        } catch {
+          // ignore
+        }
       },
     };
   }
@@ -573,7 +2262,19 @@ export class MixerEngine {
   constructor(audioContext: AudioContext) {
     this.context = audioContext;
     this.initializeMasterSection();
-    EffectsFactory.initialize(audioContext);
+    this.initializeAsync(audioContext);
+  }
+
+  private async initializeAsync(audioContext: AudioContext): Promise<void> {
+    await EffectsFactory.initialize(audioContext);
+    // Ensure Tone uses the same context
+    try {
+      if (Tone.getContext().rawContext !== audioContext) {
+        Tone.setContext(audioContext);
+      }
+    } catch {
+      // ignore
+    }
   }
 
   // Expose the underlying AudioContext for sanity checks
@@ -608,34 +2309,49 @@ export class MixerEngine {
    */
   createUserChannel(userId: string, username: string): UserChannel {
     const nodePool = AudioContextManager.getNodePool();
-
+    // Native preGain bridge for incoming sources
     const inputGain = nodePool?.getGainNode() || this.context.createGain();
-    const outputGain = nodePool?.getGainNode() || this.context.createGain();
-    const panNode = this.context.createStereoPanner();
-    const analyser = this.context.createAnalyser();
-    analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.85;
 
-    // Connect channel
-    inputGain.connect(panNode);
-    panNode.connect(outputGain);
-
-    if (this.masterSection) {
-      outputGain.connect(this.masterSection.inputGain);
+    // Create Tone channel with pan/volume
+    const toneChannel = new Tone.Channel({ volume: 0, pan: 0 });
+    // Route Tone channel to master bus destination
+    const masterBus = AudioContextManager.getMasterBus();
+    if (masterBus) {
+      // Connect Tone node to native master gain
+      toneChannel.connect(masterBus.getMasterGain());
+    } else {
+      toneChannel.toDestination();
     }
 
-    // Tap output to analyser (post-volume)
-    outputGain.connect(analyser);
+    // Connect native preGain into Tone channel using Tone.connect for cross-type safety
+    try {
+      // Prefer Tone.connect to bridge AudioNode <-> ToneAudioNode
+      (Tone as any).connect?.(inputGain as any, toneChannel as any);
+    } catch {
+      // Fallback: bridge via a Tone.Gain in correct direction
+      const bridge = new Tone.Gain(1);
+      try {
+        // inputGain -> bridge.input -> bridge -> toneChannel
+        inputGain.connect((bridge as any).input ?? (bridge as any));
+      } catch {
+        // Last resort: connect native to native if available
+        try { inputGain.connect((toneChannel as any).input); } catch { /* ignore */ }
+      }
+      bridge.connect(toneChannel);
+    }
+
+    // Tone analyser for metering (post-channel)
+    const analyser = new Tone.Analyser({ type: "waveform", size: 256, smoothing: 0.85 });
+    toneChannel.connect(analyser);
 
     const channel: UserChannel = {
       userId,
       username,
       inputGain,
+      toneChannel,
       effectChain: [],
-      outputGain,
       soloMute: { solo: false, mute: false },
       sends: new Map(),
-      panNode,
       analyser,
     };
 
@@ -656,18 +2372,190 @@ export class MixerEngine {
     const effect = EffectsFactory.createEffect(effectType);
     if (!effect) return null;
 
-    // Insert effect into chain
-    const lastNode =
-      channel.effectChain.length > 0
-        ? channel.effectChain[channel.effectChain.length - 1].outputNode
-        : channel.inputGain;
-
-    lastNode.disconnect();
-    lastNode.connect(effect.inputNode);
-    effect.outputNode.connect(channel.outputGain);
-
+    // Add effect to chain
     channel.effectChain.push(effect);
+
+    // Rebuild the entire audio chain
+    this.rebuildChannelChain(channel);
+
     return effect;
+  }
+
+  private resolveEffectType(effectType: string): EffectType | null {
+    const normalized = effectType.toLowerCase();
+    const match = Object.values(EffectType).find(
+      (value) => value.toLowerCase() === normalized,
+    );
+    return match ?? null;
+  }
+
+  applyEffectChainState(
+    userId: string,
+    effects: EffectInstanceState[],
+    options?: { username?: string; createIfMissing?: boolean },
+  ): void {
+    let channel = this.userChannels.get(userId);
+    if (!channel) {
+      if (options?.createIfMissing === false) {
+        return;
+      }
+      const username = options?.username || userId;
+      channel = this.createUserChannel(userId, username);
+    } else if (options?.username && channel.username !== options.username) {
+      channel.username = options.username;
+    }
+
+    if (!channel) return;
+
+    // Release existing effects to pool before rebuilding
+    channel.effectChain.forEach((effect) => EffectsFactory.releaseEffect(effect));
+    channel.effectChain = [];
+
+    const sortedEffects = [...effects].sort((a, b) => a.order - b.order);
+
+    for (const effectState of sortedEffects) {
+      const effectType = this.resolveEffectType(effectState.type);
+      if (!effectType) {
+        console.warn(
+          `[MixerEngine] Unknown effect type received for user ${userId}:`,
+          effectState.type,
+        );
+        continue;
+      }
+
+      const effect = EffectsFactory.createEffect(effectType, effectState.id);
+      if (!effect) {
+        console.warn(
+          `[MixerEngine] Failed to instantiate effect ${effectState.type} for user ${userId}`,
+        );
+        continue;
+      }
+
+      // Apply parameter state
+      for (const parameter of effectState.parameters || []) {
+        try {
+          const normalizedName = normalizeParamName(parameter.name);
+          const mappedName =
+            EFFECT_PARAMETER_NAME_MAP[effectState.type]?.[normalizedName] ??
+            parameter.name;
+          effect.setParameter(mappedName, parameter.value);
+        } catch (error) {
+          console.warn(
+            `[MixerEngine] Failed to set parameter ${parameter.name} on effect ${effectState.id}:`,
+            error,
+          );
+        }
+      }
+
+      // Handle bypass status
+      if (effectState.bypassed) {
+        effect.disable();
+      } else {
+        effect.enable();
+      }
+
+      channel.effectChain.push(effect);
+    }
+
+    this.rebuildChannelChain(channel);
+  }
+
+  removeUserChannel(userId: string): void {
+    const channel = this.userChannels.get(userId);
+    if (!channel) return;
+
+    channel.effectChain.forEach((effect) => EffectsFactory.releaseEffect(effect));
+
+    try {
+      channel.inputGain.disconnect();
+    } catch {
+      // ignore
+    }
+
+    try {
+      (channel.toneChannel as any)?.disconnect?.();
+      (channel.toneChannel as any)?.dispose?.();
+    } catch {
+      // ignore
+    }
+
+    try {
+      (channel.analyser as any)?.dispose?.();
+    } catch {
+      // ignore
+    }
+
+    this.userChannels.delete(userId);
+  }
+
+  /**
+   * Remove effect from user channel
+   */
+  removeEffectFromChannel(userId: string, effectId: string): boolean {
+    const channel = this.userChannels.get(userId);
+    if (!channel) return false;
+
+    const effectIndex = channel.effectChain.findIndex(fx => fx.id === effectId);
+    if (effectIndex === -1) return false;
+
+    // Remove effect from chain
+    const [removedEffect] = channel.effectChain.splice(effectIndex, 1);
+    
+    // Clean up the removed effect
+    try {
+      removedEffect.cleanup();
+    } catch (error) {
+      console.warn('Error cleaning up effect:', error);
+    }
+
+    // Rebuild the audio chain
+    this.rebuildChannelChain(channel);
+
+    return true;
+  }
+
+  /**
+   * Rebuild the audio chain for a channel
+   */
+  private rebuildChannelChain(channel: UserChannel): void {
+    try {
+      // Disconnect all current connections
+      channel.inputGain.disconnect();
+      
+      // If no effects, connect directly to toneChannel
+      if (channel.effectChain.length === 0) {
+        try {
+          // Use Tone.connect for better compatibility
+          (Tone as any).connect(channel.inputGain, channel.toneChannel);
+        } catch (error) {
+          console.warn('Failed to connect inputGain directly to toneChannel:', error);
+        }
+        return;
+      }
+
+      // Chain nodes: inputGain -> effect1 -> effect2 -> ... -> toneChannel
+      let current: any = channel.inputGain;
+      
+      for (const effect of channel.effectChain) {
+        try {
+          // Use Tone.connect for Tone.js effects
+          (Tone as any).connect(current, effect.inputNode);
+          current = effect.outputNode;
+        } catch (error) {
+          console.warn('Failed to connect effect in chain:', error);
+        }
+      }
+      
+      // Connect the final output to the tone channel
+      try {
+        // Use Tone.connect for better compatibility with Tone.js nodes
+        (Tone as any).connect(current, channel.toneChannel);
+      } catch (error) {
+        console.warn('Failed to connect final effect to toneChannel:', error);
+      }
+    } catch (error) {
+      console.error('Error rebuilding channel chain:', error);
+    }
   }
 
   /**
@@ -676,8 +2564,13 @@ export class MixerEngine {
   routeInstrumentToChannel(instrumentOutput: AudioNode, userId: string): void {
     const channel = this.userChannels.get(userId);
     if (!channel) return;
-
-    instrumentOutput.connect(channel.inputGain);
+    // Route instrument output into preGain bridge
+    try {
+      // Use Tone.connect to handle ToneAudioNode -> AudioNode or vice versa
+      (Tone as any).connect?.(instrumentOutput as any, channel.inputGain as any);
+    } catch {
+      try { (instrumentOutput as any).connect?.(channel.inputGain as any); } catch { /* ignore */ }
+    }
   }
 
   /**
@@ -693,32 +2586,14 @@ export class MixerEngine {
   setUserVolume(userId: string, volume: number): void {
     const channel = this.userChannels.get(userId);
     if (!channel) return;
-    // Clamp to reasonable range: 0 to ~4 (equivalent to -∞dB to +12dB)
-    const v = Math.max(0, Math.min(4, volume));
-    
-    // WebKit-specific handling for volume changes
-    const isWebKit = /webkit/i.test(navigator.userAgent);
-    
-    if (isWebKit) {
-      // Safari/WebKit fix: Set immediate value first, then schedule change
-      // This ensures the value is set even if timing is problematic
-      try {
-        // Cancel any pending automation to avoid InvalidStateError
-        channel.outputGain.gain.cancelScheduledValues(this.context.currentTime);
-        
-        // Set value immediately for WebKit
-        channel.outputGain.gain.value = v;
-        
-        // Also schedule the change slightly in the future for consistency
-        channel.outputGain.gain.setValueAtTime(v, this.context.currentTime + 0.01);
-      } catch (error) {
-        // Fallback: just set the value directly if scheduling fails
-        console.warn("WebKit volume scheduling failed, using direct assignment:", error);
-        channel.outputGain.gain.value = v;
-      }
-    } else {
-      // Standard implementation for other browsers
-      channel.outputGain.gain.setValueAtTime(v, this.context.currentTime);
+    // Expected volume is linear (0..~4). Convert to dB for Tone.Channel
+    const clamped = Math.max(0, Math.min(4, volume));
+    const db = clamped === 0 ? -Infinity : 20 * Math.log10(clamped);
+    try {
+      channel.toneChannel?.volume.setValueAtTime(db, this.context.currentTime);
+    } catch {
+    // Fallback: adjust preGain as last resort
+    channel.inputGain.gain.setValueAtTime(clamped, this.context.currentTime);
     }
   }
 
@@ -728,7 +2603,15 @@ export class MixerEngine {
   getUserVolume(userId: string): number | null {
     const channel = this.userChannels.get(userId);
     if (!channel) return null;
-    return channel.outputGain.gain.value;
+    // Prefer Tone channel's dB volume converted back to linear gain
+    if (channel.toneChannel) {
+      const db = channel.toneChannel.volume.value as number;
+      if (!isFinite(db)) return 0; // -Infinity dB => silence
+      const lin = Math.pow(10, db / 20);
+      return lin;
+    }
+  // Fallback to preGain (approximate)
+  return channel.inputGain.gain.value;
   }
 
   /**
@@ -737,58 +2620,17 @@ export class MixerEngine {
   getUserOutputLevel(userId: string): number | null {
     const channel = this.userChannels.get(userId);
     if (!channel || !channel.analyser) return null;
-
-    // Safari-specific: Check if context is suspended and try to resume
-    if (this.context.state === "suspended") {
-      this.context.resume().catch(() => {
-        // Ignore resume errors - context might be resuming already
-      });
-      return null; // Return null for this frame, should work next frame
-    }
-
-    // Safari-specific: Check if context is still valid
-    if (this.context.state === "closed") {
-      return null; // Context was closed, meter will be recreated
-    }
-
-    const analyser = channel.analyser;
-    
     try {
-      // Safari-specific: Verify analyser is still connected to a valid context
-      if (analyser.context !== this.context) {
-        return null; // Analyser belongs to old context, will be recreated
+      const values = channel.analyser.getValue() as Float32Array;
+      if (!values || values.length === 0) return 0;
+      let sum = 0;
+      for (let i = 0; i < values.length; i++) {
+        const v = values[i];
+        sum += v * v;
       }
-
-      const bufferLength = analyser.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
-      analyser.getByteTimeDomainData(dataArray);
-
-      // Safari-specific: Check for all-zero data (common Safari issue)
-      let hasNonZeroData = false;
-      for (let i = 0; i < Math.min(bufferLength, 10); i++) {
-        if (dataArray[i] !== 128) { // 128 is silence in byte domain
-          hasNonZeroData = true;
-          break;
-        }
-      }
-      
-      if (!hasNonZeroData && bufferLength > 0) {
-        // All data is silence - this might be a Safari issue or actual silence
-        // Return 0 but don't error out
-        return 0;
-      }
-
-      // Compute RMS in byte domain around 128 center
-      let sumSquares = 0;
-      for (let i = 0; i < bufferLength; i++) {
-        const v = (dataArray[i] - 128) / 128; // -1..1
-        sumSquares += v * v;
-      }
-      const rms = Math.sqrt(sumSquares / bufferLength);
+      const rms = Math.sqrt(sum / values.length);
       return Math.max(0, Math.min(1, rms));
-    } catch (error) {
-      // Safari-specific: AnalyserNode operations can throw in edge cases
-      console.warn("Analyser read failed (likely Safari context issue):", error);
+  } catch {
       return null;
     }
   }
@@ -802,10 +2644,9 @@ export class MixerEngine {
       channel.effectChain.forEach((effect) =>
         EffectsFactory.releaseEffect(effect),
       );
-      channel.inputGain.disconnect();
-      channel.outputGain.disconnect();
-      channel.panNode?.disconnect();
-      channel.analyser?.disconnect();
+  try { channel.inputGain.disconnect(); } catch { /* ignore */ }
+  try { (channel.toneChannel as any)?.dispose?.(); } catch { /* ignore */ }
+  try { (channel.analyser as any)?.dispose?.(); } catch { /* ignore */ }
     });
 
     // Cleanup aux buses
@@ -822,7 +2663,7 @@ export class MixerEngine {
       );
       this.masterSection.inputGain.disconnect();
       this.masterSection.outputGain.disconnect();
-      this.masterSection.analyser.disconnect();
+  this.masterSection.analyser.disconnect();
     }
 
     this.userChannels.clear();

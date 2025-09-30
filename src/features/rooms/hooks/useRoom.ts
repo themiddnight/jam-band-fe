@@ -23,6 +23,9 @@ export const useRoom = (options?: { isInstrumentMuted?: boolean }) => {
   const location = useLocation();
   // const navigate = useNavigate();
 
+  // Track whether we've already sent initial instrument data to prevent loops
+  const hasInitialInstrumentSent = useRef(false);
+
   // User state
   const { username, userId } = useUserStore();
 
@@ -188,6 +191,13 @@ export const useRoom = (options?: { isInstrumentMuted?: boolean }) => {
     if (connectionState === ConnectionState.LOBBY) {
       // If we're back in lobby state, navigate to lobby
       window.location.href = "/";
+    }
+  }, [connectionState]);
+
+  // Reset the initial instrument sent flag when disconnecting from room
+  useEffect(() => {
+    if (connectionState !== ConnectionState.IN_ROOM) {
+      hasInitialInstrumentSent.current = false;
     }
   }, [connectionState]);
 
@@ -414,6 +424,11 @@ export const useRoom = (options?: { isInstrumentMuted?: boolean }) => {
       return;
     }
 
+    // Prevent sending the same instrument repeatedly due to dependency changes
+    if (hasInitialInstrumentSent.current) {
+      return;
+    }
+
     // Only send if we don't already have an instrument set on the server
     // (to avoid overwriting existing instrument data when user already has one)
     if (!currentUser?.currentInstrument || !currentUser?.currentCategory) {
@@ -429,6 +444,7 @@ export const useRoom = (options?: { isInstrumentMuted?: boolean }) => {
       // Send the current instrument preferences to the backend
       // This ensures the user's stored preferences from localStorage are used
       changeInstrument(currentInstrument, currentCategory);
+      hasInitialInstrumentSent.current = true;
     } else {
       console.log(
         "🎵 User already has instrument set on server, skipping auto-send:",
@@ -439,6 +455,7 @@ export const useRoom = (options?: { isInstrumentMuted?: boolean }) => {
           localCategory: currentCategory,
         }
       );
+      hasInitialInstrumentSent.current = true;
     }
   }, [
     connectionState,
@@ -871,8 +888,16 @@ export const useRoom = (options?: { isInstrumentMuted?: boolean }) => {
         "🎵 Instrument change wrapper called:",
         instrument,
         "category:",
-        currentCategory
+        currentCategory,
+        "currentInstrument:",
+        currentInstrument
       );
+
+      // Check if instrument actually changed - prevent redundant emissions
+      if (instrument === currentInstrument) {
+        console.log("🎵 Skipping instrument change - no actual change detected");
+        return;
+      }
 
       // Stop all notes before switching instruments
       if (isConnected) {

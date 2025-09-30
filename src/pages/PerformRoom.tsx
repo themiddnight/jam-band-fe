@@ -45,6 +45,8 @@ import type { RoomUser } from "@/shared/types";
 import { preloadCriticalComponents } from "@/shared/utils/componentPreloader";
 import { getSafariUserMessage } from "@/shared/utils/webkitCompat";
 import { useDeepLinkHandler } from "@/shared/hooks/useDeepLinkHandler";
+import { EffectsChainSection } from "@/features/effects";
+import { useEffectsIntegration } from "@/features/effects/hooks/useEffectsIntegration";
 import { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -190,6 +192,22 @@ const PerformRoom = memo(() => {
     isAudioEnabled,
     peerConnections,
   } = useWebRTCVoice(webRTCParams);
+
+  // Effects integration - connect effects UI to audio processing
+  const { isInitialized: isEffectsInitialized, error: effectsError } = useEffectsIntegration({
+    userId: currentUser?.id || "",
+    enabled: !!(currentUser?.role === "room_owner" || currentUser?.role === "band_member") && isConnected,
+  });
+
+  // Log effects initialization status
+  useEffect(() => {
+    if (isEffectsInitialized) {
+      console.log('🎛️ Effects integration initialized for user:', currentUser?.username);
+    }
+    if (effectsError) {
+      console.error('🎛️ Effects integration error:', effectsError);
+    }
+  }, [isEffectsInitialized, effectsError, currentUser?.username]);
 
   // RTC latency measurement
   const {
@@ -1219,6 +1237,11 @@ const PerformRoom = memo(() => {
 
                 {/* Instrument Interface */}
                 {renderInstrumentControl()}
+
+                {/* Effects Chain Section */}
+                <div className="w-full max-w-6xl">
+                  <EffectsChainSection />
+                </div>
               </>
             )}
           </div>
