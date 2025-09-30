@@ -3,6 +3,7 @@ import { useCallback, useRef } from "react";
 interface UseVoiceControlsProps {
   audioContext: AudioContext | null;
   gainNode: GainNode | null;
+  monitorNode: AudioNode | null;
   mediaStream: MediaStream | null;
   micPermission: boolean;
   isMuted: boolean;
@@ -21,6 +22,7 @@ interface UseVoiceControlsReturn {
 export const useVoiceControls = ({
   audioContext,
   gainNode,
+  monitorNode,
   mediaStream,
   micPermission,
   isMuted,
@@ -30,7 +32,7 @@ export const useVoiceControls = ({
   stopInputLevelMonitoring,
 }: UseVoiceControlsProps): UseVoiceControlsReturn => {
   // Keep a reference to the monitoring connection
-  const monitoringConnectionRef = useRef<GainNode | null>(null);
+  const monitoringConnectionRef = useRef<{ node: AudioNode; gain: GainNode } | null>(null);
 
   // Handle mute/unmute toggle
   const handleMuteToggle = useCallback(async () => {
@@ -80,7 +82,7 @@ export const useVoiceControls = ({
 
   // Handle self-monitoring toggle
   const handleSelfMonitorToggle = useCallback(() => {
-    if (!audioContext || !gainNode) {
+    if (!audioContext || !monitorNode) {
       console.log(
         "🎤 Self-monitoring: No audio context or gain node available",
       );
@@ -90,44 +92,70 @@ export const useVoiceControls = ({
     try {
       if (!isSelfMonitoring) {
         // Enable self-monitoring: add monitoring connection to speakers
-        
-
         // Create a monitoring gain node to control self-monitoring volume
         // This allows hearing yourself at the input gain level but with volume control
+        if (monitoringConnectionRef.current) {
+          try {
+            monitoringConnectionRef.current.node.disconnect(
+              monitoringConnectionRef.current.gain,
+            );
+          } catch {
+            /* noop */
+          }
+
+          try {
+            monitoringConnectionRef.current.gain.disconnect(
+              audioContext.destination,
+            );
+          } catch {
+            /* noop */
+          }
+
+          monitoringConnectionRef.current = null;
+        }
+
         const monitoringGain = audioContext.createGain();
         monitoringGain.gain.value = 0.6; // Quieter to prevent feedback, but audible
 
         // Connect gain node to monitoring gain, then to speakers
         // This creates an additional path: gainNode -> monitoringGain -> destination (speakers)
         // The original path (gainNode -> analyser + WebRTC destination) remains intact
-        gainNode.connect(monitoringGain);
+        monitorNode.connect(monitoringGain);
         monitoringGain.connect(audioContext.destination);
 
         // Store reference for cleanup
-        monitoringConnectionRef.current = monitoringGain;
+        monitoringConnectionRef.current = {
+          node: monitorNode,
+          gain: monitoringGain,
+        };
 
         console.log(
           "✅ Self-monitoring enabled - you can now hear your own voice",
         );
       } else {
         // Disable self-monitoring: remove only the monitoring connection
-        
+        const monitoringConnection = monitoringConnectionRef.current;
 
-        if (monitoringConnectionRef.current) {
-          // Only disconnect the monitoring path, keep WebRTC path intact
-          gainNode.disconnect(monitoringConnectionRef.current);
-          monitoringConnectionRef.current.disconnect(audioContext.destination);
+        if (monitoringConnection) {
+          try {
+            monitoringConnection.node.disconnect(monitoringConnection.gain);
+          } catch {
+            /* noop */
+          }
+
+          try {
+            monitoringConnection.gain.disconnect(audioContext.destination);
+          } catch {
+            /* noop */
+          }
+
           monitoringConnectionRef.current = null;
-
-          
-        } else {
-          
         }
       }
     } catch (error) {
       console.error("❌ Error toggling self-monitoring:", error);
     }
-  }, [audioContext, gainNode, isSelfMonitoring]);
+  }, [audioContext, monitorNode, isSelfMonitoring]);
 
   return {
     handleMuteToggle,

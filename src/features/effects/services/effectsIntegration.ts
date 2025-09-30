@@ -7,119 +7,12 @@
  */
 
 import { getOrCreateGlobalMixer } from '../../audio/utils/effectsArchitecture';
-import { EffectType as AudioEffectType, type AudioEffect } from '../../audio/utils/effectsArchitecture';
+import { type AudioEffect } from '../../audio/utils/effectsArchitecture';
+import { AudioContextManager } from '@/features/audio/constants/audioConfig';
+import { audioInputEffectsManager } from '@/features/audio/services/audioInputEffectsManager';
+import { EFFECT_TYPE_MAP, PARAMETER_MAP } from './effectMappings';
 import type { EffectInstance, EffectChainType } from '../types';
 import { useEffectsStore } from '../stores/effectsStore';
-
-// Map UI effect types to audio effect types
-const EFFECT_TYPE_MAP: Record<string, AudioEffectType> = {
-  'reverb': AudioEffectType.REVERB,
-  'delay': AudioEffectType.DELAY,
-  'compressor': AudioEffectType.COMPRESSOR,
-  'filter': AudioEffectType.FILTER,
-  'distortion': AudioEffectType.DISTORTION,
-  'chorus': AudioEffectType.CHORUS,
-  'autofilter': AudioEffectType.AUTOFILTER,
-  'autopanner': AudioEffectType.AUTOPANNER,
-  'autowah': AudioEffectType.AUTOWAH,
-  'bitcrusher': AudioEffectType.BITCRUSHER,
-  'phaser': AudioEffectType.PHASER,
-  'pingpongdelay': AudioEffectType.PINGPONGDELAY,
-  'stereowidener': AudioEffectType.STEREOWIDENER,
-  'tremolo': AudioEffectType.TREMOLO,
-  'vibrato': AudioEffectType.VIBRATO,
-};
-
-// Map UI parameter names to audio parameter names
-const PARAMETER_MAP: Record<string, Record<string, string>> = {
-  'reverb': {
-    'room_size': 'roomSize',
-    'decay_time': 'decayTime', 
-    'pre_delay': 'preDelay',
-    'dry_wet': 'wetLevel',
-  },
-  'delay': {
-    'time': 'delayTime',  // UI shows "Time" -> needs to map to "delayTime"
-    'feedback': 'feedback',
-    'dry_wet': 'wetLevel',
-  },
-  'compressor': {
-    'threshold': 'threshold',
-    'ratio': 'ratio',
-    'attack': 'attack',
-    'release': 'release',
-    'dry_wet': 'wetLevel',
-  },
-  'filter': {
-    'frequency': 'frequency',
-    'resonance': 'Q',  // UI shows "Resonance" -> needs to map to "Q"
-    'type': 'type',
-    'dry_wet': 'wetLevel',
-  },
-  'autofilter': {
-    'frequency': 'frequency',
-    'base_frequency': 'baseFrequency',
-    'octaves': 'octaves',
-    'filter_type': 'type',
-    'dry_wet': 'wetLevel',
-  },
-  'autopanner': {
-    'frequency': 'frequency',
-    'depth': 'depth',
-    'dry_wet': 'wetLevel',
-  },
-  'autowah': {
-    'base_frequency': 'baseFrequency',
-    'octaves': 'octaves',
-    'sensitivity': 'sensitivity',
-    'q': 'Q',
-    'dry_wet': 'wetLevel',
-  },
-  'bitcrusher': {
-    'bits': 'bits',
-    'dry_wet': 'wetLevel',
-  },
-  'chorus': {
-    'frequency': 'frequency',
-    'delay_time': 'delayTime',
-    'depth': 'depth',
-    'spread': 'spread',
-    'dry_wet': 'wetLevel',
-  },
-  'distortion': {
-    'distortion': 'distortion',
-    'oversample': 'oversample',
-    'dry_wet': 'wetLevel',
-  },
-  'phaser': {
-    'frequency': 'frequency',
-    'octaves': 'octaves',
-    'base_frequency': 'baseFrequency',
-    'stages': 'stages',
-    'q': 'Q',
-    'dry_wet': 'wetLevel',
-  },
-  'pingpongdelay': {
-    'delay_time': 'delayTime',
-    'feedback': 'feedback',
-    'dry_wet': 'wetLevel',
-  },
-  'stereowidener': {
-    'width': 'width',
-    'dry_wet': 'wetLevel',
-  },
-  'tremolo': {
-    'frequency': 'frequency',
-    'depth': 'depth',
-    'spread': 'spread',
-    'dry_wet': 'wetLevel',
-  },
-  'vibrato': {
-    'frequency': 'frequency',
-    'depth': 'depth',
-    'dry_wet': 'wetLevel',
-  },
-};
 
 interface EffectMapping {
   uiEffectId: string;
@@ -148,6 +41,10 @@ class EffectsIntegrationService {
       if (!mixer.getChannel(userId)) {
         mixer.createUserChannel(userId, 'Local User');
       }
+
+      // Ensure audio input effects manager is ready with the instrument context
+      const instrumentContext = await AudioContextManager.getInstrumentContext();
+      await audioInputEffectsManager.initialize(instrumentContext);
 
       // Subscribe to effects store changes
       this.subscribeToEffectChanges();
@@ -191,6 +88,11 @@ class EffectsIntegrationService {
     for (const chainType of ['virtual_instrument', 'audio_voice_input'] as EffectChainType[]) {
       const currentEffects = currentChains[chainType].effects;
       const previousEffects = previousChains[chainType].effects;
+
+      if (chainType === 'audio_voice_input') {
+        audioInputEffectsManager.syncEffects(currentEffects);
+        continue;
+      }
 
       // Find added effects
       const addedEffects = currentEffects.filter((effect: EffectInstance) =>
@@ -370,6 +272,7 @@ class EffectsIntegrationService {
       }
 
       this.effectMappings.clear();
+      audioInputEffectsManager.reset();
       this.isInitialized = false;
       this.currentUserId = null;
 

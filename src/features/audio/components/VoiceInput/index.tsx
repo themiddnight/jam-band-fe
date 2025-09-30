@@ -72,6 +72,7 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     mediaStream,
     audioContext,
     gainNode,
+    processedOutputNode,
     analyser,
     micPermission,
     initializeAudioStream,
@@ -93,6 +94,7 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     useVoiceControls({
       audioContext,
       gainNode,
+      monitorNode: processedOutputNode,
       mediaStream,
       micPermission,
       isMuted: voiceState.isMuted,
