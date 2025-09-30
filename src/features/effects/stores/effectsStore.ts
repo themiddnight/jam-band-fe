@@ -3,6 +3,11 @@ import { devtools } from 'zustand/middleware';
 import type { EffectChain, EffectInstance, EffectType, EffectChainType } from '../types';
 import { EFFECT_CONFIGS } from '../constants';
 import { v4 as uuidv4 } from 'uuid';
+import type {
+  EffectChainState as SharedEffectChainState,
+  EffectInstanceState as SharedEffectInstanceState,
+  EffectParameterState as SharedEffectParameterState,
+} from '@/shared/types';
 
 interface EffectsState {
   // State
@@ -16,6 +21,9 @@ interface EffectsState {
   reorderEffects: (chainType: EffectChainType, fromIndex: number, toIndex: number) => void;
   clearChain: (chainType: EffectChainType) => void;
   resetEffect: (chainType: EffectChainType, effectId: string) => void;
+  setChainsFromState: (
+    chainStates: Partial<Record<EffectChainType, SharedEffectChainState>>,
+  ) => void;
 }
 
 const createDefaultChain = (type: EffectChainType): EffectChain => ({
@@ -36,6 +44,76 @@ const createEffectInstance = (type: EffectType, order: number = 0): EffectInstan
       ...param,
       id: `${type}_${param.name.toLowerCase().replace(/\s+/g, '_')}_${index}`,
     })),
+  };
+};
+
+const parameterIdFromName = (
+  effectType: EffectType,
+  name: string,
+  index: number,
+): string =>
+  `${effectType}_${name.toLowerCase().replace(/\s+/g, '_')}_${index}`;
+
+const convertParameterState = (
+  effectType: EffectType,
+  parameterState: SharedEffectParameterState,
+  index: number,
+): EffectInstance['parameters'][number] => {
+  const config = EFFECT_CONFIGS[effectType];
+  const referenceParam =
+    config?.parameters.find((param) => param.name === parameterState.name) ??
+    config?.parameters[index];
+
+  return {
+    id: parameterState.id ?? parameterIdFromName(effectType, parameterState.name, index),
+    name: parameterState.name,
+    value: parameterState.value,
+    min: parameterState.min ?? referenceParam?.min ?? 0,
+    max: parameterState.max ?? referenceParam?.max ?? 1,
+    step: parameterState.step ?? referenceParam?.step ?? 0.01,
+    type: referenceParam?.type ?? 'knob',
+    unit: parameterState.unit ?? referenceParam?.unit,
+    curve: parameterState.curve ?? referenceParam?.curve,
+  };
+};
+
+const convertEffectInstanceState = (
+  effectState: SharedEffectInstanceState,
+  fallbackOrder: number,
+): EffectInstance => {
+  const effectType = effectState.type as EffectType;
+  const config = EFFECT_CONFIGS[effectType];
+  const sortedParams = effectState.parameters || [];
+
+  return {
+    id: effectState.id,
+    type: effectType,
+    name: effectState.name ?? config?.name ?? effectState.type,
+    bypassed: effectState.bypassed,
+    order: effectState.order ?? fallbackOrder,
+    parameters: sortedParams.map((param, index) =>
+      convertParameterState(effectType, param, index),
+    ),
+  };
+};
+
+const convertChainState = (
+  chainType: EffectChainType,
+  chainState?: SharedEffectChainState,
+): EffectChain => {
+  if (!chainState) {
+    return createDefaultChain(chainType);
+  }
+
+  const sortedEffects = [...(chainState.effects || [])].sort(
+    (a, b) => a.order - b.order,
+  );
+
+  return {
+    type: chainType,
+    effects: sortedEffects.map((effectState, index) =>
+      convertEffectInstanceState(effectState, index),
+    ),
   };
 };
 
@@ -205,6 +283,34 @@ export const useEffectsStore = create<EffectsState>()(
         },
         false,
         'effects/resetEffect'
+      ),
+
+      setChainsFromState: (chainStates) => set(
+        (state) => {
+          const updatedChains: Record<EffectChainType, EffectChain> = {
+            ...state.chains,
+          };
+
+          if (chainStates.virtual_instrument) {
+            updatedChains.virtual_instrument = convertChainState(
+              'virtual_instrument',
+              chainStates.virtual_instrument,
+            );
+          }
+
+          if (chainStates.audio_voice_input) {
+            updatedChains.audio_voice_input = convertChainState(
+              'audio_voice_input',
+              chainStates.audio_voice_input,
+            );
+          }
+
+          return {
+            chains: updatedChains,
+          };
+        },
+        false,
+        'effects/setChainsFromState',
       ),
     }),
     {

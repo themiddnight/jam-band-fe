@@ -6,6 +6,15 @@ import type { ConnectionConfig } from "../types/connectionState";
 import { useRoomAudio } from "./useRoomAudio";
 import type { SynthState } from "@/features/instruments";
 import { useRoomStore } from "@/features/rooms";
+import { useEffectsStore } from "@/features/effects";
+import type {
+  EffectChain as UiEffectChain,
+  EffectChainType as UiEffectChainType,
+} from "@/features/effects/types";
+import type {
+  EffectChainState,
+  EffectChainType as SharedEffectChainType,
+} from "@/shared/types";
 import { useUserStore } from "@/shared/stores/userStore";
 import { throttle } from "lodash";
 import { useRef, useCallback, useState, useEffect, useMemo } from "react";
@@ -38,6 +47,49 @@ interface SynthParamsData {
   category: string;
   params: Partial<SynthState>;
 }
+
+interface EffectsChainChangedData {
+  userId: string;
+  username: string;
+  chains: Record<SharedEffectChainType, EffectChainState>;
+}
+
+const serializeChainsForNetwork = (
+  chains: Record<UiEffectChainType, UiEffectChain>,
+): Record<SharedEffectChainType, EffectChainState> => {
+  const result: Partial<Record<SharedEffectChainType, EffectChainState>> = {};
+
+  (Object.entries(chains) as Array<[
+    UiEffectChainType,
+    UiEffectChain
+  ]>).forEach(([chainType, chain]) => {
+    result[chainType as SharedEffectChainType] = {
+      type: chain.type as SharedEffectChainType,
+      effects: chain.effects
+        .slice()
+        .sort((a, b) => a.order - b.order)
+        .map((effect) => ({
+          id: effect.id,
+          type: effect.type,
+          name: effect.name,
+          bypassed: effect.bypassed,
+          order: effect.order,
+          parameters: effect.parameters.map((param) => ({
+            id: param.id,
+            name: param.name,
+            value: param.value,
+            min: param.min,
+            max: param.max,
+            step: param.step,
+            unit: param.unit,
+            curve: param.curve,
+          })),
+        })),
+    };
+  });
+
+  return result as Record<SharedEffectChainType, EffectChainState>;
+};
 
 // Deprecated in this hook: VoiceUser (handled by Room-level WebRTC hook)
 
@@ -131,6 +183,8 @@ export const useRoomSocket = (instrumentManager?: any) => {
 
   // Pending operations for when socket connects
   const pendingOperationsRef = useRef<Array<() => void>>([]);
+  const skipNextEffectSyncRef = useRef(false);
+  const lastEffectChainsSignatureRef = useRef<string | null>(null);
 
   // Room store actions
   const {
@@ -144,6 +198,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
     addPendingMember,
     removePendingMember,
     updateUserInstrument,
+    updateUserEffectChains,
     transferOwnership,
     clearRoom,
   } = useRoomStore();
@@ -316,7 +371,8 @@ export const useRoomSocket = (instrumentManager?: any) => {
           event === "change_instrument" ||
           event === "join_room" ||
           event === "leave_room" ||
-          event === "update_synth_params"
+          event === "update_synth_params" ||
+          event === "update_effects_chain"
         ) {
           // console.log(`📤 Immediate emit: ${event}`);
           socket.emit(event, data);
@@ -347,6 +403,79 @@ export const useRoomSocket = (instrumentManager?: any) => {
       }, 10),
     [safeEmit],
   );
+
+  const throttledEffectsEmit = useMemo(
+    () =>
+      throttle(
+        (data: { chains: Record<SharedEffectChainType, EffectChainState> }) => {
+          safeEmit("update_effects_chain", data);
+        },
+        200,
+        { leading: true, trailing: true },
+      ),
+    [safeEmit],
+  );
+
+  useEffect(() => {
+    if (connectionState !== ConnectionState.IN_ROOM) {
+      return;
+    }
+
+    let isActive = true;
+
+    const unsubscribe = useEffectsStore.subscribe((state) => {
+      if (!isActive) return;
+
+      const chains = state.chains as Record<UiEffectChainType, UiEffectChain>;
+      const signature = JSON.stringify(chains);
+
+      if (skipNextEffectSyncRef.current) {
+        skipNextEffectSyncRef.current = false;
+        lastEffectChainsSignatureRef.current = signature;
+        return;
+      }
+
+      if (lastEffectChainsSignatureRef.current === signature) {
+        return;
+      }
+
+      lastEffectChainsSignatureRef.current = signature;
+
+      const payloadChains = serializeChainsForNetwork(chains);
+
+      throttledEffectsEmit({ chains: payloadChains });
+
+      const userId = useUserStore.getState().userId;
+      const username = useUserStore.getState().username;
+      if (userId) {
+        roomAudio
+          .applyUserEffectChains(userId, payloadChains, username || undefined, {
+            applyToMixer: false,
+          })
+          .catch((error: unknown) => {
+            console.warn(
+              "⚠️ Failed to update local effect chain metadata:",
+              error,
+            );
+          });
+
+        updateUserEffectChains(userId, payloadChains);
+      }
+    });
+
+    return () => {
+      isActive = false;
+      unsubscribe();
+      lastEffectChainsSignatureRef.current = null;
+    };
+  }, [
+    connectionState,
+    roomAudio,
+    throttledEffectsEmit,
+    updateUserEffectChains,
+  ]);
+
+  useEffect(() => () => throttledEffectsEmit.cancel(), [throttledEffectsEmit]);
 
   // Set up room event handlers when socket changes
   useEffect(() => {
@@ -410,7 +539,12 @@ export const useRoomSocket = (instrumentManager?: any) => {
 
       on(
         "room_joined",
-        async (data: { room: any; users: any[]; pendingMembers: any[] }) => {
+        async (data: {
+          room: any;
+          users: any[];
+          pendingMembers: any[];
+          effectChains?: Record<SharedEffectChainType, EffectChainState>;
+        }) => {
           setCurrentRoom({
             ...data.room,
             users: data.users,
@@ -441,6 +575,23 @@ export const useRoomSocket = (instrumentManager?: any) => {
           } catch (error) {
             console.error("❌ Failed to initialize audio for room:", error);
             // Don't block room join on audio initialization failure
+          }
+
+          if (data.effectChains) {
+            skipNextEffectSyncRef.current = true;
+            useEffectsStore.getState().setChainsFromState(data.effectChains);
+
+            const currentUserId = useUserStore.getState().userId;
+            const currentUsername = useUserStore.getState().username;
+            if (currentUserId) {
+              await roomAudio.applyUserEffectChains(
+                currentUserId,
+                data.effectChains,
+                currentUsername || undefined,
+                { applyToMixer: false },
+              );
+              updateUserEffectChains(currentUserId, data.effectChains);
+            }
           }
 
           // WebRTC initialization is handled by useWebRTCVoice in Room.tsx
@@ -478,6 +629,21 @@ export const useRoomSocket = (instrumentManager?: any) => {
             `⚠️ New user ${data.user.username} has no instrument info:`,
             data.user,
           );
+        }
+
+        if (data.user.effectChains) {
+          roomAudio
+            .applyUserEffectChains(
+              data.user.id,
+              data.user.effectChains,
+              data.user.username,
+            )
+            .catch((error: unknown) => {
+              console.error(
+                `❌ Failed to apply effect chains for new user ${data.user.username}:`,
+                error,
+              );
+            });
         }
       });
 
@@ -625,6 +791,25 @@ export const useRoomSocket = (instrumentManager?: any) => {
       });
 
       on(
+        "effects_chain_changed",
+        (data: EffectsChainChangedData) => {
+          updateUserEffectChains(data.userId, data.chains);
+          roomAudio
+            .applyUserEffectChains(
+              data.userId,
+              data.chains,
+              data.username,
+            )
+            .catch((error: unknown) => {
+              console.error(
+                "❌ Failed to apply remote effects chain:",
+                error,
+              );
+            });
+        },
+      );
+
+      on(
         "request_synth_params_response",
         (data: { requestingUserId: string; requestingUsername: string }) => {
           if (requestSynthParamsResponseCallbackRef.current) {
@@ -738,6 +923,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
     addPendingMember,
     removePendingMember,
     updateUserInstrument,
+  updateUserEffectChains,
     transferOwnership,
     clearRoom,
     setPendingApproval,

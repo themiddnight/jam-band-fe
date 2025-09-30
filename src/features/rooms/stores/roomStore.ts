@@ -1,4 +1,10 @@
-import type { Room, RoomUser, Scale } from "../../../shared/types";
+import type {
+  Room,
+  RoomUser,
+  Scale,
+  EffectChainState,
+  EffectChainType,
+} from "../../../shared/types";
 import { ConnectionState } from "../../audio/types/connectionState";
 import { create } from "zustand";
 
@@ -19,6 +25,10 @@ interface RoomState {
     userId: string,
     instrument: string,
     category: string,
+  ) => void;
+  updateUserEffectChains: (
+    userId: string,
+    chains?: Record<EffectChainType, EffectChainState>,
   ) => void;
   addUser: (user: RoomUser) => void;
   removeUser: (userId: string) => void;
@@ -70,6 +80,25 @@ export const useRoomStore = create<RoomState>((set, get) => ({
 
     set({
       currentRoom: { ...currentRoom, users: updatedUsers },
+    });
+  },
+
+  updateUserEffectChains: (userId, chains) => {
+    const { currentRoom, currentUser } = get();
+    if (!currentRoom) return;
+
+    const updatedUsers = currentRoom.users.map((user) =>
+      user.id === userId ? { ...user, effectChains: chains } : user,
+    );
+
+    const updatedCurrentUser =
+      currentUser?.id === userId
+        ? { ...currentUser, effectChains: chains }
+        : currentUser;
+
+    set({
+      currentRoom: { ...currentRoom, users: updatedUsers },
+      currentUser: updatedCurrentUser,
     });
   },
 

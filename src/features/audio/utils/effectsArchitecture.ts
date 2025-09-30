@@ -12,7 +12,107 @@
  * 5. Real-time parameter automation support
  */
 import { AudioContextManager } from "../constants/audioConfig";
+import type { EffectInstanceState } from "@/shared/types";
 import * as Tone from "tone";
+
+const EFFECT_PARAMETER_NAME_MAP: Record<string, Record<string, string>> = {
+  reverb: {
+    room_size: "roomSize",
+    decay_time: "decayTime",
+    pre_delay: "preDelay",
+    dry_wet: "wetLevel",
+    wet: "wetLevel",
+  },
+  delay: {
+    time: "delayTime",
+    delay_time: "delayTime",
+    feedback: "feedback",
+    dry_wet: "wetLevel",
+    wet: "wetLevel",
+  },
+  chorus: {
+    frequency: "frequency",
+    delay_time: "delayTime",
+    depth: "depth",
+    spread: "spread",
+    dry_wet: "wetLevel",
+  },
+  compressor: {
+    threshold: "threshold",
+    ratio: "ratio",
+    attack: "attack",
+    release: "release",
+    dry_wet: "wetLevel",
+  },
+  filter: {
+    frequency: "frequency",
+    resonance: "Q",
+    q: "Q",
+    type: "type",
+    dry_wet: "wetLevel",
+  },
+  distortion: {
+    distortion: "distortion",
+    oversample: "oversample",
+    dry_wet: "wetLevel",
+  },
+  autofilter: {
+    frequency: "frequency",
+    base_frequency: "baseFrequency",
+    octaves: "octaves",
+    filter_type: "type",
+    type: "type",
+    dry_wet: "wetLevel",
+  },
+  autopanner: {
+    frequency: "frequency",
+    depth: "depth",
+    dry_wet: "wetLevel",
+  },
+  autowah: {
+    base_frequency: "baseFrequency",
+    octaves: "octaves",
+    sensitivity: "sensitivity",
+    q: "Q",
+    dry_wet: "wetLevel",
+  },
+  bitcrusher: {
+    bits: "bits",
+    dry_wet: "wetLevel",
+  },
+  phaser: {
+    frequency: "frequency",
+    octaves: "octaves",
+    base_frequency: "baseFrequency",
+    stages: "stages",
+    q: "Q",
+    dry_wet: "wetLevel",
+  },
+  pingpongdelay: {
+    delay_time: "delayTime",
+    feedback: "feedback",
+    dry_wet: "wetLevel",
+    wet: "wetLevel",
+  },
+  stereowidener: {
+    width: "width",
+    dry_wet: "wetLevel",
+  },
+  tremolo: {
+    frequency: "frequency",
+    depth: "depth",
+    spread: "spread",
+    dry_wet: "wetLevel",
+  },
+  vibrato: {
+    frequency: "frequency",
+    depth: "depth",
+    dry_wet: "wetLevel",
+  },
+};
+
+const normalizeParamName = (name: string): string =>
+  name.toLowerCase().replace(/[^a-z0-9]+/g, "_");
 
 // Effect Types
 export enum EffectType {
@@ -227,15 +327,16 @@ export class EffectsFactory {
    * Return effect to pool for reuse
    */
   static releaseEffect(effect: AudioEffect): void {
-    effect.cleanup();
+    try {
+      effect.cleanup();
+    } catch (error) {
+      console.warn("[Effects] Error during effect cleanup", error);
+    }
+
     effect.enabled = false;
 
-    const pool = this.effectPool.get(effect.type) || [];
-    if (pool.length < 5) {
-      // Limit pool size
-      pool.push(effect);
-      this.effectPool.set(effect.type, pool);
-    }
+    // Pooling is temporarily disabled to avoid reusing disposed Tone nodes
+    // which caused silent chains after remote parameter updates.
   }
 
   private static createReverbEffect(id?: string): AudioEffect {
@@ -2278,6 +2379,113 @@ export class MixerEngine {
     this.rebuildChannelChain(channel);
 
     return effect;
+  }
+
+  private resolveEffectType(effectType: string): EffectType | null {
+    const normalized = effectType.toLowerCase();
+    const match = Object.values(EffectType).find(
+      (value) => value.toLowerCase() === normalized,
+    );
+    return match ?? null;
+  }
+
+  applyEffectChainState(
+    userId: string,
+    effects: EffectInstanceState[],
+    options?: { username?: string; createIfMissing?: boolean },
+  ): void {
+    let channel = this.userChannels.get(userId);
+    if (!channel) {
+      if (options?.createIfMissing === false) {
+        return;
+      }
+      const username = options?.username || userId;
+      channel = this.createUserChannel(userId, username);
+    } else if (options?.username && channel.username !== options.username) {
+      channel.username = options.username;
+    }
+
+    if (!channel) return;
+
+    // Release existing effects to pool before rebuilding
+    channel.effectChain.forEach((effect) => EffectsFactory.releaseEffect(effect));
+    channel.effectChain = [];
+
+    const sortedEffects = [...effects].sort((a, b) => a.order - b.order);
+
+    for (const effectState of sortedEffects) {
+      const effectType = this.resolveEffectType(effectState.type);
+      if (!effectType) {
+        console.warn(
+          `[MixerEngine] Unknown effect type received for user ${userId}:`,
+          effectState.type,
+        );
+        continue;
+      }
+
+      const effect = EffectsFactory.createEffect(effectType, effectState.id);
+      if (!effect) {
+        console.warn(
+          `[MixerEngine] Failed to instantiate effect ${effectState.type} for user ${userId}`,
+        );
+        continue;
+      }
+
+      // Apply parameter state
+      for (const parameter of effectState.parameters || []) {
+        try {
+          const normalizedName = normalizeParamName(parameter.name);
+          const mappedName =
+            EFFECT_PARAMETER_NAME_MAP[effectState.type]?.[normalizedName] ??
+            parameter.name;
+          effect.setParameter(mappedName, parameter.value);
+        } catch (error) {
+          console.warn(
+            `[MixerEngine] Failed to set parameter ${parameter.name} on effect ${effectState.id}:`,
+            error,
+          );
+        }
+      }
+
+      // Handle bypass status
+      if (effectState.bypassed) {
+        effect.disable();
+      } else {
+        effect.enable();
+      }
+
+      channel.effectChain.push(effect);
+    }
+
+    this.rebuildChannelChain(channel);
+  }
+
+  removeUserChannel(userId: string): void {
+    const channel = this.userChannels.get(userId);
+    if (!channel) return;
+
+    channel.effectChain.forEach((effect) => EffectsFactory.releaseEffect(effect));
+
+    try {
+      channel.inputGain.disconnect();
+    } catch {
+      // ignore
+    }
+
+    try {
+      (channel.toneChannel as any)?.disconnect?.();
+      (channel.toneChannel as any)?.dispose?.();
+    } catch {
+      // ignore
+    }
+
+    try {
+      (channel.analyser as any)?.dispose?.();
+    } catch {
+      // ignore
+    }
+
+    this.userChannels.delete(userId);
   }
 
   /**
