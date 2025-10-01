@@ -15,19 +15,38 @@
 
 ## 🎵 What It Does
 
-Jam Band lets you create music together with friends in real-time using **virtual instruments with music theory assistance** for low-mid level musicians, and **physical instrument support** for high-level players who want to plug in their real instruments. 
+Jam Band lets you create music together with friends in real-time using **virtual instruments with music theory assistance** for low-mid level musicians, and **physical instrument support** for high-level players who want to plug in their real instruments.
 
-**Perfect for music producers** who want to brainstorm ideas, experiment with synthesizers, create patterns with step sequencers, and collaborate in real-time with live communication. Ideal for remote jam sessions, music lessons, skill development, or just having fun making music together.
+**Current: Perform Room** - Perfect for **live jamming sessions** with synchronized instruments, step sequencers, and ultra-low latency voice chat. Ideal for remote jam sessions, music lessons, skill development, or just having fun making music together.
+
+**Future: Produce Room** - Revolutionary **collaborative DAW** where multiple users can simultaneously create tracks, record audio/MIDI regions, edit notes, and mix projects in real-time. Think **Miro or Figma but for music production** - a paradigm shift from traditional single-user DAWs to real-time collaborative music creation.
 
 ## ✨ Key Features
 
-- **🎸 Virtual Instruments**: Guitar, Bass, Keyboard, Drums, Synthesizer
-- **🎤 Ultra-Low Latency Voice Chat**: Optimized for real-time performance over audio quality
-- **🥁 Synchronized Metronome**: Keep time together across all users
-- **🎼 Step Sequencer**: Create patterns and sequences together
-- **🎹 MIDI Controller Support**: Use your external MIDI devices
-- **👥 Room Management**: Role-based access (owner, band member, audience)
-- **📱 PWA Support**: Install as a native app
+### Current Features (Live Jamming)
+- **🎸 Virtual Instruments**: Guitar, Bass, Keyboard, Drums, Synthesizer with real-time collaboration
+- **🎤 Ultra-Low Latency Voice Chat**: WebRTC mesh network optimized for musical timing
+- **🥁 Synchronized Metronome**: BPM synchronization across all users with visual indicators
+- **🎼 Step Sequencer**: Collaborative pattern creation and loop sharing
+- **🎚️ Audio Effects**: Real-time effects chains (reverb, delay, distortion) with live parameter control
+- **🎹 MIDI Controller Support**: Full external MIDI device integration
+- **👥 Advanced Room Management**: Owner/member roles, approval system, room settings
+- **📱 PWA Support**: Installable app with offline capabilities and push notifications
+- **🎵 Music Theory Assistance**: Scale helpers
+- **⚡ Performance Optimization**: Dynamic polyphony, adaptive audio quality, browser-specific optimizations
+- **🧪 Comprehensive Testing**: 76 passing tests with regression prevention for all features
+
+### 🚀 Future: Collaborative DAW (Produce Room)
+*Coming Soon: Revolutionary real-time collaborative music production*
+
+- **🎛️ Real-time Collaborative DAW**: Multiple users editing tracks simultaneously like Google Docs for music
+- **🎨 Canvas-style Interface**: Miro/Figma-like collaboration patterns adapted for music production
+- **👥 Multi-user Timeline Editing**: Simultaneous track editing with presence tracking and conflict resolution
+- **🎵 Collaborative Region Recording**: Multiple users recording audio/MIDI regions to different tracks in real-time
+- **🎚️ Collaborative Mixing**: Real-time parameter adjustments across users with operational transform
+- **💾 Project Persistence**: Save and resume collaborative music projects with version history
+- **👀 Presence Tracking**: See where other users are working (cursors, selections, active regions)
+- **🔧 Smart Conflict Resolution**: Automatic handling of simultaneous edits using operational transform patterns
 
 ## 🚀 Quick Start
 
@@ -51,6 +70,11 @@ Jam Band lets you create music together with friends in real-time using **virtua
 
 3. **Open browser**
    Navigate to `http://localhost:5173`
+
+4. **Run tests (optional)**
+   ```bash
+   bun test
+   ```
 
 ## 🎛️ Audio Architecture
 
@@ -95,6 +119,7 @@ Jam Band lets you create music together with friends in real-time using **virtua
 
 ## 🎯 Perfect For
 
+### Current (Perform Room - Live Jamming)
 - **🎵 Low-Mid Level Musicians**: Virtual instruments with built-in music theory assistance
 - **🎸 High-Level Players**: Plug in physical instruments for real-time collaboration
 - **🎤 Singers**: Minimal delay between singing and hearing playback
@@ -102,49 +127,78 @@ Jam Band lets you create music together with friends in real-time using **virtua
 - **🎛️ Music Producers**: Brainstorm ideas, experiment with synthesizers, create patterns
 - **🌍 Remote Collaboration**: Jam with friends anywhere in the world
 
+### Future (Produce Room - Collaborative Production)
+- **🎼 Music Production Teams**: Collaborate on full tracks like working on a shared document
+- **🎧 Remix Artists**: Multiple producers working on the same project simultaneously
+- **🎵 Songwriters**: Real-time collaborative composition with multi-user MIDI editing
+- **🎚️ Mix Engineers**: Collaborative mixing sessions with live parameter adjustments
+- **🎓 Music Education**: Teachers and students working together on production projects
+- **🏢 Music Studios**: Distributed production workflows across multiple locations
+
 ## 🛠️ Tech Stack
 
-- **Frontend**: React 19, TypeScript, Vite
-- **Audio**: Web Audio API, Tone.js, Smplr
-- **Real-time**: Socket.IO, WebRTC
-- **State**: Zustand, TanStack Query
-- **Styling**: Tailwind CSS, DaisyUI
+- **Frontend**: React 19, TypeScript, Vite 7
+- **Audio**: Web Audio API, Tone.js 15, Smplr 0.16
+- **Real-time**: Socket.IO 4.8, WebRTC
+- **State**: Zustand 5, TanStack Query 5
+- **Styling**: Tailwind CSS 4, DaisyUI 5
+- **Testing**: Vitest 2, React Testing Library 16, 74 comprehensive tests with regression prevention
+- **PWA**: VitePWA with Workbox
+- **Dev Tools**: ESLint 9, Prettier 3, TypeScript 5.8
 
 ## 📁 Project Structure
 
 ```
 src/
-├── features/
-│   ├── audio/          # Audio processing & voice
-│   ├── instruments/    # Virtual instruments
-│   ├── rooms/          # Room management
-│   └── metronome/      # Synchronized timing
-├── shared/             # Utilities & components
-└── pages/              # Main app pages
+├── features/           # Feature-based architecture
+│   ├── audio/          # Audio processing & WebRTC voice
+│   ├── instruments/    # Virtual instruments (Guitar, Bass, Drums, Synth)
+│   ├── rooms/          # Room management & Socket.IO integration
+│   │   ├── core/       # Room type architecture (Perform + Future Produce)
+│   │   └── types/      # RoomType configurations & factory patterns
+│   ├── metronome/      # Synchronized timing across users
+│   ├── sequencer/      # Step sequencer for pattern creation
+│   ├── effects/        # Audio effects chains
+│   └── ui/             # Shared UI components & state
+├── shared/             # Cross-feature utilities & stores
+├── pages/              # Main app routes (Lobby, PerformRoom, Invite)
+├── app-config/         # Router & provider configuration
+├── test/               # Test setup & utilities
+└── __tests__/          # Integration tests & testing documentation
 ```
 
 ## 🎮 Available Scripts
 
-- **`bun dev`** - Start development server
-- **`bun build`** - Build for production
-- **`bun preview`** - Preview production build
-- **`bun lint`** - Run ESLint
+- **`bun dev`** - Start development server with HTTPS (required for WebRTC)
+- **`bun build`** - TypeScript compilation + Vite production build
+- **`bun preview`** - Preview production build locally
+- **`bun lint`** - Run ESLint with React hooks rules
+- **`bun format`** - Format code with Prettier
+- **`bun test`** - Run comprehensive test suite (74 tests with regression prevention)
+- **`bun test:run`** - Run tests once (CI mode)
+- **`bun test:ui`** - Run tests with interactive UI dashboard
+- **`bun test:coverage`** - Generate detailed coverage reports
+- **`bun test integration`** - Run cross-feature integration tests
 
 ## 🌐 Browser Support
 
-- **Chrome 90+** ✅
-- **Firefox 88+** ✅  
-- **Safari 14+** ✅
-- **Edge 90+** ✅
+- **Chrome 90+** ✅ *Recommended - Full MIDI & synthesizer support*
+- **Edge 90+** ✅ *Recommended - Full MIDI & synthesizer support*
+- **Brave 90+** ✅ *Recommended - Full MIDI & synthesizer support*
+- **Firefox 88+** ⚠️ *Limited MIDI support, some synthesizer instruments may not work*
+- **Safari 14+** ⚠️ *WebKit limitations - some instruments don't work properly*
+
+> **Best Performance**: Chromium-based browsers (Chrome, Edge, Brave) provide the most reliable Web Audio API implementation and full MIDI device support.
 
 ## 🔧 Configuration
 
 ### Environment Variables
 Create `.env.local`:
 ```env
-VITE_API_URL=http://localhost:3000
-VITE_SOCKET_URL=http://localhost:3000
+VITE_API_URL=http://localhost:3001
 ```
+
+> **Note**: Socket.IO URL is automatically derived from API URL. HTTPS is auto-configured in development via `vite-plugin-mkcert` for WebRTC compatibility.
 
 ## 🤝 Contributing
 
