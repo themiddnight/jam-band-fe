@@ -30,6 +30,7 @@ Jam Band lets you create music together with friends in real-time using **virtua
 - **🎼 Step Sequencer**: Collaborative pattern creation and loop sharing
 - **🎚️ Audio Effects**: Real-time effects chains (reverb, delay, distortion) with live parameter control
 - **🎹 MIDI Controller Support**: Full external MIDI device integration
+- **🥁 General MIDI Percussion Mapping**: Standardized drum note mapping (Z/X page navigation) for consistent playback and MIDI device compatibility
 - **👥 Advanced Room Management**: Owner/member roles, approval system, room settings
 - **📱 PWA Support**: Installable app with offline capabilities and push notifications
 - **🎵 Music Theory Assistance**: Scale helpers
@@ -89,6 +90,12 @@ Jam Band lets you create music together with friends in real-time using **virtua
 - Dynamic polyphony (32 → 6 notes during voice calls)
 - Browser-specific optimizations
 - Network optimizations for mesh networks
+
+### **MIDI & Percussion Standards**
+- **General MIDI Percussion**: Drum pads use standardized GM note mapping (C1-A4)
+- **Page Navigation**: Z/X keys for 3 pages of 16 drum pads (48 total positions)
+- **MIDI Device Ready**: Compatible with external MIDI controllers using standard percussion mapping
+- **Pattern Portability**: Sequencer patterns work consistently across all drum machines
 
 ## ⚙️ Technical Requirements & Notes
 
@@ -153,11 +160,13 @@ src/
 ├── features/           # Feature-based architecture
 │   ├── audio/          # Audio processing & WebRTC voice
 │   ├── instruments/    # Virtual instruments (Guitar, Bass, Drums, Synth)
+│   │   ├── constants/  # Including General MIDI percussion mapping
+│   │   └── utils/      # Including GM note mapper service
 │   ├── rooms/          # Room management & Socket.IO integration
 │   │   ├── core/       # Room type architecture (Perform + Future Produce)
 │   │   └── types/      # RoomType configurations & factory patterns
 │   ├── metronome/      # Synchronized timing across users
-│   ├── sequencer/      # Step sequencer for pattern creation
+│   ├── sequencer/      # Step sequencer for pattern creation (uses GM notes for drums)
 │   ├── effects/        # Audio effects chains
 │   └── ui/             # Shared UI components & state
 ├── shared/             # Cross-feature utilities & stores

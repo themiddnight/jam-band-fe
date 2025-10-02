@@ -718,27 +718,23 @@ export class EffectsFactory {
 
   private static createFilterEffect(id?: string): AudioEffect {
     const context = this.context!;
-    const filter = new Tone.Filter({ type: "lowpass", frequency: 1000, Q: 1 });
-    
-    // Create dry/wet mixing nodes
-    const inputGain = context.createGain();
-    const wetGain = context.createGain();
-    const dryGain = context.createGain();
-    const outputGain = context.createGain();
-    
-    // Set initial dry/wet balance (100% wet for filter)
-    wetGain.gain.value = 1;
-    dryGain.gain.value = 0;
-    
-    // Connect the network
-    inputGain.connect(filter.input as any);
-    inputGain.connect(dryGain);
-    (filter.output as any).connect(wetGain);
-    wetGain.connect(outputGain);
-    dryGain.connect(outputGain);
-    
-    const inputNode = inputGain;
-    const outputNode = outputGain;
+  const filter = new Tone.Filter({ type: "lowpass", frequency: 1000, Q: 1 });
+
+  // Create dry/wet mixing nodes
+  const inputGain = context.createGain();
+  const wetGain = context.createGain();
+  const dryGain = context.createGain();
+  const outputGain = context.createGain();
+
+  // Set initial dry/wet balance (100% wet for filter)
+  wetGain.gain.value = 1;
+  dryGain.gain.value = 0;
+
+  // Connect the network using Tone-aware helper to avoid context mismatches
+  this.connectToneEffect(inputGain, filter, wetGain, dryGain, outputGain);
+
+  const inputNode = inputGain;
+  const outputNode = outputGain;
 
     const parameters = new Map<string, EffectParameter>();
     parameters.set("frequency", {
@@ -779,8 +775,8 @@ export class EffectsFactory {
       parameters,
       inputNode,
       outputNode,
-      wetGainNode: outputNode,
-      dryGainNode: inputNode,
+      wetGainNode: wetGain,
+      dryGainNode: dryGain,
       bypass: false,
 
       process(input: AudioNode): AudioNode {
@@ -821,10 +817,15 @@ export class EffectsFactory {
 
       enable(): void {
         this.enabled = true;
+        const wetLevel = this.parameters.get("wetLevel")?.value ?? 1;
+        wetGain.gain.setValueAtTime(wetLevel, context.currentTime);
+        dryGain.gain.setValueAtTime(1 - wetLevel, context.currentTime);
       },
 
       disable(): void {
         this.enabled = false;
+        wetGain.gain.setValueAtTime(0, context.currentTime);
+        dryGain.gain.setValueAtTime(1, context.currentTime);
       },
 
       cleanup(): void {
@@ -992,39 +993,14 @@ export class EffectsFactory {
     const wetGain = context.createGain();
     const dryGain = context.createGain();
     const outputGain = context.createGain();
-
-    // Create stereo enhancement for mono-to-stereo panning
-    const splitter = context.createChannelSplitter(2);
-    const merger = context.createChannelMerger(2);
     
     // Set initial dry/wet balance
     wetGain.gain.value = 0.5;
     dryGain.gain.value = 0.5;
 
-    // Enhanced stereo routing for auto-panning
-    try {
-      // Route input to dry path
-      inputGain.connect(dryGain);
-      
-      // Split mono to stereo for panner processing
-      inputGain.connect(splitter);
-      splitter.connect(merger, 0, 0); // Left channel
-      splitter.connect(merger, 0, 1); // Right channel (same signal)
-      
-      // Process through auto-panner for stereo movement
-      merger.connect(autoPanner.input as any);
-      (autoPanner.output as any).connect(wetGain);
-      
-      // Mix dry (centered) and wet (panned) signals
-      dryGain.connect(outputGain);
-      wetGain.connect(outputGain);
-      
-      console.log("[Effects] AutoPanner connected with stereo movement enhancement");
-    } catch (error) {
-      console.error("[Effects] Failed to connect AutoPanner with enhancement:", error);
-      // Fallback to helper method
-      this.connectToneEffect(inputGain, autoPanner, wetGain, dryGain, outputGain);
-    }
+    // Connect using helper (input is now stereo from channel converter)
+    this.connectToneEffect(inputGain, autoPanner, wetGain, dryGain, outputGain);
+    console.log("[Effects] AutoPanner connected - will pan stereo signal");
 
     const parameters = new Map<string, EffectParameter>();
     parameters.set("frequency", {
@@ -1363,39 +1339,14 @@ export class EffectsFactory {
     const wetGain = context.createGain();
     const dryGain = context.createGain();
     const outputGain = context.createGain();
-
-    // Create stereo enhancement for chorus effect
-    const splitter = context.createChannelSplitter(2);
-    const merger = context.createChannelMerger(2);
     
     // Set initial dry/wet balance
     wetGain.gain.value = 0.5;
     dryGain.gain.value = 0.5;
 
-    // Enhanced stereo routing for chorus (spread parameter already creates stereo width)
-    try {
-      // Route input to dry path
-      inputGain.connect(dryGain);
-      
-      // Create stereo from mono for chorus processing
-      inputGain.connect(splitter);
-      splitter.connect(merger, 0, 0); // Left channel
-      splitter.connect(merger, 0, 1); // Right channel (same signal)
-      
-      // Process through chorus (spread=180 creates stereo width)
-      merger.connect(chorus.input as any);
-      (chorus.output as any).connect(wetGain);
-      
-      // Mix dry and wet
-      dryGain.connect(outputGain);
-      wetGain.connect(outputGain);
-      
-      console.log("[Effects] Chorus connected with stereo spread enhancement");
-    } catch (error) {
-      console.error("[Effects] Failed to connect Chorus with enhancement:", error);
-      // Fallback to helper method
-      this.connectToneEffect(inputGain, chorus, wetGain, dryGain, outputGain);
-    }
+    // Connect using helper (input is now stereo from channel converter)
+    this.connectToneEffect(inputGain, chorus, wetGain, dryGain, outputGain);
+    console.log("[Effects] Chorus connected - stereo spread will work with stereo input");
 
     const parameters = new Map<string, EffectParameter>();
     parameters.set("frequency", {
@@ -1734,12 +1685,17 @@ export class EffectsFactory {
 
       enable(): void {
         this.enabled = true;
-        // Phaser doesn't have start/stop methods
+        // Restore wet/dry balance
+        const wetLevel = this.parameters.get("wetLevel")?.value || 0.5;
+        wetGain.gain.setValueAtTime(wetLevel, context.currentTime);
+        dryGain.gain.setValueAtTime(1 - wetLevel, context.currentTime);
       },
 
       disable(): void {
         this.enabled = false;
-        // Phaser doesn't have start/stop methods
+        // Bypass: full dry, no wet signal
+        wetGain.gain.setValueAtTime(0, context.currentTime);
+        dryGain.gain.setValueAtTime(1, context.currentTime);
       },
 
       cleanup(): void {
@@ -1768,43 +1724,14 @@ export class EffectsFactory {
     const wetGain = context.createGain();
     const dryGain = context.createGain();
     const outputGain = context.createGain();
-
-    // Create stereo splitter for mono-to-stereo conversion
-    const splitter = context.createChannelSplitter(2);
-    const merger = context.createChannelMerger(2);
     
     // Set initial dry/wet balance
     wetGain.gain.value = 0.5;
     dryGain.gain.value = 0.5;
 
-    // Enhanced stereo routing for ping-pong effect
-    try {
-      // Route input to both dry path and ping-pong delay
-      inputGain.connect(dryGain);
-      inputGain.connect(splitter);
-      
-      // Connect splitter to ping-pong delay input (ensures stereo processing)
-      splitter.connect(pingPongDelay.input as any, 0, 0); // Left channel
-      splitter.connect(pingPongDelay.input as any, 0, 1); // Right channel (same mono signal)
-      
-      // Connect ping-pong output to wet gain
-      (pingPongDelay.output as any).connect(wetGain);
-      
-      // Mix dry and wet to stereo merger
-      dryGain.connect(merger, 0, 0); // Dry to left
-      dryGain.connect(merger, 0, 1); // Dry to right
-      wetGain.connect(merger, 0, 0); // Wet to left
-      wetGain.connect(merger, 0, 1); // Wet to right
-      
-      // Connect merger to output
-      merger.connect(outputGain);
-      
-      console.log("[Effects] PingPongDelay connected with stereo enhancement");
-    } catch (error) {
-      console.error("[Effects] Failed to connect PingPongDelay with stereo enhancement:", error);
-      // Fallback to helper method
-      this.connectToneEffect(inputGain, pingPongDelay, wetGain, dryGain, outputGain);
-    }
+    // Connect using helper (input is now stereo from channel converter)
+    this.connectToneEffect(inputGain, pingPongDelay, wetGain, dryGain, outputGain);
+    console.log("[Effects] PingPongDelay connected - will ping-pong between stereo channels");
 
     const parameters = new Map<string, EffectParameter>();
     parameters.set("delayTime", {
@@ -2305,12 +2232,70 @@ export class MixerEngine {
   }
 
   /**
+   * Create a mono-to-stereo converter using Haas effect for natural stereo width
+   * This converts mono instrument signals to true stereo for proper stereo effect processing
+   */
+  private createMonoToStereoConverter(): { input: GainNode; output: GainNode } {
+    // Input gain node
+    const inputGain = this.context.createGain();
+    
+    // Create stereo splitter and merger
+    const splitter = this.context.createChannelSplitter(2);
+    const merger = this.context.createChannelMerger(2);
+    
+    // Create subtle delays for Haas effect (psychoacoustic stereo widening)
+    const leftDelay = this.context.createDelay(0.1);
+    const rightDelay = this.context.createDelay(0.1);
+    
+    // Set subtle delays (1-2ms creates stereo width without noticeable delay)
+    leftDelay.delayTime.value = 0.0005;  // 0.5ms on left
+    rightDelay.delayTime.value = 0.0015; // 1.5ms on right
+    
+    // Create slight gain differences for additional width
+    const leftGain = this.context.createGain();
+    const rightGain = this.context.createGain();
+    leftGain.gain.value = 1.0;   // Full volume left
+    rightGain.gain.value = 0.95; // Slightly quieter right
+    
+    // Output gain node
+    const outputGain = this.context.createGain();
+    
+    // Connect the chain:
+    // Mono input -> split to two identical channels
+    inputGain.connect(splitter);
+    
+    // Left channel path: split[0] -> leftDelay -> leftGain -> merger[0]
+    splitter.connect(leftDelay, 0);
+    leftDelay.connect(leftGain);
+    leftGain.connect(merger, 0, 0);
+    
+    // Right channel path: split[0] -> rightDelay -> rightGain -> merger[1]
+    splitter.connect(rightDelay, 0);
+    rightDelay.connect(rightGain);
+    rightGain.connect(merger, 0, 1);
+    
+    // Merge to stereo output
+    merger.connect(outputGain);
+    
+    console.log('[MixerEngine] Created mono-to-stereo converter with Haas effect');
+    
+    return { input: inputGain, output: outputGain };
+  }
+
+  /**
    * Create a user channel
    */
   createUserChannel(userId: string, username: string): UserChannel {
     const nodePool = AudioContextManager.getNodePool();
     // Native preGain bridge for incoming sources
     const inputGain = nodePool?.getGainNode() || this.context.createGain();
+
+    // Create mono-to-stereo converter for proper stereo effect processing
+    // This ensures all instruments (which are mono) get converted to true stereo
+    const monoToStereo = this.createMonoToStereoConverter();
+    
+    // Connect input to mono-to-stereo converter
+    inputGain.connect(monoToStereo.input);
 
     // Create Tone channel with pan/volume
     const toneChannel = new Tone.Channel({ volume: 0, pan: 0 });
@@ -2323,19 +2308,19 @@ export class MixerEngine {
       toneChannel.toDestination();
     }
 
-    // Connect native preGain into Tone channel using Tone.connect for cross-type safety
+    // Connect mono-to-stereo output into Tone channel using Tone.connect for cross-type safety
     try {
       // Prefer Tone.connect to bridge AudioNode <-> ToneAudioNode
-      (Tone as any).connect?.(inputGain as any, toneChannel as any);
+      (Tone as any).connect?.(monoToStereo.output as any, toneChannel as any);
     } catch {
       // Fallback: bridge via a Tone.Gain in correct direction
       const bridge = new Tone.Gain(1);
       try {
-        // inputGain -> bridge.input -> bridge -> toneChannel
-        inputGain.connect((bridge as any).input ?? (bridge as any));
+        // monoToStereo.output -> bridge.input -> bridge -> toneChannel
+        monoToStereo.output.connect((bridge as any).input ?? (bridge as any));
       } catch {
         // Last resort: connect native to native if available
-        try { inputGain.connect((toneChannel as any).input); } catch { /* ignore */ }
+        try { monoToStereo.output.connect((toneChannel as any).input); } catch { /* ignore */ }
       }
       bridge.connect(toneChannel);
     }

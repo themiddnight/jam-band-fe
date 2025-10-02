@@ -8,6 +8,7 @@ import {
 import { getOptimalAudioConfig } from "../../audio";
 import { Soundfont, DrumMachine } from "smplr";
 import * as Tone from "tone";
+import { gmNoteMapper } from "./gmNoteMapper";
 
 export interface SynthState {
   // Volume control
@@ -1229,6 +1230,16 @@ export class InstrumentEngine {
     }
 
     notes.forEach((note) => {
+      // For drum instruments, convert GM notes to actual sample names
+      let actualNote = note;
+      if (this.config.category === InstrumentCategory.DrumBeat) {
+        const sample = gmNoteMapper.gmNoteToSample(note);
+        if (sample) {
+          actualNote = sample;
+          console.log(`🥁 GM Note mapping: ${note} -> ${actualNote}`);
+        }
+      }
+
       // Stop existing note
       const existingNote = this.activeNotes.get(note);
       if (existingNote) {
@@ -1245,7 +1256,7 @@ export class InstrumentEngine {
       );
 
       const playedNote = this.instrument.start({
-        note: note,
+        note: actualNote, // Use the converted sample name for drum machines
         velocity: scaledVelocity,
         time: this.audioContext!.currentTime + 0.001,
       });

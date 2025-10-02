@@ -35,6 +35,7 @@ export const useAudioStream = ({
   const processedOutputNodeRef = useRef<AudioNode | null>(null);
   const micPermissionRef = useRef<boolean>(false);
   const isReinitializingRef = useRef<boolean>(false);
+  const previousTrackEnabledRef = useRef<boolean>(false); // Track the previous enabled state
 
   // Initialize audio context and stream
   const initializeAudioStream = useCallback(async () => {
@@ -47,6 +48,12 @@ export const useAudioStream = ({
     isReinitializingRef.current = true;
     
     try {
+      // Save the previous track enabled state before cleanup
+      const wasPreviouslyEnabled = mediaStreamRef.current
+        ? mediaStreamRef.current.getAudioTracks()[0]?.enabled ?? false
+        : false;
+      previousTrackEnabledRef.current = wasPreviouslyEnabled;
+      
       // Clean up any existing resources first
       if (mediaStreamRef.current) {
         mediaStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -196,11 +203,13 @@ export const useAudioStream = ({
           .catch(console.warn);
       }
 
-      // Default to muted: disable the processed audio track until user explicitly unmutes
+      // Set track enabled state based on previous state or default to disabled
+      // This preserves the mute state when reinitializing due to settings changes
       try {
         const processedTrack = processedStream.getAudioTracks()[0];
         if (processedTrack) {
-          processedTrack.enabled = false;
+          processedTrack.enabled = previousTrackEnabledRef.current;
+          console.log(`🎤 Set new track enabled state to: ${previousTrackEnabledRef.current}`);
         }
       } catch {
         // ignore if no track available
@@ -268,56 +277,21 @@ export const useAudioStream = ({
     micPermissionRef.current = false; // Reset mic permission state
   }, [onStreamRemoved]);
 
-  // Update audio constraints when settings change without full reinitialization
+  // Update audio constraints when settings change by reinitializing the stream
+  // This ensures constraints take effect immediately, especially on Chrome
   useEffect(() => {
     // Skip if already reinitializing or no active stream
     if (isReinitializingRef.current || !originalStreamRef.current || !micPermissionRef.current) {
       return;
     }
     
-    const originalAudioTrack = originalStreamRef.current.getAudioTracks()[0];
-    if (originalAudioTrack) {
-      console.log('🎤 Audio settings changed, updating constraints...');
-      // Try to update constraints on existing track first
-      originalAudioTrack
-        .applyConstraints({
-          echoCancellation: !cleanMode, // Enable processing when clean mode is off
-          noiseSuppression: !cleanMode, // Enable processing when clean mode is off
-          autoGainControl: autoGain, // Use browser auto gain when enabled
-          sampleRate: 48000, // Match WebRTC optimal sample rate
-          channelCount: 1, // Mono for lower latency
-          latency: cleanMode ? 0.005 : 0.01, // Ultra-low latency: 5ms clean, 10ms normal
-          // Advanced constraints based on clean mode
-          ...(navigator.userAgent.includes("Chrome") &&
-            ({
-              // Chrome-specific ultra-low latency optimizations
-              googEchoCancellation: !cleanMode,
-              googNoiseSuppression: !cleanMode,
-              googHighpassFilter: !cleanMode,
-              googTypingNoiseDetection: !cleanMode,
-              googAutoGainControl: autoGain,
-              googNoiseSuppression2: !cleanMode,
-              googAudioMirroring: false, // Always disable audio mirroring
-              googDAEchoCancellation: !cleanMode,
-              googBeamforming: !cleanMode,
-              googArrayGeometry: !cleanMode,
-              googAudioProcessing: !cleanMode, // Disable all processing in clean mode
-              googExperimentalEchoCancellation: !cleanMode,
-              googExperimentalNoiseSuppression: !cleanMode,
-              googExperimentalAutoGainControl: autoGain,
-              googExperimentalEchoCancellation3: !cleanMode, // Latest echo cancellation algorithm
-              googDucking: false, // Disable auto-ducking for consistent volume
-            } as any)),
-        } as MediaTrackConstraints,)
-        .then(() => {
-          console.log('🎤 Audio constraints updated successfully');
-        })
-        .catch((error) => {
-          console.warn('🎤 Failed to update constraints, reinitializing stream:', error);
-          // If constraint update fails, then reinitialize
-          initializeAudioStream();
-        });
-    }
+    // When cleanMode or autoGain changes, reinitialize the stream with new constraints
+    // This is necessary because:
+    // 1. Chrome doesn't always apply constraints immediately via applyConstraints()
+    // 2. We need to recreate the entire audio processing graph with new settings
+    // 3. The new stream will automatically replace tracks in peer connections
+    console.log('🎤 Audio settings changed (cleanMode or autoGain), reinitializing stream...');
+    initializeAudioStream();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cleanMode, autoGain]);
 

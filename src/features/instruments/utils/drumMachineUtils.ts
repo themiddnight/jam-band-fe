@@ -12,7 +12,7 @@ export const getAvailableDrumMachines = (): DrumMachineInfo[] => {
   try {
     const drumMachineNames = getDrumMachineNames();
 
-    return drumMachineNames.map((name: string) => {
+    const mappedMachines = drumMachineNames.map((name: string) => {
       // All available drum machines are electronic, so use drumpad interface for all
       const controlType = ControlType.Drumpad;
 
@@ -22,11 +22,23 @@ export const getAvailableDrumMachines = (): DrumMachineInfo[] => {
         controlType,
       };
     });
+
+    // Sort to put MFB-512 first
+    return mappedMachines.sort((a, b) => {
+      if (a.value === "MFB-512") return -1;
+      if (b.value === "MFB-512") return 1;
+      return 0;
+    });
   } catch (error) {
     console.error("Error getting drum machine names:", error);
 
     // Fallback to known working machines
     return [
+      {
+        value: "MFB-512",
+        label: "Fricke MFB-512",
+        controlType: ControlType.Drumpad,
+      },
       {
         value: "TR-808",
         label: "Roland TR-808",
@@ -40,11 +52,6 @@ export const getAvailableDrumMachines = (): DrumMachineInfo[] => {
       {
         value: "Casio-RZ1",
         label: "Casio RZ-1",
-        controlType: ControlType.Drumpad,
-      },
-      {
-        value: "MFB-512",
-        label: "Fricke MFB-512",
         controlType: ControlType.Drumpad,
       },
       {

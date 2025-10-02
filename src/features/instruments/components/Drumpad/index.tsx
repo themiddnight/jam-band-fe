@@ -1,4 +1,4 @@
-import { DRUMPAD_SHORTCUTS } from "../../index";
+import { DRUMPAD_SHORTCUTS, DRUMPAD_PAGE_SHORTCUTS } from "../../index";
 import { useKeyboardHandler } from "../../index";
 import { PadButton } from "./components/PadButton";
 import { PresetManager } from "./components/PresetManager";
@@ -25,7 +25,10 @@ export default function Drumpad({
     selectedPadForAssign,
     pads,
     currentPreset,
+    currentPage,
+    padNoteMapping,
     setVelocity,
+    setCurrentPage,
     handlePadPress,
     handlePadRelease,
     resetAssignments,
@@ -155,6 +158,23 @@ export default function Drumpad({
     preventDefault: true,
   });
 
+  // Keyboard handler for page navigation (Z/X keys)
+  useKeyboardHandler({
+    shortcuts: {
+      pageDown: { key: DRUMPAD_PAGE_SHORTCUTS.pageDown },
+      pageUp: { key: DRUMPAD_PAGE_SHORTCUTS.pageUp },
+    },
+    onKeyDown: (key: string) => {
+      if (key === DRUMPAD_PAGE_SHORTCUTS.pageDown) {
+        setCurrentPage(Math.max(0, currentPage - 1));
+      } else if (key === DRUMPAD_PAGE_SHORTCUTS.pageUp) {
+        setCurrentPage(Math.min(2, currentPage + 1)); // Max 3 pages (0-2)
+      }
+    },
+    isEnabled: true,
+    preventDefault: true,
+  });
+
   return (
     <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
       <div className="card-body">
@@ -178,6 +198,31 @@ export default function Drumpad({
                 onChange={(e) => setVelocity(parseInt(e.target.value) / 10)}
                 className="range range-primary range-sm w-32"
               />
+            </div>
+
+            {/* Page Navigation Control */}
+            <div className="flex items-center gap-2">
+              <label className="label py-1">
+                <span className="label-text text-sm">
+                  Page: {currentPage + 1} ({padNoteMapping["pad-0"]} - {padNoteMapping["pad-15"]})
+                </span>
+              </label>
+              <div className="join">
+                <button
+                  onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+                  disabled={currentPage === 0}
+                  className="btn btn-sm btn-outline join-item touch-manipulation"
+                >
+                  - <kbd className="kbd kbd-xs">Z</kbd>
+                </button>
+                <button
+                  onClick={() => setCurrentPage(Math.min(2, currentPage + 1))}
+                  disabled={currentPage === 2}
+                  className="btn btn-sm btn-outline join-item touch-manipulation"
+                >
+                  + <kbd className="kbd kbd-xs">X</kbd>
+                </button>
+              </div>
             </div>
 
             {/* Edit Mode Toggle */}
@@ -235,6 +280,7 @@ export default function Drumpad({
                   <PadButton
                     key={pad.id}
                     pad={pad}
+                    gmNote={padNoteMapping[pad.id]}
                     isEditMode={isEditMode}
                     selectedPadForAssign={selectedPadForAssign}
                     onPress={(isSliderClick) =>
@@ -254,6 +300,7 @@ export default function Drumpad({
                   <PadButton
                     key={pad.id}
                     pad={pad}
+                    gmNote={padNoteMapping[pad.id]}
                     isEditMode={isEditMode}
                     selectedPadForAssign={selectedPadForAssign}
                     onPress={(isSliderClick) =>
@@ -279,6 +326,7 @@ export default function Drumpad({
                   <PadButton
                     key={pad.id}
                     pad={pad}
+                    gmNote={padNoteMapping[pad.id]}
                     isEditMode={isEditMode}
                     selectedPadForAssign={selectedPadForAssign}
                     onPress={(isSliderClick) =>
@@ -298,6 +346,7 @@ export default function Drumpad({
                   <PadButton
                     key={pad.id}
                     pad={pad}
+                    gmNote={padNoteMapping[pad.id]}
                     isEditMode={isEditMode}
                     selectedPadForAssign={selectedPadForAssign}
                     onPress={(isSliderClick) =>

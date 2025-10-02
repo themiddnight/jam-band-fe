@@ -110,6 +110,33 @@ export const createSmartAssignments = (
 // Updated default assignments using more generic/common sample names
 // These are based on typical drum machine sample naming patterns
 export const DEFAULT_DRUM_PRESETS: Record<string, DrumPreset[]> = {
+  "MFB-512": [
+    {
+      id: "mfb512-default",
+      name: "Default",
+      description: "Default MFB-512 layout",
+      drumMachine: "MFB-512",
+      padAssignments: {
+        "pad-0": "bd",
+        "pad-1": "sd",
+        "pad-2": "ch",
+        "pad-3": "oh",
+        "pad-4": "lt",
+        "pad-5": "mt",
+        "pad-6": "ht",
+        "pad-7": "cp",
+        "pad-8": "cr",
+        "pad-9": "cy",
+        "pad-10": "cb",
+        "pad-11": "rs",
+        "pad-12": "lc",
+        "pad-13": "mc",
+        "pad-14": "hc",
+        "pad-15": "sh",
+      },
+    },
+  ],
+
   "TR-808": [
     {
       id: "tr808-default",
@@ -172,33 +199,6 @@ export const DEFAULT_DRUM_PRESETS: Record<string, DrumPreset[]> = {
       name: "Default",
       description: "Default Casio RZ-1 layout",
       drumMachine: "Casio-RZ1",
-      padAssignments: {
-        "pad-0": "bd",
-        "pad-1": "sd",
-        "pad-2": "ch",
-        "pad-3": "oh",
-        "pad-4": "lt",
-        "pad-5": "mt",
-        "pad-6": "ht",
-        "pad-7": "cp",
-        "pad-8": "cr",
-        "pad-9": "cy",
-        "pad-10": "cb",
-        "pad-11": "rs",
-        "pad-12": "lc",
-        "pad-13": "mc",
-        "pad-14": "hc",
-        "pad-15": "sh",
-      },
-    },
-  ],
-
-  "MFB-512": [
-    {
-      id: "mfb512-default",
-      name: "Default",
-      description: "Default MFB-512 layout",
-      drumMachine: "MFB-512",
       padAssignments: {
         "pad-0": "bd",
         "pad-1": "sd",
@@ -341,6 +341,12 @@ export const DRUMPAD_SHORTCUTS = {
   "pad-13": "k",
   "pad-14": "l",
   "pad-15": ";",
+} as const;
+
+// Page navigation shortcuts (like octave changes in melodic instruments)
+export const DRUMPAD_PAGE_SHORTCUTS = {
+  pageDown: "z", // Previous page (lower notes)
+  pageUp: "x",   // Next page (higher notes)
 } as const;
 
 // Fixed colors for consistent appearance

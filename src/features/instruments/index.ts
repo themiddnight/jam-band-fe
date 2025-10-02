@@ -62,7 +62,11 @@ export * from "./constants/presets/synthPresets";
 export {
   DRUMPAD_SHORTCUTS,
   DRUMPAD_COLORS,
+  DRUMPAD_PAGE_SHORTCUTS,
 } from "./constants/presets/drumPresets";
+
+// General MIDI Percussion exports
+export * from "./constants/generalMidiPercussion";
 
 // Utilities exports
 export * from "./constants/utils/displayUtils";
@@ -72,6 +76,7 @@ export * from "./utils/drumMachineUtils";
 export * from "./utils/guitarAudioUtils";
 export * from "./utils/InstrumentEngine";
 export * from "./utils/instrumentGrouping";
+export { gmNoteMapper } from "./utils/gmNoteMapper";
 
 // Types exports
 export * from "./types/presets";

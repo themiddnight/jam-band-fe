@@ -382,13 +382,13 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
             onClose={() => setIsSettingsOpen(false)}
             anchorRef={settingsButtonRef}
             placement="bottom"
-            className="w-64"
+            className="w-72"
           >
             <div className="p-4">
               <h4 className="font-semibold mb-5">Voice Settings</h4>
 
               {/* Clean Mode Toggle */}
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-4 gap-3">
                 <div className="flex flex-col">
                   <span className="text-sm font-medium">Clean Mode</span>
                   <span className="text-xs text-base-content/60">Ultra-low latency, no processing</span>
@@ -407,7 +407,7 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
               </div>
 
               {/* Auto Gain Toggle */}
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-4 gap-3">
                 <div className="flex flex-col">
                   <span className="text-sm font-medium">Auto Gain</span>
                   <span className="text-xs text-base-content/60">Browser automatic gain control</span>
