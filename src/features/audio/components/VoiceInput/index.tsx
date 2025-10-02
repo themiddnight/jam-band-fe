@@ -33,6 +33,8 @@ export interface VoiceState {
   isSelfMonitoring: boolean;
   isConnected: boolean;
   hasSeenHeadphoneModal: boolean;
+  cleanMode: boolean;
+  autoGain: boolean;
 }
 
 const VoiceInput: React.FC<VoiceInputProps> = ({
@@ -66,6 +68,8 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     setSelfMonitoring,
     setConnected,
     setHasSeenHeadphoneModal,
+    setCleanMode,
+    setAutoGain,
   } = useVoiceStateStore();
 
   const {
@@ -79,6 +83,8 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     cleanup,
   } = useAudioStream({
     gain: voiceState.gain,
+    cleanMode: voiceState.cleanMode,
+    autoGain: voiceState.autoGain,
     onStreamReady,
     onStreamRemoved,
   });
@@ -176,14 +182,8 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     setConnected(!!mediaStream);
   }, [mediaStream, setConnected]);
 
-  // Handle mute/unmute toggle with state updates and modal logic
+  // Handle mute/unmute toggle with state updates
   const handleMuteToggleWithState = useCallback(async () => {
-    // If trying to unmute and haven't seen the headphone modal yet
-    if (voiceState.isMuted && !voiceState.hasSeenHeadphoneModal) {
-      setShowHeadphoneModal(true);
-      return;
-    }
-
     // Normal mute/unmute flow
     await handleMuteToggle();
     setMuted(!voiceState.isMuted);
@@ -191,7 +191,6 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     handleMuteToggle,
     setMuted,
     voiceState.isMuted,
-    voiceState.hasSeenHeadphoneModal,
   ]);
 
   // Handle new stream after unmuting (for reconnection cases)
@@ -211,20 +210,40 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     startInputLevelMonitoring,
   ]);
 
-  // Handle proceed button from headphone modal
-  const handleProceedUnmute = useCallback(async () => {
+  // Handle clean mode toggle with modal logic
+  const handleCleanModeToggle = useCallback(() => {
+    // If trying to enable clean mode and haven't seen the headphone modal yet
+    if (!voiceState.cleanMode && !voiceState.hasSeenHeadphoneModal) {
+      setShowHeadphoneModal(true);
+      return;
+    }
+
+    // Normal clean mode toggle
+    setCleanMode(!voiceState.cleanMode);
+  }, [
+    voiceState.cleanMode,
+    voiceState.hasSeenHeadphoneModal,
+    setCleanMode,
+  ]);
+
+  // Handle auto gain toggle
+  const handleAutoGainToggle = useCallback(() => {
+    setAutoGain(!voiceState.autoGain);
+  }, [voiceState.autoGain, setAutoGain]);
+
+  // Handle proceed button from headphone modal (now for clean mode)
+  const handleProceedCleanMode = useCallback(() => {
     setShowHeadphoneModal(false);
 
     // Mark that user has seen the modal
     setHasSeenHeadphoneModal(true);
 
-    // Actually unmute
-    await handleMuteToggle();
-    setMuted(false);
-  }, [handleMuteToggle, setMuted, setHasSeenHeadphoneModal]);
+    // Actually enable clean mode
+    setCleanMode(true);
+  }, [setCleanMode, setHasSeenHeadphoneModal]);
 
   // Handle cancel button from headphone modal
-  const handleCancelUnmute = useCallback(() => {
+  const handleCancelCleanMode = useCallback(() => {
     setShowHeadphoneModal(false);
   }, []);
 
@@ -276,6 +295,15 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
               <div
                 className={`w-2 h-2 rounded-full ${voiceState.isConnected ? "bg-green-500" : "bg-red-500"}`}
               />
+              {/* Clean Mode Status Icon */}
+              {voiceState.cleanMode && (
+                <div 
+                  className="text-sm"
+                  title="Clean Mode enabled - Ultra-low latency, no audio processing"
+                >
+                  🔥
+                </div>
+              )}
             </div>
 
             {/* RTC Latency Display */}
@@ -354,18 +382,61 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
             onClose={() => setIsSettingsOpen(false)}
             anchorRef={settingsButtonRef}
             placement="bottom"
-            className="w-64"
+            className="w-72"
           >
             <div className="p-4">
               <h4 className="font-semibold mb-5">Voice Settings</h4>
+
+              {/* Clean Mode Toggle */}
+              <div className="flex items-center justify-between mb-4 gap-3">
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium">Clean Mode</span>
+                  <span className="text-xs text-base-content/60">Ultra-low latency, no processing</span>
+                </div>
+                <button
+                  onClick={handleCleanModeToggle}
+                  className={`btn btn-sm ${voiceState.cleanMode ? "btn-warning" : "btn-outline"}`}
+                  title={
+                    voiceState.cleanMode
+                      ? "Disable clean mode (enable audio processing)"
+                      : "Enable clean mode (disable audio processing)"
+                  }
+                >
+                  {voiceState.cleanMode ? "🔥" : "🧹"}
+                </button>
+              </div>
+
+              {/* Auto Gain Toggle */}
+              <div className="flex items-center justify-between mb-4 gap-3">
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium">Auto Gain</span>
+                  <span className="text-xs text-base-content/60">Browser automatic gain control</span>
+                </div>
+                <button
+                  onClick={handleAutoGainToggle}
+                  className={`btn btn-sm ${voiceState.autoGain ? "btn-success" : "btn-outline"}`}
+                  title={
+                    voiceState.autoGain
+                      ? "Disable automatic gain control"
+                      : "Enable automatic gain control"
+                  }
+                >
+                  {voiceState.autoGain ? "🤖" : "👤"}
+                </button>
+              </div>
 
               {/* Professional Input Gain Control */}
               <div className="mb-4">
                 <GainControl
                   gain={voiceState.gain}
                   onGainChange={handleGainChangeWithState}
-                  disabled={!voiceState.isConnected}
+                  disabled={!voiceState.isConnected || voiceState.autoGain}
                 />
+                {voiceState.autoGain && (
+                  <p className="text-xs text-base-content/60 mt-1">
+                    Manual gain control disabled when Auto Gain is enabled
+                  </p>
+                )}
               </div>
 
               {/* Self-Monitor Toggle */}
@@ -503,31 +574,42 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
       <Modal
         open={showHeadphoneModal}
         setOpen={setShowHeadphoneModal}
-        title="🎧 Headphone Recommendation"
+        title="🎧 Clean Mode - Headphone Recommendation"
         showCancelButton={true}
         showOkButton={true}
-        okText="Proceed"
+        okText="Enable Clean Mode"
         cancelText="Cancel"
-        onOk={handleProceedUnmute}
-        onCancel={handleCancelUnmute}
+        onOk={handleProceedCleanMode}
+        onCancel={handleCancelCleanMode}
         size="md"
       >
         <div className="space-y-4">
           <p className="text-base">
-            For the best sound, we recommend using headphones when you turn on
-            your mic. 🎧
+            You're about to enable <strong>Clean Mode</strong> for ultra-low latency audio. 
+            We strongly recommend using headphones to prevent audio feedback. 🎧
           </p>
 
-          <div className="bg-info/10 p-4 rounded-lg">
+          <div className="bg-warning/10 p-4 rounded-lg border border-warning/20">
+            <h5 className="font-semibold text-sm mb-2">⚠️ Clean Mode Effects:</h5>
             <ul className="text-sm space-y-1">
-              <li>• Less chance of echo or feedback</li>
+              <li>• Disables echo cancellation</li>
+              <li>• Disables noise suppression</li>
+              <li>• Raw audio for minimal latency</li>
+              <li>• <strong>Higher risk of feedback without headphones</strong></li>
+            </ul>
+          </div>
+
+          <div className="bg-info/10 p-4 rounded-lg">
+            <h5 className="font-semibold text-sm mb-2">🎧 Why headphones help:</h5>
+            <ul className="text-sm space-y-1">
+              <li>• Prevents audio feedback loops</li>
               <li>• Clearer sound for everyone</li>
+              <li>• Essential for clean mode operation</li>
             </ul>
           </div>
 
           <p className="text-sm text-base-content/70">
-            No headphones? No worries — you can still continue, but sound might
-            not be as good.
+            Without headphones, Clean Mode may cause echo or feedback issues for other participants.
           </p>
         </div>
       </Modal>

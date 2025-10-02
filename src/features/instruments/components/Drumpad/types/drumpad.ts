@@ -15,10 +15,12 @@ export interface DrumpadState {
   velocity: number;
   pressedPads: Set<string>;
   padAssignments: Record<string, string>;
+  padNoteMapping: Record<string, string>; // Maps pad IDs to GM note names (e.g., "C1", "D#1")
   padVolumes: Record<string, number>; // Individual pad volume multipliers
   isEditMode: boolean; // Changed from isAssignMode
   selectedPadForAssign: string | null;
   currentInstrument: string;
+  currentPage: number; // Current drum pad page (0-indexed)
 }
 
 export interface DrumpadActions {
@@ -30,6 +32,7 @@ export interface DrumpadActions {
   setIsEditMode: (isEditMode: boolean) => void;
   setSelectedPadForAssign: (padId: string | null) => void;
   setCurrentInstrument: (instrument: string) => void;
+  setCurrentPage: (page: number) => void;
   handlePadPress: (padId: string, sound?: string) => Promise<void>;
   handlePadRelease: (padId: string) => void;
   handleSoundAssignment: (sound: string) => void;
@@ -52,6 +55,8 @@ export interface DrumpadActions {
   // Additional state
   pads: DrumPad[];
   currentPreset: DrumPreset | null;
+  padNoteMapping: Record<string, string>;
+  currentPage: number;
 }
 
 export interface DrumpadProps {
@@ -76,6 +81,7 @@ export interface DrumpadProps {
 
 export interface PadButtonProps {
   pad: DrumPad;
+  gmNote?: string; // General MIDI note (e.g., "C1", "D#1")
   isEditMode: boolean;
   selectedPadForAssign: string | null;
   onPress: (isSliderClick?: boolean) => void;

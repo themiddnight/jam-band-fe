@@ -4,6 +4,7 @@ import React from "react";
 
 export const PadButton: React.FC<PadButtonProps> = ({
   pad,
+  gmNote,
   isEditMode,
   selectedPadForAssign,
   onPress,
@@ -34,7 +35,7 @@ export const PadButton: React.FC<PadButtonProps> = ({
     <div className="relative">
       <button
         className={`
-          w-20 h-20 rounded-lg border-2 transition-all duration-100 flex flex-col items-center justify-center gap-1
+          w-20 h-20 rounded-lg border-2 transition-all duration-100 flex flex-col items-center justify-center gap-0.5
           ${
             pad.isPressed
               ? "scale-95 border-gray-800"
@@ -54,6 +55,12 @@ export const PadButton: React.FC<PadButtonProps> = ({
         onMouseLeave={onRelease}
         disabled={!isSoundAvailable}
       >
+        {/* GM Note display */}
+        {gmNote && (
+          <span className="text-[10px] font-mono text-white/70">
+            {gmNote}
+          </span>
+        )}
         <span className="text-xs font-bold text-white drop-shadow-lg">
           {pad.label}
         </span>

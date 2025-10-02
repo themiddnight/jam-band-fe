@@ -172,7 +172,7 @@ export const EFFECT_CONFIGS: Record<EffectType, EffectConfig> = {
     parameters: [
       {
         name: 'Frequency',
-        value: 200,
+        value: 8.0,
         min: 1,
         max: 20,
         step: 0.1,

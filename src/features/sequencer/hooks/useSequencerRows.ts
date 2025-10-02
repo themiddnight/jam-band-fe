@@ -3,6 +3,7 @@ import type { SequencerRow, DrumRow, NoteRow, DisplayMode } from "../types";
 import { InstrumentCategory } from "@/shared/constants/instruments";
 import { useDrumpadPresetsStore } from "@/features/instruments/stores/drumpadPresetsStore";
 import { validatePresetAssignments } from "@/features/instruments/constants/presets/drumPresets";
+import { getPadNotesForPage, mapSampleToGMNote } from "@/features/instruments/constants/generalMidiPercussion";
 
 // Memoized chromatic notes generation - static data
 const CHROMATIC_NOTES = (() => {
@@ -63,37 +64,59 @@ export const useSequencerRows = ({
     const stepNotesSet = new Set(currentSteps.map(step => step.note));
 
     if (isDrumInstrument) {
-      // Handle drum instruments using current drumpad preset assignments
+      // Handle drum instruments using General MIDI note mapping
       const fallbackSamples = availableSamples.length > 0 ? availableSamples : [
         "kick", "snare", "hat_closed", "hat_open", "crash", "ride", 
         "tom_high", "tom_mid", "tom_low", "clap", "rim", "shaker"
       ];
 
-      let samplesToUse: string[] = [];
+      // Get all 16 GM notes for the first page (C1-D#2) - the most common drum sounds
+      const gmNotes = getPadNotesForPage(0);
+      
+      // Create a map of GM notes to sample names based on current preset or smart mapping
+      const noteToSampleMap = new Map<string, string>();
       
       if (displayMode === "scale_notes" && currentPreset?.padAssignments) {
         // "Only in Pad" mode: Use current drumpad assignments in pad order
-        // But first validate the preset against available samples to fix mismatches
         const validatedPreset = validatePresetAssignments(currentPreset, fallbackSamples);
         
         for (let i = 0; i < 16; i++) {
           const padId = `pad-${i}`;
           const assignedSample = validatedPreset.padAssignments[padId];
           if (assignedSample) {
-            samplesToUse.push(assignedSample);
+            noteToSampleMap.set(gmNotes[i], assignedSample);
           }
         }
-        // If no pad assignments or less than 16, fall back to first available samples
-        if (samplesToUse.length === 0) {
-          samplesToUse = fallbackSamples.slice(0, 16);
-        }
       } else {
-        // "All Samples" and "Only Current" modes: Use all available samples
-        samplesToUse = fallbackSamples;
+        // "All Samples" and "Only Current" modes: Map samples to GM notes
+        fallbackSamples.forEach(sample => {
+          // Try to find a GM note match for this sample
+          const gmNote = mapSampleToGMNote(sample);
+          if (gmNote && !noteToSampleMap.has(gmNote)) {
+            noteToSampleMap.set(gmNote, sample);
+          }
+        });
+        
+        // Fill remaining GM note slots with unmapped samples
+        let sampleIndex = 0;
+        for (const gmNote of gmNotes) {
+          if (!noteToSampleMap.has(gmNote) && sampleIndex < fallbackSamples.length) {
+            // Find next unmapped sample
+            while (sampleIndex < fallbackSamples.length && 
+                   Array.from(noteToSampleMap.values()).includes(fallbackSamples[sampleIndex])) {
+              sampleIndex++;
+            }
+            if (sampleIndex < fallbackSamples.length) {
+              noteToSampleMap.set(gmNote, fallbackSamples[sampleIndex]);
+              sampleIndex++;
+            }
+          }
+        }
       }
 
-      const drumRows: DrumRow[] = samplesToUse.map(sample => {
-        const hasSteps = stepNotesSet.has(sample);
+      // Create drum rows using GM notes as the primary identifier
+      const drumRows: DrumRow[] = Array.from(noteToSampleMap.entries()).map(([gmNote, sampleName]) => {
+        const hasSteps = stepNotesSet.has(gmNote) || stepNotesSet.has(sampleName);
         
         let visible = true;
         if (displayMode === "only_current") {
@@ -101,8 +124,8 @@ export const useSequencerRows = ({
         }
 
         return {
-          sampleName: sample,
-          displayName: sample.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
+          sampleName: gmNote, // Use GM note as the identifier for consistency
+          displayName: `${gmNote} - ${sampleName.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}`,
           visible,
         };
       });

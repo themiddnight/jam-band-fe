@@ -2,6 +2,8 @@ import {
   DRUMPAD_SHORTCUTS,
   DRUMPAD_COLORS,
   validatePresetAssignments,
+  getPadNotesForPage,
+  gmNoteMapper,
 } from "../../../index";
 import { useVelocityControl } from "../../../index";
 import { useDrumpadPresetsStore } from "../../../stores/drumpadPresetsStore";
@@ -31,6 +33,7 @@ export const useDrumpadState = ({
   const [selectedPadForAssign, setSelectedPadForAssign] = useState<
     string | null
   >(null);
+  const [currentPage, setCurrentPage] = useState<number>(0); // Start at page 0 (C1-D#2)
 
   // Add velocity control hook
   const { handleVelocityChange } = useVelocityControl({
@@ -68,6 +71,9 @@ export const useDrumpadState = ({
       return;
     }
 
+    // Initialize GM note mapper with available samples
+    gmNoteMapper.initialize(availableSamples);
+
     if (currentPreset?.padAssignments) {
       // Validate the preset against available samples
       const validatedPreset = validatePresetAssignments(
@@ -77,6 +83,9 @@ export const useDrumpadState = ({
       setPadAssignments(validatedPreset.padAssignments);
       // Load pad volumes from preset or use defaults
       setPadVolumes(validatedPreset.padVolumes || {});
+      
+      // Update GM note mapper with preset assignments
+      gmNoteMapper.updateFromPreset(validatedPreset.padAssignments);
     } else {
       // If no preset is loaded, create and load a smart default preset
       const smartDefaultPreset = createSmartDefaultPreset(
@@ -90,6 +99,19 @@ export const useDrumpadState = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPreset, availableSamples, currentInstrument]);
 
+  // Generate GM note mapping for pads based on current page
+  const padNoteMapping = useMemo(() => {
+    const mapping: Record<string, string> = {};
+    const pageNotes = getPadNotesForPage(currentPage);
+    
+    for (let i = 0; i < 16; i++) {
+      const padId = `pad-${i}`;
+      mapping[padId] = pageNotes[i];
+    }
+    
+    return mapping;
+  }, [currentPage]);
+
   // Generate the fixed 16 pads
   const pads = useMemo(() => {
     const generatedPads: DrumPad[] = [];
@@ -97,7 +119,17 @@ export const useDrumpadState = ({
     for (let i = 0; i < 16; i++) {
       const padId = `pad-${i}`;
       const group = i < 8 ? "A" : "B";
-      const assignedSound = padAssignments[padId];
+      const gmNote = padNoteMapping[padId];
+      
+      // Get the sample for this GM note from the mapper
+      // This ensures the pad always shows the sample mapped to its current GM note
+      let assignedSound = gmNoteMapper.gmNoteToSample(gmNote) || undefined;
+      
+      // If no mapping exists yet (samples not loaded), fall back to preset assignments for page 0
+      if (!assignedSound && currentPage === 0) {
+        assignedSound = padAssignments[padId];
+      }
+      
       const padVolume = padVolumes[padId] || 1; // Default to 1x multiplier
 
       // Create a better label from the sample name or use fallback
@@ -115,6 +147,9 @@ export const useDrumpadState = ({
         if (!label) {
           label = assignedSound.slice(0, 6).toUpperCase();
         }
+      } else {
+        // If no sample assigned, show GM note
+        label = gmNote;
       }
 
       generatedPads.push({
@@ -131,7 +166,7 @@ export const useDrumpadState = ({
     }
 
     return generatedPads;
-  }, [padAssignments, padVolumes, pressedPads]);
+  }, [padAssignments, padVolumes, pressedPads, currentPage, padNoteMapping]);
 
   // Actions
   const handlePadPress = useCallback(
@@ -157,13 +192,19 @@ export const useDrumpadState = ({
           // Calculate effective velocity using global velocity and pad-specific volume
           const padVolume = padVolumes[padId] || 1;
           const effectiveVelocity = Math.min(velocity * padVolume, 1); // Cap at 1.0
-          await onPlayNotes([sound], effectiveVelocity, false);
+          
+          // Get the GM note for this pad
+          const gmNote = padNoteMapping[padId];
+          
+          // Play using GM note instead of sample name
+          // The audio engine will map it back to the sample
+          await onPlayNotes([gmNote], effectiveVelocity, false);
         } else {
           console.warn(`Sample not available: ${sound}`);
         }
       }
     },
-    [onPlayNotes, velocity, padVolumes, isEditMode, availableSamples],
+    [onPlayNotes, velocity, padVolumes, isEditMode, availableSamples, padNoteMapping],
   );
 
   const handlePadRelease = useCallback(
@@ -337,10 +378,12 @@ export const useDrumpadState = ({
     velocity,
     pressedPads,
     padAssignments,
+    padNoteMapping,
     padVolumes,
     isEditMode,
     selectedPadForAssign,
     currentInstrument,
+    currentPage,
     pads,
 
     // Actions
@@ -352,6 +395,7 @@ export const useDrumpadState = ({
     setIsEditMode,
     setSelectedPadForAssign,
     setCurrentInstrument: setStoreInstrument,
+    setCurrentPage,
     handlePadPress,
     handlePadRelease,
     handleSoundAssignment,

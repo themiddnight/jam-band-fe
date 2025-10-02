@@ -1,5 +1,10 @@
 // Rooms Feature Barrel Export
 
+// Room Type Architecture exports
+export { RoomFactory } from "./core/services/RoomFactory";
+export { ROOM_TYPES } from "./core/types/RoomType";
+export type { RoomType, RoomTypeConfig, RoomInstance, RoomServices, RoomState } from "./core/types/RoomType";
+
 // Components exports
 export { default as ChatBox } from "./components/ChatBox";
 export { default as RoomMembers } from "./components/RoomMembers";

@@ -11,6 +11,12 @@ export enum InstrumentCategory {
 // Available drum machines from smplr
 export const DRUM_MACHINES: Instrument[] = [
   {
+    value: "MFB-512",
+    label: "Fricke MFB-512",
+    controlType: ControlType.Drumpad,
+    icon: "🥁",
+  },
+  {
     value: "TR-808",
     label: "Roland TR-808",
     controlType: ControlType.Drumpad,
@@ -25,12 +31,6 @@ export const DRUM_MACHINES: Instrument[] = [
   {
     value: "Casio-RZ1",
     label: "Casio RZ-1",
-    controlType: ControlType.Drumpad,
-    icon: "🥁",
-  },
-  {
-    value: "MFB-512",
-    label: "Fricke MFB-512",
     controlType: ControlType.Drumpad,
     icon: "🥁",
   },

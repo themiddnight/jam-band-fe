@@ -863,6 +863,7 @@ export const useWebRTCVoice = ({
   // Add local stream to all peer connections
   const addLocalStream = useCallback(
     async (stream: MediaStream) => {
+      const hadPreviousStream = !!localStreamRef.current;
       localStreamRef.current = stream;
       setLocalStream(stream);
 
@@ -885,12 +886,35 @@ export const useWebRTCVoice = ({
         console.warn("Failed to create local analyser:", e);
       }
 
-      // Add tracks to existing peer connections (only if user can transmit)
+      // Add or replace tracks in existing peer connections (only if user can transmit)
       if (canTransmit) {
         Object.values(peersRef.current).forEach((peer) => {
-          stream.getTracks().forEach((track) => {
-            peer.connection.addTrack(track, stream);
-          });
+          const newTracks = stream.getTracks();
+          const senders = peer.connection.getSenders();
+          
+          // If we have existing senders, replace their tracks
+          if (hadPreviousStream && senders.length > 0) {
+            console.log('🔄 Replacing tracks in peer connection for audio settings change');
+            newTracks.forEach((newTrack) => {
+              const sender = senders.find((s) => s.track?.kind === newTrack.kind);
+              if (sender) {
+                sender.replaceTrack(newTrack).catch((err) => {
+                  console.error('Failed to replace track:', err);
+                  // Fallback: remove and add track
+                  peer.connection.removeTrack(sender);
+                  peer.connection.addTrack(newTrack, stream);
+                });
+              } else {
+                // No sender for this track type, add it
+                peer.connection.addTrack(newTrack, stream);
+              }
+            });
+          } else {
+            // First time adding stream, just add tracks normally
+            newTracks.forEach((track) => {
+              peer.connection.addTrack(track, stream);
+            });
+          }
         });
       }
 
