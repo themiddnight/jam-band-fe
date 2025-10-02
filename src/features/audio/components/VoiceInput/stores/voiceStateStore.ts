@@ -7,16 +7,20 @@ export interface VoiceState {
   isSelfMonitoring: boolean;
   isConnected: boolean;
   hasSeenHeadphoneModal: boolean; // Track if user has seen the headphone recommendation modal
+  cleanMode: boolean; // When enabled, disables all audio processing for lowest latency
+  autoGain: boolean; // When enabled, uses browser's automatic gain control
 }
 
 export const useVoiceStateStore = () => {
   const [voiceState, setVoiceState] = useState<VoiceState>({
-    isMuted: true, // Start muted by default
+    isMuted: false, // Start muted by default
     gain: 1,
     inputLevel: 0,
     isSelfMonitoring: false,
     isConnected: false,
     hasSeenHeadphoneModal: false, // Start as false for new sessions
+    cleanMode: false, // Start with clean mode disabled (normal processing)
+    autoGain: false, // Start with auto gain disabled
   });
 
   const updateVoiceState = useCallback((updates: Partial<VoiceState>) => {
@@ -65,6 +69,20 @@ export const useVoiceStateStore = () => {
     [updateVoiceState],
   );
 
+  const setCleanMode = useCallback(
+    (cleanMode: boolean) => {
+      updateVoiceState({ cleanMode });
+    },
+    [updateVoiceState],
+  );
+
+  const setAutoGain = useCallback(
+    (autoGain: boolean) => {
+      updateVoiceState({ autoGain });
+    },
+    [updateVoiceState],
+  );
+
   return {
     voiceState,
     updateVoiceState,
@@ -74,5 +92,7 @@ export const useVoiceStateStore = () => {
     setSelfMonitoring,
     setConnected,
     setHasSeenHeadphoneModal,
+    setCleanMode,
+    setAutoGain,
   };
 };
