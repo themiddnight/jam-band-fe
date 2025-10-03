@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type { EffectChain, EffectInstance, EffectType, EffectChainType } from '../types';
+import type { EffectChain, EffectInstance, EffectType, EffectChainType, EffectChainPreset } from '../types';
 import { EFFECT_CONFIGS } from '../constants';
 import { v4 as uuidv4 } from 'uuid';
 import type {
@@ -24,6 +24,7 @@ interface EffectsState {
   setChainsFromState: (
     chainStates: Partial<Record<EffectChainType, SharedEffectChainState>>,
   ) => void;
+  loadPreset: (chainType: EffectChainType, preset: EffectChainPreset) => void;
 }
 
 const createDefaultChain = (type: EffectChainType): EffectChain => ({
@@ -311,6 +312,43 @@ export const useEffectsStore = create<EffectsState>()(
         },
         false,
         'effects/setChainsFromState',
+      ),
+
+      loadPreset: (chainType, preset) => set(
+        (state) => {
+          // Clear current chain
+          const newChain = createDefaultChain(chainType);
+          
+          // Add effects from preset
+          preset.effects.forEach((effectData, index) => {
+            const config = EFFECT_CONFIGS[effectData.type];
+            const effectInstance: EffectInstance = {
+              id: uuidv4(),
+              type: effectData.type,
+              name: config.name,
+              bypassed: effectData.bypassed,
+              order: index,
+              parameters: config.parameters.map((param, paramIndex) => {
+                const paramValue = effectData.parameters[param.name];
+                return {
+                  ...param,
+                  id: `${effectData.type}_${param.name.toLowerCase().replace(/\s+/g, '_')}_${paramIndex}`,
+                  value: paramValue !== undefined ? paramValue : param.value,
+                };
+              }),
+            };
+            newChain.effects.push(effectInstance);
+          });
+
+          return {
+            chains: {
+              ...state.chains,
+              [chainType]: newChain,
+            },
+          };
+        },
+        false,
+        'effects/loadPreset',
       ),
     }),
     {

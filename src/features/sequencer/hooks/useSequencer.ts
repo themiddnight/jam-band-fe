@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Socket } from "socket.io-client";
 import { debounce } from "lodash";
 import { useSequencerStore } from "../stores/sequencerStore";
@@ -23,6 +23,7 @@ export const useSequencer = ({
   onStopNotes,
 }: UseSequencerProps) => {
   const sequencerStore = useSequencerStore();
+  const setActiveCategory = useSequencerStore((state) => state.setActiveCategory);
   const sequencerServiceRef = useRef<SequencerService | null>(null);
   const metronomeServiceRef = useRef<MetronomeSocketService | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -36,6 +37,32 @@ export const useSequencer = ({
   const currentBPMRef = useRef(currentBPM);
   const hasStartedPlayingRef = useRef(false);
   const currentlyPlayingNotesRef = useRef<Set<string>>(new Set()); // Track playing notes for hard-stop
+  useLayoutEffect(() => {
+    setActiveCategory(currentCategory);
+  }, [currentCategory, setActiveCategory]);
+
+  useEffect(() => {
+    hasStartedPlayingRef.current = false;
+
+    const playingNotes = Array.from(currentlyPlayingNotesRef.current);
+    if (playingNotes.length > 0) {
+      onStopNotesRef.current(playingNotes);
+      currentlyPlayingNotesRef.current.clear();
+    }
+
+    if (!isInitialized) {
+      return;
+    }
+
+    if (sequencerServiceRef.current) {
+      sequencerServiceRef.current.stopPlayback();
+      const currentBankState = sequencerStoreRef.current.banks[sequencerStoreRef.current.currentBank];
+      if (currentBankState) {
+        sequencerServiceRef.current.setSteps(currentBankState.steps);
+      }
+    }
+  }, [currentCategory, isInitialized]);
+
   
   // Debounced service update functions to prevent excessive calls with Lodash
   const debouncedServiceUpdate = useRef(

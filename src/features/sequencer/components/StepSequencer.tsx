@@ -1,6 +1,7 @@
 import { memo, useMemo, useCallback } from "react";
 import { Socket } from "socket.io-client";
 import { useSequencer } from "../hooks/useSequencer";
+import { useSequencerStore } from "../stores/sequencerStore";
 import {
   useSequencerRows,
   useDisplayModeOptions,
@@ -16,6 +17,7 @@ import {
   LengthControl,
   DisplayModeControl,
 } from "./controls";
+import { PresetManager } from "@/shared/components";
 import type { EditMode } from "../types";
 import type { CSSProperties } from "react";
 
@@ -215,6 +217,44 @@ export const StepSequencer = memo(
               waitingBankChange={waitingBankChange}
               onBankSwitch={sequencer.handleBankSwitch}
               onBankToggleEnabled={sequencer.handleBankToggleEnabled}
+            />
+          </div>
+
+          {/* Preset Controls */}
+          <div className="flex items-center justify-end">
+            <PresetManager
+              storageKey="sequencer-presets"
+              version="1.0.0"
+              filterPresets={(preset: any) => {
+                // Group melodic and synthesizer presets together, separate drums
+                const isDrumPreset = preset.instrumentCategory === 'drum_beat';
+                const isCurrentDrum = currentCategory === 'drum_beat';
+                
+                if (isDrumPreset) {
+                  return isCurrentDrum; // Only show drum presets when in drum mode
+                } else {
+                  return !isCurrentDrum; // Show melodic/synth presets when in melodic/synth mode
+                }
+              }}
+              onSave={(partialPreset) => {
+                const state = useSequencerStore.getState();
+                return {
+                  ...partialPreset,
+                  banks: state.banks,
+                  settings: state.settings,
+                  instrumentCategory: currentCategory,
+                } as any;
+              }}
+              onLoad={(preset: any) => {
+                // Apply the preset's banks and settings directly to the store
+                useSequencerStore.setState({
+                  banks: preset.banks,
+                  settings: preset.settings,
+                  currentBeat: 0,
+                  selectedBeat: 0,
+                });
+              }}
+              size="xs"
             />
           </div>
 

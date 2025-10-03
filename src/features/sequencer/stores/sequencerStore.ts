@@ -1,8 +1,10 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import type { StateStorage } from "zustand/middleware";
 import { subscribeWithSelector } from "zustand/middleware";
 import { v4 as uuidv4 } from "uuid";
 import { SEQUENCER_CONSTANTS } from "@/shared/constants";
+import { InstrumentCategory } from "@/shared/constants/instruments";
 import type {
   SequencerState,
   SequencerStep,
@@ -13,19 +15,20 @@ import type {
   DisplayMode,
   BankMode,
   EditMode,
+  SequencerCategoryState,
 } from "../types";
 
 // Shallow comparison utilities for performance optimization
 const shallowEqual = (obj1: any, obj2: any): boolean => {
   const keys1 = Object.keys(obj1);
   const keys2 = Object.keys(obj2);
-  
+
   if (keys1.length !== keys2.length) return false;
-  
+
   for (const key of keys1) {
     if (obj1[key] !== obj2[key]) return false;
   }
-  
+
   return true;
 };
 
@@ -37,15 +40,15 @@ const arraysShallowEqual = <T>(arr1: T[], arr2: T[]): boolean => {
 // Step comparison utility for checking if step arrays actually changed
 const stepsEqual = (steps1: SequencerStep[], steps2: SequencerStep[]): boolean => {
   if (steps1.length !== steps2.length) return false;
-  
+
   return steps1.every((step1, index) => {
     const step2 = steps2[index];
-    return step1.id === step2.id && 
-           step1.beat === step2.beat && 
-           step1.note === step2.note && 
-           step1.velocity === step2.velocity && 
-           step1.gate === step2.gate && 
-           step1.enabled === step2.enabled;
+    return step1.id === step2.id &&
+      step1.beat === step2.beat &&
+      step1.note === step2.note &&
+      step1.velocity === step2.velocity &&
+      step1.gate === step2.gate &&
+      step1.enabled === step2.enabled;
   });
 };
 
@@ -116,6 +119,9 @@ interface SequencerStore extends SequencerState {
   // Reset
   reset: () => void;
   resetUI: () => void;
+
+  // Category management
+  setActiveCategory: (category: string) => void;
 }
 
 // Helper function to create empty bank
@@ -135,15 +141,7 @@ const createDefaultBanks = (): Record<string, SequencerBank> => {
   return banks;
 };
 
-// Initial state
-const initialState: SequencerState = {
-  isPlaying: false,
-  isRecording: false,
-  softStopRequested: false, // Indicates soft-stop was requested (what used to be "paused")
-  currentBeat: 0,
-  currentBank: "A",
-  waitingForMetronome: false,
-  waitingBankChange: null,
+const createDefaultCategoryState = (): SequencerCategoryState => ({
   banks: createDefaultBanks(),
   settings: {
     speed: SEQUENCER_CONSTANTS.DEFAULT_SPEED,
@@ -152,10 +150,118 @@ const initialState: SequencerState = {
     displayMode: "scale_notes",
     editMode: "note",
   },
+  currentBank: "A",
+  currentBeat: 0,
   selectedBeat: 0,
   presets: [],
   clipboard: null,
+});
+
+const DEFAULT_CATEGORY = InstrumentCategory.Melodic;
+
+const createMemoryStorage = (): StateStorage => {
+  const storage = new Map<string, string>();
+  return {
+    getItem: (name) => storage.get(name) ?? null,
+    setItem: (name, value) => {
+      storage.set(name, value);
+    },
+    removeItem: (name) => {
+      storage.delete(name);
+    },
+  };
 };
+
+const resolvePersistenceStorage = (): StateStorage => {
+  if (typeof window === "undefined") {
+    return createMemoryStorage();
+  }
+
+  try {
+    const testKey = "__sequencer_store_test__";
+    window.localStorage.setItem(testKey, testKey);
+    window.localStorage.removeItem(testKey);
+    return window.localStorage;
+  } catch {
+    return createMemoryStorage();
+  }
+};
+
+const persistenceStorage = resolvePersistenceStorage();
+
+const ensureCategoryState = (
+  state: SequencerState,
+  category: string
+): { categoryState: SequencerCategoryState; categoryStates: Record<string, SequencerCategoryState> } => {
+  const existing = state.categoryStates[category];
+  if (existing) {
+    return { categoryState: existing, categoryStates: state.categoryStates };
+  }
+
+  const newCategoryState = createDefaultCategoryState();
+  return {
+    categoryState: newCategoryState,
+    categoryStates: {
+      ...state.categoryStates,
+      [category]: newCategoryState,
+    },
+  };
+};
+
+const buildCategoryUpdate = (
+  state: SequencerState,
+  updates: Partial<SequencerCategoryState>
+): {
+  nextCategoryStates: Record<string, SequencerCategoryState>;
+  updatedCategoryState: SequencerCategoryState;
+  activeCategory: string;
+} => {
+  const activeCategory = state.activeCategory || DEFAULT_CATEGORY;
+  const { categoryState, categoryStates } = ensureCategoryState(state, activeCategory);
+  const updatedCategoryState: SequencerCategoryState = {
+    ...categoryState,
+    ...updates,
+  };
+
+  const baseCategoryStates =
+    categoryStates === state.categoryStates
+      ? { ...state.categoryStates }
+      : { ...categoryStates };
+
+  baseCategoryStates[activeCategory] = updatedCategoryState;
+
+  return {
+    nextCategoryStates: baseCategoryStates,
+    updatedCategoryState,
+    activeCategory,
+  };
+};
+
+const createInitialSequencerState = (): SequencerState => {
+  const defaultCategoryState = createDefaultCategoryState();
+
+  return {
+    isPlaying: false,
+    isRecording: false,
+    softStopRequested: false,
+    currentBeat: defaultCategoryState.currentBeat,
+    currentBank: defaultCategoryState.currentBank,
+    waitingForMetronome: false,
+    waitingBankChange: null,
+    banks: defaultCategoryState.banks,
+    settings: defaultCategoryState.settings,
+    selectedBeat: defaultCategoryState.selectedBeat,
+    presets: defaultCategoryState.presets,
+    clipboard: defaultCategoryState.clipboard,
+    activeCategory: DEFAULT_CATEGORY,
+    categoryStates: {
+      [DEFAULT_CATEGORY]: defaultCategoryState,
+    },
+  };
+};
+
+// Initial state
+const initialState: SequencerState = createInitialSequencerState();
 
 export const useSequencerStore = create<SequencerStore>()(
   subscribeWithSelector(
@@ -174,17 +280,17 @@ export const useSequencerStore = create<SequencerStore>()(
             );
 
             let newSteps: SequencerStep[];
-            
+
             if (existingStepIndex >= 0) {
               // Update existing step - only if values actually changed
               const existingStep = bank.steps[existingStepIndex];
-              if (existingStep.velocity === velocity && 
-                  existingStep.gate === gate && 
-                  existingStep.enabled === true) {
+              if (existingStep.velocity === velocity &&
+                existingStep.gate === gate &&
+                existingStep.enabled === true) {
                 // No change needed
                 return state;
               }
-              
+
               newSteps = [...bank.steps];
               newSteps[existingStepIndex] = {
                 ...existingStep,
@@ -210,11 +316,19 @@ export const useSequencerStore = create<SequencerStore>()(
               return state;
             }
 
+            const updatedBank = { ...bank, steps: newSteps };
+            const updatedBanks = {
+              ...state.banks,
+              [bankId]: updatedBank,
+            };
+
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              banks: updatedBanks,
+            });
+
             return {
-              banks: {
-                ...state.banks,
-                [bankId]: { ...bank, steps: newSteps },
-              },
+              banks: updatedBanks,
+              categoryStates: nextCategoryStates,
             };
           });
         },
@@ -224,14 +338,22 @@ export const useSequencerStore = create<SequencerStore>()(
             const bank = state.banks[bankId];
             if (!bank) return state;
 
+            const updatedBank = {
+              ...bank,
+              steps: bank.steps.filter(step => step.id !== stepId),
+            };
+            const updatedBanks = {
+              ...state.banks,
+              [bankId]: updatedBank,
+            };
+
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              banks: updatedBanks,
+            });
+
             return {
-              banks: {
-                ...state.banks,
-                [bankId]: {
-                  ...bank,
-                  steps: bank.steps.filter(step => step.id !== stepId),
-                },
-              },
+              banks: updatedBanks,
+              categoryStates: nextCategoryStates,
             };
           });
         },
@@ -247,11 +369,19 @@ export const useSequencerStore = create<SequencerStore>()(
             const updatedSteps = [...bank.steps];
             updatedSteps[stepIndex] = { ...updatedSteps[stepIndex], ...updates };
 
+            const updatedBank = { ...bank, steps: updatedSteps };
+            const updatedBanks = {
+              ...state.banks,
+              [bankId]: updatedBank,
+            };
+
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              banks: updatedBanks,
+            });
+
             return {
-              banks: {
-                ...state.banks,
-                [bankId]: { ...bank, steps: updatedSteps },
-              },
+              banks: updatedBanks,
+              categoryStates: nextCategoryStates,
             };
           });
         },
@@ -278,20 +408,28 @@ export const useSequencerStore = create<SequencerStore>()(
             if (!bank) return state;
 
             const newSteps = bank.steps.filter(step => step.beat !== beat);
-            
+
             // Check if steps actually changed
             if (arraysShallowEqual(bank.steps, newSteps)) {
               return state;
             }
 
+            const updatedBank = {
+              ...bank,
+              steps: newSteps,
+            };
+            const updatedBanks = {
+              ...state.banks,
+              [bankId]: updatedBank,
+            };
+
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              banks: updatedBanks,
+            });
+
             return {
-              banks: {
-                ...state.banks,
-                [bankId]: {
-                  ...bank,
-                  steps: newSteps,
-                },
-              },
+              banks: updatedBanks,
+              categoryStates: nextCategoryStates,
             };
           });
         },
@@ -301,11 +439,19 @@ export const useSequencerStore = create<SequencerStore>()(
             const bank = state.banks[bankId];
             if (!bank) return state;
 
+            const updatedBank = { ...bank, steps: [] };
+            const updatedBanks = {
+              ...state.banks,
+              [bankId]: updatedBank,
+            };
+
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              banks: updatedBanks,
+            });
+
             return {
-              banks: {
-                ...state.banks,
-                [bankId]: { ...bank, steps: [] },
-              },
+              banks: updatedBanks,
+              categoryStates: nextCategoryStates,
             };
           });
         },
@@ -317,15 +463,31 @@ export const useSequencerStore = create<SequencerStore>()(
               updatedBanks[bankId] = { ...updatedBanks[bankId], steps: [] };
             });
 
-            return { banks: updatedBanks };
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              banks: updatedBanks,
+            });
+
+            return {
+              banks: updatedBanks,
+              categoryStates: nextCategoryStates,
+            };
           });
         },
 
         // Bank management
         switchBank: (bankId) => {
-          
-          set({ currentBank: bankId });
-          
+
+          set((state) => {
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              currentBank: bankId,
+            });
+
+            return {
+              currentBank: bankId,
+              categoryStates: nextCategoryStates,
+            };
+          });
+
         },
 
         toggleBankEnabled: (bankId) => {
@@ -333,11 +495,19 @@ export const useSequencerStore = create<SequencerStore>()(
             const bank = state.banks[bankId];
             if (!bank) return state;
 
+            const updatedBank = { ...bank, enabled: !bank.enabled };
+            const updatedBanks = {
+              ...state.banks,
+              [bankId]: updatedBank,
+            };
+
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              banks: updatedBanks,
+            });
+
             return {
-              banks: {
-                ...state.banks,
-                [bankId]: { ...bank, enabled: !bank.enabled },
-              },
+              banks: updatedBanks,
+              categoryStates: nextCategoryStates,
             };
           });
         },
@@ -353,14 +523,22 @@ export const useSequencerStore = create<SequencerStore>()(
               id: uuidv4(), // Generate new IDs
             }));
 
+            const updatedBank = {
+              ...toBank,
+              steps: duplicatedSteps,
+            };
+            const updatedBanks = {
+              ...state.banks,
+              [toBankId]: updatedBank,
+            };
+
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              banks: updatedBanks,
+            });
+
             return {
-              banks: {
-                ...state.banks,
-                [toBankId]: {
-                  ...toBank,
-                  steps: duplicatedSteps,
-                },
-              },
+              banks: updatedBanks,
+              categoryStates: nextCategoryStates,
             };
           });
         },
@@ -377,9 +555,18 @@ export const useSequencerStore = create<SequencerStore>()(
             })),
             timestamp: Date.now(),
           };
-          
-          set({ clipboard: copiedBankData });
-          
+
+          set((currentState) => {
+            const { nextCategoryStates } = buildCategoryUpdate(currentState, {
+              clipboard: copiedBankData,
+            });
+
+            return {
+              clipboard: copiedBankData,
+              categoryStates: nextCategoryStates,
+            };
+          });
+
         },
 
         pasteBank: (bankId) => {
@@ -388,15 +575,24 @@ export const useSequencerStore = create<SequencerStore>()(
           if (!bank) return;
 
           if (!state.clipboard) {
-            
+
             return;
           }
 
           // Check if clipboard is still valid (within 1 hour)
           const clipboardAge = Date.now() - state.clipboard.timestamp;
           if (clipboardAge > 60 * 60 * 1000) {
-            
-            set({ clipboard: null });
+
+            set((currentState) => {
+              const { nextCategoryStates } = buildCategoryUpdate(currentState, {
+                clipboard: null,
+              });
+
+              return {
+                clipboard: null,
+                categoryStates: nextCategoryStates,
+              };
+            });
             return;
           }
 
@@ -406,24 +602,49 @@ export const useSequencerStore = create<SequencerStore>()(
               id: uuidv4(), // Generate new IDs for the pasted data
             }));
 
-            set((state) => ({
-              banks: {
-                ...state.banks,
-                [bankId]: {
-                  ...state.banks[bankId],
-                  steps: copiedSteps,
-                },
-              },
-            }));
+            set((currentState) => {
+              const currentBank = currentState.banks[bankId];
+              if (!currentBank) {
+                return currentState;
+              }
 
-            
+              const updatedBank = {
+                ...currentBank,
+                steps: copiedSteps,
+              };
+
+              const updatedBanks = {
+                ...currentState.banks,
+                [bankId]: updatedBank,
+              };
+
+              const { nextCategoryStates } = buildCategoryUpdate(currentState, {
+                banks: updatedBanks,
+              });
+
+              return {
+                banks: updatedBanks,
+                categoryStates: nextCategoryStates,
+              };
+            });
+
+
           } catch (error) {
             console.error('🎵 Error pasting bank data:', error);
           }
         },
 
         clearClipboard: () => {
-          set({ clipboard: null });
+          set((state) => {
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              clipboard: null,
+            });
+
+            return {
+              clipboard: null,
+              categoryStates: nextCategoryStates,
+            };
+          });
         },
 
         // Playback control
@@ -433,12 +654,19 @@ export const useSequencerStore = create<SequencerStore>()(
 
         // Note: This is now hardStop - immediate stop with note-off
         stop: () => {
-          set({ 
-            isPlaying: false, 
-            softStopRequested: false,
-            currentBeat: 0,
-            waitingForMetronome: false,
-            waitingBankChange: null,
+          set((state) => {
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              currentBeat: 0,
+            });
+
+            return {
+              isPlaying: false,
+              softStopRequested: false,
+              currentBeat: 0,
+              waitingForMetronome: false,
+              waitingBankChange: null,
+              categoryStates: nextCategoryStates,
+            };
           });
         },
 
@@ -456,12 +684,19 @@ export const useSequencerStore = create<SequencerStore>()(
         },
 
         hardStop: () => {
-          set({ 
-            isPlaying: false, 
-            softStopRequested: false,
-            currentBeat: 0,
-            waitingForMetronome: false,
-            waitingBankChange: null,
+          set((state) => {
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              currentBeat: 0,
+            });
+
+            return {
+              isPlaying: false,
+              softStopRequested: false,
+              currentBeat: 0,
+              waitingForMetronome: false,
+              waitingBankChange: null,
+              categoryStates: nextCategoryStates,
+            };
           });
         },
 
@@ -477,28 +712,58 @@ export const useSequencerStore = create<SequencerStore>()(
         },
 
         setCurrentBeat: (beat) => {
-          
-          set({ currentBeat: Math.max(0, Math.min(get().settings.length - 1, beat)) });
-          
+
+          set((state) => {
+            const maxBeat = state.settings.length - 1;
+            const clampedBeat = Math.max(0, Math.min(maxBeat, beat));
+
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              currentBeat: clampedBeat,
+            });
+
+            return {
+              currentBeat: clampedBeat,
+              categoryStates: nextCategoryStates,
+            };
+          });
+
         },
 
         nextBeat: () => {
           const state = get();
           const nextBeat = (state.currentBeat + 1) % state.settings.length;
-          
+
           // Handle bank switching in continuous mode
           if (nextBeat === 0 && state.settings.bankMode === "continuous") {
             const nextBank = state.getNextEnabledBank();
             if (nextBank && nextBank !== state.currentBank) {
-              set({ currentBank: nextBank });
+              set((currentState) => {
+                const { nextCategoryStates } = buildCategoryUpdate(currentState, {
+                  currentBank: nextBank,
+                });
+
+                return {
+                  currentBank: nextBank,
+                  categoryStates: nextCategoryStates,
+                };
+              });
             }
           }
-          
+
           state.setCurrentBeat(nextBeat);
         },
 
         resetToStart: () => {
-          set({ currentBeat: 0 });
+          set((state) => {
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              currentBeat: 0,
+            });
+
+            return {
+              currentBeat: 0,
+              categoryStates: nextCategoryStates,
+            };
+          });
         },
 
         // Recording
@@ -536,52 +801,112 @@ export const useSequencerStore = create<SequencerStore>()(
         updateSettings: (updates) => {
           set((state) => {
             const newSettings = { ...state.settings, ...updates };
-            
+
             // Check if settings actually changed
             if (shallowEqual(state.settings, newSettings)) {
               return state;
             }
-            
+
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              settings: newSettings,
+            });
+
             return {
               settings: newSettings,
+              categoryStates: nextCategoryStates,
             };
           });
         },
 
         setSpeed: (speed) => {
-          set((state) => ({
-            settings: { ...state.settings, speed },
-          }));
+          set((state) => {
+            const updatedSettings = { ...state.settings, speed };
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              settings: updatedSettings,
+            });
+
+            return {
+              settings: updatedSettings,
+              categoryStates: nextCategoryStates,
+            };
+          });
         },
 
         setLength: (length) => {
           const clampedLength = Math.max(SEQUENCER_CONSTANTS.MIN_BEATS, Math.min(SEQUENCER_CONSTANTS.MAX_BEATS, length));
-          set((state) => ({
-            settings: { ...state.settings, length: clampedLength },
-            currentBeat: Math.min(state.currentBeat, clampedLength - 1),
-          }));
+          set((state) => {
+            const updatedSettings = { ...state.settings, length: clampedLength };
+            const updatedCurrentBeat = Math.min(state.currentBeat, clampedLength - 1);
+
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              settings: updatedSettings,
+              currentBeat: updatedCurrentBeat,
+            });
+
+            return {
+              settings: updatedSettings,
+              currentBeat: updatedCurrentBeat,
+              categoryStates: nextCategoryStates,
+            };
+          });
         },
 
         setBankMode: (bankMode) => {
-          set((state) => ({
-            settings: { ...state.settings, bankMode },
-          }));
+          set((state) => {
+            const updatedSettings = { ...state.settings, bankMode };
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              settings: updatedSettings,
+            });
+
+            return {
+              settings: updatedSettings,
+              categoryStates: nextCategoryStates,
+            };
+          });
         },
 
         setDisplayMode: (displayMode) => {
-          set((state) => ({
-            settings: { ...state.settings, displayMode },
-          }));
+          set((state) => {
+            const updatedSettings = { ...state.settings, displayMode };
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              settings: updatedSettings,
+            });
+
+            return {
+              settings: updatedSettings,
+              categoryStates: nextCategoryStates,
+            };
+          });
         },
 
         setEditMode: (editMode) => {
-          set((state) => ({
-            settings: { ...state.settings, editMode },
-          }));
+          set((state) => {
+            const updatedSettings = { ...state.settings, editMode };
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              settings: updatedSettings,
+            });
+
+            return {
+              settings: updatedSettings,
+              categoryStates: nextCategoryStates,
+            };
+          });
         },
 
         setSelectedBeat: (beat) => {
-          set({ selectedBeat: Math.max(0, Math.min(get().settings.length - 1, beat)) });
+          set((state) => {
+            const maxBeat = state.settings.length - 1;
+            const clampedBeat = Math.max(0, Math.min(maxBeat, beat));
+
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              selectedBeat: clampedBeat,
+            });
+
+            return {
+              selectedBeat: clampedBeat,
+              categoryStates: nextCategoryStates,
+            };
+          });
         },
 
 
@@ -608,9 +933,17 @@ export const useSequencerStore = create<SequencerStore>()(
             createdAt: Date.now(),
           };
 
-          set((state) => ({
-            presets: [...state.presets, preset],
-          }));
+          set((state) => {
+            const updatedPresets = [...state.presets, preset];
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              presets: updatedPresets,
+            });
+
+            return {
+              presets: updatedPresets,
+              categoryStates: nextCategoryStates,
+            };
+          });
         },
 
         loadPreset: (presetId) => {
@@ -618,18 +951,39 @@ export const useSequencerStore = create<SequencerStore>()(
           const preset = state.presets.find(p => p.id === presetId);
           if (!preset) return;
 
-          set({
-            banks: preset.banks,
-            settings: preset.settings,
-            currentBeat: 0,
-            selectedBeat: 0,
+          set((currentState) => {
+            const presetBanks = preset.banks;
+            const presetSettings = preset.settings;
+
+            const { nextCategoryStates } = buildCategoryUpdate(currentState, {
+              banks: presetBanks,
+              settings: presetSettings,
+              currentBeat: 0,
+              selectedBeat: 0,
+            });
+
+            return {
+              banks: presetBanks,
+              settings: presetSettings,
+              currentBeat: 0,
+              selectedBeat: 0,
+              categoryStates: nextCategoryStates,
+            };
           });
         },
 
         deletePreset: (presetId) => {
-          set((state) => ({
-            presets: state.presets.filter(p => p.id !== presetId),
-          }));
+          set((state) => {
+            const updatedPresets = state.presets.filter(p => p.id !== presetId);
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              presets: updatedPresets,
+            });
+
+            return {
+              presets: updatedPresets,
+              categoryStates: nextCategoryStates,
+            };
+          });
         },
 
         exportPreset: (presetId) => {
@@ -645,9 +999,17 @@ export const useSequencerStore = create<SequencerStore>()(
             preset.id = uuidv4();
             preset.createdAt = Date.now();
 
-            set((state) => ({
-              presets: [...state.presets, preset],
-            }));
+            set((state) => {
+              const updatedPresets = [...state.presets, preset];
+              const { nextCategoryStates } = buildCategoryUpdate(state, {
+                presets: updatedPresets,
+              });
+
+              return {
+                presets: updatedPresets,
+                categoryStates: nextCategoryStates,
+              };
+            });
           } catch (error) {
             console.error("Failed to import preset:", error);
           }
@@ -672,30 +1034,30 @@ export const useSequencerStore = create<SequencerStore>()(
         getNextEnabledBank: () => {
           const state = get();
           const bankNames = SEQUENCER_CONSTANTS.BANK_NAMES;
-          
+
           // Get all enabled banks in order
           const enabledBanks = bankNames.filter(name => state.banks[name]?.enabled);
-          
-          
+
+
           if (enabledBanks.length === 0) {
-            
+
             return null;
           }
-          
+
           // Find current bank position in enabled banks list
           const currentIndex = enabledBanks.indexOf(state.currentBank as BankName);
-          
+
           if (currentIndex === -1) {
             // Current bank is not enabled, return first enabled bank
-            
+
             return enabledBanks[0];
           }
-          
+
           // Get next enabled bank (cycle back to first if at end)
           const nextIndex = (currentIndex + 1) % enabledBanks.length;
           const nextBank = enabledBanks[nextIndex];
-          
-          
+
+
           return nextBank;
         },
 
@@ -710,17 +1072,74 @@ export const useSequencerStore = create<SequencerStore>()(
 
         // Reset
         reset: () => {
-          set(initialState);
+          set(createInitialSequencerState());
         },
 
         // Reset UI state (useful when entering new room)
         resetUI: () => {
-          set({ selectedBeat: 0, settings: { ...get().settings, editMode: "note" } });
+          set((state) => {
+            const updatedSettings: SequencerSettings = {
+              ...state.settings,
+              editMode: "note" as EditMode,
+            };
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              selectedBeat: 0,
+              settings: updatedSettings,
+            });
+
+            return {
+              selectedBeat: 0,
+              settings: updatedSettings,
+              categoryStates: nextCategoryStates,
+            };
+          });
+        },
+
+        setActiveCategory: (category) => {
+          set((state) => {
+            const { nextCategoryStates } = buildCategoryUpdate(state, {
+              banks: state.banks,
+              settings: state.settings,
+              currentBank: state.currentBank,
+              currentBeat: state.currentBeat,
+              selectedBeat: state.selectedBeat,
+              presets: state.presets,
+              clipboard: state.clipboard,
+            });
+
+            const workingState: SequencerState = {
+              ...state,
+              categoryStates: nextCategoryStates,
+            };
+
+            const { categoryState, categoryStates } = ensureCategoryState(
+              workingState,
+              category
+            );
+
+            return {
+              activeCategory: category,
+              banks: categoryState.banks,
+              settings: categoryState.settings,
+              currentBank: categoryState.currentBank,
+              currentBeat: categoryState.currentBeat,
+              selectedBeat: categoryState.selectedBeat,
+              presets: categoryState.presets,
+              clipboard: categoryState.clipboard,
+              isPlaying: false,
+              isRecording: false,
+              softStopRequested: false,
+              waitingForMetronome: false,
+              waitingBankChange: null,
+              categoryStates,
+            };
+          });
         },
       }),
       {
         name: "sequencer-store",
-        storage: createJSONStorage(() => localStorage),
+        storage: createJSONStorage(() => persistenceStorage),
+        version: 1,
         // Only persist certain parts of the state
         partialize: (state) => ({
           banks: state.banks,
@@ -728,7 +1147,42 @@ export const useSequencerStore = create<SequencerStore>()(
           presets: state.presets,
           clipboard: state.clipboard,
           selectedBeat: state.selectedBeat,
+          categoryStates: state.categoryStates,
+          activeCategory: state.activeCategory,
         }),
+        migrate: (persistedState: any) => {
+          if (!persistedState || persistedState.categoryStates) {
+            return persistedState;
+          }
+
+          const defaultCategoryState = createDefaultCategoryState();
+
+          const legacyBanks = persistedState.banks ?? defaultCategoryState.banks;
+          const legacySettings = persistedState.settings ?? defaultCategoryState.settings;
+          const legacySelectedBeat = persistedState.selectedBeat ?? defaultCategoryState.selectedBeat;
+          const legacyPresets = persistedState.presets ?? [];
+          const legacyClipboard = persistedState.clipboard ?? null;
+
+          const drumCategoryState: SequencerCategoryState = {
+            banks: legacyBanks,
+            settings: legacySettings,
+            currentBank: defaultCategoryState.currentBank,
+            currentBeat: defaultCategoryState.currentBeat,
+            selectedBeat: legacySelectedBeat,
+            presets: legacyPresets,
+            clipboard: legacyClipboard,
+          };
+
+          return {
+            ...persistedState,
+            activeCategory: InstrumentCategory.DrumBeat,
+            categoryStates: {
+              [InstrumentCategory.DrumBeat]: drumCategoryState,
+              [InstrumentCategory.Melodic]: createDefaultCategoryState(),
+              [InstrumentCategory.Synthesizer]: createDefaultCategoryState(),
+            },
+          };
+        },
       }
     )
   )

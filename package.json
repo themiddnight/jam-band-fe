@@ -12,7 +12,8 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:regression": "vitest run regression"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.11",

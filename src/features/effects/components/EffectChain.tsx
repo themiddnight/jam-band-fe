@@ -1,7 +1,10 @@
 import { useState, useRef } from 'react';
-import type { EffectType, EffectChainType } from '@/features/effects/types';
+import type { EffectType, EffectChainType, EffectChainPreset } from '@/features/effects/types';
 import { useEffectsStore } from '@/features/effects/stores/effectsStore';
 import { EFFECT_CONFIGS, EFFECT_ORDER } from '@/features/effects/constants/effectConfigs';
+import { DEFAULT_EFFECT_CHAIN_PRESETS } from '@/features/effects/constants/defaultPresets';
+import { effectChainPresetValidator } from '@/shared/hooks/presetManagement';
+import { PresetManager } from '@/shared/components';
 import { AnchoredPopup } from '@/features/ui';
 import EffectModule from './EffectModule';
 
@@ -15,7 +18,7 @@ export default function EffectChain({ chainType, title }: EffectChainProps) {
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [draggingEffectId, setDraggingEffectId] = useState<string | null>(null);
 
-  const { chains, addEffect, clearChain, reorderEffects } = useEffectsStore();
+  const { chains, addEffect, clearChain, reorderEffects, loadPreset } = useEffectsStore();
   const chain = chains[chainType];
 
   const handleAddEffect = (effectType: EffectType) => {
@@ -25,6 +28,25 @@ export default function EffectChain({ chainType, title }: EffectChainProps) {
 
   const handleClearChain = () => {
     clearChain(chainType);
+  };
+
+  const handleSavePreset = (partialPreset: Partial<EffectChainPreset>): EffectChainPreset => {
+    return {
+      ...partialPreset,
+      chainType,
+      effects: chain.effects.map((effect) => ({
+        type: effect.type,
+        bypassed: effect.bypassed,
+        parameters: effect.parameters.reduce((acc, param) => {
+          acc[param.name] = param.value;
+          return acc;
+        }, {} as Record<string, number>),
+      })),
+    } as EffectChainPreset;
+  };
+
+  const handleLoadPreset = (preset: EffectChainPreset) => {
+    loadPreset(chainType, preset);
   };
 
   const handleDragStart = (effectId: string) => {
@@ -58,7 +80,23 @@ export default function EffectChain({ chainType, title }: EffectChainProps) {
       {/* Chain Header */}
       <div className="flex items-center justify-between mb-4">
         <h3>{title}</h3>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Centralized Preset Manager */}
+          <PresetManager<EffectChainPreset>
+            storageKey="jam-band-effect-chain-presets"
+            version="1.0.0"
+            validator={effectChainPresetValidator}
+            currentContext={{ chainType }}
+            contextDescription={`the current chain type (${chainType})`}
+            filterPresets={(preset) => preset.chainType === chainType}
+            getExportFilename={() => `effect-chain-presets-${chainType}.json`}
+            onSave={handleSavePreset}
+            onLoad={handleLoadPreset}
+            saveButtonDisabled={chain.effects.length === 0}
+            size="xs"
+            additionalPresets={DEFAULT_EFFECT_CHAIN_PRESETS as any}
+          />
+
           <span className="text-sm text-base-content/70">
             {sortedEffects.length} effect{sortedEffects.length !== 1 ? 's' : ''}
           </span>
@@ -88,7 +126,7 @@ export default function EffectChain({ chainType, title }: EffectChainProps) {
           <div className="flex-1 flex items-center justify-center opacity-50">
             <div className="text-center">
               <p>No effects in chain</p>
-              <p className="text-xs">Click "Add" to add an effect</p>
+              <p className="text-xs">Click "Add" to add an effect or load a preset</p>
             </div>
           </div>
         ) : (

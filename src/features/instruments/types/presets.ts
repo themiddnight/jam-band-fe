@@ -32,7 +32,7 @@ export interface PresetManagerActions {
   loadPreset: (preset: SynthPreset) => void;
   deletePreset: (presetId: string) => void;
   exportPresets: () => string;
-  importPresets: (data: string) => void;
+  importPresets: (data: string, mode?: 'replace' | 'merge') => void;
   getPresetsForSynth: (
     synthType: "analog" | "fm",
     polyphony: "mono" | "poly",

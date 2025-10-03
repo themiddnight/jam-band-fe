@@ -1,11 +1,12 @@
-import { usePresetManager } from "../../hooks/usePresetManager";
+import { synthPresetValidator } from "@/shared/hooks/presetManagement";
+import { PresetManager } from "@/shared/components";
 import { DEFAULT_SYNTH_PRESETS } from "../../index";
 import type { SynthPreset } from "../../types/presets";
 import type { SynthState } from "../../utils/InstrumentEngine";
 import { LatencyControls } from "./LatencyControls";
-import { Knob, Modal } from "@/features/ui";
+import { Knob } from "@/features/ui";
 import { SYNTHESIZER_INSTRUMENTS } from "@/shared/constants/instruments";
-import React, { useState } from "react";
+import React from "react";
 
 interface SynthControlsProps {
   currentInstrument: string;
@@ -24,81 +25,32 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
     (synth) => synth.value === currentInstrument,
   );
 
-  const presetManager = usePresetManager();
-  const [showPresetModal, setShowPresetModal] = useState(false);
-  const [presetName, setPresetName] = useState("");
-  const [showImportExport, setShowImportExport] = useState(false);
-  const [importData, setImportData] = useState("");
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [presetToDelete, setPresetToDelete] = useState<SynthPreset | null>(
-    null,
-  );
-
   if (!currentSynthData) return null;
 
   const isAnalog = currentSynthData.type === "analog";
   const isFM = currentSynthData.type === "fm";
 
-  // Get relevant presets for current synthesizer type
-  const availablePresets = [
-    ...DEFAULT_SYNTH_PRESETS.filter(
-      (preset: any) =>
-        preset.synthType === currentSynthData.type &&
-        preset.polyphony === currentSynthData.polyphony,
-    ),
-    ...presetManager.getPresetsForSynth(
-      currentSynthData.type as "analog" | "fm",
-      currentSynthData.polyphony as "mono" | "poly",
-    ),
-  ];
-
-  const handleSavePreset = () => {
-    if (presetName.trim()) {
-      presetManager.savePreset(
-        presetName.trim(),
-        currentSynthData.type as "analog" | "fm",
-        currentSynthData.polyphony as "mono" | "poly",
-        synthState,
-      );
-      setPresetName("");
-      setShowPresetModal(false);
-    }
+  const handleSavePreset = (partialPreset: Partial<SynthPreset>) => {
+    // This will be called by PresetManager with just the name
+    // We need to add the full preset data
+    return {
+      ...partialPreset,
+      synthType: currentSynthData.type as "analog" | "fm",
+      polyphony: currentSynthData.polyphony as "mono" | "poly",
+      parameters: synthState,
+    } as SynthPreset;
   };
 
   const handleLoadPreset = (preset: SynthPreset) => {
-    
     if (onLoadPreset) {
       onLoadPreset(preset.parameters);
     } else {
       onParamChange(preset.parameters);
     }
-    presetManager.loadPreset(preset);
-
-    // Ensure all preset parameters are synchronized to remote users
     console.log(
       "🎛️ Syncing all preset parameters to remote users:",
       preset.parameters,
     );
-    // The onParamChange will trigger the sync through the callback mechanism
-  };
-
-  const handleExportPresets = () => {
-    const data = presetManager.exportPresets();
-    const blob = new Blob([data], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "synth-presets.json";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleImportPresets = () => {
-    if (importData.trim()) {
-      presetManager.importPresets(importData.trim());
-      setImportData("");
-      setShowImportExport(false);
-    }
   };
 
   return (
@@ -114,174 +66,33 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
             />
           </div>
 
-          {/* Preset Controls */}
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={() => setShowPresetModal(true)}
-              className="btn btn-primary btn-xs"
-            >
-              Save Preset
-            </button>
-            {presetManager.currentPreset && (
-              <button
-                onClick={() => {
-                  const currentPreset = presetManager.currentPreset;
-                  if (currentPreset) {
-                    setPresetToDelete(currentPreset);
-                    setShowDeleteModal(true);
-                  }
-                }}
-                className="btn btn-error btn-xs"
-                title="Delete current preset"
-              >
-                Delete
-              </button>
-            )}
-            <button
-              onClick={() => setShowImportExport(true)}
-              className="btn btn-secondary btn-xs"
-            >
-              Import/Export
-            </button>
-            {availablePresets.length > 0 && (
-              <select
-                value={presetManager.currentPreset?.id || ""}
-                onChange={(e) => {
-                  const selectedPreset = availablePresets.find(
-                    (p) => p.id === e.target.value,
-                  );
-                  if (selectedPreset) {
-                    handleLoadPreset(selectedPreset);
-                  }
-                }}
-                className="select select-bordered select-xs flex-1"
-              >
-                <option value="">Select a preset...</option>
-                {availablePresets.map((preset) => (
-                  <option key={preset.id} value={preset.id}>
-                    {preset.name}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-        </div>
-
-        {/* Error Display */}
-        {presetManager.error && (
-          <div className="alert alert-error ">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="stroke-current shrink-0 h-6 w-6"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <span>{presetManager.error}</span>
-          </div>
-        )}
-
-        {/* Save Preset Modal */}
-        <Modal
-          open={showPresetModal}
-          setOpen={setShowPresetModal}
-          title="Save Preset"
-          onOk={handleSavePreset}
-          onCancel={() => {
-            setShowPresetModal(false);
-            setPresetName("");
-          }}
-          okText="Save"
-          cancelText="Cancel"
-          showOkButton={!!presetName.trim()}
-        >
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={presetName}
-              onChange={(e) => setPresetName(e.target.value)}
-              placeholder="Enter preset name"
-              className="input input-bordered w-full"
-              onKeyDown={(e) => e.key === "Enter" && handleSavePreset()}
-            />
-          </div>
-        </Modal>
-
-        {/* Import/Export Modal */}
-        <Modal
-          open={showImportExport}
-          setOpen={setShowImportExport}
-          title="Import/Export Presets"
-          onCancel={() => {
-            setShowImportExport(false);
-            setImportData("");
-          }}
-          showOkButton={false}
-          size="lg"
-        >
-          <div className="space-y-4">
-            <div>
-              <button
-                onClick={handleExportPresets}
-                className="btn btn-success w-full"
-              >
-                Export All Presets
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label className="label">
-                <span className="label-text text-base-content">
-                  Import Presets (JSON)
-                </span>
-              </label>
-              <textarea
-                value={importData}
-                onChange={(e) => setImportData(e.target.value)}
-                placeholder="Paste preset JSON data here"
-                className="textarea textarea-bordered h-32 resize-none"
-              />
-              <button
-                onClick={handleImportPresets}
-                disabled={!importData.trim()}
-                className="btn btn-primary mt-2"
-              >
-                Import
-              </button>
-            </div>
-          </div>
-        </Modal>
-
-        {/* Delete Preset Modal */}
-        <Modal
-          open={showDeleteModal}
-          setOpen={setShowDeleteModal}
-          title="Delete Preset"
-          onOk={() => {
-            if (presetToDelete) {
-              presetManager.deletePreset(presetToDelete.id);
-              setShowDeleteModal(false);
-              setPresetToDelete(null);
+          {/* Centralized Preset Manager */}
+          <PresetManager<SynthPreset>
+            storageKey="jam-band-synth-presets"
+            version="1.0.0"
+            validator={synthPresetValidator}
+            currentContext={{
+              synthType: currentSynthData.type,
+              polyphony: currentSynthData.polyphony,
+            }}
+            contextDescription={`the current synthesizer type (${currentSynthData.type} ${currentSynthData.polyphony})`}
+            filterPresets={(preset) =>
+              preset.synthType === currentSynthData.type &&
+              preset.polyphony === currentSynthData.polyphony
             }
-          }}
-          onCancel={() => {
-            setShowDeleteModal(false);
-            setPresetToDelete(null);
-          }}
-          okText="Delete"
-          cancelText="Cancel"
-        >
-          <p className="py-4">
-            Are you sure you want to delete "{presetToDelete?.name}"? This
-            action cannot be undone.
-          </p>
-        </Modal>
+            getExportFilename={() =>
+              `synth-presets-${currentSynthData.type}-${currentSynthData.polyphony}.json`
+            }
+            onSave={(partialPreset) => {
+              const fullPreset = handleSavePreset(partialPreset);
+              // The PresetManager will handle the actual save through the hook
+              return fullPreset;
+            }}
+            onLoad={handleLoadPreset}
+            size="xs"
+            additionalPresets={DEFAULT_SYNTH_PRESETS as any}
+          />
+        </div>
 
         {/* Analog Synthesizer Controls */}
         {isAnalog && (

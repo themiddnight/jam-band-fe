@@ -6,3 +6,4 @@ export { EditModeControl } from "./EditModeControl";
 export { BankActions } from "./BankActions";
 export { LengthControl } from "./LengthControl";
 export { DisplayModeControl } from "./DisplayModeControl";
+// PresetControls removed - now using centralized PresetManager from @/shared/components

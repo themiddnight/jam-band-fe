@@ -49,6 +49,20 @@ export interface SequencerState {
   
   // Clipboard state
   clipboard: SequencerClipboard | null;
+
+  // Category state management
+  activeCategory: string;
+  categoryStates: Record<string, SequencerCategoryState>;
+}
+
+export interface SequencerCategoryState {
+  banks: Record<string, SequencerBank>;
+  settings: SequencerSettings;
+  currentBank: string;
+  currentBeat: number;
+  selectedBeat: number;
+  presets: SequencerPreset[];
+  clipboard: SequencerClipboard | null;
 }
 
 export interface SequencerPreset {

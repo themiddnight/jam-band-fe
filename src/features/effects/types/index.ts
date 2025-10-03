@@ -60,3 +60,35 @@ export interface EffectConfig {
   parameters: Omit<EffectParameter, 'id'>[];
   defaultPreset?: EffectPreset;
 }
+
+// Effect Chain Preset Types
+export interface EffectChainPreset {
+  id: string;
+  name: string;
+  chainType: EffectChainType;
+  effects: Array<{
+    type: EffectType;
+    bypassed: boolean;
+    parameters: Record<string, number>;
+  }>;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface EffectChainPresetBank {
+  presets: EffectChainPreset[];
+  version: string;
+}
+
+export interface EffectChainPresetManager {
+  currentPreset: EffectChainPreset | null;
+  presets: EffectChainPreset[];
+  isLoading: boolean;
+  error: string | null;
+  savePreset: (name: string, chainType: EffectChainType, chain: EffectChain) => void;
+  loadPreset: (preset: EffectChainPreset) => void;
+  deletePreset: (presetId: string) => void;
+  exportPresets: () => string;
+  importPresets: (jsonData: string, mode?: 'replace' | 'merge') => void;
+  getPresetsForChainType: (chainType: EffectChainType) => EffectChainPreset[];
+}
