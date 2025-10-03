@@ -2,6 +2,7 @@ import { useMidiController } from "@/features/audio";
 import { useRoomSocket } from "@/features/audio/hooks/useRoomSocket";
 import { ConnectionState } from "@/features/audio/types/connectionState";
 import { useInstrument } from "@/features/instruments/hooks/useInstrument";
+import { gmNoteMapper } from "@/features/instruments";
 import { useRoomStore } from "@/features/rooms";
 import { updateRoomSettings } from "@/features/rooms/services/api";
 import type { UpdateRoomSettingsRequest } from "@/features/rooms/services/api";
@@ -269,7 +270,8 @@ export const useRoom = (options?: { isInstrumentMuted?: boolean }) => {
               data.velocity,
               data.instrument,
               data.category as InstrumentCategory,
-              data.isKeyHeld || false
+              data.isKeyHeld || false,
+              data.sampleNotes
             );
           }
         } catch (error) {
@@ -676,6 +678,15 @@ export const useRoom = (options?: { isInstrumentMuted?: boolean }) => {
         return;
       }
 
+      let sampleNotes: string[] | undefined;
+      if (
+        eventType === "note_on" &&
+        currentCategory === InstrumentCategory.DrumBeat &&
+        notes.length > 0
+      ) {
+        sampleNotes = notes.map((note) => gmNoteMapper.gmNoteToSample(note) || note);
+      }
+
       const noteData = {
         notes,
         velocity,
@@ -683,6 +694,7 @@ export const useRoom = (options?: { isInstrumentMuted?: boolean }) => {
         category: currentCategory,
         eventType,
         isKeyHeld,
+        ...(sampleNotes ? { sampleNotes } : {}),
       };
 
       playNote(noteData);

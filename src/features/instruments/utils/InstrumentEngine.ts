@@ -8,7 +8,8 @@ import {
 import { getOptimalAudioConfig } from "../../audio";
 import { Soundfont, DrumMachine } from "smplr";
 import * as Tone from "tone";
-import { getPadNotesForPage } from "../constants/generalMidiPercussion";
+import { getPadNotesForPage, mapSampleToGMNote } from "../constants/generalMidiPercussion";
+import { gmNoteMapper } from "./gmNoteMapper";
 
 export interface SynthState {
   // Volume control
@@ -337,13 +338,16 @@ export class InstrumentEngine {
     this.gmNoteToSampleMap.clear();
     this.sampleToGMNoteMap.clear();
 
-    // Get the first page of GM notes (most common drum sounds)
+    if (availableSamples.length === 0) {
+      return;
+    }
+
     const gmNotes = getPadNotesForPage(0);
     const usedGMNotes = new Set<string>();
 
-    // First pass: Map samples that have clear pattern matches
-    availableSamples.forEach(sample => {
-      const gmNote = this.mapSampleToGMNote(sample);
+    // First pass: use explicit GM note patterns when possible
+    availableSamples.forEach((sample) => {
+      const gmNote = mapSampleToGMNote(sample);
       if (gmNote && !usedGMNotes.has(gmNote)) {
         this.gmNoteToSampleMap.set(gmNote, sample);
         this.sampleToGMNoteMap.set(sample, gmNote);
@@ -351,55 +355,45 @@ export class InstrumentEngine {
       }
     });
 
-    // Second pass: Assign remaining samples to unused GM notes
+    // Second pass: assign remaining samples to unused GM notes in order
     let noteIndex = 0;
-    availableSamples.forEach(sample => {
-      if (!this.sampleToGMNoteMap.has(sample)) {
-        // Find next unused GM note
-        while (noteIndex < gmNotes.length && usedGMNotes.has(gmNotes[noteIndex])) {
-          noteIndex++;
-        }
+    availableSamples.forEach((sample) => {
+      if (this.sampleToGMNoteMap.has(sample)) {
+        return;
+      }
 
-        if (noteIndex < gmNotes.length) {
-          const gmNote = gmNotes[noteIndex];
-          this.gmNoteToSampleMap.set(gmNote, sample);
-          this.sampleToGMNoteMap.set(sample, gmNote);
-          usedGMNotes.add(gmNote);
-          noteIndex++;
-        }
+      while (noteIndex < gmNotes.length && usedGMNotes.has(gmNotes[noteIndex])) {
+        noteIndex++;
+      }
+
+      const fallbackNote = gmNotes[noteIndex] ?? null;
+      if (fallbackNote) {
+        this.gmNoteToSampleMap.set(fallbackNote, sample);
+        this.sampleToGMNoteMap.set(sample, fallbackNote);
+        usedGMNotes.add(fallbackNote);
+        noteIndex++;
       }
     });
   }
 
   /**
-   * Map a sample name to its GM note using pattern matching
+   * Resolve the appropriate sample name for a GM drum note
    */
-  private mapSampleToGMNote(sample: string): string | null {
-    const lower = sample.toLowerCase();
-    
-    // Common drum sound mappings to GM notes
-    const patterns: Array<[RegExp, string]> = [
-      [/^kick|^bd|bass.*drum/i, 'C1'],
-      [/^snare|^sd/i, 'D#1'],
-      [/^hat.*closed|^hh.*closed|^chh/i, 'F#2'],
-      [/^hat.*open|^hh.*open|^ohh/i, 'A#2'],
-      [/^clap|^cp/i, 'D2'],
-      [/^tom.*low|^lt/i, 'F1'],
-      [/^tom.*mid|^mt/i, 'A1'],
-      [/^tom.*hi|^ht/i, 'C2'],
-      [/^crash|^cy/i, 'C#3'],
-      [/^ride/i, 'D#3'],
-      [/^cowbell|^cb/i, 'G#2'],
-      [/^rimshot|^rim/i, 'C#1'],
-    ];
+  private resolveDrumSample(note: string): string | null {
+    if (this.config.category !== InstrumentCategory.DrumBeat) {
+      return null;
+    }
 
-    for (const [pattern, gmNote] of patterns) {
-      if (pattern.test(lower)) {
-        return gmNote;
+    // Local users rely on the global gmNoteMapper which is updated by the drumpad UI
+    if (this.config.isLocalUser) {
+      const mappedSample = gmNoteMapper.gmNoteToSample(note);
+      if (mappedSample) {
+        return mappedSample;
       }
     }
 
-    return null;
+    // Fallback to this engine's inferred mapping (used for remote instruments)
+    return this.gmNoteToSampleMap.get(note) ?? null;
   }
 
   /**
@@ -1087,6 +1081,7 @@ export class InstrumentEngine {
     notes: string[],
     velocity: number,
     isKeyHeld: boolean = false,
+    options?: { sampleNotes?: string[] },
   ): Promise<void> {
     if (!this.isReady()) {
       await this.load();
@@ -1103,7 +1098,12 @@ export class InstrumentEngine {
       }
       await this.playSynthNotes(musicalNotes, velocity, isKeyHeld);
     } else {
-      await this.playTraditionalNotes(notes, velocity, isKeyHeld);
+      await this.playTraditionalNotes(
+        notes,
+        velocity,
+        isKeyHeld,
+        options?.sampleNotes,
+      );
     }
   }
 
@@ -1318,6 +1318,7 @@ export class InstrumentEngine {
     notes: string[],
     velocity: number,
     isKeyHeld: boolean,
+    sampleNotes?: string[],
   ): Promise<void> {
     if (!this.instrument) return;
 
@@ -1326,11 +1327,12 @@ export class InstrumentEngine {
       notes = [notes as string];
     }
 
-    notes.forEach((note) => {
+    notes.forEach((note, index) => {
       // For drum instruments, convert GM notes to actual sample names
       let actualNote = note;
       if (this.config.category === InstrumentCategory.DrumBeat) {
-        const sample = this.gmNoteToSampleMap.get(note);
+        const overrideSample = sampleNotes?.[index];
+        const sample = overrideSample || this.resolveDrumSample(note);
         if (sample) {
           actualNote = sample;
           console.log(`🥁 GM Note mapping: ${note} -> ${actualNote} (user: ${this.config.username})`);

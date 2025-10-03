@@ -27,6 +27,7 @@ interface NoteData {
   category: string;
   eventType: "note_on" | "note_off" | "sustain_on" | "sustain_off";
   isKeyHeld?: boolean;
+  sampleNotes?: string[];
 }
 
 interface NoteReceivedData {
@@ -38,6 +39,7 @@ interface NoteReceivedData {
   category: string;
   eventType: "note_on" | "note_off" | "sustain_on" | "sustain_off";
   isKeyHeld?: boolean;
+  sampleNotes?: string[];
 }
 
 interface SynthParamsData {

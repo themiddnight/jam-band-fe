@@ -68,6 +68,7 @@ export interface UseInstrumentManagerReturn {
     instrumentName: string,
     category: InstrumentCategory,
     isKeyHeld?: boolean,
+    sampleNotes?: string[],
   ) => Promise<void>;
   stopRemoteNotes: (
     userId: string,
@@ -423,6 +424,7 @@ export const useInstrumentManager = (): UseInstrumentManagerReturn => {
       instrumentName: string,
       category: InstrumentCategory,
       isKeyHeld: boolean = false,
+      sampleNotes?: string[],
     ) => {
       let engine = getRemoteEngine(userId, instrumentName, category);
 
@@ -436,7 +438,9 @@ export const useInstrumentManager = (): UseInstrumentManagerReturn => {
         });
       }
 
-      await engine.playNotes(notes, velocity, isKeyHeld);
+      await engine.playNotes(notes, velocity, isKeyHeld, {
+        sampleNotes,
+      });
     },
     [getRemoteEngine, addRemoteEngine],
   );

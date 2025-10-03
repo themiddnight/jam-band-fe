@@ -72,6 +72,7 @@ export interface UseInstrumentReturn {
     instrumentName: string,
     category: InstrumentCategory,
     isKeyHeld?: boolean,
+    sampleNotes?: string[],
   ) => Promise<void>;
   stopRemoteUserNote: (
     userId: string,
@@ -731,6 +732,7 @@ export const useInstrument = (
       instrumentName: string,
       category: InstrumentCategory,
       isKeyHeld: boolean = false,
+      sampleNotes?: string[],
     ) => {
       try {
         await instrumentManager.playRemoteNotes(
@@ -741,6 +743,7 @@ export const useInstrument = (
           instrumentName,
           category,
           isKeyHeld,
+          sampleNotes,
         );
       } catch (error) {
         console.error(
