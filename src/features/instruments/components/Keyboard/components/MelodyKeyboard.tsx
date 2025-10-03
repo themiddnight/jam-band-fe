@@ -10,6 +10,8 @@ interface MelodyKeyboardProps {
   // Add sustain state to prevent mouse leave issues
   sustain?: boolean;
   sustainToggle?: boolean;
+  // Root note for scale-based coloring
+  rootNote?: string;
 }
 
 export const MelodyKeyboard = memo<MelodyKeyboardProps>(
@@ -20,6 +22,7 @@ export const MelodyKeyboard = memo<MelodyKeyboardProps>(
     onKeyRelease,
     sustain = false,
     sustainToggle = false,
+    rootNote,
   }) => {
     // Convert KeyboardKey to NoteKey format
     const noteKeys: NoteKey[] = virtualKeys.map((key) => ({
@@ -53,6 +56,7 @@ export const MelodyKeyboard = memo<MelodyKeyboardProps>(
         variant="keyboard"
         sustain={sustain}
         sustainToggle={sustainToggle}
+        rootNote={rootNote}
       />
     );
   },

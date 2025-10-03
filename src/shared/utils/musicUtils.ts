@@ -372,3 +372,41 @@ export const generateDrumPads = (
 
   return pads;
 };
+
+/**
+ * Calculate which "scale octave" a note belongs to based on the root note.
+ * This groups notes into octaves starting from the root note, not from C.
+ * 
+ * For example, if rootNote is "D":
+ * - D0, D#0, E0, F0, F#0, G0, G#0, A0, A#0, B0, C1, C#1 would be scale octave 0
+ * - D1, D#1, E1, F1, F#1, G1, G#1, A1, A#1, B1, C2, C#2 would be scale octave 1
+ * - etc.
+ * 
+ * @param note - The note with octave (e.g., "C4", "D#3")
+ * @param rootNote - The root note without octave (e.g., "C", "D#")
+ * @returns The scale octave number (0, 1, 2, etc.)
+ */
+export const getScaleOctave = (note: string, rootNote: string): number => {
+  // Extract note name and octave
+  const noteName = note.slice(0, -1);
+  const octave = parseInt(note.slice(-1));
+  
+  // Get positions in chromatic scale (0-11)
+  const noteIndex = NOTE_NAMES.indexOf(noteName);
+  const rootIndex = NOTE_NAMES.indexOf(rootNote);
+  
+  // Calculate absolute position in chromatic scale
+  const absolutePosition = octave * 12 + noteIndex;
+  
+  // Calculate the position of the root at octave 0
+  const rootAtZero = rootIndex;
+  
+  // Calculate how many semitones from the nearest lower root note
+  const semitonesSinceRoot = absolutePosition - rootAtZero;
+  
+  // Calculate which scale octave this note belongs to
+  // (divide by 12 and floor to get the scale octave)
+  const scaleOctave = Math.floor(semitonesSinceRoot / 12);
+  
+  return scaleOctave;
+};

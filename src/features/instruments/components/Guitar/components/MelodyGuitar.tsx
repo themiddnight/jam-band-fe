@@ -178,6 +178,7 @@ export const MelodyGuitar: React.FC<MelodyGuitarProps> = ({
             size="md"
             sustain={guitarState.sustain}
             sustainToggle={guitarState.sustainToggle}
+            rootNote={scaleState.rootNote}
           />
         )}
 
@@ -214,6 +215,7 @@ export const MelodyGuitar: React.FC<MelodyGuitarProps> = ({
             size="md"
             sustain={guitarState.sustain}
             sustainToggle={guitarState.sustainToggle}
+            rootNote={scaleState.rootNote}
           />
         )}
       </div>

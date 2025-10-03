@@ -8,7 +8,7 @@ import {
 import { getOptimalAudioConfig } from "../../audio";
 import { Soundfont, DrumMachine } from "smplr";
 import * as Tone from "tone";
-import { gmNoteMapper } from "./gmNoteMapper";
+import { getPadNotesForPage } from "../constants/generalMidiPercussion";
 
 export interface SynthState {
   // Volume control
@@ -117,6 +117,10 @@ export class InstrumentEngine {
   private readonly PROCESSING_INTERVAL = 4; // Reduced from 8ms to 4ms for better responsiveness
   private processingTimeout: ReturnType<typeof setTimeout> | null = null;
   private isWebRTCOptimized = false; // Track if we're in WebRTC optimization mode
+
+  // Per-instrument GM note mapper for drum machines
+  private gmNoteToSampleMap: Map<string, string> = new Map();
+  private sampleToGMNoteMap: Map<string, string> = new Map();
 
   // Audio performance optimizations (future enhancement)
   // private audioBufferCache = new Map<string, AudioBuffer>();
@@ -323,6 +327,79 @@ export class InstrumentEngine {
 
   getSynthState(): SynthState {
     return { ...this.synthState };
+  }
+
+  /**
+   * Initialize GM note mapper with available samples for this instrument
+   * This creates a mapping between GM notes (e.g., "C1") and actual sample names
+   */
+  private initializeGMNoteMapper(availableSamples: string[]): void {
+    this.gmNoteToSampleMap.clear();
+    this.sampleToGMNoteMap.clear();
+
+    // Get the first page of GM notes (most common drum sounds)
+    const gmNotes = getPadNotesForPage(0);
+    const usedGMNotes = new Set<string>();
+
+    // First pass: Map samples that have clear pattern matches
+    availableSamples.forEach(sample => {
+      const gmNote = this.mapSampleToGMNote(sample);
+      if (gmNote && !usedGMNotes.has(gmNote)) {
+        this.gmNoteToSampleMap.set(gmNote, sample);
+        this.sampleToGMNoteMap.set(sample, gmNote);
+        usedGMNotes.add(gmNote);
+      }
+    });
+
+    // Second pass: Assign remaining samples to unused GM notes
+    let noteIndex = 0;
+    availableSamples.forEach(sample => {
+      if (!this.sampleToGMNoteMap.has(sample)) {
+        // Find next unused GM note
+        while (noteIndex < gmNotes.length && usedGMNotes.has(gmNotes[noteIndex])) {
+          noteIndex++;
+        }
+
+        if (noteIndex < gmNotes.length) {
+          const gmNote = gmNotes[noteIndex];
+          this.gmNoteToSampleMap.set(gmNote, sample);
+          this.sampleToGMNoteMap.set(sample, gmNote);
+          usedGMNotes.add(gmNote);
+          noteIndex++;
+        }
+      }
+    });
+  }
+
+  /**
+   * Map a sample name to its GM note using pattern matching
+   */
+  private mapSampleToGMNote(sample: string): string | null {
+    const lower = sample.toLowerCase();
+    
+    // Common drum sound mappings to GM notes
+    const patterns: Array<[RegExp, string]> = [
+      [/^kick|^bd|bass.*drum/i, 'C1'],
+      [/^snare|^sd/i, 'D#1'],
+      [/^hat.*closed|^hh.*closed|^chh/i, 'F#2'],
+      [/^hat.*open|^hh.*open|^ohh/i, 'A#2'],
+      [/^clap|^cp/i, 'D2'],
+      [/^tom.*low|^lt/i, 'F1'],
+      [/^tom.*mid|^mt/i, 'A1'],
+      [/^tom.*hi|^ht/i, 'C2'],
+      [/^crash|^cy/i, 'C#3'],
+      [/^ride/i, 'D#3'],
+      [/^cowbell|^cb/i, 'G#2'],
+      [/^rimshot|^rim/i, 'C#1'],
+    ];
+
+    for (const [pattern, gmNote] of patterns) {
+      if (pattern.test(lower)) {
+        return gmNote;
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -614,6 +691,26 @@ export class InstrumentEngine {
     console.log(
       `Loaded ${this.config.category} instrument ${this.config.instrumentName} for ${this.config.isLocalUser ? "local" : "remote"} user ${this.config.username}`,
     );
+
+    // Initialize per-instrument GM note mapper for drum machines (both local and remote)
+    if (this.config.category === InstrumentCategory.DrumBeat) {
+      try {
+        const samples = await this.waitForSamples(3000);
+        if (samples.length > 0) {
+          this.initializeGMNoteMapper(samples);
+          console.log(`🥁 Initialized GM note mapper for ${this.config.isLocalUser ? "local" : "remote"} drum machine ${this.config.instrumentName}:`, {
+            totalSamples: samples.length,
+            user: this.config.username,
+            mappings: Array.from(this.gmNoteToSampleMap.entries()).slice(0, 5)
+          });
+        } else {
+          console.warn(`🥁 No samples available for drum machine ${this.config.instrumentName}`);
+        }
+      } catch (error) {
+        console.error(`🥁 Failed to initialize GM note mapper for drum machine:`, error);
+      }
+    }
+
     return newInstrument;
   }
 
@@ -1233,10 +1330,12 @@ export class InstrumentEngine {
       // For drum instruments, convert GM notes to actual sample names
       let actualNote = note;
       if (this.config.category === InstrumentCategory.DrumBeat) {
-        const sample = gmNoteMapper.gmNoteToSample(note);
+        const sample = this.gmNoteToSampleMap.get(note);
         if (sample) {
           actualNote = sample;
-          console.log(`🥁 GM Note mapping: ${note} -> ${actualNote}`);
+          console.log(`🥁 GM Note mapping: ${note} -> ${actualNote} (user: ${this.config.username})`);
+        } else {
+          console.warn(`🥁 No mapping found for GM note ${note} - using as-is`);
         }
       }
 

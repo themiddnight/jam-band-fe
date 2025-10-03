@@ -221,6 +221,7 @@ export const MelodyBass: React.FC<MelodyBassProps> = ({
             size="md"
             sustain={bassState.sustain}
             sustainToggle={bassState.sustainToggle}
+            rootNote={scaleState.rootNote}
           />
         )}
 
@@ -253,6 +254,7 @@ export const MelodyBass: React.FC<MelodyBassProps> = ({
             size="md"
             sustain={bassState.sustain}
             sustainToggle={bassState.sustainToggle}
+            rootNote={scaleState.rootNote}
           />
         )}
       </div>

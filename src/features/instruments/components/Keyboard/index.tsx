@@ -171,6 +171,7 @@ export default function Keyboard({
           onKeyRelease={handleVirtualKeyRelease}
           sustain={sustain}
           sustainToggle={sustainToggle}
+          rootNote={scaleState.rootNote}
         />
       );
     } else {

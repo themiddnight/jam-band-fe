@@ -17,6 +17,8 @@ interface SharedNoteKeysProps {
   // Add sustain state to prevent mouse leave issues
   sustain?: boolean;
   sustainToggle?: boolean;
+  // Root note for scale-based coloring (used in melody mode)
+  rootNote?: string;
 }
 
 export const SharedNoteKeys = memo<SharedNoteKeysProps>(
@@ -28,6 +30,7 @@ export const SharedNoteKeys = memo<SharedNoteKeysProps>(
     size = "md",
     sustain = false,
     sustainToggle = false,
+    rootNote,
   }) => {
     // Separate keys by position for better organization (for keyboard)
     const lowerRowKeys = noteKeys.filter((key) => (key.position || 0) < 100);
@@ -49,6 +52,7 @@ export const SharedNoteKeys = memo<SharedNoteKeysProps>(
               size={size}
               sustain={sustain}
               sustainToggle={sustainToggle}
+              rootNote={rootNote}
             />
           ))}
         </div>
@@ -73,6 +77,7 @@ export const SharedNoteKeys = memo<SharedNoteKeysProps>(
                 size={size}
                 sustain={sustain}
                 sustainToggle={sustainToggle}
+                rootNote={rootNote}
               />
             ))}
           </div>
@@ -93,6 +98,7 @@ export const SharedNoteKeys = memo<SharedNoteKeysProps>(
                 size={size}
                 sustain={sustain}
                 sustainToggle={sustainToggle}
+                rootNote={rootNote}
               />
             ))}
           </div>

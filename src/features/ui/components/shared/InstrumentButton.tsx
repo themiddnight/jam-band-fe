@@ -1,5 +1,6 @@
 import { useTouchEvents } from "../../hooks/useTouchEvents";
 import { memo } from "react";
+import { getScaleOctave } from "@/shared/utils/musicUtils";
 
 export interface InstrumentButtonProps {
   // Button identification
@@ -24,6 +25,9 @@ export interface InstrumentButtonProps {
   // Sustain state to prevent mouse leave issues
   sustain?: boolean;
   sustainToggle?: boolean;
+  
+  // Root note for scale-based coloring (used in melody mode)
+  rootNote?: string;
 }
 
 // Helper function to extract octave from note string
@@ -31,11 +35,12 @@ const getOctaveFromNote = (note: string): number => {
   return parseInt(note.slice(-1));
 };
 
-// Helper function to get background color based on octave and variant
+// Helper function to get background color based on octave/scale and variant
 const getBackgroundColor = (
   note: string | undefined,
   variant: "note" | "chord" | "modifier",
   modifierType?: string,
+  rootNote?: string,
 ): string => {
   if (variant === "chord") {
     return "bg-purple-100";
@@ -53,8 +58,14 @@ const getBackgroundColor = (
     return "bg-gray-600";
   }
 
-  // For notes, use octave-based coloring
+  // For notes, use scale-based or octave-based coloring
   if (note) {
+    // If rootNote is provided, use scale-based coloring
+    if (rootNote) {
+      const scaleOctave = getScaleOctave(note, rootNote);
+      return scaleOctave % 2 === 0 ? "bg-white" : "bg-blue-100";
+    }
+    // Otherwise, fall back to traditional octave-based coloring
     const octave = getOctaveFromNote(note);
     return octave % 2 === 0 ? "bg-white" : "bg-blue-100";
   }
@@ -67,6 +78,7 @@ const getPressedBackgroundColor = (
   note: string | undefined,
   variant: "note" | "chord" | "modifier",
   modifierType?: string,
+  rootNote?: string,
 ): string => {
   if (variant === "chord") {
     return "bg-purple-300";
@@ -84,8 +96,14 @@ const getPressedBackgroundColor = (
     return "bg-yellow-500";
   }
 
-  // For notes, use octave-based coloring
+  // For notes, use scale-based or octave-based coloring
   if (note) {
+    // If rootNote is provided, use scale-based coloring
+    if (rootNote) {
+      const scaleOctave = getScaleOctave(note, rootNote);
+      return scaleOctave % 2 === 0 ? "bg-gray-200" : "bg-blue-200";
+    }
+    // Otherwise, fall back to traditional octave-based coloring
     const octave = getOctaveFromNote(note);
     return octave % 2 === 0 ? "bg-gray-200" : "bg-blue-200";
   }
@@ -145,13 +163,15 @@ export const InstrumentButton = memo<InstrumentButtonProps>(
     size = "md",
     sustain = false,
     sustainToggle = false,
+    rootNote,
   }) => {
     const touchHandlers = useTouchEvents({ onPress, onRelease });
-    const baseBgColor = getBackgroundColor(note, variant, modifierType);
+    const baseBgColor = getBackgroundColor(note, variant, modifierType, rootNote);
     const pressedBgColor = getPressedBackgroundColor(
       note,
       variant,
       modifierType,
+      rootNote,
     );
     const textColor = getTextColor(variant, modifierType);
     const sizeClasses = getSizeClasses(size);
