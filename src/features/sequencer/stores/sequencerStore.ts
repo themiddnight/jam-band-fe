@@ -5,6 +5,7 @@ import { subscribeWithSelector } from "zustand/middleware";
 import { v4 as uuidv4 } from "uuid";
 import { SEQUENCER_CONSTANTS } from "@/shared/constants";
 import { InstrumentCategory } from "@/shared/constants/instruments";
+import { DEFAULT_MELODIC_PRESETS } from "../constants/defaultPresets";
 import type {
   SequencerState,
   SequencerStep,
@@ -141,21 +142,26 @@ const createDefaultBanks = (): Record<string, SequencerBank> => {
   return banks;
 };
 
-const createDefaultCategoryState = (): SequencerCategoryState => ({
-  banks: createDefaultBanks(),
-  settings: {
-    speed: SEQUENCER_CONSTANTS.DEFAULT_SPEED,
-    length: SEQUENCER_CONSTANTS.DEFAULT_LENGTH,
-    bankMode: "single",
-    displayMode: "scale_notes",
-    editMode: "note",
-  },
-  currentBank: "A",
-  currentBeat: 0,
-  selectedBeat: 0,
-  presets: [],
-  clipboard: null,
-});
+const createDefaultCategoryState = (category?: string): SequencerCategoryState => {
+  // Load default presets for melodic category
+  const defaultPresets = category === InstrumentCategory.Melodic ? DEFAULT_MELODIC_PRESETS : [];
+  
+  return {
+    banks: createDefaultBanks(),
+    settings: {
+      speed: SEQUENCER_CONSTANTS.DEFAULT_SPEED,
+      length: SEQUENCER_CONSTANTS.DEFAULT_LENGTH,
+      bankMode: "single",
+      displayMode: "scale_notes",
+      editMode: "note",
+    },
+    currentBank: "A",
+    currentBeat: 0,
+    selectedBeat: 0,
+    presets: defaultPresets,
+    clipboard: null,
+  };
+};
 
 const DEFAULT_CATEGORY = InstrumentCategory.Melodic;
 
@@ -198,7 +204,7 @@ const ensureCategoryState = (
     return { categoryState: existing, categoryStates: state.categoryStates };
   }
 
-  const newCategoryState = createDefaultCategoryState();
+  const newCategoryState = createDefaultCategoryState(category);
   return {
     categoryState: newCategoryState,
     categoryStates: {
@@ -238,7 +244,7 @@ const buildCategoryUpdate = (
 };
 
 const createInitialSequencerState = (): SequencerState => {
-  const defaultCategoryState = createDefaultCategoryState();
+  const defaultCategoryState = createDefaultCategoryState(DEFAULT_CATEGORY);
 
   return {
     isPlaying: false,
@@ -924,11 +930,13 @@ export const useSequencerStore = create<SequencerStore>()(
         // Preset management
         savePreset: (name, instrumentCategory) => {
           const state = get();
+          // Exclude displayMode and editMode from saved settings (UI state only)
+          const { speed, length, bankMode } = state.settings;
           const preset: SequencerPreset = {
             id: uuidv4(),
             name,
             banks: state.banks,
-            settings: state.settings,
+            settings: { speed, length, bankMode },
             instrumentCategory,
             createdAt: Date.now(),
           };
@@ -953,7 +961,12 @@ export const useSequencerStore = create<SequencerStore>()(
 
           set((currentState) => {
             const presetBanks = preset.banks;
-            const presetSettings = preset.settings;
+            // Merge preset settings with current UI state (displayMode and editMode)
+            const presetSettings: SequencerSettings = {
+              ...preset.settings,
+              displayMode: currentState.settings.displayMode,
+              editMode: currentState.settings.editMode,
+            };
 
             const { nextCategoryStates } = buildCategoryUpdate(currentState, {
               banks: presetBanks,
@@ -990,9 +1003,7 @@ export const useSequencerStore = create<SequencerStore>()(
           const state = get();
           const preset = state.presets.find(p => p.id === presetId);
           return preset ? JSON.stringify(preset, null, 2) : "";
-        },
-
-        importPreset: (presetData) => {
+        },        importPreset: (presetData) => {
           try {
             const preset: SequencerPreset = JSON.parse(presetData);
             // Regenerate ID to avoid conflicts
@@ -1178,8 +1189,8 @@ export const useSequencerStore = create<SequencerStore>()(
             activeCategory: InstrumentCategory.DrumBeat,
             categoryStates: {
               [InstrumentCategory.DrumBeat]: drumCategoryState,
-              [InstrumentCategory.Melodic]: createDefaultCategoryState(),
-              [InstrumentCategory.Synthesizer]: createDefaultCategoryState(),
+              [InstrumentCategory.Melodic]: createDefaultCategoryState(InstrumentCategory.Melodic),
+              [InstrumentCategory.Synthesizer]: createDefaultCategoryState(InstrumentCategory.Synthesizer),
             },
           };
         },

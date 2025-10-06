@@ -65,11 +65,18 @@ export interface SequencerCategoryState {
   clipboard: SequencerClipboard | null;
 }
 
+// Preset settings exclude UI state (displayMode and editMode)
+export interface SequencerPresetSettings {
+  speed: number;
+  length: number;
+  bankMode: "single" | "continuous";
+}
+
 export interface SequencerPreset {
   id: string;
   name: string;
   banks: Record<string, SequencerBank>;
-  settings: SequencerSettings;
+  settings: SequencerPresetSettings;
   instrumentCategory: string;
   createdAt: number;
 }

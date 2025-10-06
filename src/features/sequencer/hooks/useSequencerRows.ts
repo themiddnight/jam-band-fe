@@ -10,7 +10,7 @@ const CHROMATIC_NOTES = (() => {
   const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
   const notes: string[] = [];
   
-  for (let octave = 2; octave <= 6; octave++) {
+  for (let octave = 1; octave <= 6; octave++) {
     for (const note of noteNames) {
       notes.push(`${note}${octave}`);
     }

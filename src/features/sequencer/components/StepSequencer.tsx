@@ -2,6 +2,8 @@ import { memo, useMemo, useCallback } from "react";
 import { Socket } from "socket.io-client";
 import { useSequencer } from "../hooks/useSequencer";
 import { useSequencerStore } from "../stores/sequencerStore";
+import { DEFAULT_MELODIC_PRESETS } from "../constants/defaultPresets";
+import { DEFAULT_DRUM_BEAT_PRESETS } from "../constants/defaultDrumPresets";
 import {
   useSequencerRows,
   useDisplayModeOptions,
@@ -225,6 +227,7 @@ export const StepSequencer = memo(
             <PresetManager
               storageKey="sequencer-presets"
               version="1.0.0"
+              additionalPresets={currentCategory === 'drum_beat' ? DEFAULT_DRUM_BEAT_PRESETS : DEFAULT_MELODIC_PRESETS}
               filterPresets={(preset: any) => {
                 // Group melodic and synthesizer presets together, separate drums
                 const isDrumPreset = preset.instrumentCategory === 'drum_beat';
@@ -246,10 +249,16 @@ export const StepSequencer = memo(
                 } as any;
               }}
               onLoad={(preset: any) => {
-                // Apply the preset's banks and settings directly to the store
+                // Apply the preset's banks and settings, preserving current UI state
+                const currentState = useSequencerStore.getState();
                 useSequencerStore.setState({
                   banks: preset.banks,
-                  settings: preset.settings,
+                  settings: {
+                    ...preset.settings,
+                    // Preserve current UI state (displayMode and editMode)
+                    displayMode: currentState.settings.displayMode,
+                    editMode: currentState.settings.editMode,
+                  },
                   currentBeat: 0,
                   selectedBeat: 0,
                 });

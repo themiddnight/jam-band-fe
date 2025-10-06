@@ -19,6 +19,7 @@ export type {
   SequencerStep,
   SequencerBank,
   SequencerSettings,
+  SequencerPresetSettings,
   SequencerState,
   SequencerPreset,
   SequencerRow,
@@ -34,4 +35,8 @@ export type {
 export { 
   SEQUENCER_CONSTANTS,
   SEQUENCER_SPEEDS,
-} from "@/shared/constants"; 
+} from "@/shared/constants";
+
+// Constants
+export { DEFAULT_MELODIC_PRESETS } from "./constants/defaultPresets";
+export { DEFAULT_DRUM_BEAT_PRESETS } from "./constants/defaultDrumPresets"; 
