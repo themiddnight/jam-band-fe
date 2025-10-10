@@ -160,28 +160,33 @@ export const useGuitarKeysController = ({
           return;
         }
 
-        // Note keys (base octave - ASDFGHJKL;')
+        // Note keys (base octave - ASDFGHJKL;') - using 4th interval logic
         const lowerOctaveKeys = shortcuts.lowerOctaveNotes.key.split("");
         if (lowerOctaveKeys.includes(key)) {
           const keyIndex = lowerOctaveKeys.indexOf(key);
 
-          // Get scale notes for current and next octaves
-          const currentScaleNotes = scaleState.getScaleNotes(
-            scaleState.rootNote,
-            scaleState.scale,
-            guitarState.currentOctave,
-          );
-          const nextOctaveScaleNotes = scaleState.getScaleNotes(
-            scaleState.rootNote,
-            scaleState.scale,
-            guitarState.currentOctave + 1,
-          );
+          // Generate enough scale notes across multiple octaves (same as UI component)
+          const scaleLength = 7;
+          const lowerRowLength = lowerOctaveKeys.length;
+          const totalNotesNeeded = lowerRowLength + 4; // Extra buffer for higher row 4th offset
+          
+          const allScaleNotes: string[] = [];
+          let octave = guitarState.currentOctave;
+          let noteCount = 0;
+          
+          while (noteCount < totalNotesNeeded) {
+            const scaleNotes = scaleState.getScaleNotes(
+              scaleState.rootNote,
+              scaleState.scale,
+              octave,
+            );
+            allScaleNotes.push(...scaleNotes);
+            noteCount += scaleLength;
+            octave++;
+          }
 
-          // Combine notes from both octaves: [...currentScaleNotes, ...nextOctaveScaleNotes]
-          const baseOctaveNotes = [
-            ...currentScaleNotes,
-            ...nextOctaveScaleNotes,
-          ];
+          // Lower row starts from root (index 0) - same as UI component
+          const baseOctaveNotes = allScaleNotes.slice(0, lowerRowLength);
 
           if (baseOctaveNotes[keyIndex]) {
             // Check if hammer-on is enabled for this string
@@ -208,28 +213,34 @@ export const useGuitarKeysController = ({
           return;
         }
 
-        // Note keys (higher octave - QWERTYUIOP[])
+        // Note keys (higher octave - QWERTYUIOP[]) - using 4th interval logic
         const higherOctaveKeys = shortcuts.higherOctaveNotes.key.split("");
         if (higherOctaveKeys.includes(key)) {
           const keyIndex = higherOctaveKeys.indexOf(key);
 
-          // Get scale notes for next and upper octaves
-          const nextOctaveScaleNotes = scaleState.getScaleNotes(
-            scaleState.rootNote,
-            scaleState.scale,
-            guitarState.currentOctave + 1,
-          );
-          const upperOctaveScaleNotes = scaleState.getScaleNotes(
-            scaleState.rootNote,
-            scaleState.scale,
-            guitarState.currentOctave + 2,
-          );
+          // Generate enough scale notes across multiple octaves (same as UI component)
+          const scaleLength = 7;
+          const higherRowLength = higherOctaveKeys.length;
+          const totalNotesNeeded = higherRowLength + 4; // Extra buffer for 4th offset
+          
+          const allScaleNotes: string[] = [];
+          let octave = guitarState.currentOctave;
+          let noteCount = 0;
+          
+          while (noteCount < totalNotesNeeded) {
+            const scaleNotes = scaleState.getScaleNotes(
+              scaleState.rootNote,
+              scaleState.scale,
+              octave,
+            );
+            allScaleNotes.push(...scaleNotes);
+            noteCount += scaleLength;
+            octave++;
+          }
 
-          // Combine notes from both octaves: [...nextOctaveScaleNotes, ...upperOctaveScaleNotes]
-          const higherOctaveNotes = [
-            ...nextOctaveScaleNotes,
-            ...upperOctaveScaleNotes,
-          ];
+          // Higher row starts from 4th (index 3) - same as UI component
+          const fourthOffset = 3;
+          const higherOctaveNotes = allScaleNotes.slice(fourthOffset, fourthOffset + higherRowLength);
 
           if (higherOctaveNotes[keyIndex]) {
             // Check if hammer-on is enabled for this string
@@ -424,28 +435,33 @@ export const useGuitarKeysController = ({
 
       // Simple - Note mode
       if (guitarState.mode.type === "melody") {
-        // Note keys (base octave - ASDFGHJKL;')
+        // Note keys (base octave - ASDFGHJKL;') - using 4th interval logic
         const lowerOctaveKeys = shortcuts.lowerOctaveNotes.key.split("");
         if (lowerOctaveKeys.includes(key)) {
           const keyIndex = lowerOctaveKeys.indexOf(key);
 
-          // Get scale notes for current and next octaves
-          const currentScaleNotes = scaleState.getScaleNotes(
-            scaleState.rootNote,
-            scaleState.scale,
-            guitarState.currentOctave,
-          );
-          const nextOctaveScaleNotes = scaleState.getScaleNotes(
-            scaleState.rootNote,
-            scaleState.scale,
-            guitarState.currentOctave + 1,
-          );
+          // Generate enough scale notes across multiple octaves (same as UI component)
+          const scaleLength = 7;
+          const lowerRowLength = lowerOctaveKeys.length;
+          const totalNotesNeeded = lowerRowLength + 4; // Extra buffer for higher row 4th offset
+          
+          const allScaleNotes: string[] = [];
+          let octave = guitarState.currentOctave;
+          let noteCount = 0;
+          
+          while (noteCount < totalNotesNeeded) {
+            const scaleNotes = scaleState.getScaleNotes(
+              scaleState.rootNote,
+              scaleState.scale,
+              octave,
+            );
+            allScaleNotes.push(...scaleNotes);
+            noteCount += scaleLength;
+            octave++;
+          }
 
-          // Combine notes from both octaves: [...currentScaleNotes, ...nextOctaveScaleNotes]
-          const baseOctaveNotes = [
-            ...currentScaleNotes,
-            ...nextOctaveScaleNotes,
-          ];
+          // Lower row starts from root (index 0) - same as UI component
+          const baseOctaveNotes = allScaleNotes.slice(0, lowerRowLength);
 
           if (baseOctaveNotes[keyIndex]) {
             guitarControls.handleNoteRelease(
@@ -456,28 +472,34 @@ export const useGuitarKeysController = ({
           return;
         }
 
-        // Note keys (higher octave - QWERTYUIOP[])
+        // Note keys (higher octave - QWERTYUIOP[]) - using 4th interval logic
         const higherOctaveKeys = shortcuts.higherOctaveNotes.key.split("");
         if (higherOctaveKeys.includes(key)) {
           const keyIndex = higherOctaveKeys.indexOf(key);
 
-          // Get scale notes for next and upper octaves
-          const nextOctaveScaleNotes = scaleState.getScaleNotes(
-            scaleState.rootNote,
-            scaleState.scale,
-            guitarState.currentOctave + 1,
-          );
-          const upperOctaveScaleNotes = scaleState.getScaleNotes(
-            scaleState.rootNote,
-            scaleState.scale,
-            guitarState.currentOctave + 2,
-          );
+          // Generate enough scale notes across multiple octaves (same as UI component)
+          const scaleLength = 7;
+          const higherRowLength = higherOctaveKeys.length;
+          const totalNotesNeeded = higherRowLength + 4; // Extra buffer for 4th offset
+          
+          const allScaleNotes: string[] = [];
+          let octave = guitarState.currentOctave;
+          let noteCount = 0;
+          
+          while (noteCount < totalNotesNeeded) {
+            const scaleNotes = scaleState.getScaleNotes(
+              scaleState.rootNote,
+              scaleState.scale,
+              octave,
+            );
+            allScaleNotes.push(...scaleNotes);
+            noteCount += scaleLength;
+            octave++;
+          }
 
-          // Combine notes from both octaves: [...nextOctaveScaleNotes, ...upperOctaveScaleNotes]
-          const higherOctaveNotes = [
-            ...nextOctaveScaleNotes,
-            ...upperOctaveScaleNotes,
-          ];
+          // Higher row starts from 4th (index 3) - same as UI component
+          const fourthOffset = 3;
+          const higherOctaveNotes = allScaleNotes.slice(fourthOffset, fourthOffset + higherRowLength);
 
           if (higherOctaveNotes[keyIndex]) {
             guitarControls.handleNoteRelease(

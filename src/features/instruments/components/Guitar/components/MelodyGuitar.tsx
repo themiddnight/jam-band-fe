@@ -66,38 +66,43 @@ export const MelodyGuitar: React.FC<MelodyGuitarProps> = ({
     isPlayButton: true,
   });
 
-  // Generate note keys for both octaves
+  // Generate note keys for both rows with 4th interval
   const noteKeys = useMemo(() => {
     const baseOctaveNoteKeys: GuitarNote[] = [];
     const higherOctaveNoteKeys: GuitarNote[] = [];
 
-    // Get scale notes for current and next octaves
-    const currentScaleNotes = scaleState.getScaleNotes(
-      scaleState.rootNote,
-      scaleState.scale,
-      currentOctave,
-    );
-    const nextOctaveScaleNotes = scaleState.getScaleNotes(
-      scaleState.rootNote,
-      scaleState.scale,
-      currentOctave + 1,
-    );
-    const upperOctaveScaleNotes = scaleState.getScaleNotes(
-      scaleState.rootNote,
-      scaleState.scale,
-      currentOctave + 2,
-    );
+    // Generate enough scale notes across multiple octaves to fill both keyboard rows
+    const scaleLength = 7; // Major/minor scales have 7 notes
+    const lowerRowLength = shortcuts.lowerOctaveNotes.key.length; // 11 keys (ASDFGHJKL;')
+    const higherRowLength = shortcuts.higherOctaveNotes.key.length; // 12 keys (QWERTYUIOP[])
+    const maxRowLength = Math.max(lowerRowLength, higherRowLength);
+    const totalNotesNeeded = maxRowLength + 4; // Extra buffer for higher row 4th offset
+    
+    const allScaleNotes: string[] = [];
+    const allNoteOctaves: number[] = [];
+    let octave = currentOctave;
+    let noteCount = 0;
+    
+    while (noteCount < totalNotesNeeded) {
+      const scaleNotes = scaleState.getScaleNotes(
+        scaleState.rootNote,
+        scaleState.scale,
+        octave,
+      );
+      scaleNotes.forEach((note) => {
+        allScaleNotes.push(note);
+        allNoteOctaves.push(octave);
+      });
+      noteCount += scaleLength;
+      octave++;
+    }
 
-    // Base octave notes (ASDFGHJKL;') - 11 keys
-    // Use pattern: [...currentScaleNotes, ...nextOctaveScaleNotes]
-    const baseOctaveNotes = [...currentScaleNotes, ...nextOctaveScaleNotes];
+    // Base octave notes (ASDFGHJKL;') - starts from root (index 0)
     const baseOctaveKeyChars = shortcuts.lowerOctaveNotes.key.split("");
-
     baseOctaveKeyChars.forEach((keyChar, index) => {
-      if (index < baseOctaveNotes.length) {
-        const note = baseOctaveNotes[index];
-        const octave =
-          index < currentScaleNotes.length ? currentOctave : currentOctave + 1;
+      if (index < allScaleNotes.length) {
+        const note = allScaleNotes[index];
+        const octave = allNoteOctaves[index];
         const isPressed = guitarState.strings.lower.pressedNotes.has(note);
         baseOctaveNoteKeys.push({
           note,
@@ -108,21 +113,15 @@ export const MelodyGuitar: React.FC<MelodyGuitarProps> = ({
       }
     });
 
-    // Higher octave notes (QWERTYUIOP[]) - 12 keys
-    // Use pattern: [...nextOctaveScaleNotes, ...upperOctaveScaleNotes]
-    const higherOctaveNotes = [
-      ...nextOctaveScaleNotes,
-      ...upperOctaveScaleNotes,
-    ];
+    // Higher octave notes (QWERTYUIOP[]) - starts from 4th (index 3)
     const higherOctaveKeyChars = shortcuts.higherOctaveNotes.key.split("");
-
+    const fourthOffset = 3; // 4th degree is at index 3 (0-based)
+    
     higherOctaveKeyChars.forEach((keyChar, index) => {
-      if (index < higherOctaveNotes.length) {
-        const note = higherOctaveNotes[index];
-        const octave =
-          index < nextOctaveScaleNotes.length
-            ? currentOctave + 1
-            : currentOctave + 2;
+      const noteIndex = fourthOffset + index;
+      if (noteIndex < allScaleNotes.length) {
+        const note = allScaleNotes[noteIndex];
+        const octave = allNoteOctaves[noteIndex];
         const isPressed = guitarState.strings.higher.pressedNotes.has(note);
         higherOctaveNoteKeys.push({
           note,

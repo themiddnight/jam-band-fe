@@ -189,17 +189,28 @@ export default function Bass({
           // Get scale notes based on alwaysRoot setting
           let lowerOctaveNotes: string[];
           if (!alwaysRoot) {
-            const currentScaleNotes = scaleState.getScaleNotes(
-              scaleState.rootNote,
-              scaleState.scale,
-              currentOctave,
-            );
-            const nextOctaveScaleNotes = scaleState.getScaleNotes(
-              scaleState.rootNote,
-              scaleState.scale,
-              currentOctave + 1,
-            );
-            lowerOctaveNotes = [...currentScaleNotes, ...nextOctaveScaleNotes];
+            // Use 4th interval mapping (same as guitar melody and UI component)
+            const scaleLength = 7;
+            const lowerRowLength = lowerOctaveKeys.length;
+            const totalNotesNeeded = lowerRowLength + 4; // Extra buffer for higher row 4th offset
+            
+            const allScaleNotes: string[] = [];
+            let octave = currentOctave;
+            let noteCount = 0;
+            
+            while (noteCount < totalNotesNeeded) {
+              const scaleNotes = scaleState.getScaleNotes(
+                scaleState.rootNote,
+                scaleState.scale,
+                octave,
+              );
+              allScaleNotes.push(...scaleNotes);
+              noteCount += scaleLength;
+              octave++;
+            }
+
+            // Lower row starts from root (index 0)
+            lowerOctaveNotes = allScaleNotes.slice(0, lowerRowLength);
           } else {
             // Always Root mode: use fixed ranges
             const baseScaleNames = scaleState
@@ -276,20 +287,29 @@ export default function Bass({
           // Get scale notes based on alwaysRoot setting
           let higherOctaveNotes: string[];
           if (!alwaysRoot) {
-            const nextOctaveScaleNotes = scaleState.getScaleNotes(
-              scaleState.rootNote,
-              scaleState.scale,
-              currentOctave + 1,
-            );
-            const upperOctaveScaleNotes = scaleState.getScaleNotes(
-              scaleState.rootNote,
-              scaleState.scale,
-              currentOctave + 2,
-            );
-            higherOctaveNotes = [
-              ...nextOctaveScaleNotes,
-              ...upperOctaveScaleNotes,
-            ];
+            // Use 4th interval mapping (same as guitar melody and UI component)
+            const scaleLength = 7;
+            const higherRowLength = higherOctaveKeys.length;
+            const totalNotesNeeded = higherRowLength + 4; // Extra buffer for 4th offset
+            
+            const allScaleNotes: string[] = [];
+            let octave = currentOctave;
+            let noteCount = 0;
+            
+            while (noteCount < totalNotesNeeded) {
+              const scaleNotes = scaleState.getScaleNotes(
+                scaleState.rootNote,
+                scaleState.scale,
+                octave,
+              );
+              allScaleNotes.push(...scaleNotes);
+              noteCount += scaleLength;
+              octave++;
+            }
+
+            // Higher row starts from 4th (index 3)
+            const fourthOffset = 3;
+            higherOctaveNotes = allScaleNotes.slice(fourthOffset, fourthOffset + higherRowLength);
           } else {
             // Always Root mode: use fixed ranges
             const baseScaleNames = scaleState
@@ -421,17 +441,28 @@ export default function Bass({
           // Get scale notes based on alwaysRoot setting
           let lowerOctaveNotes: string[];
           if (!alwaysRoot) {
-            const currentScaleNotes = scaleState.getScaleNotes(
-              scaleState.rootNote,
-              scaleState.scale,
-              currentOctave,
-            );
-            const nextOctaveScaleNotes = scaleState.getScaleNotes(
-              scaleState.rootNote,
-              scaleState.scale,
-              currentOctave + 1,
-            );
-            lowerOctaveNotes = [...currentScaleNotes, ...nextOctaveScaleNotes];
+            // Use 4th interval mapping (same as guitar melody and UI component)
+            const scaleLength = 7;
+            const lowerRowLength = lowerOctaveKeys.length;
+            const totalNotesNeeded = lowerRowLength + 4; // Extra buffer for higher row 4th offset
+            
+            const allScaleNotes: string[] = [];
+            let octave = currentOctave;
+            let noteCount = 0;
+            
+            while (noteCount < totalNotesNeeded) {
+              const scaleNotes = scaleState.getScaleNotes(
+                scaleState.rootNote,
+                scaleState.scale,
+                octave,
+              );
+              allScaleNotes.push(...scaleNotes);
+              noteCount += scaleLength;
+              octave++;
+            }
+
+            // Lower row starts from root (index 0)
+            lowerOctaveNotes = allScaleNotes.slice(0, lowerRowLength);
           } else {
             // Always Root mode: use fixed ranges
             const baseScaleNames = scaleState
@@ -488,20 +519,29 @@ export default function Bass({
           // Get scale notes based on alwaysRoot setting
           let higherOctaveNotes: string[];
           if (!alwaysRoot) {
-            const nextOctaveScaleNotes = scaleState.getScaleNotes(
-              scaleState.rootNote,
-              scaleState.scale,
-              currentOctave + 1,
-            );
-            const upperOctaveScaleNotes = scaleState.getScaleNotes(
-              scaleState.rootNote,
-              scaleState.scale,
-              currentOctave + 2,
-            );
-            higherOctaveNotes = [
-              ...nextOctaveScaleNotes,
-              ...upperOctaveScaleNotes,
-            ];
+            // Use 4th interval mapping (same as guitar melody and UI component)
+            const scaleLength = 7;
+            const higherRowLength = higherOctaveKeys.length;
+            const totalNotesNeeded = higherRowLength + 4; // Extra buffer for 4th offset
+            
+            const allScaleNotes: string[] = [];
+            let octave = currentOctave;
+            let noteCount = 0;
+            
+            while (noteCount < totalNotesNeeded) {
+              const scaleNotes = scaleState.getScaleNotes(
+                scaleState.rootNote,
+                scaleState.scale,
+                octave,
+              );
+              allScaleNotes.push(...scaleNotes);
+              noteCount += scaleLength;
+              octave++;
+            }
+
+            // Higher row starts from 4th (index 3)
+            const fourthOffset = 3;
+            higherOctaveNotes = allScaleNotes.slice(fourthOffset, fourthOffset + higherRowLength);
           } else {
             // Always Root mode: use fixed ranges
             const baseScaleNames = scaleState

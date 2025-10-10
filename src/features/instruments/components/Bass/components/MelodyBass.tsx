@@ -109,25 +109,37 @@ export const MelodyBass: React.FC<MelodyBassProps> = ({
     };
 
     if (!alwaysRoot) {
-      // Same mapping as guitar melody
-      const currentScale = scaleState.getScaleNotes(
-        scaleState.rootNote,
-        scaleState.scale,
-        currentOctave,
-      );
-      const nextScale = scaleState.getScaleNotes(
-        scaleState.rootNote,
-        scaleState.scale,
-        currentOctave + 1,
-      );
-      const upperScale = scaleState.getScaleNotes(
-        scaleState.rootNote,
-        scaleState.scale,
-        currentOctave + 2,
-      );
+      // Use 4th interval mapping (same as guitar melody)
+      const scaleLength = 7; // Major/minor scales have 7 notes
+      const lowerRowLength = lowerKeyChars.length;
+      const higherRowLength = higherKeyChars.length;
+      const maxRowLength = Math.max(lowerRowLength, higherRowLength);
+      const totalNotesNeeded = maxRowLength + 4; // Extra buffer for higher row 4th offset
+      
+      const allScaleNotes: string[] = [];
+      let octave = currentOctave;
+      let noteCount = 0;
+      
+      while (noteCount < totalNotesNeeded) {
+        const scaleNotes = scaleState.getScaleNotes(
+          scaleState.rootNote,
+          scaleState.scale,
+          octave,
+        );
+        allScaleNotes.push(...scaleNotes);
+        noteCount += scaleLength;
+        octave++;
+      }
 
-      pushKeys(lowerKeyChars, [...currentScale, ...nextScale], true);
-      pushKeys(higherKeyChars, [...nextScale, ...upperScale], false);
+      // Lower row starts from root (index 0)
+      const lowerRowNotes = allScaleNotes.slice(0, lowerRowLength);
+      
+      // Higher row starts from 4th (index 3)
+      const fourthOffset = 3;
+      const higherRowNotes = allScaleNotes.slice(fourthOffset, fourthOffset + higherRowLength);
+
+      pushKeys(lowerKeyChars, lowerRowNotes, true);
+      pushKeys(higherKeyChars, higherRowNotes, false);
     } else {
       // Always Root mapping: clamp to E1-D#2 for lower, and E3-D#4 for higher
       // Build 7 notes of current scale but snapped into the given ranges
