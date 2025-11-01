@@ -546,18 +546,25 @@ export const useRoomSocket = (instrumentManager?: any) => {
           users: any[];
           pendingMembers: any[];
           effectChains?: Record<SharedEffectChainType, EffectChainState>;
+          self?: any;
         }) => {
+          const normalizedUsers = data.users?.length
+            ? data.users
+            : data.room?.users ?? [];
+
           setCurrentRoom({
             ...data.room,
-            users: data.users,
+            users: normalizedUsers,
             pendingMembers: data.pendingMembers,
           });
 
           const currentUserId = useUserStore.getState().userId;
           if (currentUserId) {
-            const currentUserData = data.users.find(
-              (user: any) => user.id === currentUserId,
-            );
+            const currentUserData =
+              data.self && data.self.id === currentUserId
+                ? data.self
+                : normalizedUsers.find((user: any) => user.id === currentUserId);
+
             if (currentUserData) {
               setCurrentUser(currentUserData);
             }
