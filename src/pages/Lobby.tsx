@@ -401,13 +401,13 @@ export default function Lobby() {
                       </div>
                     </div>
                     <div 
-                      className={`card cursor-not-allowed opacity-50 ${newRoomType === "produce" ? "bg-primary text-primary-content" : "bg-base-200"}`}
-                      title="Coming soon!"
+                      className={`card cursor-pointer transition-all ${newRoomType === "produce" ? "bg-secondary text-secondary-content" : "bg-base-200 hover:bg-base-300"}`}
+                      onClick={() => setNewRoomType("produce")}
                     >
                       <div className="card-body p-4">
                         <h4 className="card-title text-sm">Produce Room</h4>
                         <p className="text-xs opacity-70">
-                          Multi-track production with async editing (Coming Soon)
+                          Multi-track production with async editing
                         </p>
                       </div>
                     </div>

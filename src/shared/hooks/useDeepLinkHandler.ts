@@ -77,8 +77,9 @@ export const useDeepLinkHandler = () => {
   }, [navigate]);
 
   // Utility function to generate invitation URLs
-  const generateInviteUrl = (roomId: string, role: 'band_member' | 'audience') => {
-    return `${window.location.origin}/invite/${roomId}?role=${role}`;
+  const generateInviteUrl = (roomId: string, role: 'band_member' | 'audience', roomType?: 'perform' | 'produce') => {
+    const baseUrl = `${window.location.origin}/invite/${roomId}?role=${role}`;
+    return roomType ? `${baseUrl}&roomType=${roomType}` : baseUrl;
   };
 
   // Utility function to generate protocol URL

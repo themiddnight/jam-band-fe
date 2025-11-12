@@ -129,6 +129,7 @@ export const useLobby = () => {
       // Find the room to check if it's private (use filteredRooms for consistency)
       const room = filteredRooms.find((r: any) => r.id === roomId);
       const isPrivateRoom = room?.isPrivate || false;
+      const roomType = room?.roomType || "perform";
 
       try {
         if (isPrivateRoom && role === "band_member") {
@@ -139,8 +140,9 @@ export const useLobby = () => {
         } else {
           // For public rooms or audience members, join directly
           await connectToRoom(roomId, role);
-          // Navigate to room page
-          navigate(`/perform/${roomId}`, { state: { role } });
+          // Navigate to room page based on room type
+          const roomPath = roomType === "produce" ? "produce" : "perform";
+          navigate(`/${roomPath}/${roomId}`, { state: { role } });
         }
       } catch (error) {
         console.error("Failed to join room:", error);
@@ -223,12 +225,17 @@ export const useLobby = () => {
   // Navigate to the room after approval (when socket transitions to IN_ROOM)
   useEffect(() => {
     if (connectionState === ConnectionState.IN_ROOM && pendingRoomIntent) {
-      navigate(`/room/${pendingRoomIntent.roomId}`, {
+      // Find the room to get its type
+      const room = filteredRooms.find((r: any) => r.id === pendingRoomIntent.roomId);
+      const roomType = room?.roomType || "perform";
+      const roomPath = roomType === "produce" ? "produce" : "perform";
+      
+      navigate(`/${roomPath}/${pendingRoomIntent.roomId}`, {
         state: { role: pendingRoomIntent.role },
       });
       setPendingRoomIntent(null);
     }
-  }, [connectionState, pendingRoomIntent, navigate]);
+  }, [connectionState, pendingRoomIntent, navigate, filteredRooms]);
 
   // Expose cancel approval action for UI
   const cancelApproval = useCallback(async () => {
@@ -297,12 +304,8 @@ export const useLobby = () => {
         fetchRooms();
 
         // Navigate to the new room based on room type
-        if (result.room.roomType === "perform") {
-          navigate(`/perform/${result.room.id}`);
-        } else {
-          // For now, produce rooms redirect to perform since produce is not implemented yet
-          navigate(`/perform/${result.room.id}`);
-        }
+        const roomPath = result.room.roomType === "produce" ? "produce" : "perform";
+        navigate(`/${roomPath}/${result.room.id}`);
       }
     } catch (error) {
       console.error("Failed to create room:", error);
