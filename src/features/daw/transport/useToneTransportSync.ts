@@ -58,15 +58,19 @@ export const useToneTransportSync = () => {
     if ((transportState === 'playing' || transportState === 'recording') && Tone.Transport.state !== 'started') {
       initializeAudioEngine().then(() => {
         if (Tone.Transport.state !== 'started') {
-          // If loop is enabled and playhead is before loop start, jump to loop start
-          if (loop.enabled && playhead < loop.start) {
-            const beatsInBar = timeSignature.numerator;
+          const shouldSnapToLoopStart = loop.enabled && (transportState === 'playing' || transportState === 'recording');
+
+          if (shouldSnapToLoopStart) {
+            const beatsInBar = timeSignature.numerator || 4;
             const startBars = Math.floor(loop.start / beatsInBar);
             const startBeats = loop.start % beatsInBar;
             Tone.Transport.position = `${startBars}:${startBeats}:0`;
-            setPlayhead(loop.start);
+
+            if (playhead !== loop.start) {
+              setPlayhead(loop.start);
+            }
           }
-          
+
           Tone.Transport.start();
         }
       });

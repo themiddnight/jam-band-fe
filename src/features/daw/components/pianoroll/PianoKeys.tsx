@@ -11,7 +11,7 @@ import { midiNumberToNoteName } from '../../utils/midiUtils';
 import { useTrackStore } from '../../stores/trackStore';
 import { usePianoRollStore } from '../../stores/pianoRollStore';
 import { useRegionStore } from '../../stores/regionStore';
-import { playImmediateNote, stopImmediateNote } from '../../utils/audioEngine';
+import { trackInstrumentRegistry } from '../../utils/trackInstrumentRegistry';
 
 const BLACK_KEYS = new Set([1, 3, 6, 8, 10]); // relative to octave (C=0)
 
@@ -36,25 +36,49 @@ export const PianoKeys = React.memo(() => {
   const activeRegionId = usePianoRollStore((state) => state.activeRegionId);
   const regions = useRegionStore((state) => state.regions);
   const tracks = useTrackStore((state) => state.tracks);
-  const activeNotesRef = useRef<Set<number>>(new Set());
+  const activeNotesRef = useRef<Set<string>>(new Set());
   
   const region = regions.find((r) => r.id === activeRegionId);
   const track = region ? tracks.find((t) => t.id === region.trackId) : null;
   
   const handleKeyDown = (midi: number) => {
-    if (!track || activeNotesRef.current.has(midi)) {
+    if (!track) {
       return;
     }
-    activeNotesRef.current.add(midi);
-    playImmediateNote(track, midi, 100);
+
+    const noteName = midiNumberToNoteName(midi);
+    if (activeNotesRef.current.has(noteName)) {
+      return;
+    }
+
+    activeNotesRef.current.add(noteName);
+    void trackInstrumentRegistry
+      .playNotes(track, noteName, {
+        velocity: 100,
+        isKeyHeld: true,
+      })
+      .catch((error) => {
+        console.error('Failed to play piano roll note:', error);
+        activeNotesRef.current.delete(noteName);
+      });
   };
   
   const handleKeyUp = (midi: number) => {
     if (!track) {
       return;
     }
-    activeNotesRef.current.delete(midi);
-    stopImmediateNote(track, midi);
+
+    const noteName = midiNumberToNoteName(midi);
+    if (!activeNotesRef.current.has(noteName)) {
+      return;
+    }
+
+    activeNotesRef.current.delete(noteName);
+    void trackInstrumentRegistry
+      .stopNotes(track, noteName)
+      .catch((error) => {
+        console.error('Failed to stop piano roll note:', error);
+      });
   };
 
   return (

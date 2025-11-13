@@ -7,7 +7,7 @@ import { usePianoRollStore } from '../../stores/pianoRollStore';
 import { Playhead } from './Playhead';
 import { TimeRuler } from './TimeRuler';
 import { TrackCanvas } from './TrackCanvas';
-import { TrackHeader } from './TrackHeader';
+import { TrackHeader } from '../../multitrack/TrackHeader';
 import { AddTrackMenu } from './AddTrackMenu';
 import { SnapToggle } from '../transport/SnapToggle';
 import { LoopToggle } from '../transport/LoopToggle';

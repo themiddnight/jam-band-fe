@@ -1,11 +1,18 @@
-import { type ChangeEvent, useEffect, useState } from 'react';
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useResizeDetector } from 'react-resize-detector';
 
 import { useTrackStore } from '../stores/trackStore';
 import type { Track } from '../types/daw';
-import { loadInstrumentForTrack } from '../utils/audioEngine';
 import { useInputMonitoring } from '../hooks/useInputMonitoring';
-import { InstrumentSelector } from './InstrumentSelector';
+import { trackInstrumentRegistry } from '../utils/trackInstrumentRegistry';
+import AnchoredPopup from '@/features/ui/components/shared/AnchoredPopup';
+import InstrumentCategoryTabs from '@/features/instruments/components/InstrumentCategoryTabs';
+import {
+  getDefaultInstrumentForCategory,
+  getInstrumentCategoryById,
+  getInstrumentLabelById,
+} from '@/features/instruments/utils/instrumentLookup';
+import { InstrumentCategory } from '@/shared/constants/instruments';
 
 interface TrackHeaderProps {
   track: Track;
@@ -16,6 +23,7 @@ interface TrackHeaderProps {
 
 export const TrackHeader = ({ track, isSelected, onSelect, onHeightChange }: TrackHeaderProps) => {
   const [inputFeedback, setInputFeedback] = useState(false);
+  const [isInstrumentPopupOpen, setIsInstrumentPopupOpen] = useState(false);
   
   const { ref: containerRef, height } = useResizeDetector({
     refreshMode: 'debounce',
@@ -36,6 +44,129 @@ export const TrackHeader = ({ track, isSelected, onSelect, onHeightChange }: Tra
   const toggleSolo = useTrackStore((state) => state.toggleSolo);
   const setTrackInstrument = useTrackStore((state) => state.setTrackInstrument);
   const removeTrack = useTrackStore((state) => state.removeTrack);
+
+  const instrumentButtonRef = useRef<HTMLButtonElement | null>(null);
+
+  const resolvedCategory = useMemo(() => {
+    if (track.instrumentCategory) {
+      return track.instrumentCategory;
+    }
+    if (track.instrumentId) {
+      return getInstrumentCategoryById(track.instrumentId);
+    }
+    return InstrumentCategory.Melodic;
+  }, [track.instrumentCategory, track.instrumentId]);
+
+  const selectorInstrumentValue = useMemo(
+    () => track.instrumentId ?? getDefaultInstrumentForCategory(resolvedCategory),
+    [track.instrumentId, resolvedCategory]
+  );
+
+  const currentInstrumentLabel = useMemo(() => {
+    if (track.instrumentId) {
+      return getInstrumentLabelById(track.instrumentId);
+    }
+    return getInstrumentLabelById(selectorInstrumentValue);
+  }, [track.instrumentId, selectorInstrumentValue]);
+
+  useEffect(() => {
+    if (track.type !== 'midi') {
+      return;
+    }
+
+    if (!track.instrumentId) {
+      const defaultInstrument = getDefaultInstrumentForCategory(resolvedCategory);
+      setTrackInstrument(track.id, defaultInstrument, resolvedCategory);
+      return;
+    }
+
+    if (!track.instrumentCategory || track.instrumentCategory !== resolvedCategory) {
+      setTrackInstrument(track.id, track.instrumentId, resolvedCategory);
+    }
+  }, [track, resolvedCategory, setTrackInstrument]);
+
+  useEffect(() => {
+    if (track.type !== 'midi') {
+      return;
+    }
+
+    const instrumentId = track.instrumentId ?? getDefaultInstrumentForCategory(resolvedCategory);
+    const instrumentCategory = track.instrumentCategory ?? resolvedCategory;
+    const hydratedTrack: Track = {
+      ...track,
+      instrumentId,
+      instrumentCategory,
+    };
+
+    void trackInstrumentRegistry
+      .ensureEngine(hydratedTrack, {
+        instrumentId,
+        instrumentCategory,
+      })
+      .catch((error) => {
+        console.error('Failed to prepare instrument engine for track:', error);
+      });
+  }, [track, resolvedCategory]);
+
+  useEffect(() => {
+    if (track.type !== 'midi' && isInstrumentPopupOpen) {
+      setIsInstrumentPopupOpen(false);
+    }
+  }, [track.type, isInstrumentPopupOpen]);
+
+  const handleInstrumentButtonClick = () => {
+    if (track.type !== 'midi') {
+      return;
+    }
+    setIsInstrumentPopupOpen((prev) => !prev);
+  };
+
+  const closeInstrumentPopup = () => {
+    setIsInstrumentPopupOpen(false);
+  };
+
+  const handleCategorySelect = (category: InstrumentCategory) => {
+    if (track.type !== 'midi') {
+      return;
+    }
+    const nextInstrument = getDefaultInstrumentForCategory(category);
+    setTrackInstrument(track.id, nextInstrument, category);
+    const updatedTrack: Track = {
+      ...track,
+      instrumentId: nextInstrument,
+      instrumentCategory: category,
+    };
+    void trackInstrumentRegistry
+      .updateTrackConfig(updatedTrack, {
+        instrumentId: nextInstrument,
+        instrumentCategory: category,
+      })
+      .catch((error) => {
+        console.error('Failed to update instrument engine for category change:', error);
+      });
+  };
+
+  const handleInstrumentSelect = (instrumentId: string) => {
+    if (track.type !== 'midi') {
+      return;
+    }
+    const category = getInstrumentCategoryById(instrumentId);
+    setTrackInstrument(track.id, instrumentId, category);
+    const updatedTrack: Track = {
+      ...track,
+      instrumentId,
+      instrumentCategory: category,
+    };
+    void trackInstrumentRegistry
+      .updateTrackConfig(updatedTrack, {
+        instrumentId,
+        instrumentCategory: category,
+      })
+      .catch((error) => {
+        console.error('Failed to update instrument engine for selection:', error);
+      });
+    closeInstrumentPopup();
+  };
   
   // Input monitoring for audio tracks
   // Show meter when track is selected, enable feedback when 'I' is pressed
@@ -55,16 +186,6 @@ export const TrackHeader = ({ track, isSelected, onSelect, onHeightChange }: Tra
 
   const handlePanChange = (event: ChangeEvent<HTMLInputElement>) => {
     setTrackPan(track.id, Number(event.target.value) / 100);
-  };
-
-  const handleInstrumentChange = (newInstrumentId: string) => {
-    setTrackInstrument(track.id, newInstrumentId);
-    
-    // Load the new instrument in the background
-    const updatedTrack = { ...track, instrumentId: newInstrumentId };
-    loadInstrumentForTrack(updatedTrack).catch((error) => {
-      console.error('Failed to load new instrument:', error);
-    });
   };
 
   return (
@@ -164,10 +285,28 @@ export const TrackHeader = ({ track, isSelected, onSelect, onHeightChange }: Tra
           </>
         )}
         {track.type === 'midi' && (
-          <InstrumentSelector
-            value={track.instrumentId || 'acoustic_grand_piano'}
-            onChange={handleInstrumentChange}
-          />
+          <div className="relative">
+            <button
+              ref={instrumentButtonRef}
+              type="button"
+              onClick={handleInstrumentButtonClick}
+              className="btn btn-xs btn-outline"
+            >
+              {currentInstrumentLabel}
+            </button>
+            <AnchoredPopup
+              open={isInstrumentPopupOpen}
+              onClose={closeInstrumentPopup}
+              anchorRef={instrumentButtonRef}
+            >
+              <InstrumentCategoryTabs
+                currentCategory={resolvedCategory}
+                currentInstrument={selectorInstrumentValue}
+                onCategoryChange={handleCategorySelect}
+                onInstrumentChange={handleInstrumentSelect}
+              />
+            </AnchoredPopup>
+          </div>
         )}
       </div>
     </div>

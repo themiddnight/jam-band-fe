@@ -4,6 +4,7 @@ import {
   DEFAULT_INSTRUMENT_ID,
   DEFAULT_TRACK_COLOR,
 } from '../types/daw';
+import { InstrumentCategory } from '@/shared/constants/instruments';
 import type { Track, TrackId } from '../types/daw';
 
 const TRACK_COLORS = [
@@ -28,7 +29,11 @@ interface TrackStoreState {
   setTrackPan: (trackId: TrackId, pan: number) => void;
   toggleMute: (trackId: TrackId, value?: boolean) => void;
   toggleSolo: (trackId: TrackId, value?: boolean) => void;
-  setTrackInstrument: (trackId: TrackId, instrumentId: string) => void;
+  setTrackInstrument: (
+    trackId: TrackId,
+    instrumentId: string,
+    instrumentCategory?: InstrumentCategory,
+  ) => void;
   attachRegionToTrack: (trackId: TrackId, regionId: string) => void;
   detachRegionFromTrack: (trackId: TrackId, regionId: string) => void;
   selectTrack: (trackId: TrackId | null) => void;
@@ -46,6 +51,7 @@ const createTrack = (index: number, overrides?: Partial<Track>): Track => {
     name: trackName,
     type,
     instrumentId: type === 'midi' ? (overrides?.instrumentId ?? DEFAULT_INSTRUMENT_ID) : undefined,
+    instrumentCategory: type === 'midi' ? (overrides?.instrumentCategory ?? InstrumentCategory.Melodic) : undefined,
     volume: overrides?.volume ?? 0.8,
     pan: overrides?.pan ?? 0,
     mute: overrides?.mute ?? false,
@@ -115,10 +121,17 @@ export const useTrackStore = create<TrackStoreState>((set, get) => ({
           : track
       ),
     })),
-  setTrackInstrument: (trackId, instrumentId) =>
+  setTrackInstrument: (trackId, instrumentId, instrumentCategory) =>
     set((state) => ({
       tracks: state.tracks.map((track) =>
-        track.id === trackId ? { ...track, instrumentId } : track
+        track.id === trackId
+          ? {
+              ...track,
+              instrumentId,
+              instrumentCategory:
+                instrumentCategory ?? track.instrumentCategory,
+            }
+          : track
       ),
     })),
   attachRegionToTrack: (trackId, regionId) =>

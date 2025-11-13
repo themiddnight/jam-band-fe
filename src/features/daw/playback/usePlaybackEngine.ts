@@ -1,51 +1,130 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Tone from 'tone';
 
-import { initializeAudioEngine, scheduleRegionPlayback } from '../utils/audioEngine';
 import { scheduleAudioRegionPlayback, stopAllAudioPlayback } from '../utils/audioPlayback';
+import { scheduleMidiRegionPlayback, type ScheduledMidiPlayback } from '../utils/midiPlaybackScheduler';
 import { useProjectStore } from '../stores/projectStore';
 import { useRegionStore } from '../stores/regionStore';
 import { useTrackStore } from '../stores/trackStore';
+import type { Track } from '../types/daw';
+
+const buildSchedulingTrackMeta = (sourceTracks: Track[]) =>
+  sourceTracks.map((track) => ({
+    id: track.id,
+    mute: track.mute,
+    solo: track.solo,
+    type: track.type,
+    instrumentId: track.instrumentId,
+    instrumentCategory: track.instrumentCategory,
+  }));
+
+const toSchedulingSignature = (
+  meta: ReturnType<typeof buildSchedulingTrackMeta>,
+) =>
+  meta
+    .map((item) =>
+      `${item.id}:${item.type}:${item.instrumentId ?? ''}:${item.instrumentCategory ?? ''}:${item.mute ? '1' : '0'}:${item.solo ? '1' : '0'}`,
+    )
+    .join('|');
 
 export const usePlaybackEngine = () => {
   const transportState = useProjectStore((state) => state.transportState);
+  const bpm = useProjectStore((state) => state.bpm);
+  const timeSignature = useProjectStore((state) => state.timeSignature);
+  const loop = useProjectStore((state) => state.loop);
   const setPlayhead = useProjectStore((state) => state.setPlayhead);
   const tracks = useTrackStore((state) => state.tracks);
   const regions = useRegionStore((state) => state.regions);
 
-  const partsRef = useRef<Map<string, Tone.Part>>(new Map());
+  const tracksRef = useRef(tracks);
+  useEffect(() => {
+    tracksRef.current = tracks;
+  }, [tracks]);
+
+  const schedulingTrackMetaRef = useRef(buildSchedulingTrackMeta(tracks));
+  const schedulingTrackSignatureRef = useRef(
+    toSchedulingSignature(schedulingTrackMetaRef.current),
+  );
+  const [schedulingTrackMetaVersion, setSchedulingTrackMetaVersion] = useState(0);
+
+  useEffect(() => {
+    const nextMeta = buildSchedulingTrackMeta(tracks);
+    const nextSignature = toSchedulingSignature(nextMeta);
+    if (schedulingTrackSignatureRef.current !== nextSignature) {
+      schedulingTrackMetaRef.current = nextMeta;
+      schedulingTrackSignatureRef.current = nextSignature;
+      setSchedulingTrackMetaVersion((version) => version + 1);
+    }
+  }, [tracks]);
+
+  const midiPlaybackRef = useRef<Map<string, ScheduledMidiPlayback>>(new Map());
   const animationFrameRef = useRef<number | null>(null);
+  const toneConfiguredRef = useRef(false);
 
   const clearParts = useCallback(() => {
-    partsRef.current.forEach((part) => {
-      try {
-        // Stop with explicit time 0 to avoid negative time errors
-        part.stop(0);
-        part.dispose();
-      } catch (error) {
-        console.warn('Error disposing part:', error);
-      }
+    midiPlaybackRef.current.forEach(({ cleanup }) => {
+      cleanup().catch((error) => {
+        console.error('Failed to clean up scheduled MIDI playback', error);
+      });
     });
-    partsRef.current.clear();
+    midiPlaybackRef.current.clear();
     stopAllAudioPlayback();
     Tone.Transport.cancel(0);
   }, []);
 
+  const ensureToneReady = useCallback(async () => {
+    if (!toneConfiguredRef.current) {
+      try {
+        Tone.context.lookAhead = 0.1;
+        toneConfiguredRef.current = true;
+      } catch (error) {
+        console.warn('Could not configure Tone.js context:', error);
+      }
+    }
+
+    if (Tone.context.state !== 'running') {
+      await Tone.start();
+    }
+  }, []);
+
   const scheduleParts = useCallback(async () => {
-    await initializeAudioEngine();
+    await ensureToneReady();
     clearParts();
 
-    const soloTrackIds = tracks.filter((track) => track.solo && !track.mute).map((track) => track.id);
+    const tracks = tracksRef.current;
+    const trackMeta = schedulingTrackMetaRef.current;
+    const soloTrackIds = trackMeta.filter((meta) => meta.solo && !meta.mute).map((meta) => meta.id);
+
+    const effectiveBpm = typeof bpm === 'number' && bpm > 0 ? bpm : Tone.Transport.bpm.value || 120;
+    Tone.Transport.bpm.value = effectiveBpm;
+    const currentBeat = Tone.Transport.ticks / Tone.Transport.PPQ;
+    const isTransportStarted = Tone.Transport.state === 'started';
+
+    const currentPlayhead = useProjectStore.getState().playhead;
+
+    const anchorBeat = isTransportStarted
+      ? loop.enabled
+        ? loop.start
+        : currentBeat
+      : currentPlayhead;
+
+    if (timeSignature) {
+      const { numerator, denominator } = timeSignature;
+      if (numerator && denominator) {
+        Tone.Transport.timeSignature = [numerator, denominator];
+      }
+    }
+
     const shouldPlayTrack = (trackId: string) => {
-      const track = tracks.find((item) => item.id === trackId);
-      if (!track) {
+      const trackMetaEntry = trackMeta.find((item) => item.id === trackId);
+      if (!trackMetaEntry) {
         return false;
       }
-      if (track.mute) {
+      if (trackMetaEntry.mute) {
         return false;
       }
       if (soloTrackIds.length > 0) {
-        return track.solo;
+        return trackMetaEntry.solo;
       }
       return true;
     };
@@ -63,11 +142,26 @@ export const usePlaybackEngine = () => {
         if (region.type === 'midi') {
           // Schedule MIDI regions
           if (!region.notes.length) {
+            console.log('[PlaybackEngine] Skip empty MIDI region', region.id);
             return;
           }
-          const part = await scheduleRegionPlayback(track, region);
-          if (part) {
-            partsRef.current.set(region.id, part);
+          console.log('[PlaybackEngine] Scheduling MIDI region', {
+            regionId: region.id,
+            trackId: track.id,
+            noteCount: region.notes.length,
+            start: region.start,
+            length: region.length,
+          });
+          const playback = await scheduleMidiRegionPlayback(track, region, {
+            transportBpm: effectiveBpm,
+            anchorBeat,
+          });
+          if (playback) {
+            midiPlaybackRef.current.set(region.id, playback);
+            console.log('[PlaybackEngine] Scheduled MIDI region', {
+              regionId: region.id,
+              hasCleanup: typeof playback.cleanup === 'function',
+            });
           }
         } else if (region.type === 'audio') {
           // Schedule audio regions
@@ -75,7 +169,7 @@ export const usePlaybackEngine = () => {
         }
       })
     );
-  }, [clearParts, regions, tracks]);
+  }, [bpm, clearParts, ensureToneReady, loop.enabled, loop.start, regions, timeSignature]);
 
   useEffect(() => {
     if (transportState === 'playing' || transportState === 'recording') {
@@ -100,7 +194,7 @@ export const usePlaybackEngine = () => {
       updatePlayhead();
     } else {
       clearParts();
-      
+
       // Stop playhead update loop
       if (animationFrameRef.current !== null) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -121,6 +215,29 @@ export const usePlaybackEngine = () => {
     if (transportState === 'playing' || transportState === 'recording') {
       scheduleParts();
     }
-  }, [regions, scheduleParts, tracks, transportState]);
+  }, [regions, scheduleParts, schedulingTrackMetaVersion, transportState]);
+
+  useEffect(() => {
+    if (transportState === 'playing' || transportState === 'recording') {
+      scheduleParts();
+    }
+  }, [loop.enabled, loop.end, loop.start, scheduleParts, transportState]);
+
+  useEffect(() => {
+    const handleLoop = () => {
+      if (!loop.enabled) {
+        return;
+      }
+      scheduleParts().catch((error) => {
+        console.error('Failed to reschedule playback on loop', error);
+      });
+    };
+
+    Tone.Transport.on('loop', handleLoop);
+
+    return () => {
+      Tone.Transport.off('loop', handleLoop);
+    };
+  }, [loop.enabled, scheduleParts]);
 };
 

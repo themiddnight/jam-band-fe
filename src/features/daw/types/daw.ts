@@ -1,3 +1,5 @@
+import { InstrumentCategory } from "@/shared/constants/instruments";
+
 export type TransportState = 'stopped' | 'playing' | 'paused' | 'recording';
 
 export interface TimeSignature {
@@ -65,6 +67,7 @@ export interface Track {
   name: string;
   type: TrackType;
   instrumentId?: InstrumentId; // Only for MIDI tracks
+  instrumentCategory?: InstrumentCategory; // Only for MIDI tracks
   volume: number; // 0 - 1 range
   pan: number; // -1 (left) to 1 (right)
   mute: boolean;

@@ -8,11 +8,17 @@ export const Metronome = () => {
   const transportState = useProjectStore((state) => state.transportState);
   const timeSignature = useProjectStore((state) => state.timeSignature);
   const bpm = useProjectStore((state) => state.bpm);
+  const playhead = useProjectStore((state) => state.playhead);
   
   const audioContextRef = useRef<AudioContext | null>(null);
   const intervalRef = useRef<number | null>(null);
   const nextBeatTimeRef = useRef<number>(0);
   const beatCountRef = useRef<number>(0);
+  const latestPlayheadRef = useRef<number>(playhead);
+
+  useEffect(() => {
+    latestPlayheadRef.current = playhead;
+  }, [playhead]);
 
   useEffect(() => {
     const shouldPlay = isMetronomeEnabled && (transportState === 'playing' || transportState === 'recording');
@@ -33,8 +39,9 @@ export const Metronome = () => {
       // Calculate beat interval in seconds based on denominator
       // BPM is always in quarter notes per minute, so we adjust based on denominator
       const quarterNoteSeconds = 60 / bpm;
-      const secondsPerBeat = quarterNoteSeconds * (4 / timeSignature.denominator);
-      const beatsPerBar = timeSignature.numerator;
+      const safeDenominator = timeSignature.denominator || 4;
+      const secondsPerBeat = quarterNoteSeconds * (4 / safeDenominator);
+      const beatsPerBar = Math.max(1, timeSignature.numerator);
       
       // Schedule the next beat
       const scheduleMetronomeClick = () => {
@@ -73,8 +80,13 @@ export const Metronome = () => {
       
       // Initialize next beat time
       if (nextBeatTimeRef.current === 0) {
-        nextBeatTimeRef.current = audioContext.currentTime;
-        beatCountRef.current = 0;
+        const playheadBeats = latestPlayheadRef.current ?? 0;
+        const playheadWithinBar = beatsPerBar ? playheadBeats % beatsPerBar : 0;
+        const fractionalBeat = playheadWithinBar - Math.floor(playheadWithinBar);
+        const beatsUntilNext = fractionalBeat <= 1e-6 ? 0 : 1 - fractionalBeat;
+        nextBeatTimeRef.current = audioContext.currentTime + beatsUntilNext * secondsPerBeat;
+        const nextBeatIndex = fractionalBeat <= 1e-6 ? Math.floor(playheadWithinBar) : Math.floor(playheadWithinBar) + 1;
+        beatCountRef.current = ((nextBeatIndex % beatsPerBar) + beatsPerBar) % beatsPerBar;
       }
       
       // Schedule clicks in a loop

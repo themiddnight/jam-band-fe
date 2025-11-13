@@ -9,7 +9,8 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useRegionStore } from '../../stores/regionStore';
 import { useTrackStore } from '../../stores/trackStore';
 import { useRecordingStore } from '../../stores/recordingStore';
-import { playImmediateNote, stopImmediateNote, setSustainPedal } from '../../utils/audioEngine';
+import { midiNumberToNoteName } from '../../utils/midiUtils';
+import { trackInstrumentRegistry } from '../../utils/trackInstrumentRegistry';
 
 interface RecordedNote extends Omit<MidiNote, 'id'> {
   tempId: number;
@@ -19,7 +20,7 @@ interface ActiveNote {
   tempId: number;
   startBeat: number;
   velocity: number;
-  stopFn: (() => void) | null;
+  noteName: string;
 }
 
 interface RecordedSustainEvent extends Omit<SustainEvent, 'id'> {
@@ -136,7 +137,7 @@ export const useRecordingEngine = () => {
       if (trackId) {
         const track = tracks.find((t) => t.id === trackId);
         if (track) {
-          setSustainPedal(track, false).catch(() => {
+          trackInstrumentRegistry.setSustain(track, false).catch(() => {
             // Ignore errors during cleanup
           });
         }
@@ -174,7 +175,7 @@ export const useRecordingEngine = () => {
         // Sustain pedal pressed (value >= 64 means on)
         if (typeof message.value === 'number' && message.value >= 64) {
           // Apply sustain to the instrument for monitoring
-          setSustainPedal(track, true).catch((error) => {
+          trackInstrumentRegistry.setSustain(track, true).catch((error) => {
             console.error('Failed to set sustain pedal:', error);
           });
           
@@ -186,7 +187,7 @@ export const useRecordingEngine = () => {
         // Sustain pedal released (value < 64 means off)
         else if (typeof message.value === 'number' && message.value < 64) {
           // Release sustain on the instrument
-          setSustainPedal(track, false).catch((error) => {
+          trackInstrumentRegistry.setSustain(track, false).catch((error) => {
             console.error('Failed to release sustain pedal:', error);
           });
           
@@ -209,23 +210,26 @@ export const useRecordingEngine = () => {
         const velocity = message.velocity;
         const noteNumber = message.note;
 
+        const noteName = midiNumberToNoteName(noteNumber);
+
         // Store note info (but don't write to recordedNotes yet - wait for note-off)
         activeNotesRef.current.set(noteNumber, {
           tempId,
           startBeat: relativeBeat,
           velocity: velocity,
-          stopFn: null,
+          noteName,
         });
 
         // Play the note immediately for monitoring
-        playImmediateNote(track, noteNumber, velocity).then((stopFn) => {
-          const noteInfo = activeNotesRef.current.get(noteNumber);
-          if (noteInfo) {
-            noteInfo.stopFn = stopFn;
-          }
-        }).catch((error) => {
-          console.error('Failed to play note:', error);
-        });
+        trackInstrumentRegistry
+          .playNotes(track, noteName, {
+            velocity,
+            isKeyHeld: true,
+          })
+          .catch((error) => {
+            console.error('Failed to play note:', error);
+            activeNotesRef.current.delete(noteNumber);
+          });
       } else if (
         (message.type === 'noteoff' || (message.type === 'noteon' && message.velocity === 0)) &&
         typeof message.note === 'number'
@@ -237,9 +241,11 @@ export const useRecordingEngine = () => {
         }
 
         // Stop the note (with sustain handling)
-        stopImmediateNote(track, noteNumber, noteInfo.stopFn).catch(() => {
-          // Ignore errors
-        });
+        trackInstrumentRegistry
+          .stopNotes(track, noteInfo.noteName)
+          .catch(() => {
+            // Ignore errors
+          });
 
         // Calculate duration
         const currentBeat = getCurrentBeat();

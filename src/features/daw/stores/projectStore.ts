@@ -67,7 +67,16 @@ export const useProjectStore = create<ProjectStoreState>()(
       ...initialState,
       setBpm: (bpm) => set({ bpm }),
       setTimeSignature: (timeSignature) => set({ timeSignature }),
-      setTransportState: (state) => set({ transportState: state }),
+      setTransportState: (state) =>
+        set((current) => {
+          const updates: Partial<ProjectStoreState> = { transportState: state };
+
+          if ((state === 'playing' || state === 'recording') && current.loop.enabled) {
+            updates.playhead = current.loop.start;
+          }
+
+          return updates;
+        }),
       setPlayhead: (position) => set({ playhead: position }),
       setGridDivision: (division) => set({ gridDivision: division }),
       setLoop: (loop) =>
@@ -90,19 +99,26 @@ export const useProjectStore = create<ProjectStoreState>()(
             typeof enabled === 'boolean' ? enabled : !state.isMetronomeEnabled,
         })),
       toggleRecording: (enabled) =>
-        set((state) => ({
-          isRecording: typeof enabled === 'boolean' ? enabled : !state.isRecording,
-          transportState:
-            typeof enabled === 'boolean'
-              ? enabled
-                ? 'recording'
-                : state.transportState === 'recording'
-                  ? 'stopped'
-                  : state.transportState
-              : state.isRecording
-                ? 'stopped'
-                : 'recording',
-        })),
+        set((state) => {
+          const nextIsRecording =
+            typeof enabled === 'boolean' ? enabled : !state.isRecording;
+
+          const updates: Partial<ProjectStoreState> = {
+            isRecording: nextIsRecording,
+          };
+
+          if (nextIsRecording) {
+            updates.transportState = 'recording';
+            if (state.loop.enabled) {
+              updates.playhead = state.loop.start;
+            }
+          } else {
+            updates.transportState =
+              state.transportState === 'recording' ? 'stopped' : state.transportState;
+          }
+
+          return updates;
+        }),
       toggleSnap: (enabled) =>
         set((state) => ({
           snapToGrid: typeof enabled === 'boolean' ? enabled : !state.snapToGrid,
