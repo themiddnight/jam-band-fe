@@ -761,7 +761,7 @@ const PerformRoom = memo(() => {
   const handleCopyInviteUrl = async (role: "band_member" | "audience") => {
     if (!currentRoom?.id) return;
 
-    const inviteUrl = generateInviteUrl(currentRoom.id, role);
+    const inviteUrl = generateInviteUrl(currentRoom.id, role, "perform");
 
     try {
       await navigator.clipboard.writeText(inviteUrl);
@@ -782,7 +782,7 @@ const PerformRoom = memo(() => {
   const handleShareInviteUrl = async (role: "band_member" | "audience") => {
     if (!currentRoom?.id) return;
 
-    const inviteUrl = generateInviteUrl(currentRoom.id, role);
+    const inviteUrl = generateInviteUrl(currentRoom.id, role, "perform");
     const roleText = role === "band_member" ? "Band Member" : "Audience";
 
     if (navigator.share) {

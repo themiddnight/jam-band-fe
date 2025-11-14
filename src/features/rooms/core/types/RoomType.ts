@@ -1,5 +1,5 @@
 // Room Type Architecture Foundation
-export type RoomType = 'perform' | 'produce';
+export type RoomType = 'perform' | 'arrange';
 
 // Room Type Configuration
 export interface RoomTypeConfig {
@@ -117,10 +117,10 @@ export const ROOM_TYPES: Record<RoomType, RoomTypeConfig> = {
       presenceTracking: true,
     },
   },
-  produce: {
-    id: 'produce',
-    name: 'produce',
-    displayName: 'Produce Room',
+  arrange: {
+    id: 'arrange',
+    name: 'arrange',
+    displayName: 'Arrange Room',
     description: 'Collaborative DAW-like environment for music production with real-time multi-user editing',
     collaborationModel: 'collaborative-production',
     features: [

@@ -101,7 +101,7 @@ export default function EffectModule({
     <>
       <div
         className={`
-          effect-module relative flex flex-col items-center p-2 bg-base-200 rounded-lg border
+          effect-module relative flex flex-col items-center p-1 bg-base-200 rounded-lg border
           ${effect.bypassed ? 'border-base-300 opacity-60' : 'border-primary'}
           ${isDragging ? 'opacity-50' : ''}
           ${canReorder ? 'cursor-move' : ''}

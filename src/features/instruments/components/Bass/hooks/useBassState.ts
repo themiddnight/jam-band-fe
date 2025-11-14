@@ -1,3 +1,5 @@
+import { useCallback, useRef } from "react";
+
 import type { Scale } from "../../../../ui";
 import { useInstrumentState } from "../../../index";
 import { useBassStore } from "../../../stores/bassStore";
@@ -16,6 +18,7 @@ export const useBassState = (
   onReleaseKeyHeldNote: (note: string) => void,
   onSustainChange: (sustain: boolean) => void,
   onSustainToggleChange?: (sustainToggle: boolean) => void,
+  onSelectionActiveChange?: (isActive: boolean) => void,
 ) => {
   // Unified instrument state
   const unifiedState = useInstrumentState({
@@ -45,10 +48,25 @@ export const useBassState = (
     onReleaseKeyHeldNote,
     velocity,
   );
+  const selectionActiveRef = useRef(false);
+  const handleSelectionActiveChange = useCallback(
+    (isActive: boolean) => {
+      if (selectionActiveRef.current === isActive) {
+        return;
+      }
+      selectionActiveRef.current = isActive;
+      onSelectionActiveChange?.(isActive);
+    },
+    [onSelectionActiveChange],
+  );
+
   const stringBehavior = useGuitarStringBehavior(
     onPlayNotes,
     onStopNotes,
     velocity,
+    {
+      onSelectionActiveChange: handleSelectionActiveChange,
+    },
   );
 
   // Construct bass state for controllers

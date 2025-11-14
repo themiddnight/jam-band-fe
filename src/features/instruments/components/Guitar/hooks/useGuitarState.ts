@@ -1,3 +1,5 @@
+import { useCallback, useRef } from "react";
+
 import type { Scale } from "../../../../ui";
 import { useInstrumentState } from "../../../index";
 import { useGuitarStore } from "../../../stores/guitarStore";
@@ -17,6 +19,7 @@ export const useGuitarState = (
   onReleaseKeyHeldNote: (note: string) => void,
   onSustainChange: (sustain: boolean) => void,
   onSustainToggleChange?: (sustainToggle: boolean) => void,
+  onSelectionActiveChange?: (isActive: boolean) => void,
 ) => {
   // Use the unified instrument state hook
   const unifiedState = useInstrumentState({
@@ -48,10 +51,25 @@ export const useGuitarState = (
   };
 
   // Use separated logic hooks
+  const selectionActiveRef = useRef(false);
+  const handleSelectionActiveChange = useCallback(
+    (isActive: boolean) => {
+      if (selectionActiveRef.current === isActive) {
+        return;
+      }
+      selectionActiveRef.current = isActive;
+      onSelectionActiveChange?.(isActive);
+    },
+    [onSelectionActiveChange],
+  );
+
   const stringBehavior = useGuitarStringBehavior(
     onPlayNotes,
     onStopNotes,
     velocity,
+    {
+      onSelectionActiveChange: handleSelectionActiveChange,
+    },
   );
 
   const chordLogic = useGuitarChordLogic(

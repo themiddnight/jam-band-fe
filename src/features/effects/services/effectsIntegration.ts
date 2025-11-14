@@ -8,17 +8,22 @@
 
 import { getOrCreateGlobalMixer } from '../../audio/utils/effectsArchitecture';
 import { type AudioEffect } from '../../audio/utils/effectsArchitecture';
+import { useTrackStore } from '@/features/daw/stores/trackStore';
 import { AudioContextManager } from '@/features/audio/constants/audioConfig';
 import { audioInputEffectsManager } from '@/features/audio/services/audioInputEffectsManager';
 import { EFFECT_TYPE_MAP, PARAMETER_MAP } from './effectMappings';
-import type { EffectInstance, EffectChainType } from '../types';
+import type { EffectInstance, EffectChainType, EffectChain } from '../types';
 import { useEffectsStore } from '../stores/effectsStore';
 
 interface EffectMapping {
   uiEffectId: string;
   audioEffect: AudioEffect;
   chainType: EffectChainType;
+  channelId: string;
 }
+
+type ChainStateMap = Record<EffectChainType, EffectChain>;
+type PartialChainStateMap = Partial<Record<EffectChainType, EffectChain>>;
 
 class EffectsIntegrationService {
   private effectMappings = new Map<string, EffectMapping>();
@@ -70,52 +75,62 @@ class EffectsIntegrationService {
     });
 
     // Apply initial effects if any exist
-    this.handleEffectChanges(store.chains, {
-      virtual_instrument: { type: 'virtual_instrument', effects: [] },
-      audio_voice_input: { type: 'audio_voice_input', effects: [] },
-    });
+    this.handleEffectChanges(store.chains, {} as PartialChainStateMap);
   }
 
   /**
    * Handle changes in effects chains
    */
   private async handleEffectChanges(
-    currentChains: any,
-    previousChains: any
+    currentChains: ChainStateMap,
+    previousChains: PartialChainStateMap,
   ): Promise<void> {
-    if (!this.currentUserId) return;
+    if (!currentChains) return;
 
-    for (const chainType of ['virtual_instrument', 'audio_voice_input'] as EffectChainType[]) {
-      const currentEffects = currentChains[chainType].effects;
-      const previousEffects = previousChains[chainType].effects;
+    const chainEntries = Object.entries(currentChains) as Array<[
+      EffectChainType,
+      EffectChain
+    ]>;
+
+    for (const [chainType, chainState] of chainEntries) {
+      const currentEffects = chainState?.effects ?? [];
+      const previousEffects = previousChains?.[chainType]?.effects ?? [];
 
       if (chainType === 'audio_voice_input') {
         audioInputEffectsManager.syncEffects(currentEffects);
         continue;
       }
 
+      const channelId = await this.getChannelIdForChain(chainType);
+      if (!channelId) {
+        continue;
+      }
+
       // Find added effects
-      const addedEffects = currentEffects.filter((effect: EffectInstance) =>
-        !previousEffects.find((prev: EffectInstance) => prev.id === effect.id)
+      const addedEffects = currentEffects.filter(
+        (effect) => !previousEffects.find((prev) => prev.id === effect.id),
       );
 
-      // Find removed effects  
-      const removedEffects = previousEffects.filter((effect: EffectInstance) =>
-        !currentEffects.find((curr: EffectInstance) => curr.id === effect.id)
+      // Find removed effects
+      const removedEffects = previousEffects.filter(
+        (effect) => !currentEffects.find((curr) => curr.id === effect.id),
       );
 
-      // Find updated effects (parameters or bypass state changed)
-      const updatedEffects = currentEffects.filter((effect: EffectInstance) => {
-        const prevEffect = previousEffects.find((prev: EffectInstance) => prev.id === effect.id);
-        return prevEffect && (
-          JSON.stringify(effect.parameters) !== JSON.stringify(prevEffect.parameters) ||
-          effect.bypassed !== prevEffect.bypassed
+      // Find updated effects (parameters, bypass, or order changes)
+      const updatedEffects = currentEffects.filter((effect) => {
+        const prevEffect = previousEffects.find((prev) => prev.id === effect.id);
+        return (
+          prevEffect &&
+          (
+            JSON.stringify(effect.parameters) !== JSON.stringify(prevEffect.parameters) ||
+            effect.bypassed !== prevEffect.bypassed ||
+            effect.order !== prevEffect.order
+          )
         );
       });
 
-      // Process changes
       for (const effect of addedEffects) {
-        await this.addAudioEffect(effect, chainType);
+        await this.addAudioEffect(effect, chainType, channelId);
       }
 
       for (const effect of removedEffects) {
@@ -126,6 +141,26 @@ class EffectsIntegrationService {
         await this.updateAudioEffectParameters(effect);
       }
     }
+
+    const previousEntries = Object.entries(previousChains ?? {}) as Array<[
+      EffectChainType,
+      EffectChain
+    ]>;
+
+    for (const [chainType, chainState] of previousEntries) {
+      if (currentChains[chainType]) {
+        continue;
+      }
+
+      if (chainType === 'audio_voice_input') {
+        audioInputEffectsManager.syncEffects([]);
+        continue;
+      }
+
+      for (const effect of chainState.effects) {
+        await this.removeAudioEffect(effect.id);
+      }
+    }
   }
 
   /**
@@ -133,9 +168,10 @@ class EffectsIntegrationService {
    */
   private async addAudioEffect(
     uiEffect: EffectInstance,
-    chainType: EffectChainType
+    chainType: EffectChainType,
+    channelId: string
   ): Promise<void> {
-    if (!this.currentUserId) return;
+    if (!channelId) return;
 
     try {
       const mixer = await getOrCreateGlobalMixer();
@@ -146,8 +182,10 @@ class EffectsIntegrationService {
         return;
       }
 
-      // Add effect to the user's channel
-      const audioEffect = mixer.addEffectToChannel(this.currentUserId, audioEffectType);
+      await this.ensureChannelExists(mixer, chainType, channelId);
+
+      // Add effect to the channel
+      const audioEffect = mixer.addEffectToChannel(channelId, audioEffectType);
       
       if (audioEffect) {
         // Store mapping
@@ -155,6 +193,7 @@ class EffectsIntegrationService {
           uiEffectId: uiEffect.id,
           audioEffect,
           chainType,
+          channelId,
         });
 
         // Apply initial parameters
@@ -179,13 +218,13 @@ class EffectsIntegrationService {
    */
   private async removeAudioEffect(uiEffectId: string): Promise<void> {
     const mapping = this.effectMappings.get(uiEffectId);
-    if (!mapping || !this.currentUserId) return;
+    if (!mapping) return;
 
     try {
       const mixer = await getOrCreateGlobalMixer();
       
       // Use the mixer's removeEffectFromChannel method
-      const success = mixer.removeEffectFromChannel(this.currentUserId, mapping.audioEffect.id);
+      const success = mixer.removeEffectFromChannel(mapping.channelId, mapping.audioEffect.id);
       
       if (success) {
         this.effectMappings.delete(uiEffectId);
@@ -260,15 +299,13 @@ class EffectsIntegrationService {
    * Clean up all effects and mappings
    */
   async cleanup(): Promise<void> {
-    if (!this.currentUserId) return;
-
     try {
       const mixer = await getOrCreateGlobalMixer();
       
       // Remove all effects from the user's channel
       // This will also rebuild the chain automatically
       for (const mapping of this.effectMappings.values()) {
-        mixer.removeEffectFromChannel(this.currentUserId, mapping.audioEffect.id);
+        mixer.removeEffectFromChannel(mapping.channelId, mapping.audioEffect.id);
       }
 
       this.effectMappings.clear();
@@ -280,6 +317,39 @@ class EffectsIntegrationService {
     } catch (error) {
       console.error('Failed to cleanup effects integration:', error);
     }
+  }
+
+  private async getChannelIdForChain(chainType: EffectChainType): Promise<string | null> {
+    if (chainType === 'virtual_instrument') {
+      return this.currentUserId;
+    }
+
+    if (chainType.startsWith('track:')) {
+      const [, trackId] = chainType.split(':');
+      return trackId ?? null;
+    }
+
+    return null;
+  }
+
+  private async ensureChannelExists(
+    mixer: Awaited<ReturnType<typeof getOrCreateGlobalMixer>>,
+    chainType: EffectChainType,
+    channelId: string,
+  ): Promise<void> {
+    if (mixer.getChannel(channelId)) {
+      return;
+    }
+
+    let username = channelId;
+    if (chainType.startsWith('track:')) {
+      const track = useTrackStore.getState().tracks.find((t) => t.id === channelId);
+      username = track?.name || username;
+    } else if (chainType === 'virtual_instrument' && this.currentUserId) {
+      username = 'Local User';
+    }
+
+    mixer.createUserChannel(channelId, username);
   }
 }
 

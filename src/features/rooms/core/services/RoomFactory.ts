@@ -47,7 +47,7 @@ export class RoomFactory {
           metronome: null,       // Shared timing reference
         };
         
-      case 'produce':
+      case 'arrange':
         return {
           ...baseServices,
           realtimeSync: null,    // Real-time collaborative editing sync

@@ -19,6 +19,7 @@ export interface BassProps {
   onStopSustainedNotes: () => void;
   onReleaseKeyHeldNote: (note: string) => void;
   onSustainChange: (sustain: boolean) => void;
+  onSelectionActiveChange?: (isActive: boolean) => void;
 }
 
 export default function Bass({
@@ -28,6 +29,7 @@ export default function Bass({
   onStopSustainedNotes,
   onReleaseKeyHeldNote,
   onSustainChange,
+  onSelectionActiveChange,
 }: BassProps) {
   const {
     unifiedState,
@@ -53,6 +55,7 @@ export default function Bass({
     onStopSustainedNotes,
     onReleaseKeyHeldNote,
     onSustainChange,
+    onSelectionActiveChange,
   );
 
   // Velocity control hook

@@ -14,8 +14,9 @@ export default function Invite() {
       return;
     }
 
-    // Get role from query parameter
+    // Get role and room type from query parameters
     const role = searchParams.get("role");
+    const roomType = searchParams.get("roomType");
 
     // Validate role parameter
     if (!role || !["band_member", "audience"].includes(role)) {
@@ -23,7 +24,9 @@ export default function Invite() {
       console.log(
         `🎭 Invalid role parameter "${role}", defaulting to audience`,
       );
-      navigate(`/perform/${roomId}`, { state: { role: "audience" } });
+      // Default to perform room if no room type specified
+      const roomPath = roomType === "arrange" ? "arrange" : "perform";
+      navigate(`/${roomPath}/${roomId}`, { state: { role: "audience" } });
       return;
     }
 
@@ -43,8 +46,9 @@ export default function Invite() {
       return;
     }
 
-    // Redirect to room with specified role
-    navigate(`/perform/${roomId}`, {
+    // Redirect to room with specified role and type
+    const roomPath = roomType === "arrange" ? "arrange" : "perform";
+    navigate(`/${roomPath}/${roomId}`, {
       state: { role: role as "band_member" | "audience" },
     });
   }, [roomId, searchParams, navigate, username, userId]);

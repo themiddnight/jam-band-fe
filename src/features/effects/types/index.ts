@@ -17,7 +17,10 @@ export type EffectType =
   | 'tremolo'
   | 'vibrato';
 
-export type EffectChainType = 'virtual_instrument' | 'audio_voice_input';
+export type EffectChainType =
+  | 'virtual_instrument'
+  | 'audio_voice_input'
+  | `track:${string}`;
 
 export interface EffectParameter {
   id: string;

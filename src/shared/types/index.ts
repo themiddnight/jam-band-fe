@@ -6,7 +6,10 @@ export enum ControlType {
   Drumset = "drumset",
 }
 
-export type EffectChainType = "virtual_instrument" | "audio_voice_input";
+export type EffectChainType =
+  | "virtual_instrument"
+  | "audio_voice_input"
+  | `track:${string}`;
 
 export interface EffectParameterState {
   id?: string;
@@ -44,7 +47,7 @@ export interface RoomUser {
   effectChains?: Record<EffectChainType, EffectChainState>;
 }
 
-export type RoomType = "perform" | "produce";
+export type RoomType = "perform" | "arrange";
 
 export interface Room {
   id: string;
