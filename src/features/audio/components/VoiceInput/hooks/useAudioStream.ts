@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect } from "react";
 import { audioInputEffectsManager } from "@/features/audio/services/audioInputEffectsManager";
+import { getBrowserAudioCapabilities } from "@/features/audio/utils/ultraLowLatencyOptimizer";
 
 interface UseAudioStreamProps {
   gain: number;
@@ -31,11 +32,88 @@ export const useAudioStream = ({
   const originalStreamRef = useRef<MediaStream | null>(null); // Keep reference to original stream
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const gainNodeRef = useRef<GainNode | null>(null);
   const processedOutputNodeRef = useRef<AudioNode | null>(null);
+  const gainNodeRef = useRef<GainNode | null>(null);
   const micPermissionRef = useRef<boolean>(false);
   const isReinitializingRef = useRef<boolean>(false);
   const previousTrackEnabledRef = useRef<boolean>(false); // Track the previous enabled state
+  const browserCapabilitiesRef = useRef(getBrowserAudioCapabilities());
+
+  const buildAudioConstraints = useCallback((): MediaTrackConstraints => {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices) {
+      return { channelCount: 1 };
+    }
+
+    const supported = navigator.mediaDevices.getSupportedConstraints
+      ? navigator.mediaDevices.getSupportedConstraints()
+      : {};
+    const supports = (constraint: string) =>
+      Boolean((supported as Record<string, unknown>)[constraint]);
+    const capabilities = browserCapabilitiesRef.current;
+    const audioConstraints: MediaTrackConstraints & Record<string, unknown> = {
+      channelCount: 1,
+    };
+
+    if (supports("echoCancellation")) {
+      audioConstraints.echoCancellation = !cleanMode;
+    }
+
+    if (supports("noiseSuppression")) {
+      audioConstraints.noiseSuppression = !cleanMode;
+    }
+
+    if (supports("autoGainControl")) {
+      audioConstraints.autoGainControl = autoGain;
+    }
+
+    if (supports("sampleRate") && capabilities.browserType !== "safari") {
+      audioConstraints.sampleRate = 48000;
+    }
+
+    if (supports("latency")) {
+      let latencyTarget = cleanMode ? 0.01 : 0.02;
+
+      if (capabilities.browserType === "chrome") {
+        latencyTarget = cleanMode ? 0.005 : 0.01;
+      } else if (capabilities.browserType === "safari") {
+        latencyTarget = cleanMode ? 0.02 : 0.03;
+      }
+
+      audioConstraints.latency = latencyTarget;
+    }
+
+    if (supports("voiceIsolation") && capabilities.browserType === "safari") {
+      (audioConstraints as Record<string, unknown>).voiceIsolation = !cleanMode;
+    }
+
+    const isDesktopChrome =
+      capabilities.browserType === "chrome" &&
+      typeof navigator !== "undefined" &&
+      !/android|iphone|ipad|ipod/i.test(navigator.userAgent);
+
+    if (isDesktopChrome) {
+      Object.assign(audioConstraints as Record<string, unknown>, {
+        googEchoCancellation: !cleanMode,
+        googNoiseSuppression: !cleanMode,
+        googHighpassFilter: !cleanMode,
+        googTypingNoiseDetection: !cleanMode,
+        googAutoGainControl: autoGain,
+        googNoiseSuppression2: !cleanMode,
+        googAudioMirroring: false,
+        googDAEchoCancellation: !cleanMode,
+        googBeamforming: !cleanMode,
+        googArrayGeometry: !cleanMode,
+        googAudioProcessing: !cleanMode,
+        googExperimentalEchoCancellation: !cleanMode,
+        googExperimentalNoiseSuppression: !cleanMode,
+        googExperimentalAutoGainControl: autoGain,
+        googExperimentalEchoCancellation3: !cleanMode,
+        googDucking: false,
+      });
+    }
+
+    return audioConstraints;
+  }, [autoGain, cleanMode]);
 
   // Initialize audio context and stream
   const initializeAudioStream = useCallback(async () => {
@@ -78,38 +156,14 @@ export const useAudioStream = ({
 
       processedOutputNodeRef.current = null;
 
-      // Request microphone with ultra-low latency constraints based on clean mode
+      // Request microphone with browser-aware constraints based on clean mode
+      const audioConstraints = buildAudioConstraints();
       const constraints: MediaStreamConstraints = {
-        audio: {
-          echoCancellation: !cleanMode, // Enable processing when clean mode is off
-          noiseSuppression: !cleanMode, // Enable processing when clean mode is off
-          autoGainControl: autoGain, // Use browser auto gain when enabled
-          sampleRate: 48000, // Match WebRTC optimal sample rate
-          channelCount: 1, // Mono for lower latency
-          latency: cleanMode ? 0.005 : 0.01, // Ultra-low latency: 5ms clean, 10ms normal (reduced from 10/20ms)
-          // Advanced constraints based on clean mode
-          ...(navigator.userAgent.includes("Chrome") &&
-            ({
-              // Chrome-specific ultra-low latency optimizations
-              googEchoCancellation: !cleanMode,
-              googNoiseSuppression: !cleanMode,
-              googHighpassFilter: !cleanMode,
-              googTypingNoiseDetection: !cleanMode,
-              googAutoGainControl: autoGain,
-              googNoiseSuppression2: !cleanMode,
-              googAudioMirroring: false, // Always disable audio mirroring
-              googDAEchoCancellation: !cleanMode,
-              googBeamforming: !cleanMode,
-              googArrayGeometry: !cleanMode,
-              googAudioProcessing: !cleanMode, // Disable all processing in clean mode
-              googExperimentalEchoCancellation: !cleanMode,
-              googExperimentalNoiseSuppression: !cleanMode,
-              googExperimentalAutoGainControl: autoGain,
-              googExperimentalEchoCancellation3: !cleanMode, // Latest echo cancellation algorithm
-              googDucking: false, // Disable auto-ducking for consistent volume
-            } as any)),
-        } as MediaTrackConstraints,
+        audio: audioConstraints,
+        video: false,
       };
+
+      console.log("🎤 Requesting microphone with constraints", audioConstraints);
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
@@ -236,7 +290,7 @@ export const useAudioStream = ({
       // Always reset the reinitializing flag
       isReinitializingRef.current = false;
     }
-  }, [gain, cleanMode, autoGain, onStreamReady]);
+  }, [gain, cleanMode, autoGain, onStreamReady, buildAudioConstraints]);
 
   // Cleanup function
   const cleanup = useCallback(() => {
