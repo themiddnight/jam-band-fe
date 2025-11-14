@@ -25,7 +25,7 @@ export default function Invite() {
         `🎭 Invalid role parameter "${role}", defaulting to audience`,
       );
       // Default to perform room if no room type specified
-      const roomPath = roomType === "produce" ? "produce" : "perform";
+      const roomPath = roomType === "arrange" ? "arrange" : "perform";
       navigate(`/${roomPath}/${roomId}`, { state: { role: "audience" } });
       return;
     }
@@ -47,7 +47,7 @@ export default function Invite() {
     }
 
     // Redirect to room with specified role and type
-    const roomPath = roomType === "produce" ? "produce" : "perform";
+    const roomPath = roomType === "arrange" ? "arrange" : "perform";
     navigate(`/${roomPath}/${roomId}`, {
       state: { role: role as "band_member" | "audience" },
     });

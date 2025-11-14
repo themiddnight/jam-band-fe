@@ -61,14 +61,22 @@ export const usePlaybackEngine = () => {
   const animationFrameRef = useRef<number | null>(null);
   const toneConfiguredRef = useRef(false);
 
-  const clearParts = useCallback(() => {
-    midiPlaybackRef.current.forEach(({ cleanup }) => {
-      cleanup().catch((error) => {
-        console.error('Failed to clean up scheduled MIDI playback', error);
-      });
-    });
+  const clearParts = useCallback(async (skipNoteCleanup = false) => {
+    if (!skipNoteCleanup) {
+      // Clean up all MIDI playback (including sustain reset and stopping notes)
+      const cleanupPromises = Array.from(midiPlaybackRef.current.values()).map(({ cleanup }) =>
+        cleanup().catch((error) => {
+          console.error('Failed to clean up scheduled MIDI playback', error);
+        })
+      );
+      await Promise.all(cleanupPromises);
+    }
     midiPlaybackRef.current.clear();
+    
+    // Stop all audio playback
     stopAllAudioPlayback();
+    
+    // Clear all scheduled transport events
     Tone.Transport.cancel(0);
   }, []);
 
@@ -87,9 +95,10 @@ export const usePlaybackEngine = () => {
     }
   }, []);
 
-  const scheduleParts = useCallback(async () => {
+  const scheduleParts = useCallback(async (isLoopReschedule = false) => {
     await ensureToneReady();
-    clearParts();
+    // When rescheduling for a loop, skip note cleanup to avoid stopping currently playing notes
+    await clearParts(isLoopReschedule);
 
     const tracks = tracksRef.current;
     const trackMeta = schedulingTrackMetaRef.current;
@@ -151,6 +160,7 @@ export const usePlaybackEngine = () => {
             noteCount: region.notes.length,
             start: region.start,
             length: region.length,
+            isLoopReschedule,
           });
           const playback = await scheduleMidiRegionPlayback(track, region, {
             transportBpm: effectiveBpm,
@@ -193,7 +203,8 @@ export const usePlaybackEngine = () => {
       };
       updatePlayhead();
     } else {
-      clearParts();
+      // Stop playback - clear parts and reset sustain
+      void clearParts();
 
       // Stop playhead update loop
       if (animationFrameRef.current !== null) {
@@ -203,7 +214,7 @@ export const usePlaybackEngine = () => {
     }
 
     return () => {
-      clearParts();
+      void clearParts();
       if (animationFrameRef.current !== null) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
@@ -228,7 +239,11 @@ export const usePlaybackEngine = () => {
       if (!loop.enabled) {
         return;
       }
-      scheduleParts().catch((error) => {
+      // When transport loops back to the start, reschedule all parts
+      // Pass true to indicate this is a loop reschedule, which skips stopping currently playing notes
+      console.log('[PlaybackEngine] Transport loop event - rescheduling for next iteration');
+      
+      scheduleParts(true).catch((error) => {
         console.error('Failed to reschedule playback on loop', error);
       });
     };

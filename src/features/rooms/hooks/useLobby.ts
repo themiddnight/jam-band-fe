@@ -141,7 +141,7 @@ export const useLobby = () => {
           // For public rooms or audience members, join directly
           await connectToRoom(roomId, role);
           // Navigate to room page based on room type
-          const roomPath = roomType === "produce" ? "produce" : "perform";
+          const roomPath = roomType === "arrange" ? "arrange" : "perform";
           navigate(`/${roomPath}/${roomId}`, { state: { role } });
         }
       } catch (error) {
@@ -228,7 +228,7 @@ export const useLobby = () => {
       // Find the room to get its type
       const room = filteredRooms.find((r: any) => r.id === pendingRoomIntent.roomId);
       const roomType = room?.roomType || "perform";
-      const roomPath = roomType === "produce" ? "produce" : "perform";
+      const roomPath = roomType === "arrange" ? "arrange" : "perform";
       
       navigate(`/${roomPath}/${pendingRoomIntent.roomId}`, {
         state: { role: pendingRoomIntent.role },
@@ -289,12 +289,15 @@ export const useLobby = () => {
     if (!newRoomName.trim() || !username || !userId) return;
 
     try {
+      // Force arrange rooms to be hidden since they're demo rooms
+      const shouldBeHidden = newRoomType === "arrange" ? true : isHidden;
+      
       const result = await createRoomAPI(
         newRoomName.trim(),
         username,
         userId,
         isPrivate,
-        isHidden,
+        shouldBeHidden,
         newRoomDescription.trim() || undefined,
         newRoomType,
       );
@@ -304,7 +307,7 @@ export const useLobby = () => {
         fetchRooms();
 
         // Navigate to the new room based on room type
-        const roomPath = result.room.roomType === "produce" ? "produce" : "perform";
+        const roomPath = result.room.roomType === "arrange" ? "arrange" : "perform";
         navigate(`/${roomPath}/${result.room.id}`);
       }
     } catch (error) {

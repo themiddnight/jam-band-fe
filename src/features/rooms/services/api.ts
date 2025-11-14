@@ -6,7 +6,7 @@ export interface Room {
   id: string;
   name: string;
   description?: string;
-  roomType: "perform" | "produce";
+  roomType: "perform" | "arrange";
   owner: string;
   isPrivate: boolean;
   isHidden: boolean;
@@ -57,7 +57,7 @@ export async function createRoom(
   isPrivate: boolean = false,
   isHidden: boolean = false,
   description?: string,
-  roomType: "perform" | "produce" = "perform",
+  roomType: "perform" | "arrange" = "perform",
 ): Promise<{ success: boolean; room: Room; user: User }> {
   const response = await axiosInstance.post(endpoints.createRoom, {
     name,

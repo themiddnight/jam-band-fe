@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import type { EffectType, EffectChainType, EffectChainPreset } from '@/features/effects/types';
 import { useEffectsStore } from '@/features/effects/stores/effectsStore';
 import { EFFECT_CONFIGS, EFFECT_ORDER } from '@/features/effects/constants/effectConfigs';
@@ -11,15 +11,28 @@ import EffectModule from './EffectModule';
 interface EffectChainProps {
   chainType: EffectChainType;
   title: string;
+  mode?: 'perform'| 'arrange' ;
 }
 
-export default function EffectChain({ chainType, title }: EffectChainProps) {
+export default function EffectChain({ chainType, title, mode = 'perform' }: EffectChainProps) {
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [draggingEffectId, setDraggingEffectId] = useState<string | null>(null);
 
-  const { chains, addEffect, clearChain, reorderEffects, loadPreset } = useEffectsStore();
+  const { chains, addEffect, clearChain, reorderEffects, loadPreset, ensureChain } = useEffectsStore();
   const chain = chains[chainType];
+
+  useEffect(() => {
+    ensureChain(chainType);
+  }, [chainType, ensureChain]);
+
+  if (!chain) {
+    return (
+      <div className='effect-chain p-3 rounded-lg border border-base-300 bg-base-100'>
+        <div className="text-sm text-base-content/60">Initializing effect chain…</div>
+      </div>
+    );
+  }
 
   const handleAddEffect = (effectType: EffectType) => {
     addEffect(chainType, effectType);
@@ -63,12 +76,12 @@ export default function EffectChain({ chainType, title }: EffectChainProps) {
 
   const handleDrop = (e: React.DragEvent, targetIndex: number) => {
     e.preventDefault();
-    
+
     if (!draggingEffectId) return;
-    
+
     const sourceIndex = chain.effects.findIndex(effect => effect.id === draggingEffectId);
     if (sourceIndex === -1 || sourceIndex === targetIndex) return;
-    
+
     reorderEffects(chainType, sourceIndex, targetIndex);
     setDraggingEffectId(null);
   };
@@ -82,24 +95,23 @@ export default function EffectChain({ chainType, title }: EffectChainProps) {
         <h3>{title}</h3>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Centralized Preset Manager */}
-          <PresetManager<EffectChainPreset>
-            storageKey="jam-band-effect-chain-presets"
-            version="1.0.0"
-            validator={effectChainPresetValidator}
-            currentContext={{ chainType }}
-            contextDescription={`the current chain type (${chainType})`}
-            filterPresets={(preset) => preset.chainType === chainType}
-            getExportFilename={() => `effect-chain-presets-${chainType}.json`}
-            onSave={handleSavePreset}
-            onLoad={handleLoadPreset}
-            saveButtonDisabled={chain.effects.length === 0}
-            size="xs"
-            additionalPresets={DEFAULT_EFFECT_CHAIN_PRESETS as any}
-          />
+          {mode === 'perform' && (
+            <PresetManager<EffectChainPreset>
+              storageKey="jam-band-effect-chain-presets"
+              version="1.0.0"
+              validator={effectChainPresetValidator}
+              currentContext={{ chainType }}
+              contextDescription={`the current chain type (${chainType})`}
+              filterPresets={(preset) => preset.chainType === chainType}
+              getExportFilename={() => `effect-chain-presets-${chainType}.json`}
+              onSave={handleSavePreset}
+              onLoad={handleLoadPreset}
+              saveButtonDisabled={chain.effects.length === 0}
+              size="xs"
+              additionalPresets={DEFAULT_EFFECT_CHAIN_PRESETS as any}
+            />
+          )}
 
-          <span className="text-sm text-base-content/70">
-            {sortedEffects.length} effect{sortedEffects.length !== 1 ? 's' : ''}
-          </span>
           {sortedEffects.length > 0 && (
             <button
               onClick={handleClearChain}
@@ -121,12 +133,12 @@ export default function EffectChain({ chainType, title }: EffectChainProps) {
       </div>
 
       {/* Effects Chain */}
-      <div className="flex flex-wrap gap-5 items-start">
+      <div className="flex flex-wrap gap-x-5 gap-y-2 items-start">
         {sortedEffects.length === 0 ? (
           <div className="flex-1 flex items-center justify-center opacity-50">
             <div className="text-center">
               <p>No effects in chain</p>
-              <p className="text-xs">Click "Add" to add an effect or load a preset</p>
+              {mode === 'perform' && <p className="text-xs">Click "Add" to add an effect or load a preset</p>}
             </div>
           </div>
         ) : (
@@ -145,7 +157,7 @@ export default function EffectChain({ chainType, title }: EffectChainProps) {
                 isDragging={draggingEffectId === effect.id}
                 canReorder={sortedEffects.length > 1}
               />
-              
+
               {/* Signal flow arrow */}
               {index < sortedEffects.length - 1 && (
                 <div className="absolute -right-4 top-1/2 transform -translate-y-1/2 text-primary text-lg z-10">

@@ -9,6 +9,7 @@ export interface MidiMessage {
   velocity?: number;
   control?: number;
   value?: number;
+  monitoringHandled?: boolean;
   raw: MIDIMessageEvent;
 }
 

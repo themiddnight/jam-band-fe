@@ -21,6 +21,7 @@ export interface GuitarProps {
   onReleaseKeyHeldNote: (note: string) => void;
   onSustainChange: (sustain: boolean) => void;
   onSustainToggleChange?: (sustainToggle: boolean) => void;
+  onSelectionActiveChange?: (isActive: boolean) => void;
 }
 
 export default function Guitar({
@@ -31,6 +32,7 @@ export default function Guitar({
   onReleaseKeyHeldNote,
   onSustainChange,
   onSustainToggleChange,
+  onSelectionActiveChange,
 }: GuitarProps) {
   // Use the separated guitar state hook
   const {
@@ -62,6 +64,7 @@ export default function Guitar({
     onReleaseKeyHeldNote,
     onSustainChange,
     onSustainToggleChange,
+    onSelectionActiveChange,
   );
 
   // Use shared sustain sync hook to eliminate duplicate useEffect blocks

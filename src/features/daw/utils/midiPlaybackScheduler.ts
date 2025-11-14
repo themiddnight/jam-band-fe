@@ -118,6 +118,8 @@ export const scheduleMidiRegionPlayback = async (
   const noteStartIds: number[] = [];
   const noteStopIds: number[] = [];
   const activeNotes = new Set<string>();
+  const sustainedNotes = new Set<string>(); // Track notes being held by sustain
+  let currentSustainState = false;
 
   const bpm = options.transportBpm ?? Tone.Transport.bpm.value;
   const secondsPerBeat = bpm > 0 ? 60 / bpm : 60 / 120;
@@ -127,13 +129,37 @@ export const scheduleMidiRegionPlayback = async (
   const beatToSeconds = (beat: number) => beat * secondsPerBeat;
   const toRelativeTime = (seconds: number) => `+${Math.max(0, seconds + scheduleEpsilon)}`;
 
-  sustainEvents.forEach((event) => {
+  const sortedSustainEvents = [...sustainEvents].sort((a, b) => a.time - b.time);
+
+  // Helper to check if a beat is within any sustain event
+  const isSustainActiveAtBeat = (beat: number): boolean => {
+    return sortedSustainEvents.some((event, index) => {
+      if (!event.active || event.time > beat) {
+        return false;
+      }
+
+      const nextRelease = sortedSustainEvents
+        .slice(index + 1)
+        .find((nextEvent) => !nextEvent.active);
+
+      if (!nextRelease) {
+        return true;
+      }
+
+      return nextRelease.time > beat;
+    });
+  };
+
+  sortedSustainEvents.forEach((event) => {
     const relativeBeat = event.time - anchorBeat;
     if (relativeBeat < -0.001) {
       return;
     }
     const sustainTimeSeconds = beatToSeconds(Math.max(relativeBeat, 0));
     const id = Tone.Transport.scheduleOnce(() => {
+      const wasSustained = currentSustainState;
+      currentSustainState = event.active;
+      
       void trackInstrumentRegistry
         .setSustain(track, event.active)
         .catch((error) => {
@@ -143,6 +169,22 @@ export const scheduleMidiRegionPlayback = async (
             error,
           });
         });
+
+      // When sustain is released, stop all notes that were being sustained
+      if (wasSustained && !event.active && sustainedNotes.size > 0) {
+        console.log('[MIDI Playback] Releasing sustained notes', {
+          trackId: track.id,
+          notes: Array.from(sustainedNotes),
+        });
+        const notesToStop = Array.from(sustainedNotes);
+        sustainedNotes.clear();
+        void trackInstrumentRegistry.stopNotes(track, notesToStop).catch((error) => {
+          console.error("Failed to stop sustained notes", {
+            trackId: track.id,
+            error,
+          });
+        });
+      }
     }, toRelativeTime(sustainTimeSeconds));
 
     sustainEventIds.push(id);
@@ -162,15 +204,32 @@ export const scheduleMidiRegionPlayback = async (
     const startTimeSeconds = beatToSeconds(clampedStartBeat);
     const stopTimeSeconds = beatToSeconds(clampedEndBeat);
 
+    // Check if note should be sustained
+    const shouldBeSustained = isSustainActiveAtBeat(event.startBeat);
+
     const stopId = Tone.Transport.scheduleOnce(() => {
-      activeNotes.delete(event.noteName);
-      void trackInstrumentRegistry.stopNotes(track, event.noteName).catch((error) => {
-        console.error("Failed to stop scheduled MIDI note", {
+      // When note's natural duration ends
+      if (currentSustainState) {
+        // If sustain is active, move note from active to sustained set
+        // Don't stop it yet - it will be stopped when sustain is released
+        activeNotes.delete(event.noteName);
+        sustainedNotes.add(event.noteName);
+        console.log('[MIDI Playback] Note duration ended but sustain active', {
           trackId: track.id,
           note: event.noteName,
-          error,
+          sustainedNotes: Array.from(sustainedNotes),
         });
-      });
+      } else {
+        // If sustain is not active, stop the note normally
+        activeNotes.delete(event.noteName);
+        void trackInstrumentRegistry.stopNotes(track, event.noteName).catch((error) => {
+          console.error("Failed to stop scheduled MIDI note", {
+            trackId: track.id,
+            note: event.noteName,
+            error,
+          });
+        });
+      }
     }, toRelativeTime(stopTimeSeconds));
 
     noteStopIds.push(stopId);
@@ -182,10 +241,14 @@ export const scheduleMidiRegionPlayback = async (
         velocity: event.velocity,
         startBeat: event.startBeat,
         endBeat: event.endBeat,
+        sustainActive: currentSustainState,
+        shouldBeSustained,
         transportTime: Tone.Transport.ticks,
       });
       activeNotes.add(event.noteName);
 
+      // Play note as key-held (not sustained) so it can be managed properly
+      // The sustain state is already set on the engine via setSustain calls
       void trackInstrumentRegistry
         .playNotes(track, event.noteName, {
           velocity: event.velocity,
@@ -209,13 +272,16 @@ export const scheduleMidiRegionPlayback = async (
   });
 
   const cleanup = async () => {
+    // Clear all scheduled events
     sustainEventIds.forEach((id) => Tone.Transport.clear(id));
     noteStartIds.forEach((id) => Tone.Transport.clear(id));
     noteStopIds.forEach((id) => Tone.Transport.clear(id));
 
-    if (activeNotes.size > 0) {
+    // Stop all active notes and sustained notes
+    const allNotesToStop = new Set([...activeNotes, ...sustainedNotes]);
+    if (allNotesToStop.size > 0) {
       try {
-        await trackInstrumentRegistry.stopNotes(track, Array.from(activeNotes));
+        await trackInstrumentRegistry.stopNotes(track, Array.from(allNotesToStop));
       } catch (error) {
         console.error("Failed to stop active notes during cleanup", {
           trackId: track.id,
@@ -223,8 +289,10 @@ export const scheduleMidiRegionPlayback = async (
         });
       }
       activeNotes.clear();
+      sustainedNotes.clear();
     }
 
+    // Reset sustain state and stop any sustained notes
     try {
       await trackInstrumentRegistry.setSustain(track, false);
     } catch (error) {
@@ -233,6 +301,18 @@ export const scheduleMidiRegionPlayback = async (
         error,
       });
     }
+
+    // Stop all remaining notes on the track as a final cleanup
+    try {
+      await trackInstrumentRegistry.stopAllNotes(track);
+    } catch (error) {
+      console.error("Failed to stop all notes during cleanup", {
+        trackId: track.id,
+        error,
+      });
+    }
+
+    currentSustainState = false;
   };
 
   return { cleanup };

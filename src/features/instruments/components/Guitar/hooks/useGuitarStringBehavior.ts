@@ -2,10 +2,15 @@ import { HAMMER_ON_PULL_OFF } from "../../../index";
 import type { GuitarString, HammerOnState } from "../types/guitar";
 import { useState, useCallback, useRef } from "react";
 
+interface GuitarStringBehaviorOptions {
+  onSelectionActiveChange?: (isActive: boolean) => void;
+}
+
 export const useGuitarStringBehavior = (
   onPlayNotes: (notes: string[], velocity: number, isKeyHeld: boolean) => void,
   onStopNotes: (notes: string[]) => void,
   velocity: number,
+  options?: GuitarStringBehaviorOptions,
 ) => {
   // State for string behavior
   const [strings, setStrings] = useState<{
@@ -40,6 +45,25 @@ export const useGuitarStringBehavior = (
   // Ref to track current state for stable callbacks
   const stateRef = useRef({ strings, hammerOnState, velocity });
   stateRef.current = { strings, hammerOnState, velocity };
+
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+
+  const selectionActiveRef = useRef(false);
+
+  const notifySelectionActiveChange = useCallback(
+    (nextStrings: { lower: GuitarString; higher: GuitarString }) => {
+      const isActive =
+        nextStrings.lower.pressedNotes.size > 0 ||
+        nextStrings.higher.pressedNotes.size > 0;
+
+      if (selectionActiveRef.current !== isActive) {
+        selectionActiveRef.current = isActive;
+        optionsRef.current?.onSelectionActiveChange?.(isActive);
+      }
+    },
+    [],
+  );
 
   // Helper function to get the highest note from a set of notes
   const getHighestNote = useCallback((notes: Set<string>): string | null => {
@@ -154,10 +178,11 @@ export const useGuitarStringBehavior = (
         }
 
         newStrings[stringId] = string;
+        notifySelectionActiveChange(newStrings);
         return newStrings;
       });
     },
-    [getHighestNote, stopNote],
+    [getHighestNote, stopNote, notifySelectionActiveChange],
   );
 
   // Function to handle note release with string behavior
@@ -228,10 +253,11 @@ export const useGuitarStringBehavior = (
         }
 
         newStrings[stringId] = string;
+        notifySelectionActiveChange(newStrings);
         return newStrings;
       });
     },
-    [getHighestNote, playNote, stopNote, velocity, hammerOnState.windowMs],
+    [getHighestNote, playNote, stopNote, velocity, hammerOnState.windowMs, notifySelectionActiveChange],
   );
 
   // Function to handle play button press
@@ -278,10 +304,11 @@ export const useGuitarStringBehavior = (
         }
 
         newStrings[stringId] = string;
+        notifySelectionActiveChange(newStrings);
         return newStrings;
       });
     },
-    [getHighestNote, playNote, stopNote, velocity],
+    [getHighestNote, playNote, stopNote, velocity, notifySelectionActiveChange],
   );
 
   // Function to handle hammer-on note press (called after normal play)
@@ -326,10 +353,11 @@ export const useGuitarStringBehavior = (
         }
 
         newStrings[stringId] = string;
+        notifySelectionActiveChange(newStrings);
         return newStrings;
       });
     },
-    [isHammerOnValid, playNote, stopNote, velocity, getHighestNote],
+    [isHammerOnValid, playNote, stopNote, velocity, getHighestNote, notifySelectionActiveChange],
   );
 
   return {

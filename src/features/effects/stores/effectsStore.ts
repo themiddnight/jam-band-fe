@@ -25,6 +25,7 @@ interface EffectsState {
     chainStates: Partial<Record<EffectChainType, SharedEffectChainState>>,
   ) => void;
   loadPreset: (chainType: EffectChainType, preset: EffectChainPreset) => void;
+  ensureChain: (chainType: EffectChainType) => void;
 }
 
 const createDefaultChain = (type: EffectChainType): EffectChain => ({
@@ -125,21 +126,23 @@ export const useEffectsStore = create<EffectsState>()(
       chains: {
         virtual_instrument: createDefaultChain('virtual_instrument'),
         audio_voice_input: createDefaultChain('audio_voice_input'),
-      },
+      } as Record<EffectChainType, EffectChain>,
 
       // Actions
       addEffect: (chainType, effectType) => set(
         (state) => {
-          const chain = state.chains[chainType];
-          const newOrder = Math.max(0, ...chain.effects.map(e => e.order)) + 1;
+          const existingChain = state.chains[chainType] ?? createDefaultChain(chainType);
+          const newOrder = existingChain.effects.length
+            ? Math.max(...existingChain.effects.map((e) => e.order)) + 1
+            : 0;
           const newEffect = createEffectInstance(effectType, newOrder);
           
           return {
             chains: {
               ...state.chains,
               [chainType]: {
-                ...chain,
-                effects: [...chain.effects, newEffect],
+                ...existingChain,
+                effects: [...existingChain.effects, newEffect],
               },
             },
           };
@@ -151,7 +154,9 @@ export const useEffectsStore = create<EffectsState>()(
       removeEffect: (chainType, effectId) => set(
         (state) => {
           const chain = state.chains[chainType];
-          
+          if (!chain) {
+            return state;
+          }
           return {
             chains: {
               ...state.chains,
@@ -169,7 +174,10 @@ export const useEffectsStore = create<EffectsState>()(
       updateEffectParameter: (chainType, effectId, parameterId, value) => set(
         (state) => {
           const chain = state.chains[chainType];
-          
+          if (!chain) {
+            return state;
+          }
+
           return {
             chains: {
               ...state.chains,
@@ -198,6 +206,9 @@ export const useEffectsStore = create<EffectsState>()(
       toggleEffectBypass: (chainType, effectId) => set(
         (state) => {
           const chain = state.chains[chainType];
+          if (!chain) {
+            return state;
+          }
           
           return {
             chains: {
@@ -220,8 +231,14 @@ export const useEffectsStore = create<EffectsState>()(
       reorderEffects: (chainType, fromIndex, toIndex) => set(
         (state) => {
           const chain = state.chains[chainType];
+          if (!chain) {
+            return state;
+          }
           const effects = [...chain.effects];
           const [reorderedItem] = effects.splice(fromIndex, 1);
+          if (!reorderedItem) {
+            return state;
+          }
           effects.splice(toIndex, 0, reorderedItem);
           
           // Update order values
@@ -260,7 +277,7 @@ export const useEffectsStore = create<EffectsState>()(
           const chain = state.chains[chainType];
           const effectToReset = chain.effects.find(e => e.id === effectId);
           
-          if (!effectToReset) return state;
+          if (!chain || !effectToReset) return state;
           
           const config = EFFECT_CONFIGS[effectToReset.type];
           const resetParameters = config.parameters.map((param, index) => ({
@@ -292,19 +309,14 @@ export const useEffectsStore = create<EffectsState>()(
             ...state.chains,
           };
 
-          if (chainStates.virtual_instrument) {
-            updatedChains.virtual_instrument = convertChainState(
-              'virtual_instrument',
-              chainStates.virtual_instrument,
+          Object.entries(chainStates).forEach(([chainType, chainState]) => {
+            if (!chainState) return;
+            const typedChainType = chainType as EffectChainType;
+            updatedChains[typedChainType] = convertChainState(
+              typedChainType,
+              chainState,
             );
-          }
-
-          if (chainStates.audio_voice_input) {
-            updatedChains.audio_voice_input = convertChainState(
-              'audio_voice_input',
-              chainStates.audio_voice_input,
-            );
-          }
+          });
 
           return {
             chains: updatedChains,
@@ -349,6 +361,23 @@ export const useEffectsStore = create<EffectsState>()(
         },
         false,
         'effects/loadPreset',
+      ),
+
+      ensureChain: (chainType) => set(
+        (state) => {
+          if (state.chains[chainType]) {
+            return state;
+          }
+
+          return {
+            chains: {
+              ...state.chains,
+              [chainType]: createDefaultChain(chainType),
+            },
+          };
+        },
+        false,
+        'effects/ensureChain',
       ),
     }),
     {

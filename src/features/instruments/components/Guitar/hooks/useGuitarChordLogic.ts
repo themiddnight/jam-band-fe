@@ -70,6 +70,21 @@ export const useGuitarChordLogic = (
   // Handle strum chord for simple chord mode with proper timing
   const handleStrumChord = useCallback(
     async (chordIndex: number, direction: "up" | "down") => {
+      const existingTimeouts = scheduledTimeouts.get(chordIndex);
+      if (existingTimeouts && existingTimeouts.length > 0) {
+        existingTimeouts.forEach((timeout) => clearTimeout(timeout));
+        setScheduledTimeouts((prev) => {
+          const newMap = new Map(prev);
+          newMap.delete(chordIndex);
+          return newMap;
+        });
+      }
+
+      const previouslyPlayed = playedChordNotes.get(chordIndex);
+      if (previouslyPlayed && previouslyPlayed.length > 0) {
+        onStopNotes(previouslyPlayed);
+      }
+
       // Generate chord notes
       let chordNotes = getChordFromDegree(
         scaleState.rootNote,
@@ -177,6 +192,9 @@ export const useGuitarChordLogic = (
       velocity,
       strumConfig.speed,
       onPlayNotes,
+      onStopNotes,
+      playedChordNotes,
+      scheduledTimeouts,
     ],
   );
 

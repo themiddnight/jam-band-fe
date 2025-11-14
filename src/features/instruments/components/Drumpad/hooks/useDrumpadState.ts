@@ -5,7 +5,7 @@ import {
   getPadNotesForPage,
   gmNoteMapper,
 } from "../../../index";
-import { useVelocityControl } from "../../../index";
+// import { useVelocityControl } from "../../../index";
 import { useDrumpadPresetsStore } from "../../../stores/drumpadPresetsStore";
 import type {
   DrumPad,
@@ -36,13 +36,13 @@ export const useDrumpadState = ({
   const [currentPage, setCurrentPage] = useState<number>(0); // Start at page 0 (C1-D#2)
 
   // Add velocity control hook
-  const { handleVelocityChange } = useVelocityControl({
-    velocity,
-    setVelocity,
-  });
+  // const { handleVelocityChange } = useVelocityControl({
+  //   velocity,
+  //   setVelocity,
+  // });
 
   // Add refs for better event handling performance
-  const processingKeys = useRef<Set<string>>(new Set());
+  // const processingKeys = useRef<Set<string>>(new Set());
   const lastPlayTime = useRef<Map<string, number>>(new Map());
   const MIN_PLAY_INTERVAL = 10; // Minimum 10ms between same pad hits to prevent spam
 
@@ -186,9 +186,12 @@ export const useDrumpadState = ({
 
       setPressedPads((prev) => new Set(prev).add(padId));
 
-      if (sound) {
+      // Get sound from assignments if not provided
+      const sampleToPlay = sound || padAssignments[padId];
+
+      if (sampleToPlay) {
         // Check if the sound is available before playing
-        if (availableSamples.includes(sound)) {
+        if (availableSamples.includes(sampleToPlay)) {
           // Calculate effective velocity using global velocity and pad-specific volume
           const padVolume = padVolumes[padId] || 1;
           const effectiveVelocity = Math.min(velocity * padVolume, 1); // Cap at 1.0
@@ -200,11 +203,11 @@ export const useDrumpadState = ({
           // The audio engine will map it back to the sample
           await onPlayNotes([gmNote], effectiveVelocity, false);
         } else {
-          console.warn(`Sample not available: ${sound}`);
+          console.warn(`Sample not available: ${sampleToPlay}`);
         }
       }
     },
-    [onPlayNotes, velocity, padVolumes, isEditMode, availableSamples, padNoteMapping],
+    [onPlayNotes, velocity, padVolumes, isEditMode, availableSamples, padNoteMapping, padAssignments],
   );
 
   const handlePadRelease = useCallback(
@@ -292,86 +295,7 @@ export const useDrumpadState = ({
     [availableSamples, loadStorePreset],
   );
 
-  // Optimized keyboard event handling
-  useEffect(() => {
-    const currentProcessingKeys = processingKeys.current;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.repeat || isEditMode) return;
-
-      const key = e.key.toLowerCase();
-
-      // Check if the target is an input element
-      const target = e.target as HTMLElement;
-      if (
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.contentEditable === "true" ||
-        target.closest('input, textarea, [contenteditable="true"]') ||
-        target.hasAttribute("data-chat-input") ||
-        target.closest("[data-chat-input]")
-      ) {
-        return;
-      }
-
-      // Handle velocity changes first
-      if (handleVelocityChange(key)) {
-        return;
-      }
-
-      // Early exit if key is being processed
-      if (currentProcessingKeys.has(key)) {
-        return;
-      }
-
-      const padEntry = Object.entries(DRUMPAD_SHORTCUTS).find(
-        ([, shortcutKey]) => shortcutKey === key,
-      );
-      if (padEntry) {
-        e.preventDefault(); // Prevent default for drum pad keys
-
-        const [padId] = padEntry;
-
-        // Mark key as being processed
-        currentProcessingKeys.add(key);
-
-        handlePadPress(padId, padAssignments[padId]);
-      }
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (isEditMode) return;
-
-      const key = e.key.toLowerCase();
-
-      // Remove from processing keys
-      currentProcessingKeys.delete(key);
-
-      const padEntry = Object.entries(DRUMPAD_SHORTCUTS).find(
-        ([, shortcutKey]) => shortcutKey === key,
-      );
-      if (padEntry) {
-        const [padId] = padEntry;
-        handlePadRelease(padId);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
-      // Clear processing keys on cleanup
-      currentProcessingKeys.clear();
-    };
-  }, [
-    padAssignments,
-    isEditMode,
-    handlePadPress,
-    handlePadRelease,
-    handleVelocityChange,
-  ]);
+  // Note: Keyboard handling is now done in Drumpad/index.tsx using useKeyboardHandler hook
 
   return {
     // State

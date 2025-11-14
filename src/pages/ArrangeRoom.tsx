@@ -6,6 +6,8 @@ import { useDeepLinkHandler } from "@/shared/hooks/useDeepLinkHandler";
 import { MultitrackView } from "@/features/daw/multitrack";
 import { Sidebar } from "@/features/daw/sidebar";
 import { RegionEditor } from "@/features/daw/regioneditor";
+import VirtualInstrumentPanel from "@/features/daw/components/VirtualInstrumentPanel";
+import { SynthControlsPanel } from "@/features/daw/components/SynthControlsPanel";
 import { TransportToolbar } from "@/features/daw/transport";
 import { usePlaybackEngine } from "@/features/daw/playback/usePlaybackEngine";
 import { useRecordingEngine } from "@/features/daw/playback/useRecordingEngine";
@@ -14,14 +16,16 @@ import { useMidiMonitoring } from "@/features/daw/playback/useMidiMonitoring";
 import { useMidiInput } from "@/features/daw/hooks/useMidiInput";
 import { useKeyboardShortcuts } from "@/features/daw/hooks/useKeyboardShortcuts";
 import { useTrackAudioParams } from "@/features/daw/hooks/useTrackAudioParams";
+import { useEffectsIntegration } from "@/features/effects/hooks/useEffectsIntegration";
 import { initializeStoreObservers } from "@/features/daw/stores/storeObservers";
 import { useMidiStore } from "@/features/daw/stores/midiStore";
+import { useArrangeRoomScaleStore } from "@/features/daw/stores/arrangeRoomStore";
 
 /**
- * Produce Room page for multi-track production with async editing
+ * Arrange Room page for multi-track production with async editing
  * Currently a placeholder - will be implemented with DAW features
  */
-export default function ProduceRoom() {
+export default function ArrangeRoom() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
   const { username, userId } = useUserStore();
@@ -56,6 +60,20 @@ export default function ProduceRoom() {
   useKeyboardShortcuts();
   useTrackAudioParams();
 
+  const { isInitialized: isEffectsInitialized, error: effectsError } = useEffectsIntegration({
+    userId: userId ?? "",
+    enabled: Boolean(userId),
+  });
+
+  useEffect(() => {
+    if (effectsError) {
+      console.error("🎛️ Effects integration error (Arrange Room):", effectsError);
+    }
+    if (isEffectsInitialized) {
+      console.log("🎛️ Arrange Room effects integration active");
+    }
+  }, [effectsError, isEffectsInitialized]);
+
   // Update MIDI status in store
   useEffect(() => {
     setMidiStatus({
@@ -86,7 +104,7 @@ export default function ProduceRoom() {
   const handleCopyInviteUrl = async (role: "band_member" | "audience") => {
     if (!roomId) return;
 
-    const inviteUrl = generateInviteUrl(roomId, role, "produce");
+    const inviteUrl = generateInviteUrl(roomId, role, "arrange");
 
     try {
       await navigator.clipboard.writeText(inviteUrl);
@@ -97,6 +115,8 @@ export default function ProduceRoom() {
     }
   };
 
+  useArrangeRoomScaleStore();
+
   return (
     <div className="min-h-dvh bg-base-200 flex flex-col">
       <div className="flex-1 p-3">
@@ -104,7 +124,10 @@ export default function ProduceRoom() {
           {/* Header */}
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-secondary">Produce Room</h1>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-bold text-secondary">Arrange Room</h2>
+                <span className="badge badge-sm badge-secondary">Demo</span>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <div className="dropdown dropdown-end">
@@ -145,12 +168,16 @@ export default function ProduceRoom() {
             <TransportToolbar />
             <div className="flex flex-1 flex-col xl:flex-row overflow-hidden">
               {/* Main content area */}
-              <main className="flex flex-1 flex-col gap-1 p-1 overflow-hidden min-w-0">
+              <main className="flex flex-1 flex-col gap-2 p-1 overflow-hidden min-w-0">
                 <div className="flex-1 min-h-0">
                   <MultitrackView />
                 </div>
-                <div className="h-64 sm:h-80 lg:h-96">
-                  <RegionEditor />
+                <div className="flex flex-col gap-2">
+                  <div className="h-64 sm:h-80 lg:h-96">
+                    <RegionEditor />
+                  </div>
+                  <SynthControlsPanel />
+                  <VirtualInstrumentPanel onRecordMidiMessage={handleRecordingMidiMessage} />
                 </div>
               </main>
 

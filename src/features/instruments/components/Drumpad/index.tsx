@@ -140,7 +140,8 @@ export default function Drumpad({
       );
       if (padEntry) {
         const [padId] = padEntry;
-        handlePadPress(padId, drumpadState.padAssignments[padId]);
+        // Don't pass the sound parameter - let handlePadPress get it from padAssignments
+        handlePadPress(padId);
       }
     },
     onKeyUp: (key: string) => {

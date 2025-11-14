@@ -25,6 +25,7 @@ export const useKeyboardShortcuts = () => {
   const setTransportState = useProjectStore((state) => state.setTransportState);
   const isRecording = useProjectStore((state) => state.isRecording);
   const toggleRecording = useProjectStore((state) => state.toggleRecording);
+  const setPlayhead = useProjectStore((state) => state.setPlayhead);
 
   const selectedNoteIds = usePianoRollStore((state) => state.selectedNoteIds);
   const deleteSelectedNotes = usePianoRollStore((state) => state.deleteSelectedNotes);
@@ -44,13 +45,22 @@ export const useKeyboardShortcuts = () => {
         return;
       }
 
-      if (event.code === 'Space') {
+      const hasCtrl = event.ctrlKey || event.metaKey;
+
+      if (hasCtrl && !event.shiftKey && event.key.toLowerCase() === 'p') {
         event.preventDefault();
         if (transportState === 'playing' || transportState === 'recording') {
           setTransportState('paused');
         } else {
           setTransportState(isRecording ? 'recording' : 'playing');
         }
+      } else if (hasCtrl && !event.shiftKey && event.key.toLowerCase() === 'r') {
+        event.preventDefault();
+        toggleRecording();
+      } else if (hasCtrl && !event.shiftKey && event.key === ',') {
+        event.preventDefault();
+        setPlayhead(0);
+        setTransportState('stopped');
       } else if (event.key === 'Escape') {
         setTransportState('stopped');
       } else if (event.key === 'Delete' || event.key === 'Backspace') {
@@ -62,22 +72,16 @@ export const useKeyboardShortcuts = () => {
           clearRegionSelection();
           event.preventDefault();
         }
-      } else if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === 'z') {
+      } else if (hasCtrl && !event.shiftKey && event.key.toLowerCase() === 'z') {
         if (isUndoAvailable) {
           undo();
           event.preventDefault();
         }
-      } else if (
-        (event.metaKey || event.ctrlKey) &&
-        (event.shiftKey ? event.key.toLowerCase() === 'z' : event.key.toLowerCase() === 'y')
-      ) {
+      } else if (hasCtrl && (event.shiftKey ? event.key.toLowerCase() === 'z' : event.key.toLowerCase() === 'y')) {
         if (isRedoAvailable) {
           redo();
           event.preventDefault();
         }
-      } else if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'r') {
-        event.preventDefault();
-        toggleRecording();
       }
     },
     [
@@ -90,6 +94,7 @@ export const useKeyboardShortcuts = () => {
       removeRegion,
       selectedNoteIds,
       selectedRegionIds,
+      setPlayhead,
       setTransportState,
       toggleRecording,
       transportState,
