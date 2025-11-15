@@ -1,8 +1,10 @@
+import { useMemo } from 'react';
 import { Line, Rect } from 'react-konva';
 import type { RegionContentProps } from './types';
 import type { AudioRegion } from '@/features/daw/types/daw';
-import { generateWaveformData } from '@/features/daw/utils/waveformUtils';
-import { normalizeWaveform } from '@/features/daw/utils/waveformUtils';
+import { useWaveformData } from '@/features/daw/hooks/useWaveformData';
+
+const TRACK_WAVEFORM_PADDING = 6;
 
 interface AudioRegionContentProps extends RegionContentProps {
   region: AudioRegion;
@@ -19,10 +21,6 @@ export const AudioRegionContent = ({
   length,
   headResizeState,
 }: AudioRegionContentProps) => {
-  if (!region.audioBuffer) {
-    return null;
-  }
-
   const audioBuffer = region.audioBuffer;
   const originalLength = region.originalLength ?? length;
 
@@ -42,18 +40,34 @@ export const AudioRegionContent = ({
   // Sample density: ~1 sample per 4 pixels of original length
   const originalWidthPixels = originalLength * beatWidth;
   const totalSamples = Math.max(100, Math.floor(originalWidthPixels / 4));
-  const waveformData = generateWaveformData(audioBuffer, totalSamples);
-  const normalizedData = normalizeWaveform(waveformData);
+  const { data: waveformData } = useWaveformData(audioBuffer ?? null, totalSamples, { normalize: false });
 
-  // Calculate which part of the waveform to show based on trim
-  const trimRatio = effectiveTrimStart / originalLength;
-  const lengthRatio = length / originalLength;
-  const startIdx = Math.floor(trimRatio * normalizedData.length);
-  const endIdx = Math.ceil((trimRatio + lengthRatio) * normalizedData.length);
-  const visibleData = normalizedData.slice(startIdx, endIdx);
+  const visiblePeaks = useMemo(() => {
+    if (!waveformData || waveformData.length === 0) {
+      return [] as number[];
+    }
+
+    // Calculate which part of the waveform to show based on trim
+    const trimRatio = effectiveTrimStart / originalLength;
+    const lengthRatio = length / originalLength;
+    const startIdx = Math.floor(trimRatio * waveformData.length);
+    const endIdx = Math.min(
+      waveformData.length,
+      Math.max(startIdx + 1, Math.ceil((trimRatio + lengthRatio) * waveformData.length)),
+    );
+
+    return Array.from(waveformData.subarray(startIdx, endIdx));
+  }, [waveformData, effectiveTrimStart, originalLength, length]);
+
+  if (!audioBuffer || visiblePeaks.length === 0) {
+    return null;
+  }
 
   const waveformHeight = height - 16;
-  const centerY = y + height / 2;
+  const innerAvailableHeight = Math.max(waveformHeight - TRACK_WAVEFORM_PADDING * 2, 0);
+  const innerTop = y + (height - waveformHeight) / 2 + TRACK_WAVEFORM_PADDING;
+  const innerBottom = innerTop + innerAvailableHeight;
+  const centerY = innerTop + innerAvailableHeight / 2;
 
   // Apply gain to waveform visualization
   const gainMultiplier = (() => {
@@ -71,16 +85,23 @@ export const AudioRegionContent = ({
 
   return (
     <>
-      {visibleData.map((amplitude, index) => {
-        const waveX = loopX + (index / visibleData.length) * width;
-        const waveHeight = amplitude * gainMultiplier * waveformHeight / 2;
+      {visiblePeaks.map((amplitude, index) => {
+        const waveX = loopX + (index / visiblePeaks.length) * width;
+        const scaledAmplitude = amplitude * gainMultiplier;
+        const availableHeight = innerAvailableHeight > 0 ? innerAvailableHeight : waveformHeight;
+        const clampedHeight = Math.max(Math.min(scaledAmplitude * availableHeight, availableHeight), 1);
+        const minY = innerTop;
+        const maxY = innerBottom;
+        const rectTop = Math.max(minY, centerY - clampedHeight / 2);
+        const rectBottom = Math.min(maxY, rectTop + clampedHeight);
+        const waveHeight = Math.max(rectBottom - rectTop, 1);
 
         return (
           <Rect
             key={`${region.id}-wave-${index}`}
             x={waveX}
-            y={centerY - waveHeight / 2}
-            width={Math.max(width / visibleData.length, 1)}
+            y={rectTop}
+            width={Math.max(width / visiblePeaks.length, 1)}
             height={Math.max(waveHeight, 1)}
             fill="#1f2937"
             opacity={isMainLoop ? 0.7 : 0.4}

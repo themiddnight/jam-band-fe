@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Layer, Line, Rect, Stage, Text } from 'react-konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import type { AudioRegion } from '@/features/daw/types/daw';
-import { generateWaveformData, normalizeWaveform } from '@/features/daw/utils/waveformUtils';
+import { useWaveformData } from '@/features/daw/hooks/useWaveformData';
 
 interface WaveformCanvasProps {
   region: AudioRegion;
@@ -17,6 +17,7 @@ interface WaveformCanvasProps {
 
 // Base canvas height (will be multiplied by zoomY)
 const BASE_CANVAS_HEIGHT = 280;
+const VERTICAL_PADDING = 40;
 const HANDLE_WIDTH = 8;
 const FADE_HANDLE_SIZE = 12;
 
@@ -44,14 +45,16 @@ export const WaveformCanvas = ({
   const canvasHeight = BASE_CANVAS_HEIGHT; // Fixed height, don't scale with zoomY
 
   // Generate waveform data for the FULL recording
-  const waveformData = useMemo(() => {
-    if (!region.audioBuffer) return [];
-    
-    const fullWidth = originalLength * beatWidth;
-    const samples = Math.max(200, Math.floor(fullWidth / 2));
-    const data = generateWaveformData(region.audioBuffer, samples);
-    return normalizeWaveform(data);
-  }, [region.audioBuffer, originalLength, beatWidth]);
+  const fullWidth = originalLength * beatWidth;
+  const samples = Math.max(200, Math.floor(fullWidth / 2));
+  const { data: waveformData } = useWaveformData(region.audioBuffer ?? null, samples, { normalize: false });
+
+  const waveformPeaks = useMemo(() => {
+    if (!waveformData || waveformData.length === 0) {
+      return [] as number[];
+    }
+    return Array.from(waveformData);
+  }, [waveformData]);
 
   // Calculate positions (absolute positions in the full waveform)
   const trimStart = region.trimStart || 0;
@@ -182,20 +185,25 @@ export const WaveformCanvas = ({
         />
 
         {/* Waveform - full recording */}
-        {waveformData.map((amplitude, index) => {
-          const x = (index / waveformData.length) * fullWaveformWidth;
-          // Apply zoomY to scale from center (with padding for margins)
-          const baseWaveHeight = amplitude * gainMultiplier * (canvasHeight / 2 - 40);
-          const waveHeight = baseWaveHeight * zoomY;
+        {waveformPeaks.map((amplitude, index) => {
+          const x = (index / waveformPeaks.length) * fullWaveformWidth;
+          const availableHeight = Math.max(canvasHeight - VERTICAL_PADDING * 2, 0);
+          const baseHeight = Math.max(amplitude * gainMultiplier * availableHeight, 1);
+          const waveHeight = baseHeight * zoomY;
           const centerY = canvasHeight / 2;
-          
+          const topLimit = VERTICAL_PADDING;
+          const bottomLimit = canvasHeight - VERTICAL_PADDING;
+          const rectTop = Math.max(topLimit, centerY - waveHeight / 2);
+          const rectBottom = Math.min(bottomLimit, rectTop + waveHeight);
+          const clampedHeight = Math.max(rectBottom - rectTop, 1);
+
           return (
             <Rect
               key={`wave-${index}`}
               x={x}
-              y={centerY - waveHeight / 2}
-              width={Math.max(fullWaveformWidth / waveformData.length, 1)}
-              height={Math.max(waveHeight, 1)}
+              y={rectTop}
+              width={Math.max(fullWaveformWidth / waveformPeaks.length, 1)}
+              height={clampedHeight}
               fill="#34d399"
               opacity={0.8}
               listening={false}
