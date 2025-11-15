@@ -21,9 +21,9 @@ export const TransportToolbar = () => {
         <Metronome />
         <SnapToggle />
       </div>
-      <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm sm:text-base">
+      <div className="flex flex-wrap justify-end items-center gap-2 text-sm">
         <div className="flex items-center gap-2 rounded-lg border border-base-300 bg-base-100/80 px-2 py-1">
-          <div className="hidden sm:flex flex-col leading-tight">
+          <div className="flex items-center gap-2 leading-tight">
             <span className="text-[10px] font-semibold uppercase tracking-wide text-base-content/60">
               Scale
             </span>
@@ -36,6 +36,7 @@ export const TransportToolbar = () => {
             scale={scale}
             onRootNoteChange={setRootNote}
             onScaleChange={setScale}
+            size="xs"
           />
         </div>
         <BPMControl />

@@ -127,7 +127,7 @@ export const Metronome = () => {
     <button
       type="button"
       onClick={() => toggleMetronome()}
-      className={`btn btn-xs sm:btn-sm ${isMetronomeEnabled ? 'btn-primary' : 'btn-ghost'}`}
+      className={`btn btn-xs sm:btn-xs ${isMetronomeEnabled ? 'btn-secondary' : 'btn-ghost'}`}
     >
       <span className="hidden sm:inline">{isMetronomeEnabled ? 'Metronome On' : 'Metronome Off'}</span>
       <span className="sm:hidden">{isMetronomeEnabled ? 'Met On' : 'Met Off'}</span>

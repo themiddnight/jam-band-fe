@@ -8,6 +8,7 @@ export interface ScaleSelectorProps {
   scale: Scale;
   onRootNoteChange: (note: string) => void;
   onScaleChange: (scale: Scale) => void;
+  size?: 'sm' | 'xs';
 }
 
 export default function ScaleSelector({
@@ -15,6 +16,7 @@ export default function ScaleSelector({
   scale,
   onRootNoteChange,
   onScaleChange,
+  size = 'sm',
 }: ScaleSelectorProps) {
   const { selectedSlotId, setSlot, isInitialized } = useScaleSlotsStore();
 
@@ -30,7 +32,7 @@ export default function ScaleSelector({
       <select
         value={rootNote}
         onChange={(e) => onRootNoteChange(e.target.value)}
-        className="select select-bordered select-sm"
+        className={`select select-bordered select-${size}`}
       >
         {NOTE_NAMES.map((note) => (
           <option key={note} value={note}>
@@ -41,7 +43,7 @@ export default function ScaleSelector({
       <div className="join">
         <button
           onClick={() => onScaleChange("major")}
-          className={`btn btn-sm join-item ${
+          className={`btn btn-${size} join-item ${
             scale === "major" ? "btn-accent" : "btn-outline"
           }`}
         >
@@ -49,7 +51,7 @@ export default function ScaleSelector({
         </button>
         <button
           onClick={() => onScaleChange("minor")}
-          className={`btn btn-sm join-item ${
+          className={`btn btn-${size} join-item ${
             scale === "minor" ? "btn-accent" : "btn-outline"
           }`}
         >
