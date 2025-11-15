@@ -6,6 +6,7 @@ import { useToneTransportSync } from './useToneTransportSync';
 import { useMidiStore } from '../stores/midiStore';
 import ScaleSelector from '@/features/ui/components/ScaleSelector';
 import { useArrangeRoomScaleStore } from '../stores/arrangeRoomStore';
+import { SnapToggle } from '../transport/SnapToggle';
 
 export const TransportToolbar = () => {
   useToneTransportSync();
@@ -18,6 +19,7 @@ export const TransportToolbar = () => {
       <div className="flex items-center gap-2 sm:gap-3">
         <TransportControls />
         <Metronome />
+        <SnapToggle />
       </div>
       <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-sm sm:text-base">
         <div className="flex items-center gap-2 rounded-lg border border-base-300 bg-base-100/80 px-2 py-1">

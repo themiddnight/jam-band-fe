@@ -1,4 +1,5 @@
 import * as Tone from 'tone';
+import { getOrCreateGlobalMixer } from '@/features/audio/utils/effectsArchitecture';
 import type { AudioRegion, Track } from '../types/daw';
 
 const scheduledAudioSources = new Map<string, AudioBufferSourceNode[]>();
@@ -57,10 +58,27 @@ export const scheduleAudioRegionPlayback = async (region: AudioRegion, track: Tr
     // Pan node (not automated)
     panNode.pan.value = track.pan;
     
-    // Connect: source -> gain -> pan -> destination
+    // Connect: source -> gain -> pan -> mixer channel (or destination fallback)
     source.connect(gainNode);
     gainNode.connect(panNode);
-    panNode.connect(audioContext.destination);
+    let routedThroughMixer = false;
+    try {
+      const mixer = await getOrCreateGlobalMixer();
+      if (!mixer.getChannel(track.id)) {
+        mixer.createUserChannel(track.id, track.name ?? track.id);
+      }
+      mixer.routeInstrumentToChannel(panNode, track.id);
+      routedThroughMixer = true;
+    } catch (error) {
+      console.warn('Failed to route audio track through mixer, using direct output', {
+        trackId: track.id,
+        error,
+      });
+    }
+
+    if (!routedThroughMixer) {
+      panNode.connect(audioContext.destination);
+    }
     
     let bufferOffset = trimStartSeconds;
     let playDuration = regionDurationSeconds;

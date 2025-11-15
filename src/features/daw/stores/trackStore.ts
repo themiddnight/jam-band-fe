@@ -29,6 +29,8 @@ interface TrackStoreState {
   setTrackPan: (trackId: TrackId, pan: number) => void;
   toggleMute: (trackId: TrackId, value?: boolean) => void;
   toggleSolo: (trackId: TrackId, value?: boolean) => void;
+  moveTrackUp: (trackId: TrackId) => void;
+  moveTrackDown: (trackId: TrackId) => void;
   setTrackInstrument: (
     trackId: TrackId,
     instrumentId: string,
@@ -121,6 +123,36 @@ export const useTrackStore = create<TrackStoreState>((set, get) => ({
           : track
       ),
     })),
+  moveTrackUp: (trackId) =>
+    set((state) => {
+      const index = state.tracks.findIndex((track) => track.id === trackId);
+      if (index <= 0) {
+        return state;
+      }
+
+      const updatedTracks = [...state.tracks];
+      [updatedTracks[index - 1], updatedTracks[index]] = [
+        updatedTracks[index],
+        updatedTracks[index - 1],
+      ];
+
+      return { ...state, tracks: updatedTracks };
+    }),
+  moveTrackDown: (trackId) =>
+    set((state) => {
+      const index = state.tracks.findIndex((track) => track.id === trackId);
+      if (index === -1 || index >= state.tracks.length - 1) {
+        return state;
+      }
+
+      const updatedTracks = [...state.tracks];
+      [updatedTracks[index], updatedTracks[index + 1]] = [
+        updatedTracks[index + 1],
+        updatedTracks[index],
+      ];
+
+      return { ...state, tracks: updatedTracks };
+    }),
   setTrackInstrument: (trackId, instrumentId, instrumentCategory) =>
     set((state) => ({
       tracks: state.tracks.map((track) =>

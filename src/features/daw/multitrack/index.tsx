@@ -9,7 +9,6 @@ import { TimeRuler } from './TimeRuler';
 import { TrackCanvas } from './TrackCanvas';
 import { TrackHeader } from './TrackHeader';
 import { AddTrackMenu } from './AddTrackMenu';
-import { SnapToggle } from '../transport/SnapToggle';
 import { LoopToggle } from '../transport/LoopToggle';
 import { PIXELS_PER_BEAT, TRACK_HEADER_WIDTH, TRACK_HEIGHT } from './constants';
 
@@ -128,9 +127,23 @@ export const MultitrackView = () => {
   return (
     <section className="flex h-full min-h-80 flex-col overflow-hidden rounded-lg border border-base-300 bg-base-100 shadow-sm touch-none">
       <div className="flex items-center justify-between border-b border-base-300 px-2 sm:px-4 py-1.5 sm:py-2">
-        <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-wide text-base-content/70">
-          Tracks
-        </h2>
+        <div className="flex items-center gap-4">
+          <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-wide text-base-content/70">
+            Tracks
+          </h2>
+          <label className="flex items-center gap-1 sm:gap-2 text-xs text-base-content/70">
+            <span className="hidden sm:inline">Zoom</span>
+            <input
+              type="range"
+              min={0.5}
+              max={2}
+              step={0.1}
+              value={zoom}
+              onChange={(event) => handleZoomChange(Number(event.target.value))}
+              className="range range-xs w-20 sm:w-32"
+            />
+          </label>
+        </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1">
             <button
@@ -184,20 +197,7 @@ export const MultitrackView = () => {
               ×
             </button>
           </div>
-          <label className="flex items-center gap-1 sm:gap-2 text-xs text-base-content/70">
-            <span className="hidden sm:inline">Zoom</span>
-            <input
-              type="range"
-              min={0.5}
-              max={2}
-              step={0.1}
-              value={zoom}
-              onChange={(event) => handleZoomChange(Number(event.target.value))}
-              className="range range-xs w-20 sm:w-32"
-            />
-          </label>
           <LoopToggle />
-          <SnapToggle />
         </div>
       </div>
       <div className="grid grid-cols-[auto_1fr] items-stretch border-b border-base-300">
@@ -225,13 +225,15 @@ export const MultitrackView = () => {
           className="flex flex-col overflow-y-auto border-r border-base-300 bg-base-100"
           style={{ width: `${TRACK_HEADER_WIDTH}px` }}
         >
-          {tracks.map((track) => (
+          {tracks.map((track, index) => (
             <TrackHeader
               key={track.id}
               track={track}
               isSelected={track.id === selectedTrackId}
               onSelect={selectTrack}
               onHeightChange={handleTrackHeightChange}
+              canMoveUp={index > 0}
+              canMoveDown={index < tracks.length - 1}
             />
           ))}
         </div>

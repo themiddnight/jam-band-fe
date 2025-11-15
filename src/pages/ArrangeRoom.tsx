@@ -172,13 +172,14 @@ export default function ArrangeRoom() {
                 <div className="flex-1 min-h-0">
                   <MultitrackView />
                 </div>
-                <div className="flex flex-col gap-2">
-                  <div className="h-64 sm:h-80 lg:h-96">
-                    <RegionEditor />
-                  </div>
-                  <SynthControlsPanel />
-                  <VirtualInstrumentPanel onRecordMidiMessage={handleRecordingMidiMessage} />
+                
+                <div className="h-64 sm:h-80 lg:h-96">
+                  <RegionEditor />
                 </div>
+
+                <SynthControlsPanel />
+
+                <VirtualInstrumentPanel onRecordMidiMessage={handleRecordingMidiMessage} />
               </main>
 
               {/* Sidebar: Right on desktop, bottom on mobile */}

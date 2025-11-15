@@ -46,6 +46,7 @@ export const PianoRoll = () => {
   const tracks = useTrackStore((state) => state.tracks);
   const timeSignature = useProjectStore((state) => state.timeSignature);
   const playhead = useProjectStore((state) => state.playhead);
+  const snapToGridEnabled = useProjectStore((state) => state.snapToGrid);
 
   const region = regions.find((item) => item.id === activeRegionId);
   
@@ -295,11 +296,25 @@ export const PianoRoll = () => {
   return (
     <section className="flex h-full min-h-80 flex-col overflow-hidden rounded-lg border border-base-300 bg-base-100 shadow-sm touch-none">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-base-300 px-2 sm:px-4 py-1.5 sm:py-2 gap-2">
-        <div>
-          <h3 className="text-xs sm:text-sm font-semibold text-base-content">{midiRegion.name}</h3>
-          <p className="text-xs text-base-content/60 hidden sm:block">
-            Track: {track?.name ?? 'Unknown'} · Notes: {midiRegion.notes.length}
-          </p>
+        <div className="flex items-center gap-4">
+          <div>
+            <h3 className="text-xs sm:text-sm font-semibold text-base-content">{midiRegion.name}</h3>
+            <p className="text-xs text-base-content/60 hidden sm:block">
+              Track: {track?.name ?? 'Unknown'}
+            </p>
+          </div>
+          <label className="flex items-center gap-1 sm:gap-2 text-xs text-base-content/70">
+            <span className="hidden sm:inline">Zoom</span>
+            <input
+              type="range"
+              min={0.5}
+              max={2}
+              step={0.1}
+              value={zoom}
+              onChange={(event) => handleZoomChange(Number(event.target.value))}
+              className="range range-xs w-20 sm:w-32"
+            />
+          </label>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs text-base-content/70 w-full sm:w-auto">
           <label className="flex items-center gap-1 sm:gap-2">
@@ -311,19 +326,6 @@ export const PianoRoll = () => {
               max={127}
               value={velocityPreview}
               onChange={(event) => handleVelocityChange(Number(event.target.value))}
-              className="range range-xs w-16 sm:w-24"
-            />
-          </label>
-          <label className="flex items-center gap-1 sm:gap-2">
-            <span className="hidden sm:inline">Zoom</span>
-            <span className="sm:hidden">Z</span>
-            <input
-              type="range"
-              min={0.5}
-              max={2}
-              step={0.1}
-              value={zoom}
-              onChange={(event) => handleZoomChange(Number(event.target.value))}
               className="range range-xs w-16 sm:w-24"
             />
           </label>
@@ -435,6 +437,7 @@ export const PianoRoll = () => {
               viewportWidth={viewportWidth}
               regionHighlightStart={midiRegion.start}
               regionHighlightEnd={midiRegion.start + midiRegion.length}
+              snapToGridEnabled={snapToGridEnabled}
               onSetSelectedNotes={setSelectedNoteIds}
               onToggleNoteSelection={toggleNoteSelection}
               onClearSelection={clearNoteSelection}
@@ -502,6 +505,7 @@ export const PianoRoll = () => {
                 scrollLeft={scrollLeft}
                 viewportWidth={viewportWidth}
                 playheadBeats={playhead}
+                snapToGridEnabled={snapToGridEnabled}
                 onAddEvent={handleAddSustainEvent}
                 onUpdateEvent={handleUpdateSustainEvent}
                 onRemoveEvent={handleRemoveSustainEvent}

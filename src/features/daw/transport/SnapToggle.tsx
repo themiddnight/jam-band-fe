@@ -8,7 +8,7 @@ export const SnapToggle = () => {
     <button
       type="button"
       onClick={() => toggleSnap()}
-      className={`btn btn-xs ${snapToGrid ? 'btn-primary' : 'btn-ghost'}`}
+      className={`btn btn-sm ${snapToGrid ? 'btn-primary' : 'btn-ghost'}`}
       title={snapToGrid ? 'Snap to Grid: ON' : 'Snap to Grid: OFF'}
     >
       <svg

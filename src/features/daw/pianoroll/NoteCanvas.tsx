@@ -29,6 +29,7 @@ interface NoteCanvasProps {
   viewportWidth: number;
   regionHighlightStart?: number;
   regionHighlightEnd?: number;
+  snapToGridEnabled: boolean;
   onSetSelectedNotes: (noteIds: NoteId[]) => void;
   onToggleNoteSelection: (noteId: NoteId) => void;
   onClearSelection: () => void;
@@ -112,6 +113,7 @@ export const NoteCanvas = ({
   viewportWidth,
   regionHighlightStart = 0,
   regionHighlightEnd = 0,
+  snapToGridEnabled,
   onSetSelectedNotes,
   onToggleNoteSelection,
   onClearSelection,
@@ -130,6 +132,10 @@ export const NoteCanvas = ({
   // Dynamic grid division based on zoom level
   const dynamicGridDivision = useMemo(() => getGridDivisionForZoom(zoom), [zoom]);
   const gridInterval = useMemo(() => getGridInterval(dynamicGridDivision), [dynamicGridDivision]);
+  const snapBeat = useCallback(
+    (value: number) => (snapToGridEnabled ? snapToGrid(value, dynamicGridDivision) : value),
+    [dynamicGridDivision, snapToGridEnabled]
+  );
   
   // Viewport culling - calculate visible range considering zoom
   const { visibleStartBeat, visibleEndBeat } = useMemo(() => {
@@ -195,10 +201,10 @@ export const NoteCanvas = ({
       if (!data) {
         return;
       }
-      const snappedBeat = Math.max(0, snapToGrid(data.beat, dynamicGridDivision));
-      onCreateNote(data.pitch, snappedBeat);
+      const targetBeat = Math.max(0, snapBeat(data.beat));
+      onCreateNote(data.pitch, targetBeat);
     },
-    [getPointerData, dynamicGridDivision, onCreateNote]
+    [getPointerData, onCreateNote, snapBeat]
   );
 
   const handleNotePointerDown = useCallback(
@@ -230,10 +236,10 @@ export const NoteCanvas = ({
       if (!data) {
         return;
       }
-      const snappedBeat = snapToGrid(data.beat, dynamicGridDivision);
+      const pointerBeat = snapBeat(data.beat);
       setDragState({
         noteIds,
-        originBeat: snappedBeat,
+        originBeat: pointerBeat,
         originPitch: data.pitch,
         deltaBeats: 0,
         deltaPitch: 0,
@@ -250,7 +256,7 @@ export const NoteCanvas = ({
         ),
       });
     },
-    [getPointerData, dynamicGridDivision, notes, onSetSelectedNotes, onToggleNoteSelection, selectedNoteIds]
+    [getPointerData, notes, onSetSelectedNotes, onToggleNoteSelection, selectedNoteIds, snapBeat]
   );
 
   const handleResizeHandleDown = useCallback(
@@ -261,7 +267,7 @@ export const NoteCanvas = ({
       if (!data) {
         return;
       }
-      const originBeat = snapToGrid(data.beat, dynamicGridDivision);
+      const originBeat = snapBeat(data.beat);
       const initialDurations = noteIds.reduce<Record<NoteId, number>>((acc, id) => {
         const target = notes.find((n) => n.id === id);
         if (target) {
@@ -277,7 +283,7 @@ export const NoteCanvas = ({
         previewDurations: { ...initialDurations },
       });
     },
-    [getPointerData, dynamicGridDivision, notes, selectedNoteIds]
+    [getPointerData, notes, selectedNoteIds, snapBeat]
   );
 
   const handlePointerMove = useCallback(
@@ -307,8 +313,8 @@ export const NoteCanvas = ({
         if (!data) {
           return;
         }
-        const snappedBeat = snapToGrid(data.beat, dynamicGridDivision);
-        const deltaBeats = snappedBeat - dragState.originBeat;
+        const pointerBeat = snapBeat(data.beat);
+        const deltaBeats = pointerBeat - dragState.originBeat;
         const deltaPitch = clampPitch(data.pitch) - dragState.originPitch;
         const minStart = dragState.noteIds.reduce((minValue, id) => {
           const { start } = dragState.initial[id];
@@ -341,8 +347,8 @@ export const NoteCanvas = ({
         if (!data) {
           return;
         }
-        const snappedBeat = snapToGrid(data.beat, dynamicGridDivision);
-        let deltaBeats = snappedBeat - resizeState.originBeat;
+        const pointerBeat = snapBeat(data.beat);
+        let deltaBeats = pointerBeat - resizeState.originBeat;
         const minDelta = resizeState.noteIds.reduce((minValue, id) => {
           const initial = resizeState.initialDurations[id];
           return Math.min(minValue, initial - 0.25);
@@ -403,7 +409,7 @@ export const NoteCanvas = ({
         });
       }
     },
-    [dragState, getPointerData, dynamicGridDivision, holdState, marqueeState, onPan, panState, resizeState]
+    [dragState, getPointerData, holdState, marqueeState, onPan, panState, resizeState, snapBeat]
   );
 
   const handlePointerUp = useCallback(() => {

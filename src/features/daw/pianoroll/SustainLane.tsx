@@ -16,6 +16,7 @@ interface SustainLaneProps {
   scrollLeft: number;
   viewportWidth: number;
   playheadBeats?: number;
+  snapToGridEnabled: boolean;
   onAddEvent: (start: number) => void;
   onUpdateEvent: (eventId: string, updates: Partial<SustainEvent>) => void;
   onRemoveEvent: (eventId: string) => void;
@@ -59,6 +60,7 @@ export const SustainLane = ({
   scrollLeft,
   viewportWidth,
   playheadBeats = 0,
+  snapToGridEnabled,
   onAddEvent,
   onUpdateEvent,
   onRemoveEvent,
@@ -73,6 +75,10 @@ export const SustainLane = ({
   
   // Dynamic grid division based on zoom level
   const dynamicGridDivision = useMemo(() => getGridDivisionForZoom(zoom), [zoom]);
+  const snapBeat = useCallback(
+    (value: number) => (snapToGridEnabled ? snapToGrid(value, dynamicGridDivision) : value),
+    [dynamicGridDivision, snapToGridEnabled]
+  );
   
   // Viewport culling - calculate visible range considering zoom
   const { visibleStartBeat, visibleEndBeat } = useMemo(() => {
@@ -107,13 +113,12 @@ export const SustainLane = ({
 
   const handleBackgroundDoubleClick = useCallback(
     (event: KonvaEventObject<MouseEvent>) => {
-      const beat = snapToGrid(
-        getPointerBeat(event as unknown as KonvaEventObject<PointerEvent>),
-        dynamicGridDivision
+      const beat = snapBeat(
+        getPointerBeat(event as unknown as KonvaEventObject<PointerEvent>)
       );
       onAddEvent(Math.max(0, beat));
     },
-    [getPointerBeat, dynamicGridDivision, onAddEvent]
+    [getPointerBeat, onAddEvent, snapBeat]
   );
 
   const handleEventPointerDown = useCallback(
@@ -127,7 +132,7 @@ export const SustainLane = ({
       } else if (!selectedEventIds.includes(sustain.id)) {
         onSetSelectedEvents([sustain.id]);
       }
-      const pointerBeat = snapToGrid(getPointerBeat(event), dynamicGridDivision);
+      const pointerBeat = snapBeat(getPointerBeat(event));
       setDragState({
         eventId: sustain.id,
         mode,
@@ -137,7 +142,7 @@ export const SustainLane = ({
         initialEnd: sustain.end,
       });
     },
-    [getPointerBeat, dynamicGridDivision, onSetSelectedEvents, selectedEventIds]
+    [getPointerBeat, onSetSelectedEvents, selectedEventIds, snapBeat]
   );
 
   const handlePointerMove = useCallback(
@@ -145,7 +150,7 @@ export const SustainLane = ({
       if (!dragState) {
         return;
       }
-      const pointerBeat = snapToGrid(getPointerBeat(event), dynamicGridDivision);
+      const pointerBeat = snapBeat(getPointerBeat(event));
       const delta = pointerBeat - dragState.originBeat;
       setDragState((prev) =>
         prev
@@ -156,7 +161,7 @@ export const SustainLane = ({
           : prev
       );
     },
-    [dragState, getPointerBeat, dynamicGridDivision]
+    [dragState, getPointerBeat, snapBeat]
   );
 
   const handlePointerUp = useCallback(() => {

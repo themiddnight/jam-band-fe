@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Tone from 'tone';
 
-import { scheduleAudioRegionPlayback, stopAllAudioPlayback } from '../utils/audioPlayback';
+import {
+  scheduleAudioRegionPlayback,
+  stopAllAudioPlayback,
+  stopAudioRegionPlayback,
+} from '../utils/audioPlayback';
 import { scheduleMidiRegionPlayback, type ScheduledMidiPlayback } from '../utils/midiPlaybackScheduler';
 import { useProjectStore } from '../stores/projectStore';
 import { useRegionStore } from '../stores/regionStore';
@@ -60,6 +64,7 @@ export const usePlaybackEngine = () => {
   const midiPlaybackRef = useRef<Map<string, ScheduledMidiPlayback>>(new Map());
   const animationFrameRef = useRef<number | null>(null);
   const toneConfiguredRef = useRef(false);
+  const schedulingVersionRef = useRef(0);
 
   const clearParts = useCallback(async (skipNoteCleanup = false) => {
     if (!skipNoteCleanup) {
@@ -80,6 +85,11 @@ export const usePlaybackEngine = () => {
     Tone.Transport.cancel(0);
   }, []);
 
+  const cancelAndClearParts = useCallback(async () => {
+    schedulingVersionRef.current += 1;
+    await clearParts();
+  }, [clearParts]);
+
   const ensureToneReady = useCallback(async () => {
     if (!toneConfiguredRef.current) {
       try {
@@ -96,9 +106,14 @@ export const usePlaybackEngine = () => {
   }, []);
 
   const scheduleParts = useCallback(async (isLoopReschedule = false) => {
+    const scheduleVersion = ++schedulingVersionRef.current;
     await ensureToneReady();
     // When rescheduling for a loop, skip note cleanup to avoid stopping currently playing notes
     await clearParts(isLoopReschedule);
+
+    if (scheduleVersion !== schedulingVersionRef.current) {
+      return;
+    }
 
     const tracks = tracksRef.current;
     const trackMeta = schedulingTrackMetaRef.current;
@@ -140,6 +155,9 @@ export const usePlaybackEngine = () => {
 
     await Promise.all(
       regions.map(async (region) => {
+        if (scheduleVersion !== schedulingVersionRef.current) {
+          return;
+        }
         if (!shouldPlayTrack(region.trackId)) {
           return;
         }
@@ -147,7 +165,7 @@ export const usePlaybackEngine = () => {
         if (!track) {
           return;
         }
-        
+
         if (region.type === 'midi') {
           // Schedule MIDI regions
           if (!region.notes.length) {
@@ -166,6 +184,10 @@ export const usePlaybackEngine = () => {
             transportBpm: effectiveBpm,
             anchorBeat,
           });
+          if (scheduleVersion !== schedulingVersionRef.current) {
+            await playback?.cleanup();
+            return;
+          }
           if (playback) {
             midiPlaybackRef.current.set(region.id, playback);
             console.log('[PlaybackEngine] Scheduled MIDI region', {
@@ -176,6 +198,10 @@ export const usePlaybackEngine = () => {
         } else if (region.type === 'audio') {
           // Schedule audio regions
           await scheduleAudioRegionPlayback(region, track, tracks);
+          if (scheduleVersion !== schedulingVersionRef.current) {
+            stopAudioRegionPlayback(region.id);
+            return;
+          }
         }
       })
     );
@@ -185,11 +211,15 @@ export const usePlaybackEngine = () => {
     if (transportState === 'playing' || transportState === 'recording') {
       scheduleParts().then(() => {
         // Ensure Transport starts after scheduling
-        if (Tone.Transport.state !== 'started') {
+        const nextState = useProjectStore.getState().transportState;
+        if (
+          (nextState === 'playing' || nextState === 'recording') &&
+          Tone.Transport.state !== 'started'
+        ) {
           Tone.Transport.start();
         }
       });
-      
+
       // Start playhead update loop
       const updatePlayhead = () => {
         if (Tone.Transport.state === 'started') {
@@ -204,7 +234,7 @@ export const usePlaybackEngine = () => {
       updatePlayhead();
     } else {
       // Stop playback - clear parts and reset sustain
-      void clearParts();
+      void cancelAndClearParts();
 
       // Stop playhead update loop
       if (animationFrameRef.current !== null) {
@@ -214,13 +244,13 @@ export const usePlaybackEngine = () => {
     }
 
     return () => {
-      void clearParts();
+      void cancelAndClearParts();
       if (animationFrameRef.current !== null) {
         cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
       }
     };
-  }, [clearParts, scheduleParts, setPlayhead, transportState]);
+  }, [cancelAndClearParts, scheduleParts, setPlayhead, transportState]);
 
   useEffect(() => {
     if (transportState === 'playing' || transportState === 'recording') {

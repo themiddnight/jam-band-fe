@@ -173,7 +173,7 @@ export const StepSequencer = memo(
 
     return (
       <div className="collapse collapse-arrow bg-base-100 shadow-lg">
-        <input type="checkbox" id="step-sequencer" name="step-sequencer" />
+        <input type="checkbox" id="step-sequencer" name="step-sequencer" defaultChecked />
 
         {/* First Row: Title */}
         <h3 className="collapse-title font-bold">

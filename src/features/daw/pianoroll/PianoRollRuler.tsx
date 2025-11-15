@@ -5,7 +5,8 @@ import * as Tone from 'tone';
 
 import { RULER_HEIGHT } from './constants';
 import type { TimeSignature } from '../types/daw';
-import { beatsPerBar } from '../utils/timeUtils';
+import { beatsPerBar, snapToGrid } from '../utils/timeUtils';
+import { getGridDivisionForZoom } from '../utils/gridUtils';
 import { useProjectStore } from '../stores/projectStore';
 
 // Memoized playhead component
@@ -49,6 +50,7 @@ export const PianoRollRuler = ({
   playheadBeats = 0,
 }: PianoRollRulerProps) => {
   const setPlayhead = useProjectStore((state) => state.setPlayhead);
+  const snapToGridEnabled = useProjectStore((state) => state.snapToGrid);
   const [isDragging, setIsDragging] = useState(false);
   
   const width = totalBeats * pixelsPerBeat * zoom;
@@ -59,7 +61,12 @@ export const PianoRollRuler = ({
   
   const updatePlayheadFromPointer = useCallback((pointer: { x: number; y: number }) => {
     // pointer.x is relative to the Stage which now starts at 0
-    const absoluteBeat = Math.max(0, Math.min(pointer.x / beatWidth, totalBeats));
+    let absoluteBeat = Math.max(0, Math.min(pointer.x / beatWidth, totalBeats));
+
+    if (snapToGridEnabled) {
+      const division = getGridDivisionForZoom(zoom);
+      absoluteBeat = snapToGrid(absoluteBeat, division);
+    }
     
     // Update store
     setPlayhead(absoluteBeat);
@@ -68,7 +75,7 @@ export const PianoRollRuler = ({
     const bars = Math.floor(absoluteBeat / beatsInBar);
     const beats = absoluteBeat % beatsInBar;
     Tone.Transport.position = `${bars}:${beats}:0`;
-  }, [beatWidth, beatsInBar, setPlayhead, totalBeats]);
+  }, [beatWidth, beatsInBar, setPlayhead, totalBeats, snapToGridEnabled, zoom]);
   
   const handlePointerDown = (event: KonvaEventObject<PointerEvent>) => {
     const stage = event.target.getStage();

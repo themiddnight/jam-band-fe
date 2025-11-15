@@ -91,7 +91,7 @@ export default function EffectChain({ chainType, title, mode = 'perform' }: Effe
   return (
     <div className='effect-chain p-3 rounded-lg border border-base-300 bg-base-100'>
       {/* Chain Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 gap-3">
         <h3>{title}</h3>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Centralized Preset Manager */}

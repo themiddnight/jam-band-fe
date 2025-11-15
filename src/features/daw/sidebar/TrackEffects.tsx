@@ -6,6 +6,8 @@ import { useTrackStore } from '../stores/trackStore';
 
 export const TrackEffects = () => {
   const tracks = useTrackStore((state) => state.tracks);
+  const selectedTrackId = useTrackStore((state) => state.selectedTrackId);
+  const selectTrack = useTrackStore((state) => state.selectTrack);
   const ensureChain = useEffectsStore((state) => state.ensureChain);
 
   useEffect(() => {
@@ -30,14 +32,24 @@ export const TrackEffects = () => {
         <div className="flex flex-row xl:flex-col flex-wrap gap-4 w-full">
           {tracks.map((track) => {
             const chainType = `track:${track.id}` as EffectChainType;
+            const isSelected = track.id === selectedTrackId;
+            const highlightClasses = isSelected
+              ? 'ring-2 ring-primary/70 ring-offset-2 ring-offset-base-100'
+              : 'ring-1 ring-transparent hover:ring-base-300/70';
 
             return (
-              <TrackEffectChain
+              <button
                 key={track.id}
-                chainType={chainType}
-                title={`${track.name} Effects`}
-                mode="arrange"
-              />
+                type="button"
+                onClick={() => selectTrack(track.id)}
+                className={`w-full text-left rounded-lg transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-secondary/70 focus-visible:ring-offset-2 focus-visible:ring-offset-base-100 ${highlightClasses}`}
+              >
+                <TrackEffectChain
+                  chainType={chainType}
+                  title={`${track.name} Effects`}
+                  mode="arrange"
+                />
+              </button>
             );
           })}
         </div>
