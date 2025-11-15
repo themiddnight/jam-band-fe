@@ -20,6 +20,7 @@ import { useEffectsIntegration } from "@/features/effects/hooks/useEffectsIntegr
 import { initializeStoreObservers } from "@/features/daw/stores/storeObservers";
 import { useMidiStore } from "@/features/daw/stores/midiStore";
 import { useArrangeRoomScaleStore } from "@/features/daw/stores/arrangeRoomStore";
+import { ProjectMenu } from "@/features/daw/components/ProjectMenu";
 
 /**
  * Arrange Room page for multi-track production with async editing
@@ -130,6 +131,7 @@ export default function ArrangeRoom() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <ProjectMenu />
               <div className="dropdown dropdown-end">
                 <label tabIndex={0} className="btn btn-sm btn-ghost" title="Copy invite link">
                   📋

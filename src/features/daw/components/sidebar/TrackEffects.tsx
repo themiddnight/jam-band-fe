@@ -38,18 +38,17 @@ export const TrackEffects = () => {
               : 'ring-1 ring-transparent hover:ring-base-300/70';
 
             return (
-              <button
+              <div
                 key={track.id}
-                type="button"
                 onClick={() => selectTrack(track.id)}
-                className={`w-full text-left rounded-lg transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-secondary/70 focus-visible:ring-offset-2 focus-visible:ring-offset-base-100 ${highlightClasses}`}
+                className={`w-full rounded-lg transition-all duration-150 cursor-pointer ${highlightClasses}`}
               >
                 <TrackEffectChain
                   chainType={chainType}
                   title={`${track.name} Effects`}
                   mode="arrange"
                 />
-              </button>
+              </div>
             );
           })}
         </div>

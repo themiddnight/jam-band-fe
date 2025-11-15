@@ -144,8 +144,12 @@ export const scheduleAudioRegionPlayback = async (region: AudioRegion, track: Tr
     }
     
     // Only schedule if we have duration to play
-    if (playDuration > 0 && scheduleTime >= audioContext.currentTime) {
-      source.start(scheduleTime, bufferOffset, playDuration);
+    // Allow a small tolerance for timing precision (1ms in the past)
+    const minScheduleTime = audioContext.currentTime - 0.001;
+    if (playDuration > 0 && scheduleTime >= minScheduleTime) {
+      // Ensure schedule time is not in the past
+      const safeScheduleTime = Math.max(scheduleTime, audioContext.currentTime);
+      source.start(safeScheduleTime, bufferOffset, playDuration);
       sources.push(source);
     }
   }

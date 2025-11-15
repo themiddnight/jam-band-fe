@@ -367,8 +367,74 @@ export const VirtualInstrumentPanel = ({ onRecordMidiMessage }: VirtualInstrumen
 
     if (loadError) {
       return (
-        <div className="rounded-lg bg-error/10 px-4 py-3 text-sm text-error">
-          {loadError}
+        <div className="rounded-lg bg-error/10 px-4 py-3">
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-error">{loadError}</p>
+            <p className="text-xs text-base-content/60">
+              Audio requires user interaction to start. Click the button below to initialize audio.
+            </p>
+            <button
+              onClick={async () => {
+                setLoadError(null);
+                setIsLoadingInstrument(true);
+                try {
+                  // Import AudioContextManager and Tone dynamically
+                  const { AudioContextManager } = await import('@/features/audio/constants/audioConfig');
+                  const Tone = await import('tone');
+                  
+                  // Get and start the audio context
+                  const context = await AudioContextManager.getInstrumentContext();
+                  
+                  // Ensure context is running
+                  if (context.state !== 'running') {
+                    await context.resume();
+                  }
+                  
+                  // Start Tone.js transport (required for some instruments)
+                  if (Tone.getContext().state !== 'running') {
+                    await Tone.start();
+                  }
+                  
+                  // Wait a bit for audio to fully initialize
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                  
+                  // Verify context is actually running now
+                  if (context.state !== 'running') {
+                    throw new Error('AudioContext failed to start. Please try clicking again.');
+                  }
+                  
+                  // Retry loading the instrument
+                  if (selectedTrack && selectedTrack.type === 'midi') {
+                    const { engine } = await trackInstrumentRegistry.ensureEngine(selectedTrack, {
+                      instrumentId: selectedTrack.instrumentId,
+                      instrumentCategory: selectedTrack.instrumentCategory,
+                    });
+                    
+                    if (selectedTrack.instrumentCategory === InstrumentCategory.DrumBeat) {
+                      let samples = engine.getAvailableSamples?.() ?? [];
+                      if (samples.length === 0) {
+                        try {
+                          samples = await engine.waitForSamples?.(3000) ?? [];
+                        } catch (error) {
+                          console.warn("Timeout waiting for drum samples", error);
+                        }
+                      }
+                      setAvailableSamples(samples);
+                    }
+                  }
+                } catch (error) {
+                  console.error("Failed to initialize audio", error);
+                  const errorMessage = error instanceof Error ? error.message : "Failed to initialize audio. Please try again.";
+                  setLoadError(errorMessage);
+                } finally {
+                  setIsLoadingInstrument(false);
+                }
+              }}
+              className="btn btn-sm btn-primary"
+            >
+              Initialize Audio
+            </button>
+          </div>
         </div>
       );
     }

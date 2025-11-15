@@ -142,6 +142,17 @@ const instantiateEngine = async (
   });
 
   const context = await AudioContextManager.getInstrumentContext();
+  
+  // Try to resume context if suspended
+  if (context.state === 'suspended') {
+    try {
+      await context.resume();
+    } catch (err) {
+      console.warn('Failed to resume AudioContext (may require user interaction):', err);
+    }
+  }
+  
+  // Initialize engine - this may fail if AudioContext isn't running
   await engine.initialize(context);
 
   if (category === InstrumentCategory.DrumBeat) {
