@@ -20,6 +20,7 @@ import {
   getInstrumentLabelById,
 } from '@/features/instruments/utils/instrumentLookup';
 import { InstrumentCategory } from '@/shared/constants/instruments';
+import { useDAWCollaborationContext } from '../../contexts/DAWCollaborationContext';
 
 interface TrackHeaderProps {
   track: Track;
@@ -55,15 +56,21 @@ export const TrackHeader = ({
     }
   }, [height, onHeightChange, track.id]);
 
-  const setTrackName = useTrackStore((state) => state.setTrackName);
-  const setTrackVolume = useTrackStore((state) => state.setTrackVolume);
-  const setTrackPan = useTrackStore((state) => state.setTrackPan);
   const toggleMute = useTrackStore((state) => state.toggleMute);
   const toggleSolo = useTrackStore((state) => state.toggleSolo);
-  const setTrackInstrument = useTrackStore((state) => state.setTrackInstrument);
-  const removeTrack = useTrackStore((state) => state.removeTrack);
   const moveTrackUp = useTrackStore((state) => state.moveTrackUp);
   const moveTrackDown = useTrackStore((state) => state.moveTrackDown);
+  
+  // Use collaboration handlers if available
+  const { 
+    handleTrackDelete,
+    handleTrackInstrumentChange,
+    handleTrackNameChange,
+    handleTrackVolumeChange,
+    handleTrackPanChange,
+    handleTrackVolumeDragEnd,
+    handleTrackPanDragEnd,
+  } = useDAWCollaborationContext();
 
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const instrumentButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -97,14 +104,14 @@ export const TrackHeader = ({
 
     if (!track.instrumentId) {
       const defaultInstrument = getDefaultInstrumentForCategory(resolvedCategory);
-      setTrackInstrument(track.id, defaultInstrument, resolvedCategory);
+      handleTrackInstrumentChange(track.id, defaultInstrument, resolvedCategory);
       return;
     }
 
     if (!track.instrumentCategory || track.instrumentCategory !== resolvedCategory) {
-      setTrackInstrument(track.id, track.instrumentId, resolvedCategory);
+      handleTrackInstrumentChange(track.id, track.instrumentId, resolvedCategory);
     }
-  }, [track, resolvedCategory, setTrackInstrument]);
+  }, [track, resolvedCategory, handleTrackInstrumentChange]);
 
   useEffect(() => {
     if (!isEditingName) {
@@ -164,7 +171,7 @@ export const TrackHeader = ({
       return;
     }
     const nextInstrument = getDefaultInstrumentForCategory(category);
-    setTrackInstrument(track.id, nextInstrument, category);
+    handleTrackInstrumentChange(track.id, nextInstrument, category);
     const updatedTrack: Track = {
       ...track,
       instrumentId: nextInstrument,
@@ -185,7 +192,7 @@ export const TrackHeader = ({
       return;
     }
     const category = getInstrumentCategoryById(instrumentId);
-    setTrackInstrument(track.id, instrumentId, category);
+    handleTrackInstrumentChange(track.id, instrumentId, category);
     const updatedTrack: Track = {
       ...track,
       instrumentId,
@@ -219,7 +226,7 @@ export const TrackHeader = ({
     const trimmedName = pendingName.trim();
     const nextName = trimmedName.length > 0 ? trimmedName : track.name;
     if (nextName !== track.name) {
-      setTrackName(track.id, nextName);
+      handleTrackNameChange(track.id, nextName);
     }
     setIsEditingName(false);
   };
@@ -256,11 +263,19 @@ export const TrackHeader = ({
   };
 
   const handleVolumeChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setTrackVolume(track.id, Number(event.target.value) / 100);
+    handleTrackVolumeChange(track.id, Number(event.target.value) / 100);
+  };
+
+  const handleVolumeMouseUp = () => {
+    handleTrackVolumeDragEnd();
   };
 
   const handlePanChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setTrackPan(track.id, Number(event.target.value) / 100);
+    handleTrackPanChange(track.id, Number(event.target.value) / 100);
+  };
+
+  const handlePanMouseUp = () => {
+    handleTrackPanDragEnd();
   };
 
   return (
@@ -323,7 +338,7 @@ export const TrackHeader = ({
         </div>
         <button
           type="button"
-          onClick={() => removeTrack(track.id)}
+          onClick={() => handleTrackDelete(track.id)}
           className="btn btn-xs btn-ghost btn-circle text-error hover:bg-error/20"
           title="Delete Track"
         >
@@ -339,6 +354,8 @@ export const TrackHeader = ({
             max={100}
             value={Math.round(track.volume * 100)}
             onChange={handleVolumeChange}
+            onMouseUp={handleVolumeMouseUp}
+            onTouchEnd={handleVolumeMouseUp}
             className="range range-xs max-w-[90px]"
           />
         </label>
@@ -350,6 +367,8 @@ export const TrackHeader = ({
             max={100}
             value={Math.round(track.pan * 100)}
             onChange={handlePanChange}
+            onMouseUp={handlePanMouseUp}
+            onTouchEnd={handlePanMouseUp}
             className='range range-xs max-w-[90px] [--range-bg:black] [--range-thumb:white] [--range-fill:0]'
           />
         </label>

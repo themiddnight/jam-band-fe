@@ -1,17 +1,18 @@
 import { type ChangeEvent } from 'react';
 
 import { useProjectStore } from '../../stores/projectStore';
+import { useDAWCollaborationContext } from '../../contexts/DAWCollaborationContext';
 
 const MIN_BPM = 40;
 const MAX_BPM = 300;
 
 export const BPMControl = () => {
   const bpm = useProjectStore((state) => state.bpm);
-  const setBpm = useProjectStore((state) => state.setBpm);
+  const { handleBpmChange: syncBpmChange } = useDAWCollaborationContext();
 
   const handleBpmChange = (value: number) => {
     const clamped = Math.min(Math.max(value, MIN_BPM), MAX_BPM);
-    setBpm(clamped);
+    syncBpmChange(clamped);
   };
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {

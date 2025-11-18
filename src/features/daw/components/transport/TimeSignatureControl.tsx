@@ -1,23 +1,24 @@
 import type { ChangeEvent } from 'react';
 
 import { useProjectStore } from '../../stores/projectStore';
+import { useDAWCollaborationContext } from '../../contexts/DAWCollaborationContext';
 
 const NUMERATOR_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
 const DENOMINATOR_OPTIONS = [2, 4, 8, 16];
 
 export const TimeSignatureControl = () => {
   const timeSignature = useProjectStore((state) => state.timeSignature);
-  const setTimeSignature = useProjectStore((state) => state.setTimeSignature);
+  const { handleTimeSignatureChange } = useDAWCollaborationContext();
 
   const handleNumeratorChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    setTimeSignature({
+    handleTimeSignatureChange({
       numerator: Number(event.target.value),
       denominator: timeSignature.denominator,
     });
   };
 
   const handleDenominatorChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    setTimeSignature({
+    handleTimeSignatureChange({
       numerator: timeSignature.numerator,
       denominator: Number(event.target.value),
     });

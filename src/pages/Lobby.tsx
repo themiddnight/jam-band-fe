@@ -441,19 +441,15 @@ export default function Lobby() {
                     <input
                       type="checkbox"
                       className="checkbox checkbox-primary"
-                      checked={newRoomType === "arrange" ? true : isHidden}
+                      checked={isHidden}
                       onChange={(e) => setIsHidden(e.target.checked)}
-                      disabled={newRoomType === "arrange"}
                     />
                     <div className="flex flex-col">
                       <span className="label-text select-none">
                         Hidden Room
                       </span>
                       <p className="text-sm text-base-content/50">
-                        {newRoomType === "arrange" 
-                          ? "Arrange rooms are automatically hidden (demo feature)"
-                          : "Room won't appear in the public list"
-                        }
+                        Room won't appear in the public list
                       </p>
                     </div>
                   </label>

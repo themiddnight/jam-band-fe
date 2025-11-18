@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useUserStore } from "@/shared/stores/userStore";
 import { Footer } from "@/features/ui";
@@ -14,6 +15,7 @@ import { useRecordingEngine } from "@/features/daw/hooks/playback/useRecordingEn
 import { useAudioRecordingEngine } from "@/features/daw/hooks/playback/useAudioRecordingEngine";
 import { useMidiMonitoring } from "@/features/daw/hooks/playback/useMidiMonitoring";
 import { useMidiInput } from "@/features/daw/hooks/useMidiInput";
+import type { MidiMessage } from "@/features/daw/hooks/useMidiInput";
 import { useKeyboardShortcuts } from "@/features/daw/hooks/useKeyboardShortcuts";
 import { useTrackAudioParams } from "@/features/daw/hooks/useTrackAudioParams";
 import { useEffectsIntegration } from "@/features/effects/hooks/useEffectsIntegration";
@@ -21,6 +23,12 @@ import { initializeStoreObservers } from "@/features/daw/stores/storeObservers";
 import { useMidiStore } from "@/features/daw/stores/midiStore";
 import { useArrangeRoomScaleStore } from "@/features/daw/stores/arrangeRoomStore";
 import { ProjectMenu } from "@/features/daw/components/ProjectMenu";
+import { useRoom } from "@/features/rooms";
+import { useWebRTCVoice } from "@/features/audio";
+import { VoiceInput } from "@/features/audio";
+import { DAWCollaborationProvider } from "@/features/daw/contexts/DAWCollaborationContext";
+import { RoomMembers, KickUserModal } from "@/features/rooms";
+import type { Socket } from "socket.io-client";
 
 /**
  * Arrange Room page for multi-track production with async editing
@@ -32,6 +40,50 @@ export default function ArrangeRoom() {
   const { username, userId } = useUserStore();
   const { generateInviteUrl } = useDeepLinkHandler();
   const [copiedRole, setCopiedRole] = useState<string | null>(null);
+  const [showKickModal, setShowKickModal] = useState(false);
+  const [userToKick, setUserToKick] = useState<any | null>(null);
+  const [recordingHandler, setRecordingHandler] = useState<(message: MidiMessage) => void>(() => () => {});
+
+  // Room management
+  const {
+    currentRoom,
+    currentUser,
+    isConnected,
+    isConnecting,
+    showLeaveConfirmModal,
+    setShowLeaveConfirmModal,
+    handleLeaveRoomClick,
+    handleLeaveRoomConfirm,
+    kickUser,
+    getActiveSocket,
+  } = useRoom();
+
+  // Get active socket for collaboration
+  const activeSocket = getActiveSocket();
+  const socketRef = useRef<Socket | null>(null);
+  socketRef.current = activeSocket;
+
+  // WebRTC Voice Communication
+  const isVoiceEnabled = !!currentUser?.role;
+  const canTransmitVoice =
+    currentUser?.role === "room_owner" || currentUser?.role === "band_member";
+
+  const webRTCParams = {
+    socket: activeSocket,
+    currentUserId: currentUser?.id || "",
+    currentUsername: currentUser?.username || "",
+    roomId: currentRoom?.id || "",
+    isEnabled: isVoiceEnabled,
+    canTransmit: canTransmitVoice,
+  };
+
+  const {
+    addLocalStream,
+    removeLocalStream,
+  } = useWebRTCVoice(webRTCParams);
+
+  // DAW Collaboration enabled flag
+  const isCollaborationEnabled = isConnected && !!currentRoom;
 
   // Initialize DAW store observers for undo/redo history
   useEffect(() => {
@@ -45,12 +97,11 @@ export default function ArrangeRoom() {
   const setMidiStatus = useMidiStore((state) => state.setStatus);
   const setLastMidiMessage = useMidiStore((state) => state.setLastMessage);
   const lastMidiMessage = useMidiStore((state) => state.lastMessage);
-  const handleRecordingMidiMessage = useRecordingEngine();
   const midi = useMidiInput({
     autoConnect: true,
     onMessage: (message) => {
       setLastMidiMessage(message);
-      handleRecordingMidiMessage(message);
+      recordingHandler(message);
     },
   });
 
@@ -58,8 +109,6 @@ export default function ArrangeRoom() {
   usePlaybackEngine();
   useAudioRecordingEngine();
   useMidiMonitoring(lastMidiMessage);
-  useKeyboardShortcuts();
-  useTrackAudioParams();
 
   const { isInitialized: isEffectsInitialized, error: effectsError } = useEffectsIntegration({
     userId: userId ?? "",
@@ -98,8 +147,28 @@ export default function ArrangeRoom() {
     }
   }, [roomId, navigate]);
 
-  const handleLeaveRoom = () => {
-    navigate("/");
+  // Auto-join room when component mounts
+  useEffect(() => {
+    if (roomId && username && userId && !isConnected && !isConnecting) {
+      // Room will be joined via useRoom hook when socket connects
+      // This is handled automatically by the room management system
+    }
+  }, [roomId, username, userId, isConnected, isConnecting]);
+
+  const handleKickUser = (targetUserId: string) => {
+    const user = currentRoom?.users?.find((u: any) => u.id === targetUserId);
+    if (user) {
+      setUserToKick(user);
+      setShowKickModal(true);
+    }
+  };
+
+  const handleKickConfirm = () => {
+    if (userToKick) {
+      kickUser(userToKick.id);
+      setShowKickModal(false);
+      setUserToKick(null);
+    }
   };
 
   const handleCopyInviteUrl = async (role: "band_member" | "audience") => {
@@ -119,15 +188,28 @@ export default function ArrangeRoom() {
   useArrangeRoomScaleStore();
 
   return (
-    <div className="min-h-dvh bg-base-200 flex flex-col">
-      <div className="flex-1 p-3">
+    <DAWCollaborationProvider
+      socket={activeSocket}
+      roomId={currentRoom?.id || null}
+      enabled={isCollaborationEnabled}
+    >
+      <TrackAudioParamsBridge />
+      <KeyboardShortcutsBridge />
+      <RecordingEngineBridge onHandlerReady={setRecordingHandler} />
+      <div className="min-h-dvh bg-base-200 flex flex-col">
+        <div className="flex-1 p-3">
         <div className="">
           {/* Header */}
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-bold text-secondary">Arrange Room</h2>
-                <span className="badge badge-sm badge-secondary">Demo</span>
+                {currentRoom && (
+                  <span className="badge badge-sm badge-primary">{currentRoom.name}</span>
+                )}
+                {!isConnected && (
+                  <span className="badge badge-sm badge-warning">Connecting...</span>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -157,7 +239,7 @@ export default function ArrangeRoom() {
                 </div>
               </div>
               <button
-                onClick={handleLeaveRoom}
+                onClick={handleLeaveRoomClick}
                 className="btn btn-outline btn-sm"
               >
                 Leave Room
@@ -181,18 +263,102 @@ export default function ArrangeRoom() {
 
                 <SynthControlsPanel />
 
-                <VirtualInstrumentPanel onRecordMidiMessage={handleRecordingMidiMessage} />
+                          <VirtualInstrumentPanel onRecordMidiMessage={recordingHandler} />
               </main>
 
               {/* Sidebar: Right on desktop, bottom on mobile */}
-              <Sidebar />
+              <div className="flex flex-col xl:flex-row gap-2">
+                <Sidebar />
+                
+                {/* Room Members Sidebar */}
+                {currentRoom && (
+                  <div className="w-full xl:w-64 bg-base-100 rounded-lg shadow p-4">
+                    <h3 className="font-bold text-sm mb-2">Room Members</h3>
+                    <RoomMembers
+                      users={currentRoom.users || []}
+                      pendingMembers={currentRoom.pendingMembers || []}
+                      playingIndicators={new Map()}
+                      onKickUser={handleKickUser}
+                      onApproveMember={() => {}}
+                      onRejectMember={() => {}}
+                      onSwapInstrument={() => {}}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
+            
+            {/* WebRTC Voice Input */}
+            {isVoiceEnabled && (
+              <div className="mt-2">
+                <VoiceInput
+                  isVisible={true}
+                  onStreamReady={addLocalStream}
+                  onStreamRemoved={removeLocalStream}
+                />
+              </div>
+            )}
           </div>
 
         </div>
       </div>
       <Footer />
-    </div>
+      
+      {/* Modals */}
+      {showLeaveConfirmModal && (
+        <div className="modal modal-open">
+          <div className="modal-box">
+            <h3 className="font-bold text-lg">Leave Room?</h3>
+            <p className="py-4">Are you sure you want to leave this room?</p>
+            <div className="modal-action">
+              <button onClick={() => setShowLeaveConfirmModal(false)} className="btn">
+                Cancel
+              </button>
+              <button onClick={handleLeaveRoomConfirm} className="btn btn-primary">
+                Leave
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {showKickModal && (
+        <KickUserModal
+          open={showKickModal}
+          onClose={() => {
+            setShowKickModal(false);
+            setUserToKick(null);
+          }}
+          targetUser={userToKick}
+          onConfirm={handleKickConfirm}
+        />
+      )}
+      </div>
+    </DAWCollaborationProvider>
   );
 }
+
+const TrackAudioParamsBridge = () => {
+  useTrackAudioParams();
+  return null;
+};
+
+const KeyboardShortcutsBridge = () => {
+  useKeyboardShortcuts();
+  return null;
+};
+
+interface RecordingEngineBridgeProps {
+  onHandlerReady: Dispatch<SetStateAction<(message: MidiMessage) => void>>;
+}
+
+const RecordingEngineBridge = ({ onHandlerReady }: RecordingEngineBridgeProps) => {
+  const handler = useRecordingEngine();
+
+  useEffect(() => {
+    onHandlerReady(() => handler);
+  }, [handler, onHandlerReady]);
+
+  return null;
+};
 

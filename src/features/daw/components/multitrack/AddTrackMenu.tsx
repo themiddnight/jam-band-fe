@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { useTrackStore } from '../../stores/trackStore';
 import type { TrackType } from '../../types/daw';
 import { loadInstrumentForTrack } from '../../utils/audioEngine';
+import { useDAWCollaborationContext } from '../../contexts/DAWCollaborationContext';
 
 export const AddTrackMenu = () => {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const addTrack = useTrackStore((state) => state.addTrack);
+  const { handleTrackAdd } = useDAWCollaborationContext();
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -23,11 +23,11 @@ export const AddTrackMenu = () => {
   }, [isOpen]);
 
   const handleAddTrack = (type: TrackType) => {
-    const track = addTrack({ type });
+    const track = handleTrackAdd({ type });
     setIsOpen(false);
     
     // For MIDI tracks, load the default instrument immediately
-    if (type === 'midi' && track.instrumentId) {
+    if (track && type === 'midi' && track.instrumentId) {
       loadInstrumentForTrack(track).catch((error) => {
         console.error('Failed to load default instrument:', error);
       });

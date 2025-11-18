@@ -40,6 +40,17 @@ interface TrackStoreState {
   detachRegionFromTrack: (trackId: TrackId, regionId: string) => void;
   selectTrack: (trackId: TrackId | null) => void;
   clearTracks: () => void;
+  // Sync handlers (bypass undo history)
+  syncSetTracks: (tracks: Track[]) => void;
+  syncAddTrack: (track: Track) => void;
+  syncUpdateTrack: (trackId: TrackId, updates: Partial<Track>) => void;
+  syncRemoveTrack: (trackId: TrackId) => void;
+  syncSetTrackInstrument: (
+    trackId: TrackId,
+    instrumentId: string,
+    instrumentCategory?: InstrumentCategory,
+  ) => void;
+  syncSelectTrack: (trackId: TrackId | null) => void;
 }
 
 const createTrack = (index: number, overrides?: Partial<Track>): Track => {
@@ -187,5 +198,38 @@ export const useTrackStore = create<TrackStoreState>((set, get) => ({
     })),
   selectTrack: (trackId) => set({ selectedTrackId: trackId }),
   clearTracks: () => set({ tracks: [], selectedTrackId: null }),
+  // Sync handlers (bypass undo history - called from DAWSyncService)
+  syncSetTracks: (tracks) => set({ tracks }),
+  syncAddTrack: (track) =>
+    set((state) => ({
+      tracks: [...state.tracks, track],
+      selectedTrackId: state.selectedTrackId || track.id,
+    })),
+  syncUpdateTrack: (trackId, updates) =>
+    set((state) => ({
+      tracks: state.tracks.map((track) =>
+        track.id === trackId ? { ...track, ...updates } : track
+      ),
+    })),
+  syncRemoveTrack: (trackId) =>
+    set((state) => ({
+      tracks: state.tracks.filter((track) => track.id !== trackId),
+      selectedTrackId:
+        state.selectedTrackId === trackId ? null : state.selectedTrackId,
+    })),
+  syncSetTrackInstrument: (trackId, instrumentId, instrumentCategory) =>
+    set((state) => ({
+      tracks: state.tracks.map((track) =>
+        track.id === trackId
+          ? {
+              ...track,
+              instrumentId,
+              instrumentCategory:
+                instrumentCategory ?? track.instrumentCategory,
+            }
+          : track
+      ),
+    })),
+  syncSelectTrack: (trackId) => set({ selectedTrackId: trackId }),
 }));
 

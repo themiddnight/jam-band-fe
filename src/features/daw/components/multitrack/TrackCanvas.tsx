@@ -30,8 +30,10 @@ interface TrackCanvasProps {
   onClearRegionSelection: () => void;
   onCreateRegion: (trackId: string, startBeat: number) => void;
   onMoveRegions: (regionIds: RegionId[], deltaBeats: number) => void;
+  onMoveRegionsToTrack: (regionIds: RegionId[], targetTrackId: string, deltaBeats: number) => void;
   onResizeRegion: (regionId: RegionId, newLength: number) => void;
   onSetLoopIterations: (regionId: RegionId, iterations: number) => void;
+  onHeadResizeRegion?: (regionId: RegionId, updates: Partial<Region>) => void;
   onMarqueeSelect: (regionIds: RegionId[], additive: boolean) => void;
   onPan?: (deltaX: number, deltaY: number) => void;
 }
@@ -113,8 +115,10 @@ export const TrackCanvas = ({
   onClearRegionSelection,
   onCreateRegion,
   onMoveRegions,
+  onMoveRegionsToTrack,
   onResizeRegion,
   onSetLoopIterations,
+  onHeadResizeRegion,
   onMarqueeSelect,
   onPan,
 }: TrackCanvasProps) => {
@@ -607,8 +611,7 @@ export const TrackCanvas = ({
             dragState.initialTrackIds[id] === dragState.initialTrackIds[dragState.regionIds[0]]
           );
           if (allSameTrack) {
-            const moveRegionsToTrack = useRegionStore.getState().moveRegionsToTrack;
-            moveRegionsToTrack(dragState.regionIds, dragState.targetTrackId, dragState.delta);
+            onMoveRegionsToTrack(dragState.regionIds, dragState.targetTrackId, dragState.delta);
           } else if (dragState.delta !== 0) {
             // Different initial tracks, just move horizontally
             onMoveRegions(dragState.regionIds, dragState.delta);
@@ -633,7 +636,12 @@ export const TrackCanvas = ({
       setResizeState(null);
     }
     if (headResizeState) {
-      const { updateRegion } = useRegionStore.getState();
+      const applyHeadResize =
+        onHeadResizeRegion ??
+        ((regionId: RegionId, updates: Partial<Region>) => {
+          const { updateRegion } = useRegionStore.getState();
+          updateRegion(regionId, updates);
+        });
       headResizeState.regionIds.forEach((regionId) => {
         const r = regions.find((region) => region.id === regionId);
         if (!r) return;
@@ -647,7 +655,7 @@ export const TrackCanvas = ({
           if (r.type === 'audio') {
             const currentTrimStart = r.trimStart ?? 0;
             // When moving start right (positive delta), we're trimming more from the start
-            updateRegion(regionId, {
+            applyHeadResize(regionId, {
               start: newStart,
               length: newLength,
               trimStart: currentTrimStart + actualDelta,
@@ -678,7 +686,7 @@ export const TrackCanvas = ({
                 return event.end > 0 && event.start < newLength;
               });
             
-            updateRegion(regionId, {
+            applyHeadResize(regionId, {
               start: newStart,
               length: newLength,
               notes: adjustedNotes,

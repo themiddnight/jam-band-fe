@@ -28,6 +28,13 @@ interface RegionStoreState {
   clearSelection: () => void;
   duplicateRegion: (regionId: RegionId, offsetBeats: number) => Region | null;
   splitRegions: (regionIds: RegionId[], splitPosition: number) => void;
+  // Sync handlers (bypass undo history)
+  syncSetRegions: (regions: Region[]) => void;
+  syncAddRegion: (region: Region) => void;
+  syncUpdateRegion: (regionId: RegionId, updates: Partial<Region>) => void;
+  syncRemoveRegion: (regionId: RegionId) => void;
+  syncMoveRegion: (regionId: RegionId, newStart: number) => void;
+  syncSelectRegions: (regionIds: RegionId[]) => void;
 }
 
 const clampLength = (length: number) => Math.max(length, 0.25);
@@ -158,17 +165,25 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
     }),
   moveRegionsToTrack: (regionIds, targetTrackId, deltaBeats = 0) =>
     set((state) => {
-      return {
-        regions: state.regions.map((region) =>
-          regionIds.includes(region.id)
-            ? {
-                ...region,
-                trackId: targetTrackId,
-                start: Math.max(0, region.start + deltaBeats),
-              }
-            : region
-        ),
-      };
+      const trackStore = useTrackStore.getState();
+      const regions = state.regions.map((region) => {
+        if (!regionIds.includes(region.id)) {
+          return region;
+        }
+
+        if (region.trackId !== targetTrackId) {
+          trackStore.detachRegionFromTrack(region.trackId, region.id);
+          trackStore.attachRegionToTrack(targetTrackId, region.id);
+        }
+
+        return {
+          ...region,
+          trackId: targetTrackId,
+          start: Math.max(0, region.start + deltaBeats),
+        };
+      });
+
+      return { regions };
     }),
   resizeRegion: (regionId, newLength) =>
     set((state) => ({
@@ -395,5 +410,66 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
       }
     });
   },
+  // Sync handlers (bypass undo history - called from DAWSyncService)
+  syncSetRegions: (regions) => set({ regions }),
+  syncAddRegion: (region) =>
+    set((state) => {
+      // Check if region already exists
+      if (state.regions.find((r) => r.id === region.id)) {
+        return state;
+      }
+      // Attach region to track
+      useTrackStore.getState().attachRegionToTrack(region.trackId, region.id);
+      return {
+        regions: [...state.regions, region],
+        selectedRegionIds: state.selectedRegionIds.includes(region.id)
+          ? state.selectedRegionIds
+          : [...state.selectedRegionIds, region.id],
+        lastSelectedRegionId: region.id,
+      };
+    }),
+  syncUpdateRegion: (regionId, updates) =>
+    set((state) => ({
+      regions: state.regions.map((region) => {
+        if (region.id !== regionId) {
+          return region;
+        }
+        // Type-safe update for different region types
+        if (region.type === 'midi') {
+          return { ...region, ...updates } as MidiRegion;
+        } else {
+          return { ...region, ...updates } as AudioRegion;
+        }
+      }),
+    })),
+  syncRemoveRegion: (regionId) =>
+    set((state) => {
+      const region = state.regions.find((r) => r.id === regionId);
+      if (region) {
+        useTrackStore.getState().detachRegionFromTrack(region.trackId, regionId);
+      }
+      return {
+        regions: state.regions.filter((region) => region.id !== regionId),
+        selectedRegionIds: state.selectedRegionIds.filter((id) => id !== regionId),
+        lastSelectedRegionId:
+          state.lastSelectedRegionId === regionId ? null : state.lastSelectedRegionId,
+      };
+    }),
+  syncMoveRegion: (regionId, newStart) =>
+    set((state) => ({
+      regions: state.regions.map((region) =>
+        region.id === regionId
+          ? {
+              ...region,
+              start: Math.max(0, newStart),
+            }
+          : region
+      ),
+    })),
+  syncSelectRegions: (regionIds) =>
+    set(() => ({
+      selectedRegionIds: Array.from(new Set(regionIds)),
+      lastSelectedRegionId: regionIds.at(-1) ?? null,
+    })),
 }));
 

@@ -26,6 +26,8 @@ interface EffectsState {
   ) => void;
   loadPreset: (chainType: EffectChainType, preset: EffectChainPreset) => void;
   ensureChain: (chainType: EffectChainType) => void;
+  // Sync handlers (bypass undo history)
+  syncUpdateEffectChain: (chainType: EffectChainType, effectChain: SharedEffectChainState) => void;
 }
 
 const createDefaultChain = (type: EffectChainType): EffectChain => ({
@@ -378,6 +380,21 @@ export const useEffectsStore = create<EffectsState>()(
         },
         false,
         'effects/ensureChain',
+      ),
+
+      // Sync handler (bypass undo history - called from DAWSyncService)
+      syncUpdateEffectChain: (chainType, effectChain) => set(
+        (state) => {
+          const updatedChain = convertChainState(chainType, effectChain);
+          return {
+            chains: {
+              ...state.chains,
+              [chainType]: updatedChain,
+            },
+          };
+        },
+        false,
+        'effects/syncUpdateEffectChain',
       ),
     }),
     {

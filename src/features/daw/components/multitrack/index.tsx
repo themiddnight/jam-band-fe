@@ -11,6 +11,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useRegionStore } from '../../stores/regionStore';
 import { useTrackStore } from '../../stores/trackStore';
 import { LoopToggle } from '../transport/LoopToggle';
+import { useDAWCollaborationContext } from '../../contexts/DAWCollaborationContext';
 
 export const MultitrackView = () => {
   const tracks = useTrackStore((state) => state.tracks);
@@ -21,13 +22,17 @@ export const MultitrackView = () => {
   const selectRegion = useRegionStore((state) => state.selectRegion);
   const toggleRegionSelection = useRegionStore((state) => state.toggleRegionSelection);
   const clearRegionSelection = useRegionStore((state) => state.clearSelection);
-  const addRegion = useRegionStore((state) => state.addRegion);
-  const removeRegion = useRegionStore((state) => state.removeRegion);
-  const moveRegions = useRegionStore((state) => state.moveRegions);
-  const resizeRegion = useRegionStore((state) => state.resizeRegion);
-  const setRegionLoop = useRegionStore((state) => state.setRegionLoop);
   const selectRegions = useRegionStore((state) => state.selectRegions);
-  const splitRegions = useRegionStore((state) => state.splitRegions);
+  
+  // Use collaboration handlers if available
+  const {
+    handleRegionAdd,
+    handleRegionUpdate,
+    handleRegionMoveToTrack,
+    handleRegionMove,
+    handleRegionDelete,
+    handleRegionSplit,
+  } = useDAWCollaborationContext();
   const playhead = useProjectStore((state) => state.playhead);
   const timeSignature = useProjectStore((state) => state.timeSignature);
   const setActiveRegion = usePianoRollStore((state) => state.setActiveRegion);
@@ -150,7 +155,7 @@ export const MultitrackView = () => {
               type="button"
               className="btn btn-xs btn-ghost"
               onClick={() => {
-                splitRegions(selectedRegionIds, playhead);
+                handleRegionSplit(selectedRegionIds, playhead);
               }}
               disabled={selectedRegionIds.length === 0}
               title="Split Selected Regions at Playhead"
@@ -168,7 +173,7 @@ export const MultitrackView = () => {
 
                 if (targetTrack && targetTrack.type === 'midi') {
                   // Create region at current playhead position
-                  addRegion(targetTrack.id, playhead);
+                  handleRegionAdd(targetTrack.id, playhead);
                 }
               }}
               disabled={
@@ -188,7 +193,7 @@ export const MultitrackView = () => {
               className="btn btn-xs btn-error"
               onClick={() => {
                 selectedRegionIds.forEach((id) => {
-                  removeRegion(id);
+                  handleRegionDelete(id);
                 });
               }}
               disabled={selectedRegionIds.length === 0}
@@ -292,16 +297,28 @@ export const MultitrackView = () => {
                   setActiveRegion(null);
                 }}
                 onCreateRegion={(trackId, startBeat) => {
-                  const region = addRegion(trackId, startBeat);
-                  setActiveRegion(region.id);
-
-                  // Automatically select the track
-                  selectTrack(trackId);
+                  const region = handleRegionAdd(trackId, startBeat);
+                  if (region) {
+                    setActiveRegion(region.id);
+                    // Automatically select the track
+                    selectTrack(trackId);
+                  }
                 }}
-                onMoveRegions={moveRegions}
-                onResizeRegion={resizeRegion}
+                onMoveRegions={(regionIds, deltaBeats) => {
+                  regionIds.forEach((regionId) => {
+                    handleRegionMove(regionId, deltaBeats);
+                  });
+                }}
+                onMoveRegionsToTrack={(regionIds, targetTrackId, deltaBeats) =>
+                  handleRegionMoveToTrack(regionIds, targetTrackId, deltaBeats)
+                }
+                onResizeRegion={(regionId, length) => handleRegionUpdate(regionId, { length })}
+                onHeadResizeRegion={(regionId, updates) => handleRegionUpdate(regionId, updates)}
                 onSetLoopIterations={(regionId, iterations) =>
-                  setRegionLoop(regionId, iterations > 1, iterations)
+                  handleRegionUpdate(regionId, {
+                    loopEnabled: iterations > 1,
+                    loopIterations: Math.max(1, iterations),
+                  })
                 }
                 onMarqueeSelect={(regionIds, additive) => {
                   if (additive) {

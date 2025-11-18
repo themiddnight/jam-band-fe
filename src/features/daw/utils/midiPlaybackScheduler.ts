@@ -32,12 +32,10 @@ const computeScheduledNotes = (region: MidiRegion): ScheduledNoteEvent[] => {
     region.notes.forEach((note) => {
       const noteEnd = note.start + note.duration;
 
-      if (note.start >= region.length || noteEnd <= 0) {
-        return;
-      }
-
-      const clippedStart = Math.max(0, note.start);
-      const clippedEnd = Math.min(region.length, noteEnd);
+      // Allow notes to exist outside region boundaries
+      // Only clip for playback timing, but don't skip notes entirely
+      const clippedStart = note.start;
+      const clippedEnd = noteEnd;
       const clippedDuration = clippedEnd - clippedStart;
 
       if (clippedDuration > 0.01) {
@@ -66,12 +64,9 @@ const computeSustainEvents = (region: MidiRegion): SustainSchedule[] => {
     const iterationOffset = region.start + iteration * region.length;
 
     region.sustainEvents.forEach((event) => {
-      if (event.start >= region.length || event.end <= 0) {
-        return;
-      }
-
-      const clippedStart = Math.max(0, event.start);
-      const clippedEnd = Math.min(region.length, event.end);
+      // Allow sustain events to exist outside region boundaries
+      const clippedStart = event.start;
+      const clippedEnd = event.end;
 
       events.push({
         time: iterationOffset + clippedStart,

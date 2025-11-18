@@ -4,6 +4,8 @@ import { trackInstrumentRegistry } from "../utils/trackInstrumentRegistry";
 import { InstrumentCategory } from "@/shared/constants/instruments";
 import { LazySynthControlsWrapper as SynthControls } from "@/features/instruments";
 import type { SynthState } from "@/features/instruments/utils/InstrumentEngine";
+import { useSynthStore } from "../stores/synthStore";
+import { useDAWCollaborationContext } from "../contexts/DAWCollaborationContext";
 
 /**
  * SynthControlsPanel - Shows synth controls when a MIDI track with synth instrument is selected
@@ -18,8 +20,15 @@ export const SynthControlsPanel = () => {
     return tracks.find((track) => track.id === selectedTrackId) ?? null;
   }, [selectedTrackId, tracks]);
 
-  const [synthState, setSynthState] = useState<SynthState | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const synthState = useSynthStore((state) =>
+    selectedTrack?.id ? state.synthStates[selectedTrack.id] ?? null : null
+  );
+  const setSynthStateStore = useSynthStore((state) => state.setSynthState);
+  const updateSynthStateStore = useSynthStore((state) => state.updateSynthState);
+  const removeSynthState = useSynthStore((state) => state.removeSynthState);
+
+  const { handleSynthParamsChange } = useDAWCollaborationContext();
 
   // Check if the selected track is a synth track
   const isSynthTrack = useMemo(() => {
@@ -32,7 +41,10 @@ export const SynthControlsPanel = () => {
   // Load synth state when track changes
   useEffect(() => {
     if (!selectedTrack || !isSynthTrack) {
-      setSynthState(null);
+      setIsLoading(false);
+      if (selectedTrack?.id) {
+        removeSynthState(selectedTrack.id);
+      }
       return;
     }
 
@@ -46,17 +58,17 @@ export const SynthControlsPanel = () => {
         });
 
         const state = engine.getSynthState();
-        setSynthState(state);
+        setSynthStateStore(selectedTrack.id, state);
       } catch (error) {
         console.error("Failed to load synth state", error);
-        setSynthState(null);
+        removeSynthState(selectedTrack.id);
       } finally {
         setIsLoading(false);
       }
     };
 
     void loadSynthState();
-  }, [selectedTrack, isSynthTrack]);
+  }, [selectedTrack, isSynthTrack, setSynthStateStore, removeSynthState]);
 
   // Handle synth parameter changes
   const handleParamChange = useCallback(
@@ -73,13 +85,13 @@ export const SynthControlsPanel = () => {
         // Update the engine with new parameters
         await engine.updateSynthParams(params);
 
-        // Update local state
-        setSynthState((prev) => (prev ? { ...prev, ...params } : null));
+        updateSynthStateStore(selectedTrack.id, params);
+        handleSynthParamsChange(selectedTrack.id, params);
       } catch (error) {
         console.error("Failed to update synth parameters", error);
       }
     },
-    [selectedTrack, isSynthTrack],
+    [selectedTrack, isSynthTrack, handleSynthParamsChange, updateSynthStateStore],
   );
 
   // Handle preset loading
@@ -97,13 +109,13 @@ export const SynthControlsPanel = () => {
         // Update the engine with preset parameters
         await engine.updateSynthParams(presetParams);
 
-        // Update local state
-        setSynthState(presetParams);
+        setSynthStateStore(selectedTrack.id, presetParams);
+        handleSynthParamsChange(selectedTrack.id, presetParams);
       } catch (error) {
         console.error("Failed to load preset", error);
       }
     },
-    [selectedTrack, isSynthTrack],
+    [selectedTrack, isSynthTrack, handleSynthParamsChange, setSynthStateStore],
   );
 
   // Don't render if not a synth track

@@ -5,12 +5,12 @@ import { InstrumentCategory } from '@/shared/constants/instruments';
 import type { MidiNote, SustainEvent } from '../../types/daw';
 import { useProjectStore } from '../../stores/projectStore';
 import { useTrackStore } from '../../stores/trackStore';
-import { useRegionStore } from '../../stores/regionStore';
 import { usePianoRollStore } from '../../stores/pianoRollStore';
 import { useRecordingStore } from '../../stores/recordingStore';
 import { playImmediateNote, setSustainPedal, stopImmediateNote } from '../../utils/audioEngine';
 import type { MidiMessage } from '../useMidiInput';
 import { snapToGrid } from '../../utils/timeUtils';
+import { useDAWCollaborationContext } from '../../contexts/DAWCollaborationContext';
 
 interface RecordedNote extends Omit<MidiNote, 'id'> {
   tempId: number;
@@ -34,12 +34,11 @@ export const useRecordingEngine = () => {
   const gridDivision = useProjectStore((state) => state.gridDivision);
   const selectedTrackId = useTrackStore((state) => state.selectedTrackId);
   const tracks = useTrackStore((state) => state.tracks);
-  const addRegion = useRegionStore((state) => state.addRegion);
-  const updateRegion = useRegionStore((state) => state.updateRegion);
   const setActiveRegion = usePianoRollStore((state) => state.setActiveRegion);
   const startRecordingPreview = useRecordingStore((state) => state.startRecording);
   const updateRecordingDuration = useRecordingStore((state) => state.updateRecordingDuration);
   const stopRecordingPreview = useRecordingStore((state) => state.stopRecording);
+  const { handleRegionAdd } = useDAWCollaborationContext();
 
   const activeNotesRef = useRef<Map<number, ActiveNote>>(new Map());
   const recordedNotesRef = useRef<RecordedNote[]>([]);
@@ -104,23 +103,30 @@ export const useRecordingEngine = () => {
         }, 0);
         const regionLength = Math.max(4, Math.ceil(Math.max(maxNoteEnd, maxSustainEnd)));
 
-        // Create region with all recorded notes
-        const region = addRegion(trackId, startBeat, regionLength);
-        
-        // Add all notes and sustain events to the region (stored relative to region start)
-        updateRegion(region.id, {
-          notes: notes.map((note) => ({
-            ...note,
-            id: typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-${note.tempId}`,
-          })),
-          sustainEvents: sustainEvents.map((event) => ({
-            ...event,
-            id: typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-${event.tempId}`,
-          })),
+        const resolvedNotes: MidiNote[] = notes.map((note) => ({
+          id: typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-${note.tempId}`,
+          pitch: note.pitch,
+          start: note.start,
+          duration: note.duration,
+          velocity: note.velocity,
+        }));
+
+        const resolvedSustainEvents: SustainEvent[] = sustainEvents.map((event) => ({
+          id: typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-${event.tempId}`,
+          start: event.start,
+          end: event.end,
+        }));
+
+        // Create region with all recorded data (synced to collaborators)
+        const region = handleRegionAdd(trackId, startBeat, regionLength, {
+          notes: resolvedNotes,
+          sustainEvents: resolvedSustainEvents,
         });
 
-        // Open in piano roll
-        setActiveRegion(region.id);
+        if (region) {
+          // Open in piano roll
+          setActiveRegion(region.id);
+        }
       }
 
       // Clean up
@@ -143,7 +149,7 @@ export const useRecordingEngine = () => {
         }
       }
     }
-  }, [transportState, addRegion, updateRegion, setActiveRegion, stopRecordingPreview, tracks]);
+  }, [transportState, handleRegionAdd, setActiveRegion, stopRecordingPreview, tracks]);
 
   const handleMidiMessage = useCallback(
     (message: MidiMessage) => {

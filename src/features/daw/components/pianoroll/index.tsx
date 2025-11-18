@@ -17,6 +17,7 @@ import { useRegionStore } from '../../stores/regionStore';
 import { useTrackStore } from '../../stores/trackStore';
 import type { SustainEvent } from '../../types/daw';
 import { useProjectStore } from '../../stores/projectStore';
+import { useDAWCollaborationContext } from '../../contexts/DAWCollaborationContext';
 
 const TOTAL_HEIGHT = TOTAL_KEYS * NOTE_HEIGHT;
 
@@ -28,7 +29,6 @@ export const PianoRoll = () => {
   const setSelectedNoteIds = usePianoRollStore((state) => state.setSelectedNoteIds);
   const toggleNoteSelection = usePianoRollStore((state) => state.toggleNoteSelection);
   const clearNoteSelection = usePianoRollStore((state) => state.clearSelection);
-  const addNote = usePianoRollStore((state) => state.addNote);
   const moveNotes = usePianoRollStore((state) => state.moveNotes);
   const duplicateNotes = usePianoRollStore((state) => state.duplicateNotes);
   const resizeNotes = usePianoRollStore((state) => state.resizeNotes);
@@ -36,6 +36,30 @@ export const PianoRoll = () => {
   const quantizeNotes = usePianoRollStore((state) => state.quantizeNotes);
   const quantizeAllNotes = usePianoRollStore((state) => state.quantizeAllNotes);
   const deleteSelectedNotes = usePianoRollStore((state) => state.deleteSelectedNotes);
+  
+  // Use collaboration handlers if available
+  const { handleNoteAdd, handleNoteUpdate, handleNoteDelete, handleRegionUpdate } = useDAWCollaborationContext();
+  const syncRegionNotes = useCallback(() => {
+    if (!activeRegionId) {
+      return;
+    }
+    const region = useRegionStore.getState().regions.find((r) => r.id === activeRegionId);
+    if (!region || region.type !== 'midi') {
+      return;
+    }
+    handleRegionUpdate(activeRegionId, { notes: region.notes });
+  }, [activeRegionId, handleRegionUpdate]);
+
+  const syncSustainEvents = useCallback(() => {
+    if (!activeRegionId) {
+      return;
+    }
+    const region = useRegionStore.getState().regions.find((r) => r.id === activeRegionId);
+    if (!region || region.type !== 'midi') {
+      return;
+    }
+    handleRegionUpdate(activeRegionId, { sustainEvents: region.sustainEvents });
+  }, [activeRegionId, handleRegionUpdate]);
   const selectedSustainIds = usePianoRollStore((state) => state.selectedSustainIds);
   const setSelectedSustainIds = usePianoRollStore((state) => state.setSelectedSustainIds);
   const addSustainEvent = usePianoRollStore((state) => state.addSustainEvent);
@@ -100,7 +124,7 @@ export const PianoRoll = () => {
       // Convert absolute position to region-relative position
       const relativeStart = absoluteStart - midiRegion.start;
       const clampedStart = Math.max(0, Math.min(relativeStart, midiRegion.length - 0.25));
-      const newNote = addNote({
+      const newNote = handleNoteAdd({
         pitch,
         start: clampedStart,
         duration: 1,
@@ -110,17 +134,90 @@ export const PianoRoll = () => {
         setSelectedNoteIds([newNote.id]);
       }
     },
-    [addNote, midiRegion, setSelectedNoteIds, velocityPreview]
+    [handleNoteAdd, midiRegion, setSelectedNoteIds, velocityPreview]
   );
 
   const handleVelocityChange = useCallback(
     (value: number) => {
       setVelocityPreview(value);
-      if (selectedNoteIds.length) {
+      if (selectedNoteIds.length && midiRegion) {
+        // Update locally first
         setNotesVelocity(selectedNoteIds, value);
+        // Then sync each note individually
+        selectedNoteIds.forEach((noteId) => {
+          handleNoteUpdate(noteId, { velocity: value });
+        });
       }
     },
-    [selectedNoteIds, setNotesVelocity]
+    [selectedNoteIds, setNotesVelocity, handleNoteUpdate, midiRegion]
+  );
+
+  // Wrapper for moveNotes that syncs each note individually
+  const handleMoveNotes = useCallback(
+    (noteIds: string[], deltaBeats: number, deltaPitch: number) => {
+      if (!midiRegion) return;
+      // Get current note values before update
+      const region = useRegionStore.getState().regions.find((r) => r.id === midiRegion.id);
+      if (!region || region.type !== 'midi') return;
+      
+      const notesToUpdate = region.notes.filter((note) => noteIds.includes(note.id));
+      // Update locally first
+      moveNotes(noteIds, deltaBeats, deltaPitch);
+      // Then sync each note individually with calculated new values
+      notesToUpdate.forEach((note) => {
+        handleNoteUpdate(note.id, {
+          start: Math.max(0, note.start + deltaBeats),
+          pitch: Math.min(127, Math.max(0, note.pitch + deltaPitch)),
+        });
+      });
+    },
+    [moveNotes, handleNoteUpdate, midiRegion]
+  );
+
+  // Wrapper for resizeNotes that syncs each note individually
+  const handleResizeNotes = useCallback(
+    (noteIds: string[], deltaBeats: number) => {
+      if (!midiRegion) return;
+      // Get current note values before update
+      const region = useRegionStore.getState().regions.find((r) => r.id === midiRegion.id);
+      if (!region || region.type !== 'midi') return;
+      
+      const notesToUpdate = region.notes.filter((note) => noteIds.includes(note.id));
+      // Update locally first
+      resizeNotes(noteIds, deltaBeats);
+      // Then sync each note individually with calculated new values
+      notesToUpdate.forEach((note) => {
+        handleNoteUpdate(note.id, {
+          duration: Math.max(0.25, note.duration + deltaBeats),
+        });
+      });
+    },
+    [resizeNotes, handleNoteUpdate, midiRegion]
+  );
+
+  // Wrapper for deleteSelectedNotes that syncs each note individually
+  const handleDeleteSelectedNotes = useCallback(() => {
+    if (!selectedNoteIds.length) return;
+    // Delete locally first
+    deleteSelectedNotes();
+    // Then sync each note deletion
+    selectedNoteIds.forEach((noteId) => {
+      handleNoteDelete(noteId);
+    });
+  }, [deleteSelectedNotes, handleNoteDelete, selectedNoteIds]);
+
+  // Wrapper for setNotesVelocity that syncs each note individually
+  const handleSetNotesVelocity = useCallback(
+    (noteIds: string[], velocity: number) => {
+      if (!midiRegion) return;
+      // Update locally first
+      setNotesVelocity(noteIds, velocity);
+      // Then sync each note individually
+      noteIds.forEach((noteId) => {
+        handleNoteUpdate(noteId, { velocity });
+      });
+    },
+    [setNotesVelocity, handleNoteUpdate, midiRegion]
   );
 
   const handleAddSustainEvent = useCallback(
@@ -133,9 +230,10 @@ export const PianoRoll = () => {
       const created = addSustainEvent({ start: relativeStart, end: relativeStart + 1 });
       if (created) {
         setSelectedSustainIds([created.id]);
+        syncSustainEvents();
       }
     },
-    [addSustainEvent, midiRegion, setSelectedSustainIds]
+    [addSustainEvent, midiRegion, setSelectedSustainIds, syncSustainEvents]
   );
   const handleUpdateSustainEvent = useCallback(
     (eventId: string, updates: Partial<SustainEvent>) => {
@@ -151,19 +249,22 @@ export const PianoRoll = () => {
         relativeUpdates.end = updates.end - midiRegion.start;
       }
       updateSustainEvent(eventId, relativeUpdates);
+      syncSustainEvents();
     },
-    [midiRegion, updateSustainEvent]
+    [midiRegion, updateSustainEvent, syncSustainEvents]
   );
   const handleRemoveSustainEvent = useCallback(
     (eventId: string) => {
       removeSustainEvent(eventId);
+      syncSustainEvents();
     },
-    [removeSustainEvent]
+    [removeSustainEvent, syncSustainEvents]
   );
   const handleDeleteSustainEvents = useCallback(() => {
     selectedSustainIds.forEach((id) => removeSustainEvent(id));
     setSelectedSustainIds([]);
-  }, [removeSustainEvent, selectedSustainIds, setSelectedSustainIds]);
+    syncSustainEvents();
+  }, [removeSustainEvent, selectedSustainIds, setSelectedSustainIds, syncSustainEvents]);
 
   useEffect(() => {
     if (!midiRegion || !selectedNoteIds.length) {
@@ -333,7 +434,7 @@ export const PianoRoll = () => {
             <button
               type="button"
               className="btn btn-xs btn-outline"
-              onClick={() => deleteSelectedNotes()}
+              onClick={handleDeleteSelectedNotes}
               disabled={!selectedNoteIds.length}
             >
               <span className="hidden sm:inline">Delete Notes</span>
@@ -367,7 +468,10 @@ export const PianoRoll = () => {
             <button
               type="button"
               className="btn btn-xs btn-primary"
-              onClick={() => quantizeNotes(selectedNoteIds, quantizeSize)}
+              onClick={() => {
+                quantizeNotes(selectedNoteIds, quantizeSize);
+                syncRegionNotes();
+              }}
               disabled={!selectedNoteIds.length}
               title="Quantize selected notes"
             >
@@ -377,7 +481,10 @@ export const PianoRoll = () => {
             <button
               type="button"
               className="btn btn-xs btn-primary"
-              onClick={() => quantizeAllNotes(quantizeSize)}
+              onClick={() => {
+                quantizeAllNotes(quantizeSize);
+                syncRegionNotes();
+              }}
               disabled={!midiRegion.notes.length}
               title="Quantize all notes in region"
             >
@@ -442,9 +549,9 @@ export const PianoRoll = () => {
               onToggleNoteSelection={toggleNoteSelection}
               onClearSelection={clearNoteSelection}
               onCreateNote={handleCreateNote}
-              onMoveNotes={moveNotes}
+              onMoveNotes={handleMoveNotes}
               onDuplicateNotes={duplicateNotes}
-              onResizeNotes={resizeNotes}
+              onResizeNotes={handleResizeNotes}
               onPan={(deltaX, deltaY) => {
                 if (noteScrollRef.current) {
                   noteScrollRef.current.scrollLeft += deltaX;
@@ -493,7 +600,7 @@ export const PianoRoll = () => {
                 scrollLeft={scrollLeft}
                 viewportWidth={viewportWidth}
                 playheadBeats={playhead}
-                onSetNotesVelocity={setNotesVelocity}
+                onSetNotesVelocity={handleSetNotesVelocity}
               />
             ) : (
               <SustainLane

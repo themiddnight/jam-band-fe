@@ -50,6 +50,10 @@ interface PianoRollStoreState {
   updateSustainEvent: (eventId: string, updates: Partial<SustainEvent>) => void;
   removeSustainEvent: (eventId: string) => void;
   setSelectedSustainIds: (eventIds: string[]) => void;
+  // Sync handlers (bypass undo history)
+  syncAddNote: (regionId: RegionId, note: MidiNote) => void;
+  syncUpdateNote: (regionId: RegionId, noteId: NoteId, updates: Partial<MidiNote>) => void;
+  syncDeleteNote: (regionId: RegionId, noteId: NoteId) => void;
 }
 
 export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
@@ -447,5 +451,55 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
     set({
       selectedSustainIds: Array.from(new Set(eventIds)),
     }),
+  // Sync handlers (bypass undo history - called from DAWSyncService)
+  syncAddNote: (regionId, note) => {
+    const region = useRegionStore.getState().regions.find((r) => r.id === regionId);
+    if (!region || region.type !== 'midi') {
+      return;
+    }
+    // Check if note already exists
+    if (region.notes.find((n) => n.id === note.id)) {
+      return;
+    }
+    useRegionStore.setState((state) => ({
+      regions: state.regions.map((r) =>
+        r.id === regionId && r.type === 'midi'
+          ? {
+              ...r,
+              notes: [...r.notes, note],
+            }
+          : r
+      ),
+    }));
+  },
+  syncUpdateNote: (regionId, noteId, updates) => {
+    useRegionStore.setState((state) => ({
+      regions: state.regions.map((region) =>
+        region.id === regionId && region.type === 'midi'
+          ? {
+              ...region,
+              notes: region.notes.map((note) =>
+                note.id === noteId ? { ...note, ...updates } : note
+              ),
+            }
+          : region
+      ),
+    }));
+  },
+  syncDeleteNote: (regionId, noteId) => {
+    useRegionStore.setState((state) => ({
+      regions: state.regions.map((region) =>
+        region.id === regionId && region.type === 'midi'
+          ? {
+              ...region,
+              notes: region.notes.filter((note) => note.id !== noteId),
+            }
+          : region
+      ),
+    }));
+    set((state) => ({
+      selectedNoteIds: state.selectedNoteIds.filter((id) => id !== noteId),
+    }));
+  },
 }));
 
