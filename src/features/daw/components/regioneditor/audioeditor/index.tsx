@@ -4,6 +4,7 @@ import { useRegionStore } from '@/features/daw/stores/regionStore';
 import { useProjectStore } from '@/features/daw/stores/projectStore';
 import { WaveformCanvas } from './WaveformCanvas';
 import { TimeRuler } from './TimeRuler';
+import { useDAWCollaborationContext } from '@/features/daw/contexts/DAWCollaborationContext';
 
 interface AudioEditorProps {
   region: AudioRegion;
@@ -14,11 +15,20 @@ const PIXELS_PER_BEAT = 80;
 export const AudioEditor = ({ region }: AudioEditorProps) => {
   const updateRegion = useRegionStore((state) => state.updateRegion);
   const playhead = useProjectStore((state) => state.playhead);
+  const { handleRegionUpdate } = useDAWCollaborationContext();
   const [zoomX, setZoomX] = useState(1);
   const [zoomY, setZoomY] = useState(1);
   const rulerRef = useRef<HTMLDivElement>(null);
   const waveformRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(800);
+
+  const applyRegionUpdate = useCallback(
+    (updates: Partial<AudioRegion>) => {
+      updateRegion(region.id, updates);
+      handleRegionUpdate(region.id, updates);
+    },
+    [handleRegionUpdate, region.id, updateRegion]
+  );
 
   // Calculate default zoom to fit full waveform in container
   const defaultZoomX = Math.max(0.1, containerWidth / ((region.originalLength || region.length) * PIXELS_PER_BEAT));
@@ -43,7 +53,7 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
   }, [region.id, defaultZoomX]);
 
   const handleGainChange = (newGain: number) => {
-    updateRegion(region.id, { gain: newGain });
+    applyRegionUpdate({ gain: newGain });
   };
 
   const handleTrimStartChange = (newTrimStart: number) => {
@@ -56,7 +66,7 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
     // When moving start, adjust length to keep end position fixed
     const newLength = currentTrimEnd - clampedTrimStart;
 
-    updateRegion(region.id, {
+    applyRegionUpdate({
       trimStart: clampedTrimStart,
       length: newLength
     });
@@ -72,19 +82,19 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
     // Calculate new length
     const newLength = clampedTrimEnd - currentTrimStart;
 
-    updateRegion(region.id, { length: newLength });
+    applyRegionUpdate({ length: newLength });
   };
 
   const handleFadeInChange = (duration: number) => {
     const maxFade = Math.max(0, region.length - 0.25);
     const clampedDuration = Math.max(0, Math.min(duration, maxFade));
-    updateRegion(region.id, { fadeInDuration: clampedDuration });
+    applyRegionUpdate({ fadeInDuration: clampedDuration });
   };
 
   const handleFadeOutChange = (duration: number) => {
     const maxFade = Math.max(0, region.length - 0.25);
     const clampedDuration = Math.max(0, Math.min(duration, maxFade));
-    updateRegion(region.id, { fadeOutDuration: clampedDuration });
+    applyRegionUpdate({ fadeOutDuration: clampedDuration });
   };
 
   // Sync scroll between ruler and waveform

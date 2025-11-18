@@ -6,7 +6,7 @@ import type { SynthState } from '@/features/instruments';
 import type { TimeSignature } from '../types/daw';
 import type { InstrumentCategory } from '@/shared/constants/instruments';
 
-interface DAWCollaborationContextValue {
+export interface DAWCollaborationContextValue {
   // Track handlers
   handleTrackAdd: (overrides?: any) => any;
   handleTrackUpdate: (trackId: string, updates: any) => void;
@@ -54,6 +54,7 @@ interface DAWCollaborationProviderProps {
   socket: Socket | null;
   roomId: string | null;
   enabled?: boolean;
+  value?: DAWCollaborationContextValue;
 }
 
 export const DAWCollaborationProvider: React.FC<DAWCollaborationProviderProps> = ({
@@ -61,8 +62,9 @@ export const DAWCollaborationProvider: React.FC<DAWCollaborationProviderProps> =
   socket,
   roomId,
   enabled = true,
+  value,
 }) => {
-  const collaboration = useDAWCollaboration({ socket, roomId, enabled });
+  const collaboration = value ?? useDAWCollaboration({ socket, roomId, enabled });
 
   return (
     <DAWCollaborationContext.Provider value={collaboration}>
@@ -91,10 +93,41 @@ export const useDAWCollaborationContext = (): DAWCollaborationContextValue => {
       handleTrackSelect: () => {},
       handleRegionAdd: (trackId: string, start: number, length?: number, overrides?: any) => {
         const { useRegionStore } = require('../stores/regionStore');
-        const region = useRegionStore.getState().addRegion(trackId, start, length);
-        if (overrides && Object.keys(overrides).length > 0) {
-          useRegionStore.getState().updateRegion(region.id, overrides);
-          return { ...region, ...overrides };
+        const regionStore = useRegionStore.getState();
+        const {
+          id: overrideId,
+          type: overrideType,
+          audioBuffer,
+          ...restOverrides
+        } = overrides ?? {};
+
+        const isAudioRegion =
+          overrideType === 'audio' || typeof restOverrides?.audioUrl === 'string';
+
+        let region;
+        if (isAudioRegion) {
+          const resolvedLength =
+            typeof restOverrides?.length === 'number'
+              ? restOverrides.length
+              : typeof length === 'number'
+                ? length
+                : 4;
+          const audioUrl = restOverrides?.audioUrl ?? '';
+          region = regionStore.addAudioRegion(
+            trackId,
+            start,
+            resolvedLength,
+            audioUrl,
+            audioBuffer,
+            { id: overrideId }
+          );
+        } else {
+          region = regionStore.addRegion(trackId, start, length, { id: overrideId });
+        }
+
+        if (restOverrides && Object.keys(restOverrides).length > 0) {
+          regionStore.updateRegion(region.id, restOverrides);
+          return { ...region, ...restOverrides };
         }
         return region;
       },

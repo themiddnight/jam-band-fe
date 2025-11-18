@@ -29,6 +29,8 @@ import { VoiceInput } from "@/features/audio";
 import { DAWCollaborationProvider } from "@/features/daw/contexts/DAWCollaborationContext";
 import { RoomMembers, KickUserModal } from "@/features/rooms";
 import type { Socket } from "socket.io-client";
+import { useDAWCollaboration } from "@/features/daw/hooks/useDAWCollaboration";
+import { useAudioRegionLoader } from "@/features/daw/hooks/playback/useAudioRegionLoader";
 
 /**
  * Arrange Room page for multi-track production with async editing
@@ -84,6 +86,11 @@ export default function ArrangeRoom() {
 
   // DAW Collaboration enabled flag
   const isCollaborationEnabled = isConnected && !!currentRoom;
+  const collaborationValue = useDAWCollaboration({
+    socket: activeSocket,
+    roomId: currentRoom?.id || null,
+    enabled: isCollaborationEnabled,
+  });
 
   // Initialize DAW store observers for undo/redo history
   useEffect(() => {
@@ -107,7 +114,8 @@ export default function ArrangeRoom() {
 
   // Initialize playback engines and other DAW features
   usePlaybackEngine();
-  useAudioRecordingEngine();
+  useAudioRecordingEngine({ handleRegionAdd: collaborationValue.handleRegionAdd });
+  useAudioRegionLoader();
   useMidiMonitoring(lastMidiMessage);
 
   const { isInitialized: isEffectsInitialized, error: effectsError } = useEffectsIntegration({
@@ -192,6 +200,7 @@ export default function ArrangeRoom() {
       socket={activeSocket}
       roomId={currentRoom?.id || null}
       enabled={isCollaborationEnabled}
+      value={collaborationValue}
     >
       <TrackAudioParamsBridge />
       <KeyboardShortcutsBridge />

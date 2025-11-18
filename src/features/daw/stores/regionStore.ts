@@ -13,8 +13,15 @@ interface RegionStoreState {
   regions: Region[];
   selectedRegionIds: RegionId[];
   lastSelectedRegionId: RegionId | null;
-  addRegion: (trackId: TrackId, start: number, length?: number) => MidiRegion;
-  addAudioRegion: (trackId: TrackId, start: number, length: number, audioUrl: string, audioBuffer?: AudioBuffer) => AudioRegion;
+  addRegion: (trackId: TrackId, start: number, length?: number, options?: { id?: string }) => MidiRegion;
+  addAudioRegion: (
+    trackId: TrackId,
+    start: number,
+    length: number,
+    audioUrl: string,
+    audioBuffer?: AudioBuffer,
+    options?: { id?: string }
+  ) => AudioRegion;
   updateRegion: (regionId: RegionId, updates: Partial<Region>) => void;
   removeRegion: (regionId: RegionId) => void;
   moveRegion: (regionId: RegionId, deltaBeats: number) => void;
@@ -39,8 +46,15 @@ interface RegionStoreState {
 
 const clampLength = (length: number) => Math.max(length, 0.25);
 
-const createRegion = (trackId: TrackId, index: number, start: number, length = 4): MidiRegion => {
-  const id = typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-${index}`;
+const createRegion = (
+  trackId: TrackId,
+  index: number,
+  start: number,
+  length = 4,
+  customId?: string
+): MidiRegion => {
+  const id =
+    customId ?? (typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-${index}`);
   const track = useTrackStore.getState().tracks.find((t) => t.id === trackId);
 
   return {
@@ -64,9 +78,11 @@ const createAudioRegion = (
   start: number,
   length: number,
   audioUrl: string,
-  audioBuffer?: AudioBuffer
+  audioBuffer?: AudioBuffer,
+  customId?: string
 ): AudioRegion => {
-  const id = typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-${index}`;
+  const id =
+    customId ?? (typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-${index}`);
   const track = useTrackStore.getState().tracks.find((t) => t.id === trackId);
 
   return {
@@ -90,9 +106,9 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
   regions: [],
   selectedRegionIds: [],
   lastSelectedRegionId: null,
-  addRegion: (trackId, start, length) => {
+  addRegion: (trackId, start, length, options) => {
     const index = get().regions.length;
-    const region = createRegion(trackId, index, start, length);
+    const region = createRegion(trackId, index, start, length, options?.id);
     set((state) => ({
       regions: [...state.regions, region],
       selectedRegionIds: [region.id],
@@ -101,9 +117,17 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
     useTrackStore.getState().attachRegionToTrack(trackId, region.id);
     return region;
   },
-  addAudioRegion: (trackId, start, length, audioUrl, audioBuffer) => {
+  addAudioRegion: (trackId, start, length, audioUrl, audioBuffer, options) => {
     const index = get().regions.length;
-    const region = createAudioRegion(trackId, index, start, length, audioUrl, audioBuffer);
+    const region = createAudioRegion(
+      trackId,
+      index,
+      start,
+      length,
+      audioUrl,
+      audioBuffer,
+      options?.id
+    );
     set((state) => ({
       regions: [...state.regions, region],
       selectedRegionIds: [region.id],

@@ -11,7 +11,7 @@ import { useUserStore } from '@/shared/stores/userStore';
 import { useEffectsStore } from '@/features/effects/stores/effectsStore';
 import type { EffectChainState } from '@/shared/types';
 import type { SynthState } from '@/features/instruments';
-import type { TimeSignature, Region } from '../types/daw';
+import type { TimeSignature, Region, AudioRegion } from '../types/daw';
 import type { InstrumentCategory } from '@/shared/constants/instruments';
 
 interface UseDAWCollaborationOptions {
@@ -55,6 +55,7 @@ export const useDAWCollaboration = ({
 
   // Region store
   const addRegion = useRegionStore((state) => state.addRegion);
+  const addAudioRegion = useRegionStore((state) => state.addAudioRegion);
   const updateRegion = useRegionStore((state) => state.updateRegion);
   const removeRegion = useRegionStore((state) => state.removeRegion);
   const moveRegion = useRegionStore((state) => state.moveRegion);
@@ -243,20 +244,56 @@ export const useDAWCollaboration = ({
 
   // ========== Region sync handlers ==========
 
+  const sanitizeRegionForSync = useCallback((region: Region): Region => {
+    if (region.type === 'audio') {
+      const sanitized = { ...region, audioBuffer: undefined };
+      return sanitized as Region;
+    }
+    return region;
+  }, []);
+
   const handleRegionAdd = useCallback(
     (trackId: string, start: number, length?: number, overrides?: Partial<Region>): Region => {
-      const region = addRegion(trackId, start, length);
-      let updatedRegion: Region = region;
+      const { id: overrideId, type: overrideType, ...restOverrides } = overrides ?? {};
+      const audioOverrides = restOverrides as Partial<AudioRegion>;
+      const isAudioRegion =
+        overrideType === 'audio' || typeof audioOverrides.audioUrl === 'string';
 
-      if (overrides && Object.keys(overrides).length > 0) {
-        updateRegion(region.id, overrides);
-        updatedRegion = { ...region, ...overrides } as Region;
+      let region: Region;
+      if (isAudioRegion) {
+        const audioLength =
+          typeof restOverrides.length === 'number'
+            ? restOverrides.length
+            : typeof length === 'number'
+              ? length
+              : 4;
+        const audioUrl = audioOverrides.audioUrl ?? '';
+        const buffer = audioOverrides.audioBuffer;
+        region = addAudioRegion(
+          trackId,
+          start,
+          audioLength,
+          audioUrl,
+          buffer,
+          { id: overrideId }
+        );
+      } else {
+        region = addRegion(trackId, start, length, { id: overrideId });
       }
 
-      dawSyncService.syncRegionAdd(updatedRegion);
+      const overridesToApply =
+        restOverrides && Object.keys(restOverrides).length > 0 ? restOverrides : null;
+      let updatedRegion: Region = region;
+
+      if (overridesToApply) {
+        updateRegion(region.id, overridesToApply);
+        updatedRegion = { ...region, ...overridesToApply } as Region;
+      }
+
+      dawSyncService.syncRegionAdd(sanitizeRegionForSync(updatedRegion));
       return updatedRegion;
     },
-    [addRegion, updateRegion]
+    [addRegion, addAudioRegion, updateRegion, sanitizeRegionForSync]
   );
 
   const handleRegionUpdate = useCallback(
@@ -340,19 +377,26 @@ export const useDAWCollaboration = ({
       splitRegions(regionIds, splitPosition);
       const nextRegions = new Map(useRegionStore.getState().regions.map((region) => [region.id, region]));
 
-      regionIds.forEach((regionId) => {
-        if (!nextRegions.has(regionId) && prevRegions.has(regionId)) {
-          dawSyncService.syncRegionDelete(regionId);
+      const removedRegionIds = regionIds.filter(
+        (regionId) => !nextRegions.has(regionId) && prevRegions.has(regionId)
+      );
+
+      const addedRegions: Region[] = [];
+      nextRegions.forEach((region, regionId) => {
+        if (!prevRegions.has(regionId)) {
+          addedRegions.push(region);
         }
       });
 
-      nextRegions.forEach((region, regionId) => {
-        if (!prevRegions.has(regionId)) {
-          dawSyncService.syncRegionAdd(region);
-        }
+      addedRegions.forEach((region) => {
+        dawSyncService.syncRegionAdd(sanitizeRegionForSync(region));
+      });
+
+      removedRegionIds.forEach((regionId) => {
+        dawSyncService.syncRegionDelete(regionId);
       });
     },
-    [splitRegions, isLocked, userId]
+    [splitRegions, isLocked, userId, sanitizeRegionForSync]
   );
 
   const handleRegionDelete = useCallback(
