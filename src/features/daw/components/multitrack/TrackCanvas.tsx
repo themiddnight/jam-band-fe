@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, useRef, useEffect } from "react";
+import { useCallback, useMemo, useState, useRef, useEffect, memo } from "react";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { Group, Layer, Rect, Stage, Text } from "react-konva";
 
@@ -97,7 +97,7 @@ interface HoldState {
 const HOLD_DURATION = 400; // ms - duration to hold before starting marquee
 const HOLD_MOVE_THRESHOLD = 10; // pixels - max movement during hold
 
-export const TrackCanvas = ({
+const TrackCanvasComponent = ({
   tracks,
   regions,
   selectedTrackId,
@@ -1166,3 +1166,6 @@ export const TrackCanvas = ({
     </Stage>
   );
 };
+
+// Memoize TrackCanvas with shallow comparison for arrays/objects
+export const TrackCanvas = memo(TrackCanvasComponent);

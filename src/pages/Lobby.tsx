@@ -62,7 +62,10 @@ export default function Lobby() {
   const [kickedReason, setKickedReason] = useState<string | undefined>();
 
   useEffect(() => {
-    const state = location.state as { kicked?: boolean; reason?: string } | null;
+    const state = location.state as {
+      kicked?: boolean;
+      reason?: string;
+    } | null;
     if (state?.kicked) {
       setKickedReason(state.reason ?? "You have been removed from the room.");
       setShowKickedModal(true);
@@ -87,12 +90,13 @@ export default function Lobby() {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-3">
                 <div
-                  className={`w-3 h-3 rounded-full ${connectionState === ConnectionState.LOBBY
-                    ? "bg-success"
-                    : isConnecting
-                      ? "bg-warning"
-                      : "bg-error"
-                    }`}
+                  className={`w-3 h-3 rounded-full ${
+                    connectionState === ConnectionState.LOBBY
+                      ? "bg-success"
+                      : isConnecting
+                        ? "bg-warning"
+                        : "bg-error"
+                  }`}
                 ></div>
                 <PingDisplay
                   ping={currentPing}
@@ -128,7 +132,7 @@ export default function Lobby() {
           {/* Waiting for approval modal */}
           <Modal
             open={connectionState === ConnectionState.REQUESTING}
-            setOpen={() => { }}
+            setOpen={() => {}}
             title="Waiting for Approval"
             showOkButton={false}
             showCancelButton={true}
@@ -216,8 +220,12 @@ export default function Lobby() {
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <h3 className="font-semibold">{room.name}</h3>
-                                  <span className={`badge badge-sm ${room.roomType === "perform" ? "badge-primary" : "badge-secondary"}`}>
-                                    {room.roomType === "perform" ? "Perform" : "Arrange"}
+                                  <span
+                                    className={`badge badge-sm ${room.roomType === "perform" ? "badge-primary" : "badge-secondary"}`}
+                                  >
+                                    {room.roomType === "perform"
+                                      ? "Perform"
+                                      : "Arrange"}
                                   </span>
                                   {room.isPrivate && (
                                     <span className="badge badge-warning badge-sm">
@@ -251,23 +259,27 @@ export default function Lobby() {
                                   className="btn btn-xs btn-primary"
                                   disabled={
                                     isConnecting ||
-                                    connectionState === ConnectionState.REQUESTING
+                                    connectionState ===
+                                      ConnectionState.REQUESTING
                                   }
                                 >
                                   Band Member
                                 </button>
-                                <button
-                                  onClick={() =>
-                                    handleJoinRoom(room.id, "audience")
-                                  }
-                                  className="btn btn-xs btn-outline"
-                                  disabled={
-                                    isConnecting ||
-                                    connectionState === ConnectionState.REQUESTING
-                                  }
-                                >
-                                  Audience
-                                </button>
+                                {room.roomType === "perform" && (
+                                  <button
+                                    onClick={() =>
+                                      handleJoinRoom(room.id, "audience")
+                                    }
+                                    className="btn btn-xs btn-outline"
+                                    disabled={
+                                      isConnecting ||
+                                      connectionState ===
+                                        ConnectionState.REQUESTING
+                                    }
+                                  >
+                                    Audience
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -385,9 +397,7 @@ export default function Lobby() {
                 </div>
 
                 <div className="form-control">
-                  <label className="label">
-                    Room Type
-                  </label>
+                  <label className="label">Room Type</label>
                   <div className="grid grid-cols-2 gap-3">
                     <div
                       className={`card cursor-pointer transition-all ${newRoomType === "perform" ? "bg-primary text-primary-content" : "bg-base-200 hover:bg-base-300"}`}
@@ -407,10 +417,13 @@ export default function Lobby() {
                       <div className="card-body p-4">
                         <div className="flex items-center gap-2">
                           <h4 className="card-title text-sm">Arrange Room</h4>
-                          <span className="badge badge-sm badge-outline">Demo</span>
+                          <span className="badge badge-sm badge-outline">
+                            Demo
+                          </span>
                         </div>
                         <p className="text-xs opacity-70">
-                          Multi-track production with async editing (collaboration features comming soon)
+                          Multi-track production with async editing
+                          (collaboration features comming soon)
                         </p>
                       </div>
                     </div>

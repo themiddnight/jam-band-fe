@@ -7,6 +7,8 @@ export interface BaseNoteProps {
   isDragging: boolean;
   dragOffset?: { beat: number; pitch: number };
   previewDuration?: number;
+  getNoteY?: (pitch: number) => number;
+  isOutOfScale?: boolean;
 }
 
 export interface NoteResizeHandleProps {
@@ -14,12 +16,15 @@ export interface NoteResizeHandleProps {
   beatWidth: number;
   dragOffset?: { beat: number; pitch: number };
   previewDuration?: number;
+  getNoteY?: (pitch: number) => number;
 }
 
 export interface DuplicateNotePreviewProps {
   note: MidiNote;
   beatWidth: number;
   dragOffset: { beat: number; pitch: number };
+  getNoteY?: (pitch: number) => number;
+  isOutOfScale?: boolean;
 }
 
 export interface NoteGridBackgroundProps {
@@ -32,6 +37,8 @@ export interface NoteGridBackgroundProps {
   gridInterval: number;
   regionHighlightStart?: number;
   regionHighlightEnd?: number;
+  visibleMidiNumbers?: number[];
+  midiToRowIndex?: Map<number, number>;
 }
 
 export interface MarqueeSelectionProps {

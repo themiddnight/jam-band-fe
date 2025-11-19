@@ -33,17 +33,30 @@ export const useAudioRegionLoader = (): void => {
 
       const fetchAudioBuffer = async () => {
         try {
-          const response = await fetch(appendUserQuery(region.audioUrl!, currentUserId));
+          const fetchUrl = appendUserQuery(region.audioUrl!, currentUserId);
+          console.log('Fetching audio region:', {
+            regionId: region.id,
+            audioUrl: region.audioUrl,
+            fetchUrl,
+          });
+          const response = await fetch(fetchUrl);
           if (!response.ok) {
             throw new Error(`Failed to load audio region ${region.id}: ${response.status}`);
           }
+          const contentType = response.headers.get('content-type');
           const arrayBuffer = await response.arrayBuffer();
+          console.log('Received audio data:', {
+            regionId: region.id,
+            contentType,
+            size: arrayBuffer.byteLength,
+          });
           const audioContext = Tone.getContext().rawContext as AudioContext;
           const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
           updateRegion(region.id, { audioBuffer });
         } catch (error) {
           console.error('Failed to fetch audio region buffer', {
             regionId: region.id,
+            audioUrl: region.audioUrl,
             error,
           });
         } finally {

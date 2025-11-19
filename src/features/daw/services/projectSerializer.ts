@@ -148,7 +148,7 @@ function serializeRegion(region: Region): SerializedRegion {
     const audioRegion = region as AudioRegion;
     return {
       ...base,
-      audioFileRef: audioRegion.audioUrl ? `audio/${region.id}.wav` : undefined,
+      audioFileRef: audioRegion.audioUrl ? `audio/${region.id}.webm` : undefined,
       trimStart: audioRegion.trimStart,
       originalLength: audioRegion.originalLength,
       gain: audioRegion.gain,
@@ -171,13 +171,30 @@ export async function extractAudioFiles(
       const audioRegion = region as AudioRegion;
       
       if (audioRegion.audioBuffer) {
-        // Convert AudioBuffer to WAV blob
-        const blob = await audioBufferToWav(audioRegion.audioBuffer);
+        // Convert AudioBuffer to WebM/Opus blob (compressed)
+        const blob = await audioBufferToWebM(audioRegion.audioBuffer);
         audioFiles.push({
           regionId: region.id,
-          fileName: `${region.id}.wav`,
+          fileName: `${region.id}.webm`,
           blob,
         });
+      } else if (audioRegion.audioUrl) {
+        // Fetch audio from URL if buffer is not available
+        try {
+          const response = await fetch(audioRegion.audioUrl);
+          if (response.ok) {
+            const blob = await response.blob();
+            audioFiles.push({
+              regionId: region.id,
+              fileName: `${region.id}.webm`,
+              blob,
+            });
+          } else {
+            console.warn(`Failed to fetch audio for region ${region.id}: ${response.status}`);
+          }
+        } catch (error) {
+          console.error(`Error fetching audio for region ${region.id}:`, error);
+        }
       }
     }
   }
@@ -186,62 +203,75 @@ export async function extractAudioFiles(
 }
 
 /**
- * Convert AudioBuffer to WAV Blob
+ * Convert AudioBuffer to WebM/Opus Blob (compressed)
  */
-async function audioBufferToWav(audioBuffer: AudioBuffer): Promise<Blob> {
-  const numberOfChannels = audioBuffer.numberOfChannels;
-  const length = audioBuffer.length * numberOfChannels * 2;
-  const buffer = new ArrayBuffer(44 + length);
-  const view = new DataView(buffer);
-  const channels: Float32Array[] = [];
-  let offset = 0;
-  let pos = 0;
+async function audioBufferToWebM(audioBuffer: AudioBuffer): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    // Create an offline audio context to render the buffer
+    const offlineContext = new OfflineAudioContext(
+      audioBuffer.numberOfChannels,
+      audioBuffer.length,
+      audioBuffer.sampleRate
+    );
 
-  // Write WAV header
-  const setUint16 = (data: number) => {
-    view.setUint16(pos, data, true);
-    pos += 2;
-  };
-  const setUint32 = (data: number) => {
-    view.setUint32(pos, data, true);
-    pos += 4;
-  };
+    // Create a buffer source
+    const source = offlineContext.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(offlineContext.destination);
+    source.start(0);
 
-  // "RIFF" chunk descriptor
-  setUint32(0x46464952); // "RIFF"
-  setUint32(36 + length); // file length - 8
-  setUint32(0x45564157); // "WAVE"
+    // Render the audio
+    offlineContext.startRendering().then((renderedBuffer) => {
+      // Create a MediaStreamDestination to capture the audio
+      const audioContext = new AudioContext();
+      const destination = audioContext.createMediaStreamDestination();
+      
+      // Create a buffer source with the rendered audio
+      const bufferSource = audioContext.createBufferSource();
+      bufferSource.buffer = renderedBuffer;
+      bufferSource.connect(destination);
 
-  // "fmt " sub-chunk
-  setUint32(0x20746d66); // "fmt "
-  setUint32(16); // subchunk1size
-  setUint16(1); // audio format (1 = PCM)
-  setUint16(numberOfChannels);
-  setUint32(audioBuffer.sampleRate);
-  setUint32(audioBuffer.sampleRate * 2 * numberOfChannels); // byte rate
-  setUint16(numberOfChannels * 2); // block align
-  setUint16(16); // bits per sample
+      // Set up MediaRecorder with Opus codec
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : 'audio/webm';
+      
+      const mediaRecorder = new MediaRecorder(destination.stream, {
+        mimeType,
+        audioBitsPerSecond: 128000, // 128kbps - good quality, reasonable size
+      });
 
-  // "data" sub-chunk
-  setUint32(0x61746164); // "data"
-  setUint32(length);
+      const chunks: Blob[] = [];
 
-  // Write interleaved data
-  for (let i = 0; i < numberOfChannels; i++) {
-    channels.push(audioBuffer.getChannelData(i));
-  }
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
 
-  while (pos < buffer.byteLength) {
-    for (let i = 0; i < numberOfChannels; i++) {
-      let sample = Math.max(-1, Math.min(1, channels[i][offset]));
-      sample = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
-      view.setInt16(pos, sample, true);
-      pos += 2;
-    }
-    offset++;
-  }
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: mimeType });
+        audioContext.close();
+        resolve(blob);
+      };
 
-  return new Blob([buffer], { type: 'audio/wav' });
+      mediaRecorder.onerror = (event) => {
+        audioContext.close();
+        reject(new Error('MediaRecorder error: ' + event));
+      };
+
+      // Start recording and play the buffer
+      mediaRecorder.start();
+      bufferSource.start(0);
+
+      // Stop recording after the buffer duration
+      const durationMs = (renderedBuffer.length / renderedBuffer.sampleRate) * 1000;
+      setTimeout(() => {
+        mediaRecorder.stop();
+        bufferSource.stop();
+      }, durationMs + 100); // Add 100ms buffer
+    }).catch(reject);
+  });
 }
 
 /**
@@ -312,10 +342,12 @@ export function deserializeRegions(
       } as MidiRegion;
     } else {
       const audioBuffer = audioBuffers.get(region.id);
+      // Preserve audioUrl from serialized data (server path) if no buffer is provided
+      const audioRegion = region as any;
       return {
         ...region,
         audioBuffer,
-        audioUrl: audioBuffer ? URL.createObjectURL(new Blob()) : undefined,
+        audioUrl: audioRegion.audioUrl || (audioBuffer ? URL.createObjectURL(new Blob()) : undefined),
         trimStart: region.trimStart,
         originalLength: region.originalLength,
         gain: region.gain,

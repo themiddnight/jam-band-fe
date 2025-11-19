@@ -18,8 +18,8 @@ A `.jbp` file is a ZIP archive with the following structure:
 project-name.jbp (ZIP file)
 ├── project.json          # All project metadata, tracks, regions, settings
 └── audio/
-    ├── region-1.wav      # Audio recordings for audio regions
-    ├── region-2.wav
+    ├── region-1.webm     # Audio recordings for audio regions (WebM/Opus compressed)
+    ├── region-2.webm
     └── ...
 ```
 

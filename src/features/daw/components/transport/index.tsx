@@ -25,9 +25,6 @@ export const TransportToolbar = memo(() => {
             <span className="text-[10px] font-semibold uppercase tracking-wide text-base-content/60">
               Scale
             </span>
-            <span className="text-xs sm:text-sm font-medium text-base-content">
-              {rootNote} {scale === 'major' ? 'Major' : 'Minor'}
-            </span>
           </div>
           <ScaleSelector
             rootNote={rootNote}

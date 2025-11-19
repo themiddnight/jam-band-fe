@@ -222,13 +222,21 @@ export const usePlaybackEngine = () => {
 
       // Start playhead update loop
       const updatePlayhead = () => {
-        if (Tone.Transport.state === 'started') {
-          const currentBeat = Tone.Transport.ticks / Tone.Transport.PPQ;
-          setPlayhead(currentBeat);
+        // Check if we should still be running based on transportState
+        const currentTransportState = useProjectStore.getState().transportState;
+        const shouldContinue = currentTransportState === 'playing' || currentTransportState === 'recording';
+        
+        if (shouldContinue) {
+          // Update playhead if transport is actually started
+          if (Tone.Transport.state === 'started') {
+            const currentBeat = Tone.Transport.ticks / Tone.Transport.PPQ;
+            setPlayhead(currentBeat);
+          }
+          // Continue loop as long as we're in playing/recording state
           animationFrameRef.current = requestAnimationFrame(updatePlayhead);
         } else {
-          // Keep checking if transport starts
-          animationFrameRef.current = requestAnimationFrame(updatePlayhead);
+          // Transport stopped, exit loop
+          animationFrameRef.current = null;
         }
       };
       updatePlayhead();

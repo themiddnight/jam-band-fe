@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import { Layer, Line, Rect, Stage, Text } from 'react-konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import * as Tone from 'tone';
@@ -39,7 +39,7 @@ interface PianoRollRulerProps {
   playheadBeats?: number;
 }
 
-export const PianoRollRuler = ({
+const PianoRollRulerComponent = ({
   totalBeats,
   pixelsPerBeat,
   zoom,
@@ -180,3 +180,4 @@ export const PianoRollRuler = ({
   );
 };
 
+export const PianoRollRuler = memo(PianoRollRulerComponent);

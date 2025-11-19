@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { PianoKeys } from './PianoKeys';
 import { NoteCanvas } from './NoteCanvas';
@@ -23,7 +23,7 @@ const TOTAL_HEIGHT = TOTAL_KEYS * NOTE_HEIGHT;
 
 type LaneMode = 'velocity' | 'sustain';
 
-export const PianoRoll = () => {
+const PianoRollComponent = () => {
   const activeRegionId = usePianoRollStore((state) => state.activeRegionId);
   const selectedNoteIds = usePianoRollStore((state) => state.selectedNoteIds);
   const setSelectedNoteIds = usePianoRollStore((state) => state.setSelectedNoteIds);
@@ -36,6 +36,8 @@ export const PianoRoll = () => {
   const quantizeNotes = usePianoRollStore((state) => state.quantizeNotes);
   const quantizeAllNotes = usePianoRollStore((state) => state.quantizeAllNotes);
   const deleteSelectedNotes = usePianoRollStore((state) => state.deleteSelectedNotes);
+  const viewMode = usePianoRollStore((state) => state.viewMode);
+  const setViewMode = usePianoRollStore((state) => state.setViewMode);
   
   // Use collaboration handlers if available
   const { handleNoteAdd, handleNoteUpdate, handleNoteDelete, handleRegionUpdate } = useDAWCollaborationContext();
@@ -281,24 +283,29 @@ export const PianoRoll = () => {
 
   const pixelsPerBeat = 64;
   
-  // Handle zoom changes centered on playhead
-  const handleZoomChange = useCallback((newZoom: number) => {
+  // Handle zoom changes centered on cursor or playhead
+  const handleZoomChange = useCallback((newZoom: number, cursorX?: number) => {
     if (!noteScrollRef.current) {
       setZoom(newZoom);
       return;
     }
     
-    // Calculate playhead position in pixels before zoom change
-    const oldPlayheadPixels = playhead * pixelsPerBeat * zoom;
+    // Use cursor position if provided, otherwise use playhead
+    const focusPoint = cursorX !== undefined 
+      ? (scrollLeft + cursorX) / (pixelsPerBeat * zoom)
+      : playhead;
     
-    // Calculate how far playhead is from left edge of viewport
-    const playheadOffsetInViewport = oldPlayheadPixels - scrollLeft;
+    // Calculate focus point position in pixels before zoom change
+    const oldFocusPixels = focusPoint * pixelsPerBeat * zoom;
     
-    // Calculate playhead position in pixels after zoom change
-    const newPlayheadPixels = playhead * pixelsPerBeat * newZoom;
+    // Calculate how far focus point is from left edge of viewport
+    const focusOffsetInViewport = cursorX !== undefined ? cursorX : oldFocusPixels - scrollLeft;
     
-    // Adjust scroll to keep playhead at same position in viewport
-    const newScrollLeft = newPlayheadPixels - playheadOffsetInViewport;
+    // Calculate focus point position in pixels after zoom change
+    const newFocusPixels = focusPoint * pixelsPerBeat * newZoom;
+    
+    // Adjust scroll to keep focus point at same position in viewport
+    const newScrollLeft = newFocusPixels - focusOffsetInViewport;
     
     setZoom(newZoom);
     
@@ -312,6 +319,31 @@ export const PianoRoll = () => {
       }
     });
   }, [playhead, zoom, scrollLeft, pixelsPerBeat]);
+
+  // Handle wheel zoom with Ctrl key
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        
+        const delta = -e.deltaY;
+        const zoomSpeed = 0.001;
+        const newZoom = Math.max(0.5, Math.min(2, zoom + delta * zoomSpeed));
+        
+        // Get cursor position relative to note canvas
+        const rect = noteScrollRef.current?.getBoundingClientRect();
+        const cursorX = rect ? e.clientX - rect.left : undefined;
+        
+        handleZoomChange(newZoom, cursorX);
+      }
+    };
+
+    const noteCanvas = noteScrollRef.current;
+    if (noteCanvas) {
+      noteCanvas.addEventListener('wheel', handleWheel, { passive: false });
+      return () => noteCanvas.removeEventListener('wheel', handleWheel);
+    }
+  }, [zoom, handleZoomChange]);
   
   // Convert notes to absolute positions for display
   const absoluteNotes = useMemo(() => {
@@ -404,18 +436,23 @@ export const PianoRoll = () => {
               Track: {track?.name ?? 'Unknown'}
             </p>
           </div>
-          <label className="flex items-center gap-1 sm:gap-2 text-xs text-base-content/70">
-            <span className="hidden sm:inline">Zoom</span>
-            <input
-              type="range"
-              min={0.5}
-              max={2}
-              step={0.1}
-              value={zoom}
-              onChange={(event) => handleZoomChange(Number(event.target.value))}
-              className="range range-xs w-20 sm:w-32"
-            />
-          </label>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1 text-xs text-base-content/70">
+              <span className="hidden sm:inline">View:</span>
+              <select
+                value={viewMode}
+                onChange={(e) => setViewMode(e.target.value as typeof viewMode)}
+                className="select select-xs bg-base-200"
+              >
+                <option value="all-keys">All Keys</option>
+                <option value="scale-keys">Scale Keys</option>
+                <option value="only-notes">Only Notes</option>
+              </select>
+            </label>
+            <span className="text-xs text-base-content/50 hidden lg:inline">
+              Ctrl+Scroll to zoom
+            </span>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs text-base-content/70 w-full sm:w-auto">
           <label className="flex items-center gap-1 sm:gap-2">
@@ -626,5 +663,5 @@ export const PianoRoll = () => {
   );
 };
 
-export default PianoRoll;
+export const PianoRoll = memo(PianoRollComponent);
 

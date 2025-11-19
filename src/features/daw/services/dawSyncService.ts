@@ -43,6 +43,13 @@ export class DAWSyncService {
     this.roomId = roomId;
     this.userId = userId;
     this.username = username;
+    console.log('🎵 DAW Sync Service initialized', {
+      roomId,
+      userId,
+      username,
+      socketId: socket.id,
+      socketNamespace: (socket as any).nsp,
+    });
     this.setupEventListeners();
   }
 
@@ -88,6 +95,7 @@ export class DAWSyncService {
     this.socket.on('arrange:lock_acquired', this.handleLockAcquired.bind(this));
     this.socket.on('arrange:lock_released', this.handleLockReleased.bind(this));
     this.socket.on('arrange:lock_conflict', this.handleLockConflict.bind(this));
+    this.socket.on('arrange:project_loaded', this.handleProjectLoaded.bind(this));
   }
 
   /**
@@ -117,6 +125,7 @@ export class DAWSyncService {
     this.socket.off('arrange:lock_acquired');
     this.socket.off('arrange:lock_released');
     this.socket.off('arrange:lock_conflict');
+    this.socket.off('arrange:project_loaded');
   }
 
   // ========== Outgoing sync methods (called from stores) ==========
@@ -330,6 +339,11 @@ export class DAWSyncService {
       useTrackStore.getState().syncSetTracks(data.tracks);
 
       // Set regions using sync handler
+      console.log('State sync - received regions:', data.regions.map(r => ({
+        id: r.id,
+        type: r.type,
+        audioUrl: r.type === 'audio' ? (r as any).audioUrl : undefined,
+      })));
       useRegionStore.getState().syncSetRegions(data.regions);
 
       // Set synth states
@@ -661,6 +675,54 @@ export class DAWSyncService {
   private handleLockConflict(data: { elementId: string; lockedBy: string }): void {
     console.warn(`Lock conflict: ${data.elementId} is locked by ${data.lockedBy}`);
     // Could show a notification to the user
+  }
+
+  private handleProjectLoaded(data: {
+    projectData: any;
+    uploadedBy: string;
+    uploadedAt: string;
+  }): void {
+    console.log('🎵 Received arrange:project_loaded event', {
+      uploadedBy: data.uploadedBy,
+      currentUsername: this.username,
+      projectName: data.projectData.metadata?.name,
+      tracksCount: data.projectData.tracks?.length,
+      regionsCount: data.projectData.regions?.length,
+    });
+    
+    // Don't load if this is the user who uploaded it
+    if (data.uploadedBy === this.username) {
+      console.log('Skipping project load - uploaded by current user');
+      return;
+    }
+    
+    console.log(`🎵 Loading project from ${data.uploadedBy}:`, data.projectData.metadata?.name);
+    
+    // Import the deserialize functions
+    import('./projectSerializer').then(({ deserializeProject }) => {
+      this.isSyncing = true;
+      try {
+        // Deserialize and load the project settings
+        deserializeProject(data.projectData);
+        
+        // Load regions directly from projectData (they already have audioUrl set by the server)
+        // Don't use deserializeRegions as it would overwrite the audioUrl
+        useRegionStore.setState({
+          regions: data.projectData.regions || [],
+          selectedRegionIds: [],
+          lastSelectedRegionId: null,
+        });
+        
+        console.log('Project loaded successfully from server', {
+          tracks: data.projectData.tracks?.length || 0,
+          regions: data.projectData.regions?.length || 0,
+        });
+      } catch (error) {
+        console.error('Failed to load project from server:', error);
+      } finally {
+        this.isSyncing = false;
+      }
+    });
   }
 }
 

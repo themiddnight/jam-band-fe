@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useMemo, useCallback, memo } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useUserStore } from "@/shared/stores/userStore";
-import { Footer } from "@/features/ui";
+import { Footer, AnchoredPopup } from "@/features/ui";
 import { useDeepLinkHandler } from "@/shared/hooks/useDeepLinkHandler";
 import MultitrackView from "@/features/daw/components/multitrack";
 import RegionEditor from "@/features/daw/components/regioneditor";
@@ -26,7 +26,7 @@ import { ProjectMenu } from "@/features/daw/components/ProjectMenu";
 import { useRoom } from "@/features/rooms";
 import { useWebRTCVoice, useCombinedLatency } from "@/features/audio";
 import { DAWCollaborationProvider } from "@/features/daw/contexts/DAWCollaborationContext";
-import { KickUserModal } from "@/features/rooms";
+import { KickUserModal, RoomSettingsModal } from "@/features/rooms";
 import type { Socket } from "socket.io-client";
 import { useDAWCollaboration } from "@/features/daw/hooks/useDAWCollaboration";
 import { useAudioRegionLoader } from "@/features/daw/hooks/playback/useAudioRegionLoader";
@@ -43,9 +43,15 @@ export default function ArrangeRoom() {
   const [copiedRole, setCopiedRole] = useState<string | null>(null);
   const [showKickModal, setShowKickModal] = useState(false);
   const [userToKick, setUserToKick] = useState<any | null>(null);
+  const [showRoomSettingsModal, setShowRoomSettingsModal] = useState(false);
+  const [isUpdatingRoomSettings, setIsUpdatingRoomSettings] = useState(false);
+  const [isPendingPopupOpen, setIsPendingPopupOpen] = useState(false);
+  const pendingBtnRef = useRef<HTMLButtonElement>(null);
   const recordingHandlerRef = useRef<(message: MidiMessage) => void>(() => {});
-  const [recordingHandler, setRecordingHandler] = useState<(message: MidiMessage) => void>(() => () => {});
-  
+  const [recordingHandler, setRecordingHandler] = useState<
+    (message: MidiMessage) => void
+  >(() => () => {});
+
   // Keep ref in sync with state
   useEffect(() => {
     recordingHandlerRef.current = recordingHandler;
@@ -61,7 +67,10 @@ export default function ArrangeRoom() {
     setShowLeaveConfirmModal,
     handleLeaveRoomClick,
     handleLeaveRoomConfirm,
+    handleApproveMember,
+    handleRejectMember,
     kickUser,
+    handleUpdateRoomSettings,
     getActiveSocket,
   } = useRoom();
 
@@ -75,14 +84,24 @@ export default function ArrangeRoom() {
   const canTransmitVoice =
     currentUser?.role === "room_owner" || currentUser?.role === "band_member";
 
-  const webRTCParams = useMemo(() => ({
-    socket: activeSocket,
-    currentUserId: currentUser?.id || "",
-    currentUsername: currentUser?.username || "",
-    roomId: currentRoom?.id || "",
-    isEnabled: isVoiceEnabled,
-    canTransmit: canTransmitVoice,
-  }), [activeSocket, currentUser?.id, currentUser?.username, currentRoom?.id, isVoiceEnabled, canTransmitVoice]);
+  const webRTCParams = useMemo(
+    () => ({
+      socket: activeSocket,
+      currentUserId: currentUser?.id || "",
+      currentUsername: currentUser?.username || "",
+      roomId: currentRoom?.id || "",
+      isEnabled: isVoiceEnabled,
+      canTransmit: canTransmitVoice,
+    }),
+    [
+      activeSocket,
+      currentUser?.id,
+      currentUser?.username,
+      currentRoom?.id,
+      isVoiceEnabled,
+      canTransmitVoice,
+    ]
+  );
 
   const {
     addLocalStream,
@@ -106,21 +125,31 @@ export default function ArrangeRoom() {
   });
 
   // Sync peer connections with RTC latency measurement
+  // Use a ref to track peer connection IDs to avoid re-running effect on every Map change
   const lastSeenPeerIdsRef = useRef<Set<string>>(new Set());
   const addPeerConnectionRef = useRef(addPeerConnection);
   const removePeerConnectionRef = useRef(removePeerConnection);
-  
+  const peerConnectionsRef = useRef(peerConnections);
+
   // Keep refs in sync
   useEffect(() => {
     addPeerConnectionRef.current = addPeerConnection;
     removePeerConnectionRef.current = removePeerConnection;
-  }, [addPeerConnection, removePeerConnection]);
-  
+    peerConnectionsRef.current = peerConnections;
+  }, [addPeerConnection, removePeerConnection, peerConnections]);
+
+  // Use a more efficient approach: only run when the size or keys change
+  // Convert Map to a stable array of IDs for comparison
+  const peerConnectionIds = useMemo(() => {
+    return Array.from(peerConnections.keys()).sort().join(",");
+  }, [peerConnections]);
+
   useEffect(() => {
+    const currentConnections = peerConnectionsRef.current;
     const currentIds = new Set<string>();
 
     // Add or update current peer connections
-    peerConnections.forEach((connection, userId) => {
+    currentConnections.forEach((connection, userId) => {
       currentIds.add(userId);
       addPeerConnectionRef.current(userId, connection);
     });
@@ -135,7 +164,7 @@ export default function ArrangeRoom() {
 
     // Update the last seen set
     lastSeenPeerIdsRef.current = currentIds;
-  }, [peerConnections]);
+  }, [peerConnectionIds]); // Only depend on the string of IDs, not the Map itself
 
   // DAW Collaboration enabled flag
   const isCollaborationEnabled = isConnected && !!currentRoom;
@@ -157,10 +186,13 @@ export default function ArrangeRoom() {
   const setMidiStatus = useMidiStore((state) => state.setStatus);
   const setLastMidiMessage = useMidiStore((state) => state.setLastMessage);
   const lastMidiMessage = useMidiStore((state) => state.lastMessage);
-  const handleMidiMessage = useCallback((message: MidiMessage) => {
-    setLastMidiMessage(message);
-    recordingHandlerRef.current(message);
-  }, [setLastMidiMessage]);
+  const handleMidiMessage = useCallback(
+    (message: MidiMessage) => {
+      setLastMidiMessage(message);
+      recordingHandlerRef.current(message);
+    },
+    [setLastMidiMessage]
+  );
 
   const midi = useMidiInput({
     autoConnect: true,
@@ -169,18 +201,24 @@ export default function ArrangeRoom() {
 
   // Initialize playback engines and other DAW features
   usePlaybackEngine();
-  useAudioRecordingEngine({ handleRegionAdd: collaborationValue.handleRegionAdd });
+  useAudioRecordingEngine({
+    handleRegionAdd: collaborationValue.handleRegionAdd,
+  });
   useAudioRegionLoader();
   useMidiMonitoring(lastMidiMessage);
 
-  const { isInitialized: isEffectsInitialized, error: effectsError } = useEffectsIntegration({
-    userId: userId ?? "",
-    enabled: Boolean(userId),
-  });
+  const { isInitialized: isEffectsInitialized, error: effectsError } =
+    useEffectsIntegration({
+      userId: userId ?? "",
+      enabled: Boolean(userId),
+    });
 
   useEffect(() => {
     if (effectsError) {
-      console.error("🎛️ Effects integration error (Arrange Room):", effectsError);
+      console.error(
+        "🎛️ Effects integration error (Arrange Room):",
+        effectsError
+      );
     }
     if (isEffectsInitialized) {
       console.log("🎛️ Arrange Room effects integration active");
@@ -226,21 +264,57 @@ export default function ArrangeRoom() {
     }
   }, [userToKick, kickUser]);
 
-  const handleCopyInviteUrl = useCallback(async (role: "band_member" | "audience") => {
-    if (!roomId) return;
+  const handleCopyInviteUrl = useCallback(
+    async (role: "band_member" | "audience") => {
+      if (!roomId) return;
 
-    const inviteUrl = generateInviteUrl(roomId, role, "arrange");
+      const inviteUrl = generateInviteUrl(roomId, role, "arrange");
 
-    try {
-      await navigator.clipboard.writeText(inviteUrl);
-      setCopiedRole(role);
-      setTimeout(() => setCopiedRole(null), 2000);
-    } catch (error) {
-      console.error("Failed to copy invite URL:", error);
-    }
-  }, [roomId, generateInviteUrl]);
+      try {
+        await navigator.clipboard.writeText(inviteUrl);
+        setCopiedRole(role);
+        setTimeout(() => setCopiedRole(null), 2000);
+      } catch (error) {
+        console.error("Failed to copy invite URL:", error);
+      }
+    },
+    [roomId, generateInviteUrl]
+  );
+
+  // Room settings handlers
+  const handleOpenRoomSettings = useCallback(() => {
+    setShowRoomSettingsModal(true);
+  }, []);
+
+  const handleCloseRoomSettings = useCallback(() => {
+    setShowRoomSettingsModal(false);
+  }, []);
+
+  const handleSaveRoomSettings = useCallback(
+    async (settings: {
+      name: string;
+      description: string;
+      isPrivate: boolean;
+      isHidden: boolean;
+    }) => {
+      setIsUpdatingRoomSettings(true);
+      try {
+        await handleUpdateRoomSettings(settings);
+        // Modal will be closed by the component after successful save
+      } catch (error) {
+        console.error("Failed to update room settings:", error);
+        // You could add a toast notification here
+      } finally {
+        setIsUpdatingRoomSettings(false);
+      }
+    },
+    [handleUpdateRoomSettings]
+  );
 
   useArrangeRoomScaleStore();
+
+  // Computed values
+  const pendingCount = currentRoom?.pendingMembers?.length ?? 0;
 
   return (
     <DAWCollaborationProvider
@@ -254,144 +328,245 @@ export default function ArrangeRoom() {
       <RecordingEngineBridge onHandlerReady={setRecordingHandler} />
       <div className="min-h-dvh bg-base-200 flex flex-col">
         <div className="flex-1 p-3">
-        <div className="">
-          {/* Header */}
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
+          <div className="">
+            {/* Header */}
+            <div className="flex justify-between items-center">
               <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold text-secondary">Arrange Room</h2>
-                {currentRoom && (
-                  <span className="badge badge-sm badge-primary">{currentRoom.name}</span>
-                )}
-                {!isConnected && (
-                  <span className="badge badge-sm badge-warning">Connecting...</span>
-                )}
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-bold text-secondary">
+                    Arrange Room
+                  </h2>
+                  {currentRoom && (
+                    <span className="badge badge-sm badge-primary">
+                      {currentRoom.name}
+                    </span>
+                  )}
+                  {currentUser?.username && (
+                    <span className="text-xs">
+                      {" | "}
+                      {currentUser.username}
+                    </span>
+                  )}
+                  {/* Room Settings Button - Only for room owner */}
+                  {currentUser?.role === "room_owner" && (
+                    <button
+                      onClick={handleOpenRoomSettings}
+                      className="btn btn-xs btn-ghost"
+                      title="Room Settings"
+                    >
+                      ⚙️
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleCopyInviteUrl("band_member")}
+                    className={`btn btn-sm btn-ghost ${copiedRole === "band_member" ? "btn-success" : ""}`}
+                    title="Copy invite link"
+                  >
+                    {copiedRole === "band_member" ? "✓ Copied!" : "📋"}
+                  </button>
+                  {!isConnected && (
+                    <span className="badge badge-sm badge-warning">
+                      Connecting...
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <ProjectMenu />
-              <div className="dropdown dropdown-end">
-                <label tabIndex={0} className="btn btn-sm btn-ghost" title="Copy invite link">
-                  📋
-                </label>
-                <div tabIndex={0} className="dropdown-content z-[1] card card-compact w-64 p-2 shadow bg-base-100">
-                  <div className="card-body">
-                    <h3 className="font-bold text-sm">Copy Invite Link</h3>
-                    <div className="space-y-2">
-                      <button
-                        onClick={() => handleCopyInviteUrl("band_member")}
-                        className={`btn btn-sm w-full ${copiedRole === "band_member" ? "btn-success" : "btn-primary"}`}
-                      >
-                        {copiedRole === "band_member" ? "✓ Copied!" : "📋 Producer"}
-                      </button>
-                      <button
-                        onClick={() => handleCopyInviteUrl("audience")}
-                        className={`btn btn-sm w-full ${copiedRole === "audience" ? "btn-success" : "btn-outline"}`}
-                      >
-                        {copiedRole === "audience" ? "✓ Copied!" : "📋 Listener"}
-                      </button>
-                    </div>
+              <div className="flex items-center gap-2">
+                {/* Pending notification button for room owner */}
+                {currentUser?.role === "room_owner" && (
+                  <div className="relative">
+                    <button
+                      ref={pendingBtnRef}
+                      aria-label="Pending member requests"
+                      className="btn btn-ghost btn-sm relative"
+                      onClick={() => setIsPendingPopupOpen((v) => !v)}
+                      title={
+                        pendingCount > 0
+                          ? `${pendingCount} pending requests`
+                          : "No pending requests"
+                      }
+                    >
+                      🔔
+                      {pendingCount > 0 && (
+                        <span className="badge badge-error text-white badge-xs absolute -top-1 -right-1">
+                          {pendingCount}
+                        </span>
+                      )}
+                    </button>
+                    <AnchoredPopup
+                      open={isPendingPopupOpen}
+                      onClose={() => setIsPendingPopupOpen(false)}
+                      anchorRef={pendingBtnRef}
+                      placement="bottom"
+                      className="w-72"
+                    >
+                      <div className="p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-semibold text-sm">
+                            Pending Members
+                          </h4>
+                          {pendingCount > 0 && (
+                            <span className="badge badge-ghost badge-sm">
+                              {pendingCount}
+                            </span>
+                          )}
+                        </div>
+                        {pendingCount === 0 ? (
+                          <div className="text-sm text-base-content/70">
+                            No pending requests
+                          </div>
+                        ) : (
+                          <ul className="menu bg-base-100 w-full p-0">
+                            {currentRoom!.pendingMembers.map((user) => (
+                              <div
+                                key={user.id}
+                                className="flex items-center justify-between gap-2 px-0"
+                              >
+                                <div className="flex items-center gap-2 px-2 py-1">
+                                  <span className="font-medium text-sm">
+                                    {user.username}
+                                  </span>
+                                </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    className="btn btn-sm btn-success"
+                                    onClick={() => handleApproveMember(user.id)}
+                                  >
+                                    ✓
+                                  </button>
+                                  <button
+                                    className="btn btn-sm btn-error"
+                                    onClick={() => handleRejectMember(user.id)}
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </AnchoredPopup>
                   </div>
-                </div>
-              </div>
-              <button
-                onClick={handleLeaveRoomClick}
-                className="btn btn-outline btn-sm"
-              >
-                Leave Room
-              </button>
-            </div>
-          </div>
-
-          {/* Main Content */}
-          <div>
-            <TransportToolbar />
-            <div className="flex flex-1 flex-col xl:flex-row overflow-hidden">
-              {/* Main content area */}
-              <main className="flex flex-1 flex-col gap-2 p-1 overflow-hidden min-w-0">
-                <div className="flex-1 min-h-0">
-                  <MultitrackView />
-                </div>
-                
-                <div className="h-64 sm:h-80 lg:h-96">
-                  <RegionEditor />
-                </div>
-
-                <SynthControlsPanel />
-
-                          <VirtualInstrumentPanel onRecordMidiMessage={recordingHandler} />
-              </main>
-
-              {/* Sidebar: Right on desktop, bottom on mobile */}
-              <div className="flex flex-col xl:flex-row gap-2">
-                <Sidebar
-                  collaboratorsProps={useMemo(() => ({
-                    isVoiceEnabled,
-                    canTransmitVoice,
-                    onStreamReady: addLocalStream,
-                    onStreamRemoved: removeLocalStream,
-                    rtcLatency: currentLatency,
-                    rtcLatencyActive,
-                    browserAudioLatency,
-                    meshLatency,
-                    isConnecting: isVoiceConnecting,
-                    connectionError: !!voiceConnectionError,
-                    onConnectionRetry: () => window.location.reload(),
-                    userCount: currentRoom?.users?.length || 0,
-                    roomUsers: currentRoom?.users || [],
-                    voiceUsers,
-                  }), [
-                    isVoiceEnabled,
-                    canTransmitVoice,
-                    addLocalStream,
-                    removeLocalStream,
-                    currentLatency,
-                    rtcLatencyActive,
-                    browserAudioLatency,
-                    meshLatency,
-                    isVoiceConnecting,
-                    voiceConnectionError,
-                    currentRoom?.users,
-                    voiceUsers,
-                  ])}
-                />
+                )}
+                <ProjectMenu />
+                <button
+                  onClick={handleLeaveRoomClick}
+                  className="btn btn-outline btn-sm"
+                >
+                  Leave Room
+                </button>
               </div>
             </div>
-          </div>
 
-        </div>
-      </div>
-      <Footer />
-      
-      {/* Modals */}
-      {showLeaveConfirmModal && (
-        <div className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold text-lg">Leave Room?</h3>
-            <p className="py-4">Are you sure you want to leave this room?</p>
-            <div className="modal-action">
-              <button onClick={() => setShowLeaveConfirmModal(false)} className="btn">
-                Cancel
-              </button>
-              <button onClick={handleLeaveRoomConfirm} className="btn btn-primary">
-                Leave
-              </button>
+            {/* Main Content */}
+            <div>
+              <TransportToolbar />
+              <div className="flex flex-1 flex-col xl:flex-row overflow-hidden">
+                {/* Main content area */}
+                <main className="flex flex-1 flex-col gap-2 p-1 overflow-hidden min-w-0">
+                  <div className="flex-1 min-h-0">
+                    <MultitrackView />
+                  </div>
+
+                  <div className="h-64 sm:h-80 lg:h-96">
+                    <RegionEditor />
+                  </div>
+
+                  <SynthControlsPanel />
+
+                  <VirtualInstrumentPanel
+                    onRecordMidiMessage={recordingHandler}
+                  />
+                </main>
+
+                {/* Sidebar: Right on desktop, bottom on mobile */}
+                <div className="flex flex-col xl:flex-row gap-2">
+                  <Sidebar
+                    collaboratorsProps={useMemo(
+                      () => ({
+                        isVoiceEnabled,
+                        canTransmitVoice,
+                        onStreamReady: addLocalStream,
+                        onStreamRemoved: removeLocalStream,
+                        rtcLatency: currentLatency,
+                        rtcLatencyActive,
+                        browserAudioLatency,
+                        meshLatency,
+                        isConnecting: isVoiceConnecting,
+                        connectionError: !!voiceConnectionError,
+                        onConnectionRetry: () => window.location.reload(),
+                        userCount: currentRoom?.users?.length || 0,
+                        roomUsers: currentRoom?.users || [],
+                        voiceUsers,
+                      }),
+                      [
+                        isVoiceEnabled,
+                        canTransmitVoice,
+                        addLocalStream,
+                        removeLocalStream,
+                        currentLatency,
+                        rtcLatencyActive,
+                        browserAudioLatency,
+                        meshLatency,
+                        isVoiceConnecting,
+                        voiceConnectionError,
+                        currentRoom?.users,
+                        voiceUsers,
+                      ]
+                    )}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      )}
-      
-      {showKickModal && (
-        <KickUserModal
-          open={showKickModal}
-          onClose={() => {
-            setShowKickModal(false);
-            setUserToKick(null);
-          }}
-          targetUser={userToKick}
-          onConfirm={handleKickConfirm}
+        <Footer />
+
+        {/* Modals */}
+        {showLeaveConfirmModal && (
+          <div className="modal modal-open">
+            <div className="modal-box">
+              <h3 className="font-bold text-lg">Leave Room?</h3>
+              <p className="py-4">Are you sure you want to leave this room?</p>
+              <div className="modal-action">
+                <button
+                  onClick={() => setShowLeaveConfirmModal(false)}
+                  className="btn"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleLeaveRoomConfirm}
+                  className="btn btn-primary"
+                >
+                  Leave
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showKickModal && (
+          <KickUserModal
+            open={showKickModal}
+            onClose={() => {
+              setShowKickModal(false);
+              setUserToKick(null);
+            }}
+            targetUser={userToKick}
+            onConfirm={handleKickConfirm}
+          />
+        )}
+
+        {/* Room Settings Modal */}
+        <RoomSettingsModal
+          open={showRoomSettingsModal}
+          onClose={handleCloseRoomSettings}
+          room={currentRoom}
+          onSave={handleSaveRoomSettings}
+          isLoading={isUpdatingRoomSettings}
         />
-      )}
       </div>
     </DAWCollaborationProvider>
   );
@@ -413,14 +588,15 @@ interface RecordingEngineBridgeProps {
   onHandlerReady: Dispatch<SetStateAction<(message: MidiMessage) => void>>;
 }
 
-const RecordingEngineBridge = memo(({ onHandlerReady }: RecordingEngineBridgeProps) => {
-  const handler = useRecordingEngine();
+const RecordingEngineBridge = memo(
+  ({ onHandlerReady }: RecordingEngineBridgeProps) => {
+    const handler = useRecordingEngine();
 
-  useEffect(() => {
-    onHandlerReady(() => handler);
-  }, [handler, onHandlerReady]);
+    useEffect(() => {
+      onHandlerReady(() => handler);
+    }, [handler, onHandlerReady]);
 
-  return null;
-});
+    return null;
+  }
+);
 RecordingEngineBridge.displayName = "RecordingEngineBridge";
-

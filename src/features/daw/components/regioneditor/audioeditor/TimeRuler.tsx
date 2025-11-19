@@ -1,5 +1,5 @@
 import { getGridDivisionForZoom, getGridInterval, isBarLine, isBeatLine } from '@/features/daw/utils/gridUtils';
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { Layer, Line, Rect, Stage, Text } from 'react-konva';
 
 interface TimeRulerProps {
@@ -14,7 +14,7 @@ interface TimeRulerProps {
 
 const RULER_HEIGHT = 36;
 
-export const TimeRuler = ({
+const TimeRulerComponent = ({
   totalBeats,
   pixelsPerBeat,
   zoomX,
@@ -156,3 +156,4 @@ export const TimeRuler = ({
   );
 };
 
+export const TimeRuler = memo(TimeRulerComponent);

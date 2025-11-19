@@ -8,6 +8,8 @@ import type {
   SustainEvent,
 } from '../types/daw';
 
+export type PianoRollViewMode = 'all-keys' | 'scale-keys' | 'only-notes';
+
 // Check if a note would overlap with any other notes at the same pitch
 const checkNoteOverlap = (
   notes: MidiNote[],
@@ -31,6 +33,8 @@ interface PianoRollStoreState {
   activeRegionId: RegionId | null;
   selectedNoteIds: NoteId[];
   selectedSustainIds: string[];
+  viewMode: PianoRollViewMode;
+  setViewMode: (mode: PianoRollViewMode) => void;
   setActiveRegion: (regionId: RegionId | null) => void;
   addNote: (note: Omit<MidiNote, 'id'>) => MidiNote | null;
   updateNote: (noteId: NoteId, updates: Partial<MidiNote>) => void;
@@ -60,6 +64,8 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
   activeRegionId: null,
   selectedNoteIds: [],
   selectedSustainIds: [],
+  viewMode: 'all-keys',
+  setViewMode: (mode) => set({ viewMode: mode }),
   setActiveRegion: (regionId) => {
     set({
       activeRegionId: regionId,

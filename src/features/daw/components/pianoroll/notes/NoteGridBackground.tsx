@@ -17,6 +17,8 @@ export const NoteGridBackground = React.memo<NoteGridBackgroundProps>(
     gridInterval,
     regionHighlightStart = 0,
     regionHighlightEnd = 0,
+    visibleMidiNumbers,
+    midiToRowIndex,
   }) => {
     // Region highlight dimensions
     const highlightX = regionHighlightStart * beatWidth;
@@ -48,30 +50,67 @@ export const NoteGridBackground = React.memo<NoteGridBackgroundProps>(
     const horizontalLines = [];
     const blackKeyBackgrounds = [];
 
-    for (let keyIndex = 0; keyIndex <= TOTAL_KEYS; keyIndex++) {
-      const y = keyIndex * NOTE_HEIGHT;
-      const midi = HIGHEST_MIDI - keyIndex;
-      const noteInOctave = midi % 12;
-      const isBlackKey = BLACK_KEYS.has(noteInOctave);
+    // Use visible MIDI numbers if provided, otherwise fall back to all keys
+    const midiNumbers = visibleMidiNumbers || [];
+    const totalRows = midiNumbers.length || TOTAL_KEYS;
 
-      // Add dimmed background for black keys
-      if (isBlackKey) {
-        blackKeyBackgrounds.push(
-          <Rect
-            key={`black-bg-${keyIndex}`}
-            x={0}
-            y={y}
-            width={width}
-            height={NOTE_HEIGHT}
-            fill="rgba(0,0,0,0.08)"
-            listening={false}
-          />
+    if (visibleMidiNumbers && midiToRowIndex) {
+      // Filtered view mode
+      for (let rowIndex = 0; rowIndex <= totalRows; rowIndex++) {
+        const y = rowIndex * NOTE_HEIGHT;
+        const midi = midiNumbers[rowIndex];
+        
+        if (midi !== undefined) {
+          const noteInOctave = midi % 12;
+          const isBlackKey = BLACK_KEYS.has(noteInOctave);
+
+          // Add dimmed background for black keys
+          if (isBlackKey) {
+            blackKeyBackgrounds.push(
+              <Rect
+                key={`black-bg-${rowIndex}`}
+                x={0}
+                y={y}
+                width={width}
+                height={NOTE_HEIGHT}
+                fill="rgba(0,0,0,0.08)"
+                listening={false}
+              />
+            );
+          }
+        }
+
+        horizontalLines.push(
+          <Rect key={`row-${rowIndex}`} x={0} y={y} width={width} height={1} fill="#e5e7eb" />
         );
       }
+    } else {
+      // All keys view mode (default)
+      for (let keyIndex = 0; keyIndex <= TOTAL_KEYS; keyIndex++) {
+        const y = keyIndex * NOTE_HEIGHT;
+        const midi = HIGHEST_MIDI - keyIndex;
+        const noteInOctave = midi % 12;
+        const isBlackKey = BLACK_KEYS.has(noteInOctave);
 
-      horizontalLines.push(
-        <Rect key={`row-${keyIndex}`} x={0} y={y} width={width} height={1} fill="#e5e7eb" />
-      );
+        // Add dimmed background for black keys
+        if (isBlackKey) {
+          blackKeyBackgrounds.push(
+            <Rect
+              key={`black-bg-${keyIndex}`}
+              x={0}
+              y={y}
+              width={width}
+              height={NOTE_HEIGHT}
+              fill="rgba(0,0,0,0.08)"
+              listening={false}
+            />
+          );
+        }
+
+        horizontalLines.push(
+          <Rect key={`row-${keyIndex}`} x={0} y={y} width={width} height={1} fill="#e5e7eb" />
+        );
+      }
     }
 
     return (

@@ -18,7 +18,7 @@ export const TrackEffects = memo(() => {
   }, [tracks, ensureChain]);
 
   return (
-    <div className="flex flex-col gap-4 p-3 w-full">
+    <div className="flex flex-col gap-4 p-3 w-full max-h-[70vh] overflow-y-auto">
       <h3 className="text-sm font-semibold uppercase tracking-wide text-base-content/70">
         Track Effects
       </h3>

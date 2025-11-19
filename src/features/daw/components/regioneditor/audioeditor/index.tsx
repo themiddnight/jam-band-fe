@@ -21,6 +21,7 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
   const rulerRef = useRef<HTMLDivElement>(null);
   const waveformRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(800);
+  const [scrollLeft, setScrollLeft] = useState(0);
 
   const applyRegionUpdate = useCallback(
     (updates: Partial<AudioRegion>) => {
@@ -32,6 +33,37 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
 
   // Calculate default zoom to fit full waveform in container
   const defaultZoomX = Math.max(0.1, containerWidth / ((region.originalLength || region.length) * PIXELS_PER_BEAT));
+
+  // Handle zoom changes centered on cursor
+  const handleZoomXChange = useCallback((newZoom: number, cursorX?: number) => {
+    if (!waveformRef.current) {
+      setZoomX(newZoom);
+      return;
+    }
+
+    if (cursorX !== undefined) {
+      // Calculate focus point in beats
+      const focusPoint = (scrollLeft + cursorX) / (PIXELS_PER_BEAT * zoomX);
+      
+      // Calculate new scroll position to keep focus point at same position
+      const newFocusPixels = focusPoint * PIXELS_PER_BEAT * newZoom;
+      const newScrollLeft = newFocusPixels - cursorX;
+      
+      setZoomX(newZoom);
+      
+      requestAnimationFrame(() => {
+        if (waveformRef.current) {
+          waveformRef.current.scrollLeft = Math.max(0, newScrollLeft);
+        }
+      });
+    } else {
+      setZoomX(newZoom);
+    }
+  }, [zoomX, scrollLeft]);
+
+  const handleZoomYChange = useCallback((newZoom: number) => {
+    setZoomY(newZoom);
+  }, []);
 
   // Update container width on mount and resize
   useEffect(() => {
@@ -101,14 +133,48 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
   const handleWaveformScroll = useCallback(() => {
     if (waveformRef.current && rulerRef.current) {
       rulerRef.current.scrollLeft = waveformRef.current.scrollLeft;
+      setScrollLeft(waveformRef.current.scrollLeft);
     }
   }, []);
 
   const handleRulerScroll = useCallback(() => {
     if (rulerRef.current && waveformRef.current) {
       waveformRef.current.scrollLeft = rulerRef.current.scrollLeft;
+      setScrollLeft(rulerRef.current.scrollLeft);
     }
   }, []);
+
+  // Handle wheel zoom with Ctrl key
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        
+        const delta = -e.deltaY;
+        const zoomSpeed = 0.01;
+        
+        // Shift key for Y zoom, otherwise X zoom
+        if (e.shiftKey) {
+          const newZoomY = Math.max(1, Math.min(20, zoomY + delta * zoomSpeed));
+          handleZoomYChange(newZoomY);
+        } else {
+          const newZoomX = Math.max(1, Math.min(20, zoomX + delta * zoomSpeed));
+          
+          // Get cursor position relative to waveform
+          const rect = waveformRef.current?.getBoundingClientRect();
+          const cursorX = rect ? e.clientX - rect.left : undefined;
+          
+          handleZoomXChange(newZoomX, cursorX);
+        }
+      }
+    };
+
+    const waveform = waveformRef.current;
+    if (waveform) {
+      waveform.addEventListener('wheel', handleWheel, { passive: false });
+      return () => waveform.removeEventListener('wheel', handleWheel);
+    }
+  }, [zoomX, zoomY, handleZoomXChange, handleZoomYChange]);
 
   return (
     <div className="flex flex-col h-full bg-base-100">
@@ -116,51 +182,27 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
       <div className="flex items-center justify-between gap-4 px-4 py-3 border-b border-base-300">
         <div className="flex items-center gap-4">
           <h3 className="text-sm font-semibold">{region.name}</h3>
-          {/* Zoom X Control */}
-          <label className="flex items-center gap-2">
-            <span className="text-xs text-base-content/70">Zoom X</span>
-            <input
-              type="range"
-              min={1}
-              max={20}
-              step={0.5}
-              value={zoomX}
-              onChange={(e) => setZoomX(Number(e.target.value))}
-              className="range range-xs w-20"
-            />
-            <span className="text-xs font-mono w-10">{zoomX.toFixed(1)}x</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-base-content/50">
+              Ctrl+Scroll to zoom X • Ctrl+Shift+Scroll to zoom Y
+            </span>
             <button
               type="button"
-              onClick={() => setZoomX(defaultZoomX)}
+              onClick={() => handleZoomXChange(defaultZoomX)}
               className="btn btn-xs"
               title="Reset to fit width"
             >
-              ↻
+              Fit
             </button>
-          </label>
-
-          {/* Zoom Y Control */}
-          <label className="flex items-center gap-2">
-            <span className="text-xs text-base-content/70">Zoom Y</span>
-            <input
-              type="range"
-              min={1}
-              max={20}
-              step={0.5}
-              value={zoomY}
-              onChange={(e) => setZoomY(Number(e.target.value))}
-              className="range range-xs w-20"
-            />
-            <span className="text-xs font-mono w-10">{zoomY.toFixed(1)}x</span>
             <button
               type="button"
-              onClick={() => setZoomY(1)}
+              onClick={() => handleZoomYChange(1)}
               className="btn btn-xs"
               title="Reset Y zoom"
             >
-              ↻
+              Reset Y
             </button>
-          </label>
+          </div>
         </div>
 
         <div className="flex items-center gap-4">
