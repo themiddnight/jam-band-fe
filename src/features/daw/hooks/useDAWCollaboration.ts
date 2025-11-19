@@ -50,6 +50,7 @@ export const useDAWCollaboration = ({
   const setTrackVolume = useTrackStore((state) => state.setTrackVolume);
   const setTrackPan = useTrackStore((state) => state.setTrackPan);
   const setTrackInstrument = useTrackStore((state) => state.setTrackInstrument);
+  const reorderTrack = useTrackStore((state) => state.reorderTrack);
   const selectTrack = useTrackStore((state) => state.selectTrack);
   const selectedTrackId = useTrackStore((state) => state.selectedTrackId);
 
@@ -232,6 +233,17 @@ export const useDAWCollaboration = ({
       dawSyncService.syncTrackInstrumentChange(trackId, instrumentId, instrumentCategory);
     },
     [setTrackInstrument]
+  );
+
+  const handleTrackReorder = useCallback(
+    (trackId: string, newIndex: number) => {
+      reorderTrack(trackId, newIndex);
+      // Get the new order of all track IDs after reordering
+      const tracks = useTrackStore.getState().tracks;
+      const trackIds = tracks.map((track) => track.id);
+      dawSyncService.syncTrackReorder(trackIds);
+    },
+    [reorderTrack]
   );
 
   const handleTrackSelect = useCallback(
@@ -624,6 +636,7 @@ export const useDAWCollaboration = ({
     handleTrackVolumeDragEnd,
     handleTrackPanDragEnd,
     handleTrackInstrumentChange,
+    handleTrackReorder,
     handleTrackSelect,
 
     // Region handlers

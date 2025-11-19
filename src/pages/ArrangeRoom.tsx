@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback, memo } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useUserStore } from "@/shared/stores/userStore";
@@ -24,10 +24,9 @@ import { useMidiStore } from "@/features/daw/stores/midiStore";
 import { useArrangeRoomScaleStore } from "@/features/daw/stores/arrangeRoomStore";
 import { ProjectMenu } from "@/features/daw/components/ProjectMenu";
 import { useRoom } from "@/features/rooms";
-import { useWebRTCVoice } from "@/features/audio";
-import { VoiceInput } from "@/features/audio";
+import { useWebRTCVoice, useCombinedLatency } from "@/features/audio";
 import { DAWCollaborationProvider } from "@/features/daw/contexts/DAWCollaborationContext";
-import { RoomMembers, KickUserModal } from "@/features/rooms";
+import { KickUserModal } from "@/features/rooms";
 import type { Socket } from "socket.io-client";
 import { useDAWCollaboration } from "@/features/daw/hooks/useDAWCollaboration";
 import { useAudioRegionLoader } from "@/features/daw/hooks/playback/useAudioRegionLoader";
@@ -44,7 +43,13 @@ export default function ArrangeRoom() {
   const [copiedRole, setCopiedRole] = useState<string | null>(null);
   const [showKickModal, setShowKickModal] = useState(false);
   const [userToKick, setUserToKick] = useState<any | null>(null);
+  const recordingHandlerRef = useRef<(message: MidiMessage) => void>(() => {});
   const [recordingHandler, setRecordingHandler] = useState<(message: MidiMessage) => void>(() => () => {});
+  
+  // Keep ref in sync with state
+  useEffect(() => {
+    recordingHandlerRef.current = recordingHandler;
+  }, [recordingHandler]);
 
   // Room management
   const {
@@ -70,19 +75,67 @@ export default function ArrangeRoom() {
   const canTransmitVoice =
     currentUser?.role === "room_owner" || currentUser?.role === "band_member";
 
-  const webRTCParams = {
+  const webRTCParams = useMemo(() => ({
     socket: activeSocket,
     currentUserId: currentUser?.id || "",
     currentUsername: currentUser?.username || "",
     roomId: currentRoom?.id || "",
     isEnabled: isVoiceEnabled,
     canTransmit: canTransmitVoice,
-  };
+  }), [activeSocket, currentUser?.id, currentUser?.username, currentRoom?.id, isVoiceEnabled, canTransmitVoice]);
 
   const {
     addLocalStream,
     removeLocalStream,
+    voiceUsers,
+    peerConnections,
+    isConnecting: isVoiceConnecting,
+    connectionError: voiceConnectionError,
   } = useWebRTCVoice(webRTCParams);
+
+  // RTC latency measurement
+  const {
+    totalLatency: currentLatency,
+    browserAudioLatency,
+    meshLatency,
+    isActive: rtcLatencyActive,
+    addPeerConnection,
+    removePeerConnection,
+  } = useCombinedLatency({
+    enabled: isVoiceEnabled,
+  });
+
+  // Sync peer connections with RTC latency measurement
+  const lastSeenPeerIdsRef = useRef<Set<string>>(new Set());
+  const addPeerConnectionRef = useRef(addPeerConnection);
+  const removePeerConnectionRef = useRef(removePeerConnection);
+  
+  // Keep refs in sync
+  useEffect(() => {
+    addPeerConnectionRef.current = addPeerConnection;
+    removePeerConnectionRef.current = removePeerConnection;
+  }, [addPeerConnection, removePeerConnection]);
+  
+  useEffect(() => {
+    const currentIds = new Set<string>();
+
+    // Add or update current peer connections
+    peerConnections.forEach((connection, userId) => {
+      currentIds.add(userId);
+      addPeerConnectionRef.current(userId, connection);
+    });
+
+    // Remove peers that were present before but not anymore
+    const lastSeen = lastSeenPeerIdsRef.current;
+    lastSeen.forEach((id) => {
+      if (!currentIds.has(id)) {
+        removePeerConnectionRef.current(id);
+      }
+    });
+
+    // Update the last seen set
+    lastSeenPeerIdsRef.current = currentIds;
+  }, [peerConnections]);
 
   // DAW Collaboration enabled flag
   const isCollaborationEnabled = isConnected && !!currentRoom;
@@ -104,12 +157,14 @@ export default function ArrangeRoom() {
   const setMidiStatus = useMidiStore((state) => state.setStatus);
   const setLastMidiMessage = useMidiStore((state) => state.setLastMessage);
   const lastMidiMessage = useMidiStore((state) => state.lastMessage);
+  const handleMidiMessage = useCallback((message: MidiMessage) => {
+    setLastMidiMessage(message);
+    recordingHandlerRef.current(message);
+  }, [setLastMidiMessage]);
+
   const midi = useMidiInput({
     autoConnect: true,
-    onMessage: (message) => {
-      setLastMidiMessage(message);
-      recordingHandler(message);
-    },
+    onMessage: handleMidiMessage,
   });
 
   // Initialize playback engines and other DAW features
@@ -163,23 +218,15 @@ export default function ArrangeRoom() {
     }
   }, [roomId, username, userId, isConnected, isConnecting]);
 
-  const handleKickUser = (targetUserId: string) => {
-    const user = currentRoom?.users?.find((u: any) => u.id === targetUserId);
-    if (user) {
-      setUserToKick(user);
-      setShowKickModal(true);
-    }
-  };
-
-  const handleKickConfirm = () => {
+  const handleKickConfirm = useCallback(() => {
     if (userToKick) {
       kickUser(userToKick.id);
       setShowKickModal(false);
       setUserToKick(null);
     }
-  };
+  }, [userToKick, kickUser]);
 
-  const handleCopyInviteUrl = async (role: "band_member" | "audience") => {
+  const handleCopyInviteUrl = useCallback(async (role: "band_member" | "audience") => {
     if (!roomId) return;
 
     const inviteUrl = generateInviteUrl(roomId, role, "arrange");
@@ -191,7 +238,7 @@ export default function ArrangeRoom() {
     } catch (error) {
       console.error("Failed to copy invite URL:", error);
     }
-  };
+  }, [roomId, generateInviteUrl]);
 
   useArrangeRoomScaleStore();
 
@@ -277,36 +324,39 @@ export default function ArrangeRoom() {
 
               {/* Sidebar: Right on desktop, bottom on mobile */}
               <div className="flex flex-col xl:flex-row gap-2">
-                <Sidebar />
-                
-                {/* Room Members Sidebar */}
-                {currentRoom && (
-                  <div className="w-full xl:w-64 bg-base-100 rounded-lg shadow p-4">
-                    <h3 className="font-bold text-sm mb-2">Room Members</h3>
-                    <RoomMembers
-                      users={currentRoom.users || []}
-                      pendingMembers={currentRoom.pendingMembers || []}
-                      playingIndicators={new Map()}
-                      onKickUser={handleKickUser}
-                      onApproveMember={() => {}}
-                      onRejectMember={() => {}}
-                      onSwapInstrument={() => {}}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            {/* WebRTC Voice Input */}
-            {isVoiceEnabled && (
-              <div className="mt-2">
-                <VoiceInput
-                  isVisible={true}
-                  onStreamReady={addLocalStream}
-                  onStreamRemoved={removeLocalStream}
+                <Sidebar
+                  collaboratorsProps={useMemo(() => ({
+                    isVoiceEnabled,
+                    canTransmitVoice,
+                    onStreamReady: addLocalStream,
+                    onStreamRemoved: removeLocalStream,
+                    rtcLatency: currentLatency,
+                    rtcLatencyActive,
+                    browserAudioLatency,
+                    meshLatency,
+                    isConnecting: isVoiceConnecting,
+                    connectionError: !!voiceConnectionError,
+                    onConnectionRetry: () => window.location.reload(),
+                    userCount: currentRoom?.users?.length || 0,
+                    roomUsers: currentRoom?.users || [],
+                    voiceUsers,
+                  }), [
+                    isVoiceEnabled,
+                    canTransmitVoice,
+                    addLocalStream,
+                    removeLocalStream,
+                    currentLatency,
+                    rtcLatencyActive,
+                    browserAudioLatency,
+                    meshLatency,
+                    isVoiceConnecting,
+                    voiceConnectionError,
+                    currentRoom?.users,
+                    voiceUsers,
+                  ])}
                 />
               </div>
-            )}
+            </div>
           </div>
 
         </div>
@@ -347,21 +397,23 @@ export default function ArrangeRoom() {
   );
 }
 
-const TrackAudioParamsBridge = () => {
+const TrackAudioParamsBridge = memo(() => {
   useTrackAudioParams();
   return null;
-};
+});
+TrackAudioParamsBridge.displayName = "TrackAudioParamsBridge";
 
-const KeyboardShortcutsBridge = () => {
+const KeyboardShortcutsBridge = memo(() => {
   useKeyboardShortcuts();
   return null;
-};
+});
+KeyboardShortcutsBridge.displayName = "KeyboardShortcutsBridge";
 
 interface RecordingEngineBridgeProps {
   onHandlerReady: Dispatch<SetStateAction<(message: MidiMessage) => void>>;
 }
 
-const RecordingEngineBridge = ({ onHandlerReady }: RecordingEngineBridgeProps) => {
+const RecordingEngineBridge = memo(({ onHandlerReady }: RecordingEngineBridgeProps) => {
   const handler = useRecordingEngine();
 
   useEffect(() => {
@@ -369,5 +421,6 @@ const RecordingEngineBridge = ({ onHandlerReady }: RecordingEngineBridgeProps) =
   }, [handler, onHandlerReady]);
 
   return null;
-};
+});
+RecordingEngineBridge.displayName = "RecordingEngineBridge";
 

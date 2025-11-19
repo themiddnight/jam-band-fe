@@ -1,10 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, memo } from 'react';
 import { EffectChain as TrackEffectChain } from '@/features/effects';
 import type { EffectChainType } from '@/features/effects';
 import { useEffectsStore } from '@/features/effects';
 import { useTrackStore } from '@/features/daw/stores/trackStore';
 
-export const TrackEffects = () => {
+export const TrackEffects = memo(() => {
   const tracks = useTrackStore((state) => state.tracks);
   const selectedTrackId = useTrackStore((state) => state.selectedTrackId);
   const selectTrack = useTrackStore((state) => state.selectTrack);
@@ -41,11 +41,11 @@ export const TrackEffects = () => {
               <div
                 key={track.id}
                 onClick={() => selectTrack(track.id)}
-                className={`w-full rounded-lg transition-all duration-150 cursor-pointer ${highlightClasses}`}
+                className={`w-fit xl:w-full min-w-64 rounded-lg transition-all duration-150 cursor-pointer ${highlightClasses}`}
               >
                 <TrackEffectChain
                   chainType={chainType}
-                  title={`${track.name} Effects`}
+                  title={`${track.name}`}
                   mode="arrange"
                 />
               </div>
@@ -55,5 +55,6 @@ export const TrackEffects = () => {
       )}
     </div>
   );
-};
+});
+TrackEffects.displayName = 'TrackEffects';
 

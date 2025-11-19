@@ -5,6 +5,10 @@ import type { Socket } from 'socket.io-client';
 import type { SynthState } from '@/features/instruments';
 import type { TimeSignature } from '../types/daw';
 import type { InstrumentCategory } from '@/shared/constants/instruments';
+import { useTrackStore } from '../stores/trackStore';
+import { useRegionStore } from '../stores/regionStore';
+import { useSynthStore } from '../stores/synthStore';
+import { useProjectStore } from '../stores/projectStore';
 
 export interface DAWCollaborationContextValue {
   // Track handlers
@@ -17,6 +21,7 @@ export interface DAWCollaborationContextValue {
   handleTrackVolumeDragEnd: () => void;
   handleTrackPanDragEnd: () => void;
   handleTrackInstrumentChange: (trackId: string, instrumentId: string, instrumentCategory?: InstrumentCategory) => void;
+  handleTrackReorder: (trackId: string, newIndex: number) => void;
   handleTrackSelect: (trackId: string | null) => void;
 
   // Region handlers
@@ -79,7 +84,6 @@ export const useDAWCollaborationContext = (): DAWCollaborationContextValue => {
     // Return no-op handlers when not in collaborative mode
     return {
       handleTrackAdd: (overrides?: any) => {
-        const { useTrackStore } = require('../stores/trackStore');
         return useTrackStore.getState().addTrack(overrides);
       },
       handleTrackUpdate: () => {},
@@ -90,9 +94,9 @@ export const useDAWCollaborationContext = (): DAWCollaborationContextValue => {
       handleTrackVolumeDragEnd: () => {},
       handleTrackPanDragEnd: () => {},
       handleTrackInstrumentChange: () => {},
+      handleTrackReorder: () => {},
       handleTrackSelect: () => {},
       handleRegionAdd: (trackId: string, start: number, length?: number, overrides?: any) => {
-        const { useRegionStore } = require('../stores/regionStore');
         const regionStore = useRegionStore.getState();
         const {
           id: overrideId,
@@ -134,12 +138,10 @@ export const useDAWCollaborationContext = (): DAWCollaborationContextValue => {
       handleRegionUpdate: () => {},
       handleRegionMove: () => {},
       handleRegionMoveToTrack: (regionIds: string[], targetTrackId: string, deltaBeats = 0) => {
-        const { useRegionStore } = require('../stores/regionStore');
         useRegionStore.getState().moveRegionsToTrack(regionIds, targetTrackId, deltaBeats);
       },
       handleRegionDelete: () => {},
       handleRegionSplit: (regionIds: string[], splitPosition: number) => {
-        const { useRegionStore } = require('../stores/regionStore');
         useRegionStore.getState().splitRegions(regionIds, splitPosition);
       },
       handleRegionSelect: () => {},
@@ -149,18 +151,15 @@ export const useDAWCollaborationContext = (): DAWCollaborationContextValue => {
       handleNoteDelete: () => {},
       handleEffectChainUpdate: () => {},
       handleSynthParamsChange: (trackId: string, params: Partial<SynthState>) => {
-        const { useSynthStore } = require('../stores/synthStore');
         const synthStore = useSynthStore.getState();
         if (synthStore.synthStates[trackId]) {
           synthStore.updateSynthState(trackId, params);
         }
       },
       handleBpmChange: (bpm: number) => {
-        const { useProjectStore } = require('../stores/projectStore');
         useProjectStore.getState().setBpm(bpm);
       },
       handleTimeSignatureChange: (timeSignature: TimeSignature) => {
-        const { useProjectStore } = require('../stores/projectStore');
         useProjectStore.getState().setTimeSignature(timeSignature);
       },
       isLocked: () => null,

@@ -31,6 +31,7 @@ interface TrackStoreState {
   toggleSolo: (trackId: TrackId, value?: boolean) => void;
   moveTrackUp: (trackId: TrackId) => void;
   moveTrackDown: (trackId: TrackId) => void;
+  reorderTrack: (trackId: TrackId, newIndex: number) => void;
   setTrackInstrument: (
     trackId: TrackId,
     instrumentId: string,
@@ -51,6 +52,7 @@ interface TrackStoreState {
     instrumentCategory?: InstrumentCategory,
   ) => void;
   syncSelectTrack: (trackId: TrackId | null) => void;
+  syncReorderTracks: (trackIds: TrackId[]) => void;
 }
 
 const createTrack = (index: number, overrides?: Partial<Track>): Track => {
@@ -164,6 +166,19 @@ export const useTrackStore = create<TrackStoreState>((set, get) => ({
 
       return { ...state, tracks: updatedTracks };
     }),
+  reorderTrack: (trackId, newIndex) =>
+    set((state) => {
+      const currentIndex = state.tracks.findIndex((track) => track.id === trackId);
+      if (currentIndex === -1 || newIndex < 0 || newIndex >= state.tracks.length) {
+        return state;
+      }
+
+      const updatedTracks = [...state.tracks];
+      const [movedTrack] = updatedTracks.splice(currentIndex, 1);
+      updatedTracks.splice(newIndex, 0, movedTrack);
+
+      return { ...state, tracks: updatedTracks };
+    }),
   setTrackInstrument: (trackId, instrumentId, instrumentCategory) =>
     set((state) => ({
       tracks: state.tracks.map((track) =>
@@ -231,5 +246,19 @@ export const useTrackStore = create<TrackStoreState>((set, get) => ({
       ),
     })),
   syncSelectTrack: (trackId) => set({ selectedTrackId: trackId }),
+  syncReorderTracks: (trackIds) =>
+    set((state) => {
+      // Reorder tracks based on the provided order of track IDs
+      const trackMap = new Map(state.tracks.map((track) => [track.id, track]));
+      const reorderedTracks = trackIds
+        .map((id) => trackMap.get(id))
+        .filter((track): track is Track => track !== undefined);
+      
+      // Add any tracks that weren't in the reorder list (shouldn't happen, but safety check)
+      const existingIds = new Set(trackIds);
+      const remainingTracks = state.tracks.filter((track) => !existingIds.has(track.id));
+      
+      return { ...state, tracks: [...reorderedTracks, ...remainingTracks] };
+    }),
 }));
 

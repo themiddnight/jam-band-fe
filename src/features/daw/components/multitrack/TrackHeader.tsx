@@ -58,8 +58,7 @@ export const TrackHeader = ({
 
   const toggleMute = useTrackStore((state) => state.toggleMute);
   const toggleSolo = useTrackStore((state) => state.toggleSolo);
-  const moveTrackUp = useTrackStore((state) => state.moveTrackUp);
-  const moveTrackDown = useTrackStore((state) => state.moveTrackDown);
+  const tracks = useTrackStore((state) => state.tracks);
   
   // Use collaboration handlers if available
   const { 
@@ -70,6 +69,7 @@ export const TrackHeader = ({
     handleTrackPanChange,
     handleTrackVolumeDragEnd,
     handleTrackPanDragEnd,
+    handleTrackReorder,
   } = useDAWCollaborationContext();
 
   const nameInputRef = useRef<HTMLInputElement | null>(null);
@@ -317,7 +317,12 @@ export const TrackHeader = ({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => moveTrackUp(track.id)}
+            onClick={() => {
+              const currentIndex = tracks.findIndex((t) => t.id === track.id);
+              if (currentIndex > 0) {
+                handleTrackReorder(track.id, currentIndex - 1);
+              }
+            }}
             className="btn btn-xs btn-ghost btn-circle"
             title="Move Track Up"
             aria-label="Move Track Up"
@@ -327,7 +332,12 @@ export const TrackHeader = ({
           </button>
           <button
             type="button"
-            onClick={() => moveTrackDown(track.id)}
+            onClick={() => {
+              const currentIndex = tracks.findIndex((t) => t.id === track.id);
+              if (currentIndex < tracks.length - 1) {
+                handleTrackReorder(track.id, currentIndex + 1);
+              }
+            }}
             className="btn btn-xs btn-ghost btn-circle"
             title="Move Track Down"
             aria-label="Move Track Down"

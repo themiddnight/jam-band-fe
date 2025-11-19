@@ -72,6 +72,7 @@ export class DAWSyncService {
     this.socket.on('arrange:track_updated', this.handleTrackUpdated.bind(this));
     this.socket.on('arrange:track_deleted', this.handleTrackDeleted.bind(this));
     this.socket.on('arrange:track_instrument_changed', this.handleTrackInstrumentChanged.bind(this));
+    this.socket.on('arrange:track_reordered', this.handleTrackReordered.bind(this));
     this.socket.on('arrange:region_added', this.handleRegionAdded.bind(this));
     this.socket.on('arrange:region_updated', this.handleRegionUpdated.bind(this));
     this.socket.on('arrange:region_moved', this.handleRegionMoved.bind(this));
@@ -100,6 +101,7 @@ export class DAWSyncService {
     this.socket.off('arrange:track_updated');
     this.socket.off('arrange:track_deleted');
     this.socket.off('arrange:track_instrument_changed');
+    this.socket.off('arrange:track_reordered');
     this.socket.off('arrange:region_added');
     this.socket.off('arrange:region_updated');
     this.socket.off('arrange:region_moved');
@@ -149,6 +151,14 @@ export class DAWSyncService {
   syncTrackDelete(trackId: string): void {
     if (!this.socket || !this.roomId || this.isSyncing) return;
     this.socket.emit('arrange:track_delete', { roomId: this.roomId, trackId });
+  }
+
+  /**
+   * Sync track reorder
+   */
+  syncTrackReorder(trackIds: string[]): void {
+    if (!this.socket || !this.roomId || this.isSyncing) return;
+    this.socket.emit('arrange:track_reorder', { roomId: this.roomId, trackIds });
   }
 
   /**
@@ -426,6 +436,18 @@ export class DAWSyncService {
         data.instrumentId,
         data.instrumentCategory as any
       );
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+
+  private handleTrackReordered(data: { trackIds: string[]; userId: string }): void {
+    if (this.isSyncing) return;
+    // Filter out self-generated events
+    if (data.userId === this.userId) return;
+    this.isSyncing = true;
+    try {
+      useTrackStore.getState().syncReorderTracks(data.trackIds);
     } finally {
       this.isSyncing = false;
     }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, memo } from "react";
 import { useTrackStore } from "../stores/trackStore";
 import { trackInstrumentRegistry } from "../utils/trackInstrumentRegistry";
 import { InstrumentCategory } from "@/shared/constants/instruments";
@@ -11,7 +11,7 @@ import { useDAWCollaborationContext } from "../contexts/DAWCollaborationContext"
  * SynthControlsPanel - Shows synth controls when a MIDI track with synth instrument is selected
  * Placed between RegionEditor and VirtualInstrumentPanel in ArrangeRoom
  */
-export const SynthControlsPanel = () => {
+export const SynthControlsPanel = memo(() => {
   const tracks = useTrackStore((state) => state.tracks);
   const selectedTrackId = useTrackStore((state) => state.selectedTrackId);
 
@@ -145,6 +145,7 @@ export const SynthControlsPanel = () => {
       />
     </section>
   );
-};
+});
+SynthControlsPanel.displayName = 'SynthControlsPanel';
 
 export default SynthControlsPanel;

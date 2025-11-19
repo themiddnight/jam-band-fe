@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 
 import { useProjectStore } from "../stores/projectStore";
 import { useTrackStore } from "../stores/trackStore";
@@ -57,7 +57,7 @@ interface VirtualInstrumentPanelProps {
   onRecordMidiMessage: PlayHandler;
 }
 
-export const VirtualInstrumentPanel = ({ onRecordMidiMessage }: VirtualInstrumentPanelProps) => {
+export const VirtualInstrumentPanel = memo(({ onRecordMidiMessage }: VirtualInstrumentPanelProps) => {
   const transportState = useProjectStore((state) => state.transportState);
   const tracks = useTrackStore((state) => state.tracks);
   const selectedTrackId = useTrackStore((state) => state.selectedTrackId);
@@ -481,6 +481,7 @@ export const VirtualInstrumentPanel = ({ onRecordMidiMessage }: VirtualInstrumen
       </div>
     </section>
   );
-};
+});
+VirtualInstrumentPanel.displayName = 'VirtualInstrumentPanel';
 
 export default VirtualInstrumentPanel;
