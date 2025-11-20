@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AudioRegion } from '@/features/daw/types/daw';
 import { useRegionStore } from '@/features/daw/stores/regionStore';
 import { useProjectStore } from '@/features/daw/stores/projectStore';
 import { WaveformCanvas } from './WaveformCanvas';
 import { TimeRuler } from './TimeRuler';
 import { useDAWCollaborationContext } from '@/features/daw/contexts/DAWCollaborationContext';
+import { MAX_CANVAS_WIDTH, MAX_AUDIO_ZOOM, MIN_AUDIO_ZOOM } from '@/features/daw/constants/canvas';
 
 interface AudioEditorProps {
   region: AudioRegion;
@@ -31,13 +32,45 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
     [handleRegionUpdate, region.id, updateRegion]
   );
 
+  const originalLength = region.originalLength || region.length;
+  const baseWaveformWidth = originalLength * PIXELS_PER_BEAT;
+
+  const maxZoomX = useMemo(() => {
+    if (baseWaveformWidth <= 0) {
+      return MAX_AUDIO_ZOOM;
+    }
+    const widthLimitedZoom = MAX_CANVAS_WIDTH / baseWaveformWidth;
+    if (!Number.isFinite(widthLimitedZoom) || widthLimitedZoom <= 0) {
+      return MAX_AUDIO_ZOOM;
+    }
+    return Math.min(MAX_AUDIO_ZOOM, widthLimitedZoom);
+  }, [baseWaveformWidth]);
+
+  const minZoomX = useMemo(() => {
+    return Math.min(MIN_AUDIO_ZOOM, maxZoomX);
+  }, [maxZoomX]);
+
+  const clampZoomX = useCallback((value: number) => {
+    const upperBound = maxZoomX > 0 ? maxZoomX : MIN_AUDIO_ZOOM;
+    const lowerBound = Math.min(minZoomX, upperBound);
+    const withinUpper = Math.min(upperBound, value);
+    return Math.max(lowerBound, withinUpper);
+  }, [maxZoomX, minZoomX]);
+
   // Calculate default zoom to fit full waveform in container
-  const defaultZoomX = Math.max(0.1, containerWidth / ((region.originalLength || region.length) * PIXELS_PER_BEAT));
+  const defaultZoomX = useMemo(() => {
+    if (baseWaveformWidth <= 0) {
+      return MIN_AUDIO_ZOOM;
+    }
+    const fitZoom = containerWidth / baseWaveformWidth;
+    return clampZoomX(fitZoom || MIN_AUDIO_ZOOM);
+  }, [baseWaveformWidth, containerWidth, clampZoomX]);
 
   // Handle zoom changes centered on cursor
   const handleZoomXChange = useCallback((newZoom: number, cursorX?: number) => {
+    const clampedZoom = clampZoomX(newZoom);
     if (!waveformRef.current) {
-      setZoomX(newZoom);
+      setZoomX(clampedZoom);
       return;
     }
 
@@ -46,10 +79,10 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
       const focusPoint = (scrollLeft + cursorX) / (PIXELS_PER_BEAT * zoomX);
       
       // Calculate new scroll position to keep focus point at same position
-      const newFocusPixels = focusPoint * PIXELS_PER_BEAT * newZoom;
+      const newFocusPixels = focusPoint * PIXELS_PER_BEAT * clampedZoom;
       const newScrollLeft = newFocusPixels - cursorX;
       
-      setZoomX(newZoom);
+      setZoomX(clampedZoom);
       
       requestAnimationFrame(() => {
         if (waveformRef.current) {
@@ -57,9 +90,9 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
         }
       });
     } else {
-      setZoomX(newZoom);
+      setZoomX(clampedZoom);
     }
-  }, [zoomX, scrollLeft]);
+  }, [zoomX, scrollLeft, clampZoomX]);
 
   const handleZoomYChange = useCallback((newZoom: number) => {
     setZoomY(newZoom);
@@ -158,7 +191,7 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
           const newZoomY = Math.max(1, Math.min(20, zoomY + delta * zoomSpeed));
           handleZoomYChange(newZoomY);
         } else {
-          const newZoomX = Math.max(1, Math.min(20, zoomX + delta * zoomSpeed));
+          const newZoomX = clampZoomX(zoomX + delta * zoomSpeed);
           
           // Get cursor position relative to waveform
           const rect = waveformRef.current?.getBoundingClientRect();
@@ -174,7 +207,7 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
       waveform.addEventListener('wheel', handleWheel, { passive: false });
       return () => waveform.removeEventListener('wheel', handleWheel);
     }
-  }, [zoomX, zoomY, handleZoomXChange, handleZoomYChange]);
+  }, [zoomX, zoomY, handleZoomXChange, handleZoomYChange, clampZoomX]);
 
   return (
     <div className="flex flex-col h-full bg-base-100">

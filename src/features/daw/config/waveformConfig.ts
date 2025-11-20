@@ -19,9 +19,9 @@ export const WAVEFORM_DETAIL_PRESET = {
   ULTRA_LOW: {
     maxPixelWidth: 2000,
     lodThresholds: {
-      level3: 1600,  // Extremely zoomed in
-      level2: 600,  // Very zoomed in
-      level1: 160,   // Medium zoom
+      level3: 800,  // Extremely zoomed in
+      level2: 300,  // Very zoomed in
+      level1: 80,   // Medium zoom
     },
     barWidthRange: { min: 1, max: 3 },
   },
@@ -69,7 +69,7 @@ export const WAVEFORM_DETAIL_PRESET = {
  * Change this to switch between presets:
  * 'ULTRA_LOW' | 'LOW' | 'MEDIUM' | 'HIGH' | 'ULTRA_HIGH'
  */
-export const ACTIVE_WAVEFORM_PRESET: keyof typeof WAVEFORM_DETAIL_PRESET = 'ULTRA_LOW'
+export const ACTIVE_WAVEFORM_PRESET: keyof typeof WAVEFORM_DETAIL_PRESET = 'LOW'
 
 // Get active configuration
 const activeConfig = WAVEFORM_DETAIL_PRESET[ACTIVE_WAVEFORM_PRESET];

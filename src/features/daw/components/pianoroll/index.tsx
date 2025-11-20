@@ -18,6 +18,7 @@ import { useTrackStore } from '../../stores/trackStore';
 import type { SustainEvent } from '../../types/daw';
 import { useProjectStore } from '../../stores/projectStore';
 import { useDAWCollaborationContext } from '../../contexts/DAWCollaborationContext';
+import { MAX_CANVAS_WIDTH, MAX_TIMELINE_ZOOM, MIN_TIMELINE_ZOOM } from '../../constants/canvas';
 
 const TOTAL_HEIGHT = TOTAL_KEYS * NOTE_HEIGHT;
 
@@ -282,14 +283,39 @@ const PianoRollComponent = () => {
   }, [midiRegion, selectedNoteIds]);
 
   const pixelsPerBeat = 64;
-  
+
+  const baseTimelineWidth = totalBeats * pixelsPerBeat;
+
+  const maxZoom = useMemo(() => {
+    if (baseTimelineWidth <= 0) {
+      return MAX_TIMELINE_ZOOM;
+    }
+    const widthLimitedZoom = MAX_CANVAS_WIDTH / baseTimelineWidth;
+    if (!Number.isFinite(widthLimitedZoom) || widthLimitedZoom <= 0) {
+      return MAX_TIMELINE_ZOOM;
+    }
+    return Math.min(MAX_TIMELINE_ZOOM, widthLimitedZoom);
+  }, [baseTimelineWidth]);
+
+  const minZoom = useMemo(() => {
+    return Math.min(MIN_TIMELINE_ZOOM, maxZoom);
+  }, [maxZoom]);
+
+  const clampZoom = useCallback((value: number) => {
+    const upperBound = maxZoom > 0 ? maxZoom : MIN_TIMELINE_ZOOM;
+    const lowerBound = Math.min(minZoom, upperBound);
+    const withinUpper = Math.min(upperBound, value);
+    return Math.max(lowerBound, withinUpper);
+  }, [maxZoom, minZoom]);
+
   // Handle zoom changes centered on cursor or playhead
   const handleZoomChange = useCallback((newZoom: number, cursorX?: number) => {
     if (!noteScrollRef.current) {
-      setZoom(newZoom);
+      setZoom(clampZoom(newZoom));
       return;
     }
-    
+    const clampedZoom = clampZoom(newZoom);
+
     // Use cursor position if provided, otherwise use playhead
     const focusPoint = cursorX !== undefined 
       ? (scrollLeft + cursorX) / (pixelsPerBeat * zoom)
@@ -302,13 +328,13 @@ const PianoRollComponent = () => {
     const focusOffsetInViewport = cursorX !== undefined ? cursorX : oldFocusPixels - scrollLeft;
     
     // Calculate focus point position in pixels after zoom change
-    const newFocusPixels = focusPoint * pixelsPerBeat * newZoom;
-    
+    const newFocusPixels = focusPoint * pixelsPerBeat * clampedZoom;
+
     // Adjust scroll to keep focus point at same position in viewport
     const newScrollLeft = newFocusPixels - focusOffsetInViewport;
-    
-    setZoom(newZoom);
-    
+
+    setZoom(clampedZoom);
+
     // Apply new scroll position after zoom updates
     requestAnimationFrame(() => {
       if (noteScrollRef.current) {
@@ -318,7 +344,14 @@ const PianoRollComponent = () => {
         laneScrollRef.current.scrollLeft = Math.max(0, newScrollLeft);
       }
     });
-  }, [playhead, zoom, scrollLeft, pixelsPerBeat]);
+  }, [playhead, zoom, scrollLeft, pixelsPerBeat, clampZoom]);
+
+  useEffect(() => {
+    setZoom((prev) => {
+      const clamped = clampZoom(prev);
+      return clamped === prev ? prev : clamped;
+    });
+  }, [clampZoom]);
 
   // Handle wheel zoom with Ctrl key
   useEffect(() => {
@@ -328,12 +361,12 @@ const PianoRollComponent = () => {
         
         const delta = -e.deltaY;
         const zoomSpeed = 0.001;
-        const newZoom = Math.max(0.5, Math.min(2, zoom + delta * zoomSpeed));
-        
+        const newZoom = zoom + delta * zoomSpeed;
+
         // Get cursor position relative to note canvas
         const rect = noteScrollRef.current?.getBoundingClientRect();
         const cursorX = rect ? e.clientX - rect.left : undefined;
-        
+
         handleZoomChange(newZoom, cursorX);
       }
     };

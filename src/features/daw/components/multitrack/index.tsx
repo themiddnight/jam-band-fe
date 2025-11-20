@@ -7,6 +7,7 @@ import { TrackHeader } from './TrackHeader';
 import { AddTrackMenu } from './AddTrackMenu';
 import { AddAudioClipButton } from './AddAudioClipButton';
 import { PIXELS_PER_BEAT, TRACK_HEADER_WIDTH, TRACK_HEIGHT } from './constants';
+import { MAX_CANVAS_WIDTH, MAX_TIMELINE_ZOOM, MIN_TIMELINE_ZOOM } from '../../constants/canvas';
 import { usePianoRollStore } from '../../stores/pianoRollStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useRegionStore } from '../../stores/regionStore';
@@ -45,10 +46,44 @@ export const MultitrackView = () => {
   const [viewportWidth, setViewportWidth] = useState(800);
   const [trackHeights, setTrackHeights] = useState<Record<string, number>>({});
 
+  const totalBeats = useMemo(() => {
+    const furthestRegionBeat = regions.reduce((max, region) => {
+      const loopLength = region.loopEnabled ? region.length * region.loopIterations : region.length;
+      return Math.max(max, region.start + loopLength);
+    }, 0);
+    return Math.max(32, Math.ceil(furthestRegionBeat + 8));
+  }, [regions]);
+
+  const baseTimelineWidth = totalBeats * PIXELS_PER_BEAT;
+
+  const maxTimelineZoom = useMemo(() => {
+    if (baseTimelineWidth <= 0) {
+      return MAX_TIMELINE_ZOOM;
+    }
+    const widthLimitedZoom = MAX_CANVAS_WIDTH / baseTimelineWidth;
+    if (!Number.isFinite(widthLimitedZoom) || widthLimitedZoom <= 0) {
+      return MAX_TIMELINE_ZOOM;
+    }
+    return Math.min(MAX_TIMELINE_ZOOM, widthLimitedZoom);
+  }, [baseTimelineWidth]);
+
+  const minTimelineZoom = useMemo(() => {
+    return Math.min(MIN_TIMELINE_ZOOM, maxTimelineZoom);
+  }, [maxTimelineZoom]);
+
+  const clampTimelineZoom = useCallback((value: number) => {
+    const upperBound = maxTimelineZoom > 0 ? maxTimelineZoom : MIN_TIMELINE_ZOOM;
+    const lowerBound = Math.min(minTimelineZoom, upperBound);
+    const withinUpper = Math.min(upperBound, value);
+    return Math.max(lowerBound, withinUpper);
+  }, [maxTimelineZoom, minTimelineZoom]);
+
   // Handle zoom changes centered on cursor or playhead
   const handleZoomChange = useCallback((newZoom: number, cursorX?: number) => {
+    const clampedZoom = clampTimelineZoom(newZoom);
+
     if (!canvasScrollRef.current) {
-      setZoom(newZoom);
+      setZoom(clampedZoom);
       return;
     }
 
@@ -64,12 +99,12 @@ export const MultitrackView = () => {
     const focusOffsetInViewport = cursorX !== undefined ? cursorX : oldFocusPixels - scrollLeft;
 
     // Calculate focus point position in pixels after zoom change
-    const newFocusPixels = focusPoint * PIXELS_PER_BEAT * newZoom;
+    const newFocusPixels = focusPoint * PIXELS_PER_BEAT * clampedZoom;
 
     // Adjust scroll to keep focus point at same position in viewport
     const newScrollLeft = newFocusPixels - focusOffsetInViewport;
 
-    setZoom(newZoom);
+    setZoom(clampedZoom);
 
     // Apply new scroll position after zoom updates
     requestAnimationFrame(() => {
@@ -77,7 +112,14 @@ export const MultitrackView = () => {
         canvasScrollRef.current.scrollLeft = Math.max(0, newScrollLeft);
       }
     });
-  }, [playhead, zoom, scrollLeft]);
+  }, [playhead, zoom, scrollLeft, clampTimelineZoom]);
+
+  useEffect(() => {
+    setZoom((prev) => {
+      const clamped = clampTimelineZoom(prev);
+      return clamped === prev ? prev : clamped;
+    });
+  }, [clampTimelineZoom]);
 
   // Handle wheel zoom with Ctrl key
   useEffect(() => {
@@ -87,12 +129,12 @@ export const MultitrackView = () => {
         
         const delta = -e.deltaY;
         const zoomSpeed = 0.001;
-        const newZoom = Math.max(0.5, Math.min(2, zoom + delta * zoomSpeed));
-        
+        const newZoom = zoom + delta * zoomSpeed;
+
         // Get cursor position relative to canvas
         const rect = canvasScrollRef.current?.getBoundingClientRect();
         const cursorX = rect ? e.clientX - rect.left : undefined;
-        
+
         handleZoomChange(newZoom, cursorX);
       }
     };
@@ -122,15 +164,17 @@ export const MultitrackView = () => {
       ...prev,
       [trackId]: height,
     }));
-  }, []);
 
-  const totalBeats = useMemo(() => {
-    const furthestRegionBeat = regions.reduce((max, region) => {
-      const loopLength = region.loopEnabled ? region.length * region.loopIterations : region.length;
-      return Math.max(max, region.start + loopLength);
-    }, 0);
-    return Math.max(32, Math.ceil(furthestRegionBeat + 8));
-  }, [regions]);
+    if (!canvasScrollRef.current) {
+      return;
+    }
+
+    const { scrollLeft: currentScrollLeft, scrollTop: currentScrollTop } = canvasScrollRef.current;
+    setScrollLeft(currentScrollLeft);
+    if (headerRef.current && headerRef.current.scrollTop !== currentScrollTop) {
+      headerRef.current.scrollTop = currentScrollTop;
+    }
+  }, []);
 
   const handleCanvasScroll = useCallback(() => {
     if (!canvasScrollRef.current) {
