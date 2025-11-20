@@ -16,8 +16,8 @@ interface WaveformCanvasProps {
   pixelsPerBeat: number;
   onTrimStartChange: (trimStart: number) => void;
   onTrimEndChange: (trimEnd: number) => void;
-  onFadeInChange: (duration: number) => void;
-  onFadeOutChange: (duration: number) => void;
+  onFadeInChange: (duration: number, options?: { commit?: boolean }) => void;
+  onFadeOutChange: (duration: number, options?: { commit?: boolean }) => void;
 }
 
 // Base canvas height (will be multiplied by zoomY)
@@ -240,8 +240,13 @@ const WaveformCanvasComponent = ({
   }, [dragState, beatWidth, onTrimStartChange, onTrimEndChange, onFadeInChange, onFadeOutChange]);
 
   const handlePointerUp = useCallback(() => {
+    if (dragState?.type === 'fade-in') {
+      onFadeInChange(region.fadeInDuration || 0, { commit: true });
+    } else if (dragState?.type === 'fade-out') {
+      onFadeOutChange(region.fadeOutDuration || 0, { commit: true });
+    }
     setDragState(null);
-  }, []);
+  }, [dragState, onFadeInChange, onFadeOutChange, region.fadeInDuration, region.fadeOutDuration]);
 
   // Width for rendering (full original length)
   const fullWaveformWidth = originalLength * beatWidth;

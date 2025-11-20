@@ -21,6 +21,8 @@ interface SustainLaneProps {
   onUpdateEvent: (eventId: string, updates: Partial<SustainEvent>) => void;
   onRemoveEvent: (eventId: string) => void;
   onSetSelectedEvents: (eventIds: string[]) => void;
+  onRealtimeEventUpdate?: (eventId: string, updates: Partial<SustainEvent>) => void;
+  onRealtimeFlush?: () => void;
 }
 
 interface DragState {
@@ -65,6 +67,8 @@ export const SustainLane = ({
   onUpdateEvent,
   onRemoveEvent,
   onSetSelectedEvents,
+  onRealtimeEventUpdate,
+  onRealtimeFlush,
 }: SustainLaneProps) => {
   const width = totalBeats * pixelsPerBeat * zoom;
   const beatWidth = pixelsPerBeat * zoom;
@@ -160,8 +164,25 @@ export const SustainLane = ({
             }
           : prev
       );
+
+      if (!onRealtimeEventUpdate) {
+        return;
+      }
+
+      const { eventId, mode, initialStart, initialEnd } = dragState;
+      if (mode === 'move') {
+        const length = initialEnd - initialStart;
+        const newStart = Math.max(0, initialStart + delta);
+        onRealtimeEventUpdate(eventId, { start: newStart, end: newStart + length });
+      } else if (mode === 'resize-start') {
+        const newStart = Math.min(initialEnd - 0.25, Math.max(0, initialStart + delta));
+        onRealtimeEventUpdate(eventId, { start: newStart });
+      } else if (mode === 'resize-end') {
+        const newEnd = Math.max(initialStart + 0.25, initialEnd + delta);
+        onRealtimeEventUpdate(eventId, { end: newEnd });
+      }
     },
-    [dragState, getPointerBeat, snapBeat]
+    [dragState, getPointerBeat, onRealtimeEventUpdate, snapBeat]
   );
 
   const handlePointerUp = useCallback(() => {
@@ -169,6 +190,9 @@ export const SustainLane = ({
       return;
     }
     const { eventId, mode, delta, initialStart, initialEnd } = dragState;
+    if (onRealtimeFlush) {
+      onRealtimeFlush();
+    }
     if (mode === 'move' && delta !== 0) {
       const length = initialEnd - initialStart;
       const newStart = Math.max(0, initialStart + delta);
@@ -181,7 +205,7 @@ export const SustainLane = ({
       onUpdateEvent(eventId, { end: newEnd });
     }
     setDragState(null);
-  }, [dragState, onUpdateEvent]);
+  }, [dragState, onRealtimeFlush, onUpdateEvent]);
 
   const handleBackgroundClick = useCallback(
     (event: KonvaEventObject<MouseEvent>) => {

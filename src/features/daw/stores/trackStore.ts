@@ -216,10 +216,17 @@ export const useTrackStore = create<TrackStoreState>((set, get) => ({
   // Sync handlers (bypass undo history - called from DAWSyncService)
   syncSetTracks: (tracks) => set({ tracks }),
   syncAddTrack: (track) =>
-    set((state) => ({
-      tracks: [...state.tracks, track],
-      selectedTrackId: state.selectedTrackId || track.id,
-    })),
+    set((state) => {
+      const exists = state.tracks.some((t) => t.id === track.id);
+      if (exists) {
+        return state;
+      }
+
+      return {
+        tracks: [...state.tracks, track],
+        selectedTrackId: state.selectedTrackId ?? track.id,
+      };
+    }),
   syncUpdateTrack: (trackId, updates) =>
     set((state) => ({
       tracks: state.tracks.map((track) =>

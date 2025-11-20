@@ -4,7 +4,7 @@ import { useHistoryStore } from '../stores/historyStore';
 import { usePianoRollStore } from '../stores/pianoRollStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useRegionStore } from '../stores/regionStore';
-import { useDAWCollaborationContext } from '../contexts/DAWCollaborationContext';
+import { useDAWCollaborationContext } from '../contexts/useDAWCollaborationContext';
 
 const isEditableTarget = (event: KeyboardEvent) => {
   const target = event.target as HTMLElement | null;

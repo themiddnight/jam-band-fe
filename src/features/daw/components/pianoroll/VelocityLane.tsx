@@ -14,7 +14,7 @@ interface VelocityLaneProps {
   scrollLeft: number;
   viewportWidth: number;
   playheadBeats?: number;
-  onSetNotesVelocity: (noteIds: NoteId[], velocity: number) => void;
+  onSetNotesVelocity: (noteIds: NoteId[], velocity: number, options?: { commit?: boolean }) => void;
 }
 
 interface DragState {
@@ -80,8 +80,10 @@ export const VelocityLane = ({
         noteIds,
         previewVelocity: velocity,
       });
+
+      onSetNotesVelocity(noteIds, velocity);
     },
-    [calculateVelocityFromY, selectedNoteIds]
+    [calculateVelocityFromY, onSetNotesVelocity, selectedNoteIds]
   );
   
   const handlePointerMove = useCallback(
@@ -106,8 +108,11 @@ export const VelocityLane = ({
   );
   
   const handlePointerUp = useCallback(() => {
+    if (dragState) {
+      onSetNotesVelocity(dragState.noteIds, dragState.previewVelocity, { commit: true });
+    }
     setDragState(null);
-  }, []);
+  }, [dragState, onSetNotesVelocity]);
 
   const sortedNotes = useMemo(() => {
     return [...visibleNotes].sort((a, b) => a.start - b.start);

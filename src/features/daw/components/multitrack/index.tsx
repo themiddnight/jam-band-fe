@@ -13,7 +13,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useRegionStore } from '../../stores/regionStore';
 import { useTrackStore } from '../../stores/trackStore';
 import { LoopToggle } from '../transport/LoopToggle';
-import { useDAWCollaborationContext } from '../../contexts/DAWCollaborationContext';
+import { useDAWCollaborationContext } from '../../contexts/useDAWCollaborationContext';
 
 export const MultitrackView = () => {
   const tracks = useTrackStore((state) => state.tracks);
@@ -32,6 +32,11 @@ export const MultitrackView = () => {
     handleRegionUpdate,
     handleRegionMoveToTrack,
     handleRegionMove,
+    handleRegionDragStart,
+    handleRegionDragRealtime,
+    handleRegionDragEnd,
+    handleRegionRealtimeUpdates,
+    handleRegionRealtimeFlush,
     handleRegionDelete,
     handleRegionSplit,
   } = useDAWCollaborationContext();
@@ -379,6 +384,11 @@ export const MultitrackView = () => {
                 onMoveRegionsToTrack={(regionIds, targetTrackId, deltaBeats) =>
                   handleRegionMoveToTrack(regionIds, targetTrackId, deltaBeats)
                 }
+                onRegionDragStart={handleRegionDragStart}
+                onRegionDragRealtime={handleRegionDragRealtime}
+                onRegionDragEnd={handleRegionDragEnd}
+                onRegionRealtimeUpdates={handleRegionRealtimeUpdates}
+                onRegionRealtimeFlush={handleRegionRealtimeFlush}
                 onResizeRegion={(regionId, length) => handleRegionUpdate(regionId, { length })}
                 onHeadResizeRegion={(regionId, updates) => handleRegionUpdate(regionId, updates)}
                 onSetLoopIterations={(regionId, iterations) =>

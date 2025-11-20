@@ -4,13 +4,15 @@ import { Group, Layer, Rect, Stage, Text } from "react-konva";
 
 import { TRACK_HEIGHT } from "./constants";
 import { BaseRegion, DuplicateRegionPreview } from "./regions";
-import type { Region, RegionId, Track, TimeSignature } from "../../types/daw";
+import type { AudioRegion, Region, RegionId, Track, TimeSignature } from "../../types/daw";
+import type { RegionRealtimeUpdate } from "../../contexts/DAWCollaborationContext.shared";
 import { snapToGrid as snapValueToGrid } from "../../utils/timeUtils";
 import { getGridDivisionForZoom, getGridInterval, getGridLineStyle } from "../../utils/gridUtils";
 import { beatsPerBar } from "../../utils/timeUtils";
 import { useRegionStore } from "../../stores/regionStore";
 import { useRecordingStore } from "../../stores/recordingStore";
 import { useProjectStore } from "../../stores/projectStore";
+import type { RegionDragUpdatePayload } from "../../services/dawSyncService";
 
 interface TrackCanvasProps {
   tracks: Track[];
@@ -36,6 +38,11 @@ interface TrackCanvasProps {
   onHeadResizeRegion?: (regionId: RegionId, updates: Partial<Region>) => void;
   onMarqueeSelect: (regionIds: RegionId[], additive: boolean) => void;
   onPan?: (deltaX: number, deltaY: number) => void;
+  onRegionDragStart?: (regionIds: RegionId[]) => boolean;
+  onRegionDragRealtime?: (updates: RegionDragUpdatePayload[]) => void;
+  onRegionDragEnd?: (regionIds: RegionId[]) => void;
+  onRegionRealtimeUpdates?: (updates: RegionRealtimeUpdate[]) => void;
+  onRegionRealtimeFlush?: () => void;
 }
 
 interface DragState {
@@ -121,6 +128,11 @@ const TrackCanvasComponent = ({
   onHeadResizeRegion,
   onMarqueeSelect,
   onPan,
+  onRegionDragStart,
+  onRegionDragRealtime,
+  onRegionDragEnd,
+  onRegionRealtimeUpdates,
+  onRegionRealtimeFlush,
 }: TrackCanvasProps) => {
   const width = totalBeats * pixelsPerBeat * zoom;
   const beatWidth = pixelsPerBeat * zoom;
@@ -322,6 +334,12 @@ const TrackCanvasComponent = ({
           initialTrackIds[id] = regionData.trackId;
         }
       });
+
+      const canStart = onRegionDragStart ? onRegionDragStart(regionIds) : true;
+      if (!canStart) {
+        return;
+      }
+
       setDragState({
         regionIds,
         originBeat: snappedBeat,
@@ -341,6 +359,7 @@ const TrackCanvasComponent = ({
       regions,
       selectedRegionIds,
       snapToGrid,
+      onRegionDragStart,
     ]
   );
 
@@ -382,6 +401,25 @@ const TrackCanvasComponent = ({
         // Determine target track based on Y position
         const targetTrackId = data.track?.id ?? null;
         
+        if (
+          !dragState.isDuplicate &&
+          onRegionDragRealtime &&
+          (delta !== dragState.delta || targetTrackId !== dragState.targetTrackId)
+        ) {
+          const updates: RegionDragUpdatePayload[] = dragState.regionIds.map((regionId) => {
+            const initialStart = dragState.initialPositions[regionId];
+            const nextStart = Math.max(0, initialStart + delta);
+            const fallbackTrackId = dragState.initialTrackIds[regionId];
+            const nextTrackId = targetTrackId ?? fallbackTrackId;
+            return {
+              regionId,
+              newStart: nextStart,
+              trackId: nextTrackId,
+            };
+          });
+          onRegionDragRealtime(updates);
+        }
+
         setDragState((prev) =>
           prev
             ? {
@@ -398,6 +436,7 @@ const TrackCanvasComponent = ({
         }
         
         // Calculate preview lengths using ABSOLUTE grid snapping
+        const realtimeUpdates: RegionRealtimeUpdate[] = [];
         const previewLengths = resizeState.regionIds.reduce<
           Record<RegionId, number>
         >((acc, regionId) => {
@@ -432,6 +471,13 @@ const TrackCanvasComponent = ({
           }
           
           acc[regionId] = newLength;
+
+          realtimeUpdates.push({
+            regionId,
+            updates: {
+              length: newLength,
+            },
+          });
           return acc;
         }, {});
         
@@ -444,6 +490,10 @@ const TrackCanvasComponent = ({
               }
             : prev
         );
+
+        if (onRegionRealtimeUpdates && realtimeUpdates.length > 0) {
+          onRegionRealtimeUpdates(realtimeUpdates);
+        }
       } else if (headResizeState) {
         const data = getPointerData(event);
         if (!data) {
@@ -453,6 +503,7 @@ const TrackCanvasComponent = ({
         // Calculate preview for each region using ABSOLUTE grid snapping
         const previewStarts: Record<RegionId, number> = {};
         const previewLengths: Record<RegionId, number> = {};
+        const realtimeUpdates: RegionRealtimeUpdate[] = [];
         
         headResizeState.regionIds.forEach((regionId) => {
           const r = regions.find((region) => region.id === regionId);
@@ -499,6 +550,22 @@ const TrackCanvasComponent = ({
           
           previewStarts[regionId] = newStart;
           previewLengths[regionId] = newLength;
+
+          const update: RegionRealtimeUpdate = {
+            regionId,
+            updates: {
+              start: newStart,
+              length: newLength,
+            },
+          };
+
+          if (r.type === 'audio') {
+            const currentTrimStart = r.trimStart ?? 0;
+            const actualDelta = newStart - r.start;
+            (update.updates as Partial<AudioRegion>).trimStart = Math.max(0, currentTrimStart + actualDelta);
+          }
+
+          realtimeUpdates.push(update);
         });
         
         setHeadResizeState((prev) =>
@@ -511,6 +578,10 @@ const TrackCanvasComponent = ({
               }
             : prev
         );
+
+        if (onRegionRealtimeUpdates && realtimeUpdates.length > 0) {
+          onRegionRealtimeUpdates(realtimeUpdates);
+        }
       } else if (loopState) {
         const stage = event.target.getStage();
         if (!stage) {
@@ -539,6 +610,18 @@ const TrackCanvasComponent = ({
               }
             : prev
         );
+
+        if (onRegionRealtimeUpdates) {
+          const updates: RegionRealtimeUpdate[] = loopState.regionIds.map((regionId) => ({
+            regionId,
+            updates: {
+              loopEnabled: newIterations > 1,
+              loopIterations: newIterations,
+            },
+          }));
+
+          onRegionRealtimeUpdates(updates);
+        }
       } else if (marqueeState) {
         const stage = event.target.getStage();
         if (!stage) {
@@ -589,11 +672,20 @@ const TrackCanvasComponent = ({
       regions,
       resizeState,
       snapToGrid,
+      onRegionDragRealtime,
+      onRegionRealtimeUpdates,
     ]
   );
 
   const handlePointerUp = useCallback(() => {
+    if ((resizeState || headResizeState || loopState) && onRegionRealtimeFlush) {
+      onRegionRealtimeFlush();
+    }
+
     if (dragState) {
+      if (onRegionDragEnd) {
+        onRegionDragEnd(dragState.regionIds);
+      }
       if (dragState.isDuplicate) {
         // Alt+drag: Duplicate regions
         const { duplicateRegion } = useRegionStore.getState();
@@ -761,6 +853,8 @@ const TrackCanvasComponent = ({
     onMoveRegionsToTrack,
     onResizeRegion,
     onSetLoopIterations,
+    onRegionDragEnd,
+    onRegionRealtimeFlush,
     panState,
     regions,
     resizeState,

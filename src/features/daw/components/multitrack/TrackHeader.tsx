@@ -20,7 +20,7 @@ import {
   getInstrumentLabelById,
 } from '@/features/instruments/utils/instrumentLookup';
 import { InstrumentCategory } from '@/shared/constants/instruments';
-import { useDAWCollaborationContext } from '../../contexts/DAWCollaborationContext';
+import { useDAWCollaborationContext } from '../../contexts/useDAWCollaborationContext';
 
 interface TrackHeaderProps {
   track: Track;

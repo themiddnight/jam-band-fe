@@ -41,6 +41,13 @@ interface NoteCanvasProps {
   onResizeNotes: (noteIds: NoteId[], deltaBeats: number) => void;
   onDuplicateNotes: (noteIds: NoteId[], deltaBeats: number, deltaPitch: number) => void;
   onPan?: (deltaX: number, deltaY: number) => void;
+  onRealtimeNoteUpdates?: (
+    updates: Array<{
+      noteId: NoteId;
+      updates: Partial<MidiNote>;
+    }>
+  ) => void;
+  onRealtimeNotesFlush?: () => void;
 }
 
 const clampPitch = (pitch: number) => Math.min(127, Math.max(0, pitch));
@@ -124,6 +131,8 @@ export const NoteCanvas = ({
   onResizeNotes,
   onDuplicateNotes,
   onPan,
+  onRealtimeNoteUpdates,
+  onRealtimeNotesFlush,
 }: NoteCanvasProps) => {
   const viewMode = usePianoRollStore((state) => state.viewMode);
   const rootNote = useArrangeRoomScaleStore((state) => state.rootNote);
@@ -409,7 +418,26 @@ export const NoteCanvas = ({
         const clampedDeltaPitch = Math.max(
           Math.min(deltaPitch, 127 - maxPitch),
           0 - minPitch
-        );
+        )
+
+        if (
+          !dragState.isDuplicate &&
+          onRealtimeNoteUpdates &&
+          (clampedDeltaBeats !== dragState.deltaBeats || clampedDeltaPitch !== dragState.deltaPitch)
+        ) {
+          const realtimeUpdates = dragState.noteIds.map((noteId) => {
+            const initial = dragState.initial[noteId];
+            return {
+              noteId,
+              updates: {
+                start: Math.max(0, initial.start + clampedDeltaBeats),
+                pitch: clampPitch(initial.pitch + clampedDeltaPitch),
+              },
+            };
+          });
+          onRealtimeNoteUpdates(realtimeUpdates);
+        }
+
         setDragState((prev) =>
           prev
             ? {
@@ -441,6 +469,15 @@ export const NoteCanvas = ({
           },
           {}
         );
+
+        if (onRealtimeNoteUpdates && deltaBeats !== resizeState.deltaBeats) {
+          const realtimeUpdates = resizeState.noteIds.map((id) => ({
+            noteId: id,
+            updates: { duration: previewDurations[id] },
+          }));
+          onRealtimeNoteUpdates(realtimeUpdates);
+        }
+
         setResizeState((prev) =>
           prev
             ? {
@@ -486,11 +523,26 @@ export const NoteCanvas = ({
         });
       }
     },
-    [dragState, getPointerData, holdState, marqueeState, onPan, panState, resizeState, snapBeat]
+    [
+      dragState,
+      getPointerData,
+      holdState,
+      marqueeState,
+      onPan,
+      onRealtimeNoteUpdates,
+      panState,
+      resizeState,
+      snapBeat,
+    ]
   );
 
   const handlePointerUp = useCallback(() => {
+      let didFlushRealtime = false;
       if (dragState) {
+        if (onRealtimeNotesFlush && !didFlushRealtime) {
+          onRealtimeNotesFlush();
+          didFlushRealtime = true;
+        }
         if (dragState.deltaBeats !== 0 || dragState.deltaPitch !== 0) {
           if (dragState.isDuplicate) {
             // Alt+drag: Duplicate notes
@@ -506,6 +558,10 @@ export const NoteCanvas = ({
         setPanState(null);
       }
       if (resizeState) {
+        if (onRealtimeNotesFlush && !didFlushRealtime) {
+          onRealtimeNotesFlush();
+          didFlushRealtime = true;
+        }
         if (resizeState.deltaBeats !== 0) {
           onResizeNotes(resizeState.noteIds, resizeState.deltaBeats);
         }
@@ -555,6 +611,7 @@ export const NoteCanvas = ({
       onDuplicateNotes,
       onMoveNotes,
       onResizeNotes,
+      onRealtimeNotesFlush,
       onSetSelectedNotes,
       panState,
       resizeState,

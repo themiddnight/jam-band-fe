@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import type { Socket } from 'socket.io-client';
-import { dawSyncService } from '../services/dawSyncService';
+import { dawSyncService, type RegionDragUpdatePayload } from '../services/dawSyncService';
 import { useLockStore } from '../stores/lockStore';
 import { useTrackStore } from '../stores/trackStore';
 import { useRegionStore } from '../stores/regionStore';
@@ -11,8 +11,11 @@ import { useUserStore } from '@/shared/stores/userStore';
 import { useEffectsStore } from '@/features/effects/stores/effectsStore';
 import type { EffectChainState } from '@/shared/types';
 import type { SynthState } from '@/features/instruments';
-import type { TimeSignature, Region, AudioRegion } from '../types/daw';
+import type { TimeSignature, Region, AudioRegion, Track, MidiNote } from '../types/daw';
 import type { InstrumentCategory } from '@/shared/constants/instruments';
+import { createThrottledEmitter } from '@/shared/utils/performanceUtils';
+import { COLLAB_THROTTLE_INTERVALS } from '@/features/daw/config/collaborationThrottles';
+import type { RegionRealtimeUpdate } from '../contexts/DAWCollaborationContext.shared';
 
 interface UseDAWCollaborationOptions {
   socket: Socket | null;
@@ -34,6 +37,142 @@ export const useDAWCollaboration = ({
   const trackDragLockRef = useRef<string | null>(null); // trackId being dragged
   const effectChainSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevEffectChainsRef = useRef<Record<string, string>>({}); // Store JSON strings for comparison
+  const regionDragQueueRef = useRef<Map<string, RegionDragUpdatePayload>>(new Map());
+  const regionDragEmitterRef = useRef(
+    createThrottledEmitter<void>(() => {
+      const queue = regionDragQueueRef.current;
+      if (queue.size === 0) {
+        return;
+      }
+
+      const batch = Array.from(queue.values()).map((update) => ({
+        ...update,
+        newStart: Math.max(0, update.newStart),
+      }));
+
+      queue.clear();
+      dawSyncService.syncRegionDragBatch(batch);
+    }, COLLAB_THROTTLE_INTERVALS.regionDragMs)
+  );
+  const regionRealtimeQueueRef = useRef<Map<string, Partial<Region>>>(new Map());
+  const regionRealtimeEmitterRef = useRef(
+    createThrottledEmitter<void>(() => {
+      const queue = regionRealtimeQueueRef.current;
+      if (queue.size === 0) {
+        return;
+      }
+
+      queue.forEach((updates, regionId) => {
+        if (!updates || Object.keys(updates).length === 0) {
+          return;
+        }
+
+        const sanitizedUpdates: Partial<Region> = { ...updates };
+        if (typeof sanitizedUpdates.start === 'number') {
+          sanitizedUpdates.start = Math.max(0, sanitizedUpdates.start);
+        }
+        if (typeof sanitizedUpdates.length === 'number') {
+          sanitizedUpdates.length = Math.max(0.25, sanitizedUpdates.length);
+        }
+        if (typeof sanitizedUpdates.loopIterations === 'number') {
+          sanitizedUpdates.loopIterations = Math.max(1, Math.round(sanitizedUpdates.loopIterations));
+        }
+
+        dawSyncService.syncRegionUpdate(regionId, sanitizedUpdates);
+      });
+
+      queue.clear();
+    }, COLLAB_THROTTLE_INTERVALS.regionRealtimeMs)
+  );
+  const noteRealtimeQueueRef = useRef<Map<string, { regionId: string; updates: Partial<MidiNote> }>>(new Map());
+  const noteRealtimeEmitterRef = useRef(
+    createThrottledEmitter<void>(() => {
+      const queue = noteRealtimeQueueRef.current;
+      if (queue.size === 0) {
+        return;
+      }
+
+      queue.forEach((payload, noteId) => {
+        if (!payload || !payload.updates || Object.keys(payload.updates).length === 0) {
+          return;
+        }
+        dawSyncService.syncNoteUpdate(payload.regionId, noteId, payload.updates);
+      });
+
+      queue.clear();
+    }, COLLAB_THROTTLE_INTERVALS.noteRealtimeMs)
+  );
+  const trackPropertyQueueRef = useRef<Map<string, Partial<Track>>>(new Map());
+  const trackPropertyEmitterRef = useRef(
+    createThrottledEmitter<void>(() => {
+      const queue = trackPropertyQueueRef.current;
+      if (queue.size === 0) {
+        return;
+      }
+
+      queue.forEach((updates, trackId) => {
+        if (!updates || Object.keys(updates).length === 0) {
+          return;
+        }
+
+        dawSyncService.syncTrackUpdate(trackId, updates);
+      });
+
+      queue.clear();
+    }, COLLAB_THROTTLE_INTERVALS.trackPropertyMs)
+  );
+
+  const effectChainQueueRef = useRef<Map<string, { trackId: string; chainType: string; chain: EffectChainState }>>(new Map());
+  const effectChainEmitterRef = useRef(
+    createThrottledEmitter<void>(() => {
+      const queue = effectChainQueueRef.current;
+      if (queue.size === 0) {
+        return;
+      }
+
+      queue.forEach(({ trackId, chainType, chain }) => {
+        dawSyncService.syncEffectChainUpdate(trackId, chainType, chain);
+      });
+
+      queue.clear();
+    }, COLLAB_THROTTLE_INTERVALS.effectChainMs)
+  );
+
+  const synthParamsQueueRef = useRef<Map<string, Partial<SynthState>>>(new Map());
+  const synthParamsEmitterRef = useRef(
+    createThrottledEmitter<void>(() => {
+      const queue = synthParamsQueueRef.current;
+      if (queue.size === 0) {
+        return;
+      }
+
+      queue.forEach((params, trackId) => {
+        if (!params || Object.keys(params).length === 0) {
+          return;
+        }
+        dawSyncService.syncSynthParams(trackId, params);
+      });
+
+      queue.clear();
+    }, COLLAB_THROTTLE_INTERVALS.synthParamsMs)
+  );
+
+  const queueTrackPropertyUpdate = useCallback((trackId: string, updates: Partial<Track>) => {
+    if (!updates || Object.keys(updates).length === 0) {
+      return;
+    }
+
+    const queue = trackPropertyQueueRef.current;
+    const existing = queue.get(trackId) ?? {};
+    queue.set(trackId, { ...existing, ...updates });
+    trackPropertyEmitterRef.current.push(undefined);
+  }, []);
+
+  const flushTrackPropertyUpdates = useCallback(() => {
+    trackPropertyEmitterRef.current.flush();
+    trackPropertyEmitterRef.current.cancel();
+    trackPropertyQueueRef.current.clear();
+  }, []);
 
   // Lock store
   const acquireLock = useLockStore((state) => state.acquireLock);
@@ -112,6 +251,36 @@ export const useDAWCollaboration = ({
     };
   }, [userId, releaseUserLocks]);
 
+  useEffect(() => {
+    const regionDragEmitter = regionDragEmitterRef.current;
+    const regionDragQueue = regionDragQueueRef.current;
+    const regionRealtimeEmitter = regionRealtimeEmitterRef.current;
+    const regionRealtimeQueue = regionRealtimeQueueRef.current;
+    const noteRealtimeEmitter = noteRealtimeEmitterRef.current;
+    const noteRealtimeQueue = noteRealtimeQueueRef.current;
+    const trackPropertyEmitter = trackPropertyEmitterRef.current;
+    const trackPropertyQueue = trackPropertyQueueRef.current;
+    const effectChainEmitter = effectChainEmitterRef.current;
+    const effectChainQueue = effectChainQueueRef.current;
+    const synthParamsEmitter = synthParamsEmitterRef.current;
+    const synthParamsQueue = synthParamsQueueRef.current;
+
+    return () => {
+      regionDragEmitter.cancel();
+      regionDragQueue.clear();
+      regionRealtimeEmitter.cancel();
+      regionRealtimeQueue.clear();
+      noteRealtimeEmitter.cancel();
+      noteRealtimeQueue.clear();
+      trackPropertyEmitter.cancel();
+      trackPropertyQueue.clear();
+      effectChainEmitter.cancel();
+      effectChainQueue.clear();
+      synthParamsEmitter.cancel();
+      synthParamsQueue.clear();
+    };
+  }, []);
+
   // ========== Track sync handlers ==========
 
   // Wrap track operations to sync
@@ -181,9 +350,9 @@ export const useDAWCollaboration = ({
       }
 
       setTrackVolume(trackId, volume);
-      dawSyncService.syncTrackUpdate(trackId, { volume });
+      queueTrackPropertyUpdate(trackId, { volume });
     },
-    [setTrackVolume, isLockedByUser, acquireLock, userId, username]
+    [setTrackVolume, isLockedByUser, acquireLock, userId, username, queueTrackPropertyUpdate]
   );
 
   const handleTrackPanChange = useCallback(
@@ -204,28 +373,30 @@ export const useDAWCollaboration = ({
       }
 
       setTrackPan(trackId, pan);
-      dawSyncService.syncTrackUpdate(trackId, { pan });
+      queueTrackPropertyUpdate(trackId, { pan });
     },
-    [setTrackPan, isLockedByUser, acquireLock, userId, username]
+    [setTrackPan, isLockedByUser, acquireLock, userId, username, queueTrackPropertyUpdate]
   );
 
   const handleTrackVolumeDragEnd = useCallback(() => {
     if (trackDragLockRef.current) {
+      flushTrackPropertyUpdates();
       const lockKey = `track_${trackDragLockRef.current}_property`;
       releaseLock(lockKey, userId || '');
       dawSyncService.releaseLock(lockKey);
       trackDragLockRef.current = null;
     }
-  }, [releaseLock, userId]);
+  }, [releaseLock, userId, flushTrackPropertyUpdates]);
 
   const handleTrackPanDragEnd = useCallback(() => {
     if (trackDragLockRef.current) {
+      flushTrackPropertyUpdates();
       const lockKey = `track_${trackDragLockRef.current}_property`;
       releaseLock(lockKey, userId || '');
       dawSyncService.releaseLock(lockKey);
       trackDragLockRef.current = null;
     }
-  }, [releaseLock, userId]);
+  }, [releaseLock, userId, flushTrackPropertyUpdates]);
 
   const handleTrackInstrumentChange = useCallback(
     (trackId: string, instrumentId: string, instrumentCategory?: InstrumentCategory) => {
@@ -324,6 +495,146 @@ export const useDAWCollaboration = ({
     [updateRegion, isLocked, userId]
   );
 
+  const handleRegionDragStart = useCallback(
+    (regionIds: string[]) => {
+      if (!regionIds.length) {
+        return false;
+      }
+
+      const currentUserId = userId || '';
+      const currentUsername = username || '';
+
+      const hasConflict = regionIds.some((regionId) => {
+        const lock = isLocked(regionId);
+        return lock && lock.userId !== currentUserId;
+      });
+
+      if (hasConflict) {
+        return false;
+      }
+
+      const acquired: string[] = [];
+
+      for (const regionId of regionIds) {
+        if (isLockedByUser(regionId, currentUserId)) {
+          continue;
+        }
+
+        const didAcquire = acquireLock(regionId, {
+          userId: currentUserId,
+          username: currentUsername,
+          type: 'region',
+          timestamp: Date.now(),
+        });
+
+        if (!didAcquire) {
+          acquired.forEach((id) => {
+            releaseLock(id, currentUserId);
+            dawSyncService.releaseLock(id);
+          });
+          return false;
+        }
+
+        dawSyncService.acquireLock(regionId, 'region');
+        acquired.push(regionId);
+      }
+
+      return true;
+    },
+    [acquireLock, releaseLock, isLocked, isLockedByUser, userId, username]
+  );
+
+  const handleRegionDragRealtime = useCallback((updates: RegionDragUpdatePayload[]) => {
+    if (!updates.length) {
+      return;
+    }
+
+    const queue = regionDragQueueRef.current;
+    updates.forEach((update) => {
+      queue.set(update.regionId, update);
+    });
+
+    regionDragEmitterRef.current.push(undefined);
+  }, []);
+
+  const handleRegionDragEnd = useCallback(
+    (regionIds: string[]) => {
+      regionDragEmitterRef.current.flush();
+      regionDragEmitterRef.current.cancel();
+      regionDragQueueRef.current.clear();
+
+      const currentUserId = userId || '';
+
+      regionIds.forEach((regionId) => {
+        if (isLockedByUser(regionId, currentUserId)) {
+          releaseLock(regionId, currentUserId);
+          dawSyncService.releaseLock(regionId);
+        }
+      });
+    },
+    [isLockedByUser, releaseLock, userId]
+  );
+
+  const handleRegionRealtimeUpdates = useCallback((updates: RegionRealtimeUpdate[]) => {
+    if (!updates.length) {
+      return;
+    }
+
+    const queue = regionRealtimeQueueRef.current;
+
+    updates.forEach(({ regionId, updates: regionUpdates }) => {
+      if (!regionUpdates || Object.keys(regionUpdates).length === 0) {
+        return;
+      }
+
+      const existingUpdates = queue.get(regionId) ?? {};
+      queue.set(regionId, { ...existingUpdates, ...regionUpdates });
+    });
+
+    regionRealtimeEmitterRef.current.push(undefined);
+  }, []);
+
+  const handleRegionRealtimeFlush = useCallback(() => {
+    regionRealtimeEmitterRef.current.flush();
+    regionRealtimeEmitterRef.current.cancel();
+    regionRealtimeQueueRef.current.clear();
+  }, []);
+
+  const handleNoteRealtimeUpdates = useCallback(
+    (
+      updates: Array<{
+        regionId: string;
+        noteId: string;
+        updates: Partial<MidiNote>;
+      }>
+    ) => {
+      if (!updates.length) {
+        return;
+      }
+
+      const queue = noteRealtimeQueueRef.current;
+      updates.forEach(({ regionId, noteId, updates: noteUpdates }) => {
+        if (!noteUpdates || Object.keys(noteUpdates).length === 0) {
+          return;
+        }
+        const existing = queue.get(noteId);
+        queue.set(noteId, {
+          regionId,
+          updates: { ...(existing?.updates ?? {}), ...noteUpdates },
+        });
+      });
+
+      noteRealtimeEmitterRef.current.push(undefined);
+    },
+    []
+  );
+
+  const handleNoteRealtimeFlush = useCallback(() => {
+    noteRealtimeEmitterRef.current.flush();
+    noteRealtimeEmitterRef.current.cancel();
+    noteRealtimeQueueRef.current.clear();
+  }, []);
+
   const handleRegionMove = useCallback(
     (regionId: string, deltaBeats: number) => {
       const lock = isLocked(regionId);
@@ -331,8 +642,11 @@ export const useDAWCollaboration = ({
         return; // Locked by someone else
       }
 
+      const region = useRegionStore.getState().regions.find((r) => r.id === regionId);
+      const baseStart = region?.start ?? 0;
       moveRegion(regionId, deltaBeats);
-      dawSyncService.syncRegionMove(regionId, deltaBeats);
+      const newStart = Math.max(0, baseStart + deltaBeats);
+      dawSyncService.syncRegionUpdate(regionId, { start: newStart });
     },
     [moveRegion, isLocked, userId]
   );
@@ -517,7 +831,13 @@ export const useDAWCollaboration = ({
 
   const handleEffectChainUpdate = useCallback(
     (trackId: string, chainType: string, effectChain: any) => {
-      dawSyncService.syncEffectChainUpdate(trackId, chainType, effectChain);
+      const key = `${trackId}:${chainType}`;
+      effectChainQueueRef.current.set(key, {
+        trackId,
+        chainType,
+        chain: effectChain,
+      });
+      effectChainEmitterRef.current.push(undefined);
     },
     []
   );
@@ -527,7 +847,9 @@ export const useDAWCollaboration = ({
   const handleSynthParamsChange = useCallback(
     (trackId: string, params: Partial<SynthState>) => {
       updateSynthStateStore(trackId, params);
-      dawSyncService.syncSynthParams(trackId, params);
+      const existing = synthParamsQueueRef.current.get(trackId) ?? {};
+      synthParamsQueueRef.current.set(trackId, { ...existing, ...params });
+      synthParamsEmitterRef.current.push(undefined);
     },
     [updateSynthStateStore]
   );
@@ -642,6 +964,11 @@ export const useDAWCollaboration = ({
     // Region handlers
     handleRegionAdd,
     handleRegionUpdate,
+    handleRegionDragStart,
+    handleRegionDragRealtime,
+    handleRegionDragEnd,
+    handleRegionRealtimeUpdates,
+    handleRegionRealtimeFlush,
     handleRegionMove,
     handleRegionMoveToTrack,
     handleRegionDelete,
@@ -653,6 +980,8 @@ export const useDAWCollaboration = ({
     handleNoteAdd,
     handleNoteUpdate,
     handleNoteDelete,
+    handleNoteRealtimeUpdates,
+    handleNoteRealtimeFlush,
 
     // Effect chain
     handleEffectChainUpdate,

@@ -1,7 +1,7 @@
 import type { ChangeEvent } from 'react';
 
 import { useProjectStore } from '../../stores/projectStore';
-import { useDAWCollaborationContext } from '../../contexts/DAWCollaborationContext';
+import { useDAWCollaborationContext } from '../../contexts/useDAWCollaborationContext';
 
 const NUMERATOR_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
 const DENOMINATOR_OPTIONS = [2, 4, 8, 16];

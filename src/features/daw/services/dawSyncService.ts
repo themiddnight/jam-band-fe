@@ -13,6 +13,12 @@ import type { EffectChainState } from '@/shared/types';
 import { DEFAULT_BPM, DEFAULT_TIME_SIGNATURE } from '../types/daw';
 import { debounce } from 'lodash';
 
+export type RegionDragUpdatePayload = {
+  regionId: string;
+  newStart: number;
+  trackId?: string | null;
+};
+
 export class DAWSyncService {
   private socket: Socket | null = null;
   private roomId: string | null = null;
@@ -83,6 +89,7 @@ export class DAWSyncService {
     this.socket.on('arrange:region_added', this.handleRegionAdded.bind(this));
     this.socket.on('arrange:region_updated', this.handleRegionUpdated.bind(this));
     this.socket.on('arrange:region_moved', this.handleRegionMoved.bind(this));
+    this.socket.on('arrange:region_dragged', this.handleRegionDragBatch.bind(this));
     this.socket.on('arrange:region_deleted', this.handleRegionDeleted.bind(this));
     this.socket.on('arrange:note_added', this.handleNoteAdded.bind(this));
     this.socket.on('arrange:note_updated', this.handleNoteUpdated.bind(this));
@@ -114,6 +121,7 @@ export class DAWSyncService {
     this.socket.off('arrange:region_updated');
     this.socket.off('arrange:region_moved');
     this.socket.off('arrange:region_deleted');
+    this.socket.off('arrange:region_dragged');
     this.socket.off('arrange:note_added');
     this.socket.off('arrange:note_updated');
     this.socket.off('arrange:note_deleted');
@@ -205,6 +213,21 @@ export class DAWSyncService {
   syncRegionMove(regionId: string, deltaBeats: number): void {
     if (!this.socket || !this.roomId || this.isSyncing) return;
     this.socket.emit('arrange:region_move', { roomId: this.roomId, regionId, deltaBeats });
+  }
+
+  /**
+   * Sync batched region drag updates
+   */
+  syncRegionDragBatch(updates: RegionDragUpdatePayload[]): void {
+    if (!this.socket || !this.roomId || this.isSyncing || updates.length === 0) return;
+    this.socket.emit('arrange:region_drag', {
+      roomId: this.roomId,
+      updates: updates.map((update) => ({
+        regionId: update.regionId,
+        newStart: update.newStart,
+        trackId: update.trackId ?? undefined,
+      })),
+    });
   }
 
   /**
@@ -498,6 +521,39 @@ export class DAWSyncService {
     this.isSyncing = true;
     try {
       useRegionStore.getState().syncMoveRegion(data.regionId, data.newStart);
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+
+  private handleRegionDragBatch(data: { updates: RegionDragUpdatePayload[]; userId: string }): void {
+    if (this.isSyncing || data.userId === this.userId) return;
+    if (!Array.isArray(data.updates) || data.updates.length === 0) {
+      return;
+    }
+
+    this.isSyncing = true;
+    try {
+      const regionStore = useRegionStore.getState();
+      const trackStore = useTrackStore.getState();
+
+      data.updates.forEach((update) => {
+        const region = regionStore.regions.find((r) => r.id === update.regionId);
+        if (!region) {
+          return;
+        }
+
+        const nextTrackId = update.trackId ?? region.trackId;
+        if (nextTrackId && nextTrackId !== region.trackId) {
+          trackStore.detachRegionFromTrack(region.trackId, region.id);
+          trackStore.attachRegionToTrack(nextTrackId, region.id);
+        }
+
+        regionStore.syncUpdateRegion(region.id, {
+          start: Math.max(0, update.newStart),
+          trackId: nextTrackId,
+        });
+      });
     } finally {
       this.isSyncing = false;
     }

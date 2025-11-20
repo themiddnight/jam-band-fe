@@ -12,8 +12,8 @@ import {
 } from '../../utils/audioRecorder';
 import { uploadAudioRegion } from '../../services/audioRegionApi';
 import { useRoomStore } from '@/features/rooms';
-import { useDAWCollaborationContext } from '../../contexts/DAWCollaborationContext';
-import type { DAWCollaborationContextValue } from '../../contexts/DAWCollaborationContext';
+import { useDAWCollaborationContext } from '../../contexts/useDAWCollaborationContext';
+import type { DAWCollaborationContextValue } from '../../contexts/useDAWCollaborationContext';
 
 const resolveAudioUrl = (url: string): string => {
   if (!url) {

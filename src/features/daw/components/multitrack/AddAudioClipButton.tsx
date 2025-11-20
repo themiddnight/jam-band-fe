@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { useDAWCollaborationContext } from '../../contexts/DAWCollaborationContext';
+import { useDAWCollaborationContext } from '../../contexts/useDAWCollaborationContext';
 import { useProjectStore } from '../../stores/projectStore';
 import { useTrackStore } from '../../stores/trackStore';
 import { useRoomStore } from '@/features/rooms/stores/roomStore';

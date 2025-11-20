@@ -5,7 +5,7 @@ import { InstrumentCategory } from "@/shared/constants/instruments";
 import { LazySynthControlsWrapper as SynthControls } from "@/features/instruments";
 import type { SynthState } from "@/features/instruments/utils/InstrumentEngine";
 import { useSynthStore } from "../stores/synthStore";
-import { useDAWCollaborationContext } from "../contexts/DAWCollaborationContext";
+import { useDAWCollaborationContext } from "../contexts/useDAWCollaborationContext";
 
 /**
  * SynthControlsPanel - Shows synth controls when a MIDI track with synth instrument is selected

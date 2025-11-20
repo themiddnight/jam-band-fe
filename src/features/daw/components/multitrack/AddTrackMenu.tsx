@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import type { TrackType } from '../../types/daw';
 import { loadInstrumentForTrack } from '../../utils/audioEngine';
-import { useDAWCollaborationContext } from '../../contexts/DAWCollaborationContext';
+import { useDAWCollaborationContext } from '../../contexts/useDAWCollaborationContext';
 
 export const AddTrackMenu = () => {
   const [isOpen, setIsOpen] = useState(false);

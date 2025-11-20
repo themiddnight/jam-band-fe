@@ -15,9 +15,9 @@ import {
 import { usePianoRollStore } from '../../stores/pianoRollStore';
 import { useRegionStore } from '../../stores/regionStore';
 import { useTrackStore } from '../../stores/trackStore';
-import type { SustainEvent } from '../../types/daw';
+import type { MidiNote, SustainEvent } from '../../types/daw';
 import { useProjectStore } from '../../stores/projectStore';
-import { useDAWCollaborationContext } from '../../contexts/DAWCollaborationContext';
+import { useDAWCollaborationContext } from '../../contexts/useDAWCollaborationContext';
 import { MAX_CANVAS_WIDTH, MAX_TIMELINE_ZOOM, MIN_TIMELINE_ZOOM } from '../../constants/canvas';
 
 const TOTAL_HEIGHT = TOTAL_KEYS * NOTE_HEIGHT;
@@ -41,7 +41,16 @@ const PianoRollComponent = () => {
   const setViewMode = usePianoRollStore((state) => state.setViewMode);
   
   // Use collaboration handlers if available
-  const { handleNoteAdd, handleNoteUpdate, handleNoteDelete, handleRegionUpdate } = useDAWCollaborationContext();
+  const {
+    handleNoteAdd,
+    handleNoteUpdate,
+    handleNoteDelete,
+    handleRegionUpdate,
+    handleRegionRealtimeUpdates,
+    handleRegionRealtimeFlush,
+    handleNoteRealtimeUpdates,
+    handleNoteRealtimeFlush,
+  } = useDAWCollaborationContext();
   const syncRegionNotes = useCallback(() => {
     if (!activeRegionId) {
       return;
@@ -79,7 +88,6 @@ const PianoRollComponent = () => {
   
   // Piano roll only works with MIDI regions
   const midiRegion = region?.type === 'midi' ? region : null;
-  
   const track = useMemo(() => {
     if (!midiRegion) {
       return null;
@@ -119,6 +127,93 @@ const PianoRollComponent = () => {
     return () => window.removeEventListener('resize', updateViewportSize);
   }, []);
 
+  const handleRealtimeNoteUpdates = useCallback(
+    (updates: Array<{ noteId: string; updates: Partial<MidiNote> }>) => {
+      if (!midiRegion || !updates.length) {
+        return;
+      }
+
+      const regionStart = midiRegion.start;
+      handleNoteRealtimeUpdates(
+        updates.map(({ noteId, updates: noteUpdates }) => {
+          const adjustedUpdates: Partial<MidiNote> = { ...noteUpdates };
+          if (typeof adjustedUpdates.start === 'number') {
+            adjustedUpdates.start = adjustedUpdates.start - regionStart;
+          }
+          return {
+            regionId: midiRegion.id,
+            noteId,
+            updates: adjustedUpdates,
+          };
+        })
+      );
+    },
+    [handleNoteRealtimeUpdates, midiRegion]
+  );
+
+  const flushRealtimeNotes = useCallback(() => {
+    handleNoteRealtimeFlush();
+  }, [handleNoteRealtimeFlush]);
+
+  const handleRealtimeSustainEvent = useCallback(
+    (eventId: string, updates: Partial<SustainEvent>) => {
+      if (!midiRegion) {
+        return;
+      }
+
+      const relativeUpdates: Partial<SustainEvent> = {};
+      if (typeof updates.start === 'number') {
+        relativeUpdates.start = updates.start - midiRegion.start;
+      }
+      if (typeof updates.end === 'number') {
+        relativeUpdates.end = updates.end - midiRegion.start;
+      }
+
+      const nextEvents = midiRegion.sustainEvents.map((event) =>
+        event.id === eventId ? { ...event, ...relativeUpdates } : event
+      );
+
+      handleRegionRealtimeUpdates([
+        {
+          regionId: midiRegion.id,
+          updates: { sustainEvents: nextEvents },
+        },
+      ]);
+    },
+    [handleRegionRealtimeUpdates, midiRegion]
+  );
+
+  const flushRealtimeSustainEvents = useCallback(() => {
+    handleRegionRealtimeFlush();
+  }, [handleRegionRealtimeFlush]);
+
+  const handleSetNotesVelocity = useCallback(
+    (noteIds: string[], velocity: number, options?: { commit?: boolean }) => {
+      if (!midiRegion || !noteIds.length) {
+        return;
+      }
+
+      const clampedVelocity = Math.min(127, Math.max(0, Math.round(velocity)));
+      setNotesVelocity(noteIds, clampedVelocity);
+
+      if (options?.commit) {
+        flushRealtimeNotes();
+        noteIds.forEach((noteId) => {
+          handleNoteUpdate(noteId, { velocity: clampedVelocity });
+        });
+        return;
+      }
+
+      handleRealtimeNoteUpdates(
+        noteIds.map((noteId) => ({
+          noteId,
+          updates: { velocity: clampedVelocity },
+        }))
+      );
+    },
+    [flushRealtimeNotes, handleNoteUpdate, handleRealtimeNoteUpdates, midiRegion, setNotesVelocity]
+  );
+
   const handleCreateNote = useCallback(
     (pitch: number, absoluteStart: number) => {
       if (!midiRegion) {
@@ -143,16 +238,12 @@ const PianoRollComponent = () => {
   const handleVelocityChange = useCallback(
     (value: number) => {
       setVelocityPreview(value);
-      if (selectedNoteIds.length && midiRegion) {
-        // Update locally first
-        setNotesVelocity(selectedNoteIds, value);
-        // Then sync each note individually
-        selectedNoteIds.forEach((noteId) => {
-          handleNoteUpdate(noteId, { velocity: value });
-        });
+      if (!selectedNoteIds.length) {
+        return;
       }
+      handleSetNotesVelocity(selectedNoteIds, value, { commit: true });
     },
-    [selectedNoteIds, setNotesVelocity, handleNoteUpdate, midiRegion]
+    [handleSetNotesVelocity, selectedNoteIds]
   );
 
   // Wrapper for moveNotes that syncs each note individually
@@ -208,20 +299,6 @@ const PianoRollComponent = () => {
       handleNoteDelete(noteId);
     });
   }, [deleteSelectedNotes, handleNoteDelete, selectedNoteIds]);
-
-  // Wrapper for setNotesVelocity that syncs each note individually
-  const handleSetNotesVelocity = useCallback(
-    (noteIds: string[], velocity: number) => {
-      if (!midiRegion) return;
-      // Update locally first
-      setNotesVelocity(noteIds, velocity);
-      // Then sync each note individually
-      noteIds.forEach((noteId) => {
-        handleNoteUpdate(noteId, { velocity });
-      });
-    },
-    [setNotesVelocity, handleNoteUpdate, midiRegion]
-  );
 
   const handleAddSustainEvent = useCallback(
     (absoluteStart: number) => {
@@ -628,6 +705,8 @@ const PianoRollComponent = () => {
                   noteScrollRef.current.scrollTop += deltaY;
                 }
               }}
+              onRealtimeNoteUpdates={handleRealtimeNoteUpdates}
+              onRealtimeNotesFlush={flushRealtimeNotes}
             />
           </div>
         </div>
@@ -687,6 +766,8 @@ const PianoRollComponent = () => {
                 onUpdateEvent={handleUpdateSustainEvent}
                 onRemoveEvent={handleRemoveSustainEvent}
                 onSetSelectedEvents={setSelectedSustainIds}
+                onRealtimeEventUpdate={handleRealtimeSustainEvent}
+                onRealtimeFlush={flushRealtimeSustainEvents}
               />
             )}
           </div>

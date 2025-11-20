@@ -10,7 +10,7 @@ import { useRecordingStore } from '../../stores/recordingStore';
 import { playImmediateNote, setSustainPedal, stopImmediateNote } from '../../utils/audioEngine';
 import type { MidiMessage } from '../useMidiInput';
 import { snapToGrid } from '../../utils/timeUtils';
-import { useDAWCollaborationContext } from '../../contexts/DAWCollaborationContext';
+import { useDAWCollaborationContext } from '../../contexts/useDAWCollaborationContext';
 
 interface RecordedNote extends Omit<MidiNote, 'id'> {
   tempId: number;

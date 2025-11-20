@@ -4,7 +4,7 @@ import { useRegionStore } from '@/features/daw/stores/regionStore';
 import { useProjectStore } from '@/features/daw/stores/projectStore';
 import { WaveformCanvas } from './WaveformCanvas';
 import { TimeRuler } from './TimeRuler';
-import { useDAWCollaborationContext } from '@/features/daw/contexts/DAWCollaborationContext';
+import { useDAWCollaborationContext } from '@/features/daw/contexts/useDAWCollaborationContext';
 import { MAX_CANVAS_WIDTH, MAX_AUDIO_ZOOM, MIN_AUDIO_ZOOM } from '@/features/daw/constants/canvas';
 
 interface AudioEditorProps {
@@ -16,7 +16,11 @@ const PIXELS_PER_BEAT = 80;
 export const AudioEditor = ({ region }: AudioEditorProps) => {
   const updateRegion = useRegionStore((state) => state.updateRegion);
   const playhead = useProjectStore((state) => state.playhead);
-  const { handleRegionUpdate } = useDAWCollaborationContext();
+  const {
+    handleRegionUpdate,
+    handleRegionRealtimeUpdates,
+    handleRegionRealtimeFlush,
+  } = useDAWCollaborationContext();
   const [zoomX, setZoomX] = useState(1);
   const [zoomY, setZoomY] = useState(1);
   const rulerRef = useRef<HTMLDivElement>(null);
@@ -26,10 +30,41 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
 
   const applyRegionUpdate = useCallback(
     (updates: Partial<AudioRegion>) => {
+      if (!updates || Object.keys(updates).length === 0) {
+        return;
+      }
       updateRegion(region.id, updates);
       handleRegionUpdate(region.id, updates);
     },
     [handleRegionUpdate, region.id, updateRegion]
+  );
+
+  const pushRealtimeRegionUpdate = useCallback(
+    (updates: Partial<AudioRegion>) => {
+      if (!updates || Object.keys(updates).length === 0) {
+        return;
+      }
+      updateRegion(region.id, updates);
+      handleRegionRealtimeUpdates([
+        {
+          regionId: region.id,
+          updates,
+        },
+      ]);
+    },
+    [handleRegionRealtimeUpdates, region.id, updateRegion]
+  );
+
+  const commitRegionUpdate = useCallback(
+    (updates: Partial<AudioRegion>) => {
+      if (!updates || Object.keys(updates).length === 0) {
+        return;
+      }
+      handleRegionRealtimeFlush();
+      updateRegion(region.id, updates);
+      handleRegionUpdate(region.id, updates);
+    },
+    [handleRegionRealtimeFlush, handleRegionUpdate, region.id, updateRegion]
   );
 
   const originalLength = region.originalLength || region.length;
@@ -117,8 +152,14 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
     setZoomY(1);
   }, [region.id, defaultZoomX]);
 
-  const handleGainChange = (newGain: number) => {
-    applyRegionUpdate({ gain: newGain });
+  const handleGainChange = (newGain: number, commit = false) => {
+    const clamped = Math.max(-24, Math.min(newGain, 24));
+    const updates: Partial<AudioRegion> = { gain: clamped };
+    if (commit) {
+      commitRegionUpdate(updates);
+    } else {
+      pushRealtimeRegionUpdate(updates);
+    }
   };
 
   const handleTrimStartChange = (newTrimStart: number) => {
@@ -133,7 +174,7 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
 
     applyRegionUpdate({
       trimStart: clampedTrimStart,
-      length: newLength
+      length: newLength,
     });
   };
 
@@ -150,16 +191,24 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
     applyRegionUpdate({ length: newLength });
   };
 
-  const handleFadeInChange = (duration: number) => {
+  const handleFadeInChange = (duration: number, options?: { commit?: boolean }) => {
     const maxFade = Math.max(0, region.length - 0.25);
     const clampedDuration = Math.max(0, Math.min(duration, maxFade));
-    applyRegionUpdate({ fadeInDuration: clampedDuration });
+    if (options?.commit) {
+      commitRegionUpdate({ fadeInDuration: clampedDuration });
+    } else {
+      pushRealtimeRegionUpdate({ fadeInDuration: clampedDuration });
+    }
   };
 
-  const handleFadeOutChange = (duration: number) => {
+  const handleFadeOutChange = (duration: number, options?: { commit?: boolean }) => {
     const maxFade = Math.max(0, region.length - 0.25);
     const clampedDuration = Math.max(0, Math.min(duration, maxFade));
-    applyRegionUpdate({ fadeOutDuration: clampedDuration });
+    if (options?.commit) {
+      commitRegionUpdate({ fadeOutDuration: clampedDuration });
+    } else {
+      pushRealtimeRegionUpdate({ fadeOutDuration: clampedDuration });
+    }
   };
 
   // Sync scroll between ruler and waveform
@@ -249,6 +298,9 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
               step={0.1}
               value={region.gain || 0}
               onChange={(e) => handleGainChange(Number(e.target.value))}
+              onPointerUp={(e) => handleGainChange(Number(e.currentTarget.value), true)}
+              onPointerCancel={(e) => handleGainChange(Number(e.currentTarget.value), true)}
+              onBlur={(e) => handleGainChange(Number(e.currentTarget.value), true)}
               className="range range-xs w-32"
             />
             <span className="text-xs font-mono w-12 whitespace-nowrap">
@@ -267,6 +319,9 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
               step={0.01}
               value={region.fadeInDuration || 0}
               onChange={(e) => handleFadeInChange(Number(e.target.value))}
+              onPointerUp={(e) => handleFadeInChange(Number(e.currentTarget.value), { commit: true })}
+              onPointerCancel={(e) => handleFadeInChange(Number(e.currentTarget.value), { commit: true })}
+              onBlur={(e) => handleFadeInChange(Number(e.currentTarget.value), { commit: true })}
               className="range range-xs w-20"
             />
             <span className="text-xs font-mono w-10">{(region.fadeInDuration || 0).toFixed(2)}b</span>
@@ -282,6 +337,9 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
               step={0.01}
               value={region.fadeOutDuration || 0}
               onChange={(e) => handleFadeOutChange(Number(e.target.value))}
+              onPointerUp={(e) => handleFadeOutChange(Number(e.currentTarget.value), { commit: true })}
+              onPointerCancel={(e) => handleFadeOutChange(Number(e.currentTarget.value), { commit: true })}
+              onBlur={(e) => handleFadeOutChange(Number(e.currentTarget.value), { commit: true })}
               className="range range-xs w-20"
             />
             <span className="text-xs font-mono w-10">{(region.fadeOutDuration || 0).toFixed(2)}b</span>

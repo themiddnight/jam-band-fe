@@ -1,7 +1,7 @@
 import { type ChangeEvent } from 'react';
 
 import { useProjectStore } from '../../stores/projectStore';
-import { useDAWCollaborationContext } from '../../contexts/DAWCollaborationContext';
+import { useDAWCollaborationContext } from '../../contexts/useDAWCollaborationContext';
 
 const MIN_BPM = 40;
 const MAX_BPM = 300;
