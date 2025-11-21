@@ -575,7 +575,7 @@ const PianoRollComponent = () => {
   }
 
   return (
-    <section className="flex h-full min-h-80 flex-col overflow-hidden rounded-lg border border-base-300 bg-base-100 shadow-sm touch-none">
+    <section className="flex h-full min-h-80 flex-col overflow-hidden rounded-lg border border-base-300 bg-base-100 shadow-sm">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-base-300 px-2 sm:px-4 py-1.5 sm:py-2 gap-2">
         <div className="flex items-center gap-4">
           <div>

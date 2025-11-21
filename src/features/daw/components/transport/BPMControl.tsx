@@ -20,8 +20,8 @@ export const BPMControl = () => {
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <label className="text-xs uppercase tracking-wide text-base-content/70">
+    <div className="flex items-center gap-1 sm:gap-2">
+      <label className="text-xs uppercase tracking-wide text-base-content/70 hidden sm:inline">
         BPM
       </label>
       <input
@@ -31,7 +31,7 @@ export const BPMControl = () => {
         max={MAX_BPM}
         value={bpm}
         onChange={handleInputChange}
-        className="input input-bordered input-xs w-16"
+        className="input input-bordered input-xs w-14 sm:w-16"
       />
       <input
         aria-hidden
@@ -41,7 +41,7 @@ export const BPMControl = () => {
         step={1}
         value={bpm}
         onChange={handleInputChange}
-        className="range range-xs max-w-32"
+        className="range range-xs w-16 sm:w-24 md:w-32"
       />
     </div>
   );

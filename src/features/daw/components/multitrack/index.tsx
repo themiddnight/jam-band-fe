@@ -209,7 +209,7 @@ export const MultitrackView = () => {
   }, [tracks, trackHeights]);
 
   return (
-    <section className="flex h-full max-h-[70vh] min-h-80 flex-col overflow-hidden rounded-lg border border-base-300 bg-base-100 shadow-sm touch-none">
+    <section className="flex h-full max-h-[70vh] min-h-80 flex-col overflow-hidden rounded-lg border border-base-300 bg-base-100 shadow-sm">
       <div className="flex items-center justify-between border-b border-base-300 px-2 sm:px-4 py-1.5 sm:py-2">
         <div className="flex items-center gap-4">
           <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-wide text-base-content/70">

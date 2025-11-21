@@ -135,10 +135,10 @@ export const SynthControlsPanel = memo(() => {
   // Show loading state
   if (isLoading || !synthState) {
     return (
-      <section className="flex flex-col items-center justify-center rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
+      <section className="flex flex-col items-center justify-center rounded-lg border border-base-300 bg-base-100 p-3 sm:p-4 shadow-sm">
         <div className="flex flex-col items-center gap-2">
-          <span className="loading loading-spinner loading-md" />
-          <span className="text-sm text-base-content/70">Loading synth controls...</span>
+          <span className="loading loading-spinner loading-sm sm:loading-md" />
+          <span className="text-xs sm:text-sm text-base-content/70">Loading synth controls...</span>
         </div>
       </section>
     );
@@ -151,7 +151,7 @@ export const SynthControlsPanel = memo(() => {
         synthState={synthState}
         onParamChange={handleParamChange}
         onLoadPreset={handleLoadPreset}
-        getParamLockProps={(param) => {
+        getParamLockProps={(param: string) => {
           if (!selectedTrack) {
             return {};
           }

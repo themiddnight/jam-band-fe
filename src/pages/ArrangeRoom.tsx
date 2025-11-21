@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useMemo, useCallback, memo } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useResizable } from "@/shared/hooks/useResizable";
 import { useUserStore } from "@/shared/stores/userStore";
 import { Footer, AnchoredPopup } from "@/features/ui";
 import { useDeepLinkHandler } from "@/shared/hooks/useDeepLinkHandler";
@@ -314,6 +315,34 @@ export default function ArrangeRoom() {
 
   useArrangeRoomScaleStore();
 
+  // Resizable multitrack - mobile-friendly defaults
+  const {
+    height: multitrackHeight,
+    isResizing: isMultitrackResizing,
+    handleMouseDown: handleMultitrackMouseDown,
+    attachHandleRef: attachMultitrackHandleRef,
+  } = useResizable({
+    initialHeight:
+      typeof window !== "undefined" && window.innerWidth < 640 ? 250 : 400,
+    minHeight: 200,
+    maxHeight:
+      typeof window !== "undefined" && window.innerWidth < 640 ? 400 : 800,
+  });
+
+  // Resizable region editor - mobile-friendly defaults
+  const {
+    height: regionEditorHeight,
+    isResizing: isRegionEditorResizing,
+    handleMouseDown: handleRegionEditorMouseDown,
+    attachHandleRef: attachRegionEditorHandleRef,
+  } = useResizable({
+    initialHeight:
+      typeof window !== "undefined" && window.innerWidth < 640 ? 220 : 320,
+    minHeight: 200,
+    maxHeight:
+      typeof window !== "undefined" && window.innerWidth < 640 ? 350 : 600,
+  });
+
   // Computed values
   const pendingCount = currentRoom?.pendingMembers?.length ?? 0;
 
@@ -331,55 +360,53 @@ export default function ArrangeRoom() {
         <div className="flex-1 p-3">
           <div className="">
             {/* Header */}
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-bold text-secondary">
-                    Arrange Room
-                  </h2>
-                  {currentRoom && (
-                    <span className="badge badge-sm badge-primary">
-                      {currentRoom.name}
-                    </span>
-                  )}
-                  {currentUser?.username && (
-                    <span className="text-xs">
-                      {" | "}
-                      {currentUser.username}
-                    </span>
-                  )}
-                  {/* Room Settings Button - Only for room owner */}
-                  {isRoomOwner && (
-                    <button
-                      onClick={handleOpenRoomSettings}
-                      className="btn btn-xs btn-ghost"
-                      title="Room Settings"
-                    >
-                      ⚙️
-                    </button>
-                  )}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg sm:text-xl font-bold text-secondary">
+                  Arrange Room
+                </h2>
+                {currentRoom && (
+                  <span className="badge badge-xs sm:badge-sm badge-primary">
+                    {currentRoom.name}
+                  </span>
+                )}
+                {currentUser?.username && (
+                  <span className="text-xs hidden sm:inline">
+                    {" | "}
+                    {currentUser.username}
+                  </span>
+                )}
+                {/* Room Settings Button - Only for room owner */}
+                {isRoomOwner && (
                   <button
-                    onClick={() => handleCopyInviteUrl("band_member")}
-                    className={`btn btn-sm btn-ghost ${copiedRole === "band_member" ? "btn-success" : ""}`}
-                    title="Copy invite link"
+                    onClick={handleOpenRoomSettings}
+                    className="btn btn-xs btn-ghost"
+                    title="Room Settings"
                   >
-                    {copiedRole === "band_member" ? "✓ Copied!" : "📋"}
+                    ⚙️
                   </button>
-                  {!isConnected && (
-                    <span className="badge badge-sm badge-warning">
-                      Connecting...
-                    </span>
-                  )}
-                </div>
+                )}
+                <button
+                  onClick={() => handleCopyInviteUrl("band_member")}
+                  className={`btn btn-xs sm:btn-sm btn-ghost ${copiedRole === "band_member" ? "btn-success" : ""}`}
+                  title="Copy invite link"
+                >
+                  {copiedRole === "band_member" ? "✓ Copied!" : "📋"}
+                </button>
+                {!isConnected && (
+                  <span className="badge badge-xs sm:badge-sm badge-warning">
+                    Connecting...
+                  </span>
+                )}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {/* Pending notification button for room owner */}
                 {isRoomOwner && (
                   <div className="relative">
                     <button
                       ref={pendingBtnRef}
                       aria-label="Pending member requests"
-                      className="btn btn-ghost btn-sm relative"
+                      className="btn btn-ghost btn-xs sm:btn-sm relative"
                       onClick={() => setIsPendingPopupOpen((v) => !v)}
                       title={
                         pendingCount > 0
@@ -399,7 +426,7 @@ export default function ArrangeRoom() {
                       onClose={() => setIsPendingPopupOpen(false)}
                       anchorRef={pendingBtnRef}
                       placement="bottom"
-                      className="w-72"
+                      className="w-72 sm:w-80"
                     >
                       <div className="p-3">
                         <div className="flex items-center justify-between mb-2">
@@ -430,13 +457,13 @@ export default function ArrangeRoom() {
                                 </div>
                                 <div className="flex gap-2">
                                   <button
-                                    className="btn btn-sm btn-success"
+                                    className="btn btn-xs sm:btn-sm btn-success"
                                     onClick={() => handleApproveMember(user.id)}
                                   >
                                     ✓
                                   </button>
                                   <button
-                                    className="btn btn-sm btn-error"
+                                    className="btn btn-xs sm:btn-sm btn-error"
                                     onClick={() => handleRejectMember(user.id)}
                                   >
                                     ✕
@@ -453,9 +480,10 @@ export default function ArrangeRoom() {
                 <ProjectMenu canLoadProject={isRoomOwner} />
                 <button
                   onClick={handleLeaveRoomClick}
-                  className="btn btn-outline btn-sm"
+                  className="btn btn-outline btn-xs sm:btn-sm"
                 >
-                  Leave Room
+                  <span className="hidden sm:inline">Leave Room</span>
+                  <span className="sm:hidden">Leave</span>
                 </button>
               </div>
             </div>
@@ -466,12 +494,60 @@ export default function ArrangeRoom() {
               <div className="flex flex-1 flex-col xl:flex-row overflow-hidden">
                 {/* Main content area */}
                 <main className="flex flex-1 flex-col gap-2 p-1 overflow-hidden min-w-0">
-                  <div className="flex-1 min-h-0">
-                    <MultitrackView />
+                  {/* Resizable Multitrack Section */}
+                  <div className="relative">
+                    <div 
+                      style={{ height: `${multitrackHeight}px` }}
+                      className="overflow-hidden"
+                    >
+                      <MultitrackView />
+                    </div>
+                    
+                    {/* Resize Handle */}
+                    <div
+                      ref={attachMultitrackHandleRef}
+                      onMouseDown={handleMultitrackMouseDown}
+                      onTouchStart={handleMultitrackMouseDown}
+                      className={`
+                        h-2 w-full cursor-ns-resize
+                        flex items-center justify-center
+                        hover:bg-primary/20 active:bg-primary/30
+                        transition-colors
+                        ${isMultitrackResizing ? "bg-primary/30" : "bg-base-300"}
+                      `}
+                      style={{ touchAction: "none" }}
+                      title="Drag to resize"
+                    >
+                      <div className="w-12 h-1 bg-base-content/30 rounded-full" />
+                    </div>
                   </div>
 
-                  <div className="h-64 sm:h-80 lg:h-96">
-                    <RegionEditor />
+                  {/* Resizable Region Editor Section */}
+                  <div className="relative">
+                    <div 
+                      style={{ height: `${regionEditorHeight}px` }}
+                      className="overflow-hidden"
+                    >
+                      <RegionEditor />
+                    </div>
+                    
+                    {/* Resize Handle */}
+                    <div
+                      ref={attachRegionEditorHandleRef}
+                      onMouseDown={handleRegionEditorMouseDown}
+                      onTouchStart={handleRegionEditorMouseDown}
+                      className={`
+                        h-2 w-full cursor-ns-resize
+                        flex items-center justify-center
+                        hover:bg-primary/20 active:bg-primary/30
+                        transition-colors
+                        ${isRegionEditorResizing ? "bg-primary/30" : "bg-base-300"}
+                      `}
+                      style={{ touchAction: "none" }}
+                      title="Drag to resize"
+                    >
+                      <div className="w-12 h-1 bg-base-content/30 rounded-full" />
+                    </div>
                   </div>
 
                   <SynthControlsPanel />

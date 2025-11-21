@@ -74,39 +74,41 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
   return (
     <div className="project-menu">
       {/* Menu Bar */}
-      <div className="menu-bar flex items-center gap-2 p-2 bg-base-200">
+      <div className="menu-bar flex flex-wrap items-center gap-1 sm:gap-2 p-1 sm:p-2 bg-base-200 rounded-lg">
         <button 
-          className="btn btn-xs btn-secondary" 
+          className="btn btn-xs sm:btn-sm btn-secondary" 
           onClick={handleSave} 
           disabled={isSaving}
         >
-          {isSaving ? 'Saving...' : 'Save Project'}
+          <span className="hidden sm:inline">{isSaving ? 'Saving...' : 'Save Project'}</span>
+          <span className="sm:hidden">{isSaving ? 'Saving...' : 'Save'}</span>
         </button>
         
         {canLoadProject && (
           <button 
-            className="btn btn-xs btn-accent" 
+            className="btn btn-xs sm:btn-sm btn-accent" 
             onClick={handleLoad} 
             disabled={isLoading}
           >
-            {isLoading ? 'Loading...' : 'Load Project'}
+            <span className="hidden sm:inline">{isLoading ? 'Loading...' : 'Load Project'}</span>
+            <span className="sm:hidden">{isLoading ? 'Loading...' : 'Load'}</span>
           </button>
         )}
 
         {uploadProgress > 0 && uploadProgress < 100 && (
-          <span className="text-sm text-info ml-2">
-            Uploading: {Math.round(uploadProgress)}%
+          <span className="text-xs sm:text-sm text-info ml-1 sm:ml-2">
+            {Math.round(uploadProgress)}%
           </span>
         )}
 
         {hasUnsavedChanges && (
-          <span className="text-warning ml-2" title="Unsaved changes">●</span>
+          <span className="text-warning ml-1 sm:ml-2 text-sm sm:text-base" title="Unsaved changes">●</span>
         )}
       </div>
 
       {/* Error Display */}
       {error && (
-        <div className="alert alert-error m-2">
+        <div className="alert alert-error m-1 sm:m-2 text-xs sm:text-sm">
           <span>{error}</span>
         </div>
       )}
@@ -132,16 +134,16 @@ function RecoverDialog({
 }) {
   return (
     <div className="modal modal-open">
-      <div className="modal-box">
-        <h2 className="font-bold text-lg mb-4">Recover Project</h2>
-        <p className="mb-4">
+      <div className="modal-box max-w-sm sm:max-w-md">
+        <h2 className="font-bold text-base sm:text-lg mb-3 sm:mb-4">Recover Project</h2>
+        <p className="mb-3 sm:mb-4 text-sm sm:text-base">
           An auto-saved version of your project was found. Would you like to recover it?
         </p>
         <div className="modal-action">
-          <button className="btn btn-primary" onClick={onRecover}>
+          <button className="btn btn-xs sm:btn-sm btn-primary" onClick={onRecover}>
             Recover
           </button>
-          <button className="btn" onClick={onCancel}>
+          <button className="btn btn-xs sm:btn-sm" onClick={onCancel}>
             Cancel
           </button>
         </div>

@@ -78,17 +78,17 @@ export const TransportControls = () => {
   }, [handleBackToStart, handlePlayPause, handleRecordToggle, isMac]);
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex items-center gap-1 rounded-lg bg-base-200 px-2 py-1 shadow-inner">
+    <div className="flex items-center gap-1 sm:gap-2">
+      <div className="flex items-center gap-0.5 sm:gap-1 rounded-lg bg-base-200 px-1 sm:px-2 py-1 shadow-inner">
         <div className="flex flex-col items-center gap-1">
           <button
             type="button"
             onClick={handleBackToStart}
             className="btn btn-outline btn-xs"
-            title='Return to start'
+            title={`Return to start (${modifierKey}+,)`}
             aria-label="Return to start"
           >
-            <kbd className="kbd kbd-xs">{`${modifierKey}+,`}</kbd>
+            <kbd className="kbd kbd-xs hidden sm:inline">{`${modifierKey}+,`}</kbd>
             ⏮
           </button>
         </div>
@@ -97,10 +97,10 @@ export const TransportControls = () => {
             type="button"
             onClick={handlePlayPause}
             className={`btn btn-xs ${isPlaying ? 'btn-primary' : 'btn-success'}`}
-            title={isPlaying ? 'Pause' : 'Play'}
+            title={`${isPlaying ? 'Pause' : 'Play'} (${modifierKey}+P)`}
             aria-label={isPlaying ? 'Pause' : 'Play'}
           >
-            <kbd className="kbd kbd-xs">{`${modifierKey}+P`}</kbd>
+            <kbd className="kbd kbd-xs hidden sm:inline">{`${modifierKey}+P`}</kbd>
             <PlayIcon isPlaying={isPlaying} />
           </button>
         </div>
@@ -119,10 +119,10 @@ export const TransportControls = () => {
           type="button"
           onClick={handleRecordToggle}
           className={`btn btn-outline btn-xs ${isRecording ? 'btn-error text-white' : 'btn-ghost'}`}
-          title='Record'
+          title={`Record (${modifierKey}+R)`}
           aria-label="Record"
         >
-          <kbd className="kbd kbd-xs">{`${modifierKey}+R`}</kbd>
+          <kbd className="kbd kbd-xs hidden sm:inline">{`${modifierKey}+R`}</kbd>
           <p className="text-red-500">
             {isRecording ? '●' : '○'}
           </p>

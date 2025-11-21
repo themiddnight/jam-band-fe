@@ -416,17 +416,17 @@ export const VirtualInstrumentPanel = memo(({ onRecordMidiMessage }: VirtualInst
 
   const renderInstrument = () => {
     if (!selectedTrackId) {
-      return <div className="rounded-lg bg-base-200 px-4 py-3 text-sm text-base-content/70">Select a track to play its instrument.</div>;
+      return <div className="rounded-lg bg-base-200 px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-base-content/70">Select a track to play its instrument.</div>;
     }
 
     if (!selectedTrack || selectedTrack.type !== "midi") {
-      return <div className="rounded-lg bg-base-200 px-4 py-3 text-sm text-base-content/70">Virtual instruments are only available for MIDI tracks.</div>;
+      return <div className="rounded-lg bg-base-200 px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-base-content/70">Virtual instruments are only available for MIDI tracks.</div>;
     }
 
     if (isLoadingInstrument) {
       return (
-        <div className="flex flex-col items-center justify-center rounded-lg bg-base-200 px-4 py-6 text-sm text-base-content/70">
-          <span className="loading loading-spinner loading-md mb-2" />
+        <div className="flex flex-col items-center justify-center rounded-lg bg-base-200 px-3 sm:px-4 py-4 sm:py-6 text-xs sm:text-sm text-base-content/70">
+          <span className="loading loading-spinner loading-sm sm:loading-md mb-2" />
           Loading instrument...
         </div>
       );
@@ -434,9 +434,9 @@ export const VirtualInstrumentPanel = memo(({ onRecordMidiMessage }: VirtualInst
 
     if (loadError) {
       return (
-        <div className="rounded-lg bg-error/10 px-4 py-3">
-          <div className="flex flex-col gap-3">
-            <p className="text-sm text-error">{loadError}</p>
+        <div className="rounded-lg bg-error/10 px-3 sm:px-4 py-2 sm:py-3">
+          <div className="flex flex-col gap-2 sm:gap-3">
+            <p className="text-xs sm:text-sm text-error">{loadError}</p>
             <p className="text-xs text-base-content/60">
               Audio requires user interaction to start. Click the button below to initialize audio.
             </p>
@@ -542,8 +542,8 @@ export const VirtualInstrumentPanel = memo(({ onRecordMidiMessage }: VirtualInst
   };
 
   return (
-    <section className="flex flex-col gap-3 rounded-lg border border-base-300 bg-base-100 p-1 shadow-sm overflow-auto">
-      <div className="mx-auto">
+    <section className="flex flex-col gap-2 sm:gap-3 rounded-lg border border-base-300 bg-base-100 p-1 sm:p-2 shadow-sm overflow-auto">
+      <div className="flex justify-center w-full">
         {renderInstrument()}
       </div>
     </section>

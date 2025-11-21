@@ -173,25 +173,25 @@ export default function Guitar({
     <div className="block join">
       <button
         onClick={() => setMode("melody")}
-        className={`btn btn-sm join-item touch-manipulation ${mode === "melody" ? "btn-primary" : "btn-outline"}`}
+        className={`btn btn-xs sm:btn-sm join-item touch-manipulation ${mode === "melody" ? "btn-primary" : "btn-outline"}`}
       >
         Melody{" "}
-        <kbd className="kbd kbd-xs">
+        <kbd className="kbd kbd-xs hidden sm:inline">
           {getKeyDisplayName(shortcuts.toggleMode.key)}
         </kbd>
       </button>
       <button
         onClick={() => setMode("chord")}
-        className={`btn btn-sm join-item touch-manipulation ${mode === "chord" ? "btn-primary" : "btn-outline"}`}
+        className={`btn btn-xs sm:btn-sm join-item touch-manipulation ${mode === "chord" ? "btn-primary" : "btn-outline"}`}
       >
         Chord{" "}
-        <kbd className="kbd kbd-xs">
+        <kbd className="kbd kbd-xs hidden sm:inline">
           {getKeyDisplayName(shortcuts.toggleMode.key)}
         </kbd>
       </button>
       <button
         onClick={() => setMode("basic")}
-        className={`btn btn-sm join-item touch-manipulation ${mode === "basic" ? "btn-primary" : "btn-outline"}`}
+        className={`btn btn-xs sm:btn-sm join-item touch-manipulation ${mode === "basic" ? "btn-primary" : "btn-outline"}`}
       >
         Basic
       </button>

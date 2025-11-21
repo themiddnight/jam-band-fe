@@ -193,21 +193,21 @@ export default function Keyboard({
     <div className="block join">
       <button
         onClick={() => setMode("simple-melody")}
-        className={`btn btn-sm join-item touch-manipulation ${mode === "simple-melody" ? "btn-primary" : "btn-outline"}`}
+        className={`btn btn-xs sm:btn-sm join-item touch-manipulation ${mode === "simple-melody" ? "btn-primary" : "btn-outline"}`}
       >
-        Melody {""}
-        <kbd className="kbd kbd-xs">{shortcuts.toggleMode.key}</kbd>
+        Melody{" "}
+        <kbd className="kbd kbd-xs hidden sm:inline">{shortcuts.toggleMode.key}</kbd>
       </button>
       <button
         onClick={() => setMode("simple-chord")}
-        className={`btn btn-sm join-item touch-manipulation ${mode === "simple-chord" ? "btn-primary" : "btn-outline"}`}
+        className={`btn btn-xs sm:btn-sm join-item touch-manipulation ${mode === "simple-chord" ? "btn-primary" : "btn-outline"}`}
       >
-        Chord {""}
-        <kbd className="kbd kbd-xs">{shortcuts.toggleMode.key}</kbd>
+        Chord{" "}
+        <kbd className="kbd kbd-xs hidden sm:inline">{shortcuts.toggleMode.key}</kbd>
       </button>
       <button
         onClick={() => setMode("basic")}
-        className={`btn btn-sm join-item touch-manipulation ${mode === "basic" ? "btn-primary" : "btn-outline"}`}
+        className={`btn btn-xs sm:btn-sm join-item touch-manipulation ${mode === "basic" ? "btn-primary" : "btn-outline"}`}
       >
         Basic
       </button>
@@ -242,16 +242,21 @@ export default function Keyboard({
   // Additional controls: Arpeggio (only in simple-chord mode)
   const additionalControls =
     mode === "simple-chord" ? (
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 sm:gap-2">
         <label className="label py-1">
-          <span className="label-text text-sm">
-            Arpeggio:{" "}
-            {
-              ARPEGGIO_TIME_LABELS[
-                arpeggioSpeed as keyof typeof ARPEGGIO_TIME_LABELS
-              ]
-            }{" "}
-            ({arpeggioSpeed}ms)
+          <span className="label-text text-xs sm:text-sm">
+            <span className="hidden sm:inline">
+              Arpeggio:{" "}
+              {
+                ARPEGGIO_TIME_LABELS[
+                  arpeggioSpeed as keyof typeof ARPEGGIO_TIME_LABELS
+                ]
+              }{" "}
+              ({arpeggioSpeed}ms)
+            </span>
+            <span className="sm:hidden">
+              Arp: {arpeggioSpeed}ms
+            </span>
           </span>
         </label>
         <div className="join">
@@ -265,10 +270,10 @@ export default function Keyboard({
                 setArpeggioSpeed(newSpeed as any);
               }
             }}
-            className="btn btn-sm btn-outline join-item touch-manipulation"
+            className="btn btn-xs sm:btn-sm btn-outline join-item touch-manipulation"
           >
             -{" "}
-            <kbd className="kbd kbd-xs">
+            <kbd className="kbd kbd-xs hidden sm:inline">
               {DEFAULT_KEYBOARD_SHORTCUTS.arpeggioSpeedDown.key.toUpperCase()}
             </kbd>
           </button>
@@ -282,10 +287,10 @@ export default function Keyboard({
                 setArpeggioSpeed(newSpeed as any);
               }
             }}
-            className="btn btn-sm btn-outline join-item touch-manipulation"
+            className="btn btn-xs sm:btn-sm btn-outline join-item touch-manipulation"
           >
             +{" "}
-            <kbd className="kbd kbd-xs">
+            <kbd className="kbd kbd-xs hidden sm:inline">
               {DEFAULT_KEYBOARD_SHORTCUTS.arpeggioSpeedUp.key.toUpperCase()}
             </kbd>
           </button>
