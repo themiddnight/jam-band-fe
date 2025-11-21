@@ -19,6 +19,7 @@ import type { MidiNote, SustainEvent } from '../../types/daw';
 import { useProjectStore } from '../../stores/projectStore';
 import { useDAWCollaborationContext } from '../../contexts/useDAWCollaborationContext';
 import { MAX_CANVAS_WIDTH, MAX_TIMELINE_ZOOM, MIN_TIMELINE_ZOOM } from '../../constants/canvas';
+import { usePianoRollRecording } from '../../hooks/usePianoRollRecording';
 
 const TOTAL_HEIGHT = TOTAL_KEYS * NOTE_HEIGHT;
 
@@ -39,6 +40,8 @@ const PianoRollComponent = () => {
   const deleteSelectedNotes = usePianoRollStore((state) => state.deleteSelectedNotes);
   const viewMode = usePianoRollStore((state) => state.viewMode);
   const setViewMode = usePianoRollStore((state) => state.setViewMode);
+  const isPianoRollRecording = usePianoRollStore((state) => state.isPianoRollRecording);
+  const setPianoRollRecording = usePianoRollStore((state) => state.setPianoRollRecording);
   
   // Use collaboration handlers if available
   const {
@@ -247,6 +250,24 @@ const PianoRollComponent = () => {
     },
     [handleNoteAdd, midiRegion, setSelectedNoteIds, velocityPreview]
   );
+
+  // Handle region extension when recording beyond region boundaries
+  const handleRegionExtend = useCallback(
+    (regionId: string, newLength: number) => {
+      if (!midiRegion || regionId !== midiRegion.id) {
+        return;
+      }
+      handleRegionUpdate(regionId, { length: newLength });
+    },
+    [midiRegion, handleRegionUpdate]
+  );
+
+  // Piano roll recording hook
+  usePianoRollRecording({
+    onNoteAdd: handleNoteAdd,
+    onRegionExtend: handleRegionExtend,
+    enabled: isPianoRollRecording,
+  });
 
   const handleVelocityChange = useCallback(
     (value: number) => {
@@ -564,6 +585,15 @@ const PianoRollComponent = () => {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className={`btn btn-xs ${isPianoRollRecording ? 'btn-error' : 'btn-outline'}`}
+              onClick={() => setPianoRollRecording(!isPianoRollRecording)}
+              title="Record MIDI input to piano roll"
+            >
+              <span className={isPianoRollRecording ? 'animate-pulse' : ''}>●</span>
+              <span className="hidden sm:inline">Capture</span>
+            </button>
             <label className="flex items-center gap-1 text-xs text-base-content/70">
               <span className="hidden sm:inline">View:</span>
               <select

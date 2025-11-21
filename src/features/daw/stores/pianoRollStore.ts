@@ -35,7 +35,9 @@ interface PianoRollStoreState {
   selectedSustainIds: string[];
   viewMode: PianoRollViewMode;
   regionPreviewStarts: Record<RegionId, number | undefined>;
+  isPianoRollRecording: boolean;
   setViewMode: (mode: PianoRollViewMode) => void;
+  setPianoRollRecording: (enabled: boolean) => void;
   setActiveRegion: (regionId: RegionId | null) => void;
   addNote: (note: Omit<MidiNote, 'id'>) => MidiNote | null;
   updateNote: (noteId: NoteId, updates: Partial<MidiNote>) => void;
@@ -69,7 +71,9 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
   selectedSustainIds: [],
   viewMode: 'all-keys',
   regionPreviewStarts: {},
+  isPianoRollRecording: false,
   setViewMode: (mode) => set({ viewMode: mode }),
+  setPianoRollRecording: (enabled) => set({ isPianoRollRecording: enabled }),
   setActiveRegion: (regionId) => {
     set({
       activeRegionId: regionId,
