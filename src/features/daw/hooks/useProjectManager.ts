@@ -6,6 +6,7 @@ import {
   autoSaveToIndexedDB,
   recoverFromAutoSave,
 } from '../services/projectFileManager';
+import { uploadProjectToRoom } from '../services/projectUploader';
 
 interface UseProjectManagerOptions {
   autoSaveInterval?: number; // in milliseconds, default 60000 (1 minute)
@@ -72,6 +73,71 @@ export function useProjectManager(options: UseProjectManagerOptions = {}) {
       setHasUnsavedChanges(false);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to load project';
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Load project and upload to room
+  const loadProjectAndUploadToRoom = useCallback(async (
+    roomId: string,
+    userId: string,
+    username: string,
+    file?: File,
+    onProgress?: (progress: number) => void
+  ) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Step 1: Get the project file
+      let projectFile: File;
+      
+      if (file) {
+        projectFile = file;
+      } else {
+        // Show file picker
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.collab';
+        
+        projectFile = await new Promise<File>((resolve, reject) => {
+          input.onchange = (e) => {
+            const selectedFile = (e.target as HTMLInputElement).files?.[0];
+            if (selectedFile) {
+              resolve(selectedFile);
+            } else {
+              reject(new Error('No file selected'));
+            }
+          };
+          input.click();
+        });
+      }
+
+      // Step 2: Load project locally first
+      await loadProjectFromZip(projectFile);
+
+      // Step 3: Upload to server for distribution
+      const result = await uploadProjectToRoom({
+        roomId,
+        projectFile,
+        userId,
+        username,
+        onProgress,
+      });
+
+      if (!result.success) {
+        throw new Error(result.message);
+      }
+
+      setLastSaved(new Date());
+      setHasUnsavedChanges(false);
+      
+      return result;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load and upload project';
       setError(errorMessage);
       throw err;
     } finally {
@@ -154,6 +220,7 @@ export function useProjectManager(options: UseProjectManagerOptions = {}) {
     saveProject,
     saveProjectAs,
     loadProject,
+    loadProjectAndUploadToRoom,
     recoverProject,
     markAsModified,
   };

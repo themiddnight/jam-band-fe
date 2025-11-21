@@ -11,6 +11,7 @@ export interface BaseRegionProps {
   isSelected: boolean;
   isMovingToNewTrack: boolean;
   loops: number;
+  isLockedByRemote: boolean;
   onPointerDown: (event: KonvaEventObject<PointerEvent>) => void;
 }
 
@@ -38,6 +39,7 @@ export interface RegionHandlesProps {
   height: number;
   loops: number;
   handleSize: number;
+  disabled?: boolean;
   onHeadHandleDown: (event: KonvaEventObject<PointerEvent>) => void;
   onLengthHandleDown: (event: KonvaEventObject<PointerEvent>) => void;
   onLoopHandleDown: (event: KonvaEventObject<PointerEvent>) => void;

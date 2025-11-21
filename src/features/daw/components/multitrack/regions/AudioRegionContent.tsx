@@ -1,8 +1,15 @@
 import { useMemo } from 'react';
-import { Line, Rect } from 'react-konva';
+import { Shape, Line, Rect } from 'react-konva';
 import type { RegionContentProps } from './types';
 import type { AudioRegion } from '@/features/daw/types/daw';
-import { useWaveformData } from '@/features/daw/hooks/useWaveformData';
+import {
+  getOrGenerateLOD,
+  selectLODLevel,
+  extractVisiblePeaks,
+  calculateOptimalBarWidth,
+  shouldApplyViewportCulling,
+} from '@/features/daw/utils/progressiveWaveformRenderer';
+import { VIEWPORT_CULLING } from '@/features/daw/config/waveformConfig';
 
 const TRACK_WAVEFORM_PADDING = 6;
 
@@ -36,28 +43,57 @@ export const AudioRegionContent = ({
     effectiveTrimStart = (region.trimStart ?? 0) + delta;
   }
 
-  // Generate waveform based on ORIGINAL length for consistent detail
-  // Sample density: ~1 sample per 4 pixels of original length
-  const originalWidthPixels = originalLength * beatWidth;
-  const totalSamples = Math.max(100, Math.floor(originalWidthPixels / 4));
-  const { data: waveformData } = useWaveformData(audioBuffer ?? null, totalSamples, { normalize: false });
-
+  // Use progressive LOD rendering for large audio files
   const visiblePeaks = useMemo(() => {
-    if (!waveformData || waveformData.length === 0) {
-      return [] as number[];
+    if (!audioBuffer) {
+      return new Float32Array(0);
     }
 
-    // Calculate which part of the waveform to show based on trim
-    const trimRatio = effectiveTrimStart / originalLength;
-    const lengthRatio = length / originalLength;
-    const startIdx = Math.floor(trimRatio * waveformData.length);
-    const endIdx = Math.min(
-      waveformData.length,
-      Math.max(startIdx + 1, Math.ceil((trimRatio + lengthRatio) * waveformData.length)),
-    );
-
-    return Array.from(waveformData.subarray(startIdx, endIdx));
-  }, [waveformData, effectiveTrimStart, originalLength, length]);
+    try {
+      // Generate or retrieve LOD data (uses MAX_WAVEFORM_PIXEL_WIDTH from config)
+      const lodData = getOrGenerateLOD(audioBuffer, region.id);
+      
+      // Validate LOD data
+      if (!lodData || !lodData.levels || lodData.levels.length === 0) {
+        console.warn('Invalid LOD data for region:', region.id);
+        return new Float32Array(0);
+      }
+      
+      // Select appropriate LOD level based on current zoom
+      const lodLevel = selectLODLevel(lodData, width, length);
+      
+      // Validate LOD level
+      if (!lodLevel || !lodLevel.peaks || lodLevel.peaks.length === 0) {
+        console.warn('Invalid LOD level for region:', region.id);
+        return new Float32Array(0);
+      }
+      
+      // Extract visible peaks based on trim and length
+      const peaks = extractVisiblePeaks(lodLevel, effectiveTrimStart, length, originalLength);
+      
+      // Validate extracted peaks
+      if (!peaks || peaks.length === 0) {
+        console.warn('No visible peaks extracted for region:', region.id, {
+          width,
+          length,
+          trimStart: effectiveTrimStart,
+          originalLength,
+          lodLevelPeaks: lodLevel.peaks.length,
+        });
+        return new Float32Array(0);
+      }
+      
+      return peaks;
+    } catch (error) {
+      console.error('Failed to generate waveform LOD:', error, {
+        regionId: region.id,
+        width,
+        length,
+        audioBufferLength: audioBuffer.length,
+      });
+      return new Float32Array(0);
+    }
+  }, [audioBuffer, region.id, width, length, effectiveTrimStart, originalLength]);
 
   if (!audioBuffer || visiblePeaks.length === 0) {
     return null;
@@ -83,32 +119,111 @@ export const AudioRegionContent = ({
   const fadeInEndX = loopX + fadeInWidth;
   const fadeOutStartX = loopX + width - fadeOutWidth;
 
+  // Render MinMax peaks (each peak is a min/max pair)
+  const peakCount = Math.floor(visiblePeaks.length / 2);
+
+  // If no peaks, show a placeholder
+  if (peakCount === 0) {
+    return (
+      <Rect
+        x={loopX}
+        y={centerY - 1}
+        width={width}
+        height={2}
+        fill="#1f2937"
+        opacity={0.3}
+        listening={false}
+      />
+    );
+  }
+
+  // Optimized waveform rendering using single Shape with custom drawing
   return (
     <>
-      {visiblePeaks.map((amplitude, index) => {
-        const waveX = loopX + (index / visiblePeaks.length) * width;
-        const scaledAmplitude = amplitude * gainMultiplier;
-        const availableHeight = innerAvailableHeight > 0 ? innerAvailableHeight : waveformHeight;
-        const clampedHeight = Math.max(Math.min(scaledAmplitude * availableHeight, availableHeight), 1);
-        const minY = innerTop;
-        const maxY = innerBottom;
-        const rectTop = Math.max(minY, centerY - clampedHeight / 2);
-        const rectBottom = Math.min(maxY, rectTop + clampedHeight);
-        const waveHeight = Math.max(rectBottom - rectTop, 1);
+      <Shape
+        sceneFunc={(context, shape) => {
+          context.fillStyle = '#1f2937';
+          context.globalAlpha = isMainLoop ? 0.7 : 0.4;
+          
+          const availableHeight = innerAvailableHeight > 0 ? innerAvailableHeight : waveformHeight;
+          
+          // Calculate optimal bar width to prevent overdraw
+          const barWidth = calculateOptimalBarWidth(width, peakCount, 0.5, 2);
+          
+          // Viewport culling: Only draw bars that are visible on screen
+          const stage = shape.getStage();
+          let viewportStartX = loopX;
+          let viewportEndX = loopX + width;
+          let startBarIndex = 0;
+          let endBarIndex = peakCount;
+          
+          if (stage) {
+            const container = stage.container();
+            if (container && container.parentElement) {
+              const scrollContainer = container.parentElement;
+              const stageTransform = stage.getAbsoluteTransform();
+              const scale = stageTransform.m[0]; // scaleX
+              const offsetX = stageTransform.m[4]; // translateX
+              
+              // Calculate visible range in stage coordinates
+              const scrollLeft = scrollContainer.scrollLeft;
+              const containerWidth = scrollContainer.clientWidth;
+              
+              viewportStartX = (scrollLeft - offsetX) / scale;
+              viewportEndX = ((scrollLeft + containerWidth) - offsetX) / scale;
+              
+              // Adaptive buffer based on zoom (configurable)
+              const viewportWidth = viewportEndX - viewportStartX;
+              const buffer = viewportWidth * VIEWPORT_CULLING.BUFFER_PERCENTAGE;
+              viewportStartX -= buffer;
+              viewportEndX += buffer;
+              
+              // Calculate visible bar range
+              startBarIndex = Math.max(0, Math.floor(((viewportStartX - loopX) / width) * peakCount));
+              endBarIndex = Math.min(peakCount, Math.ceil(((viewportEndX - loopX) / width) * peakCount));
+              
+              // Only apply culling if beneficial
+              const visibleBarCount = endBarIndex - startBarIndex;
+              if (!shouldApplyViewportCulling(peakCount, visibleBarCount)) {
+                startBarIndex = 0;
+                endBarIndex = peakCount;
+              }
+            }
+          }
+          
+          // Only draw visible bars
+          for (let index = startBarIndex; index < endBarIndex; index++) {
+            const minValue = visiblePeaks[index * 2] || 0;
+            const maxValue = visiblePeaks[index * 2 + 1] || 0;
+            
+            const waveX = loopX + (index / peakCount) * width;
+            
+            // Scale min and max by gain
+            const scaledMin = minValue * gainMultiplier;
+            const scaledMax = maxValue * gainMultiplier;
+            
+            // Calculate positions for min and max
+            const minHeight = Math.abs(scaledMin) * availableHeight;
+            const maxHeight = Math.abs(scaledMax) * availableHeight;
+            
+            // Draw from center outward
+            const topY = Math.max(innerTop, centerY - maxHeight / 2);
+            const bottomY = Math.min(innerBottom, centerY + Math.abs(minHeight) / 2);
+            const waveHeight = Math.max(bottomY - topY, 1);
 
-        return (
-          <Rect
-            key={`${region.id}-wave-${index}`}
-            x={waveX}
-            y={rectTop}
-            width={Math.max(width / visiblePeaks.length, 1)}
-            height={Math.max(waveHeight, 1)}
-            fill="#1f2937"
-            opacity={isMainLoop ? 0.7 : 0.4}
-            listening={false}
-          />
-        );
-      })}
+            // Ensure valid dimensions
+            if (isFinite(waveX) && isFinite(topY) && isFinite(waveHeight)) {
+              context.fillRect(waveX, topY, barWidth, waveHeight);
+            }
+          }
+          
+          // Required for Konva
+          context.fillStrokeShape(shape);
+        }}
+        listening={false}
+        perfectDrawEnabled={false}
+        shadowForStrokeEnabled={false}
+      />
 
       {/* Fade In Overlay - only on main loop */}
       {isMainLoop && fadeInDuration > 0 && (

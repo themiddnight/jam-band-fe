@@ -1,10 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, memo } from 'react';
 import { PianoRoll } from '../pianoroll';
 import { AudioEditor } from './audioeditor';
 import { usePianoRollStore } from '@/features/daw/stores/pianoRollStore';
 import { useRegionStore } from '@/features/daw/stores/regionStore';
 
-export const RegionEditor = () => {
+export const RegionEditor = memo(() => {
   const activeRegionId = usePianoRollStore((state) => state.activeRegionId);
   const regions = useRegionStore((state) => state.regions);
 
@@ -38,7 +38,8 @@ export const RegionEditor = () => {
   }
 
   return null;
-};
+});
+RegionEditor.displayName = 'RegionEditor';
 
 export default RegionEditor;
 

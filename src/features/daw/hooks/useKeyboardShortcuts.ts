@@ -4,6 +4,7 @@ import { useHistoryStore } from '../stores/historyStore';
 import { usePianoRollStore } from '../stores/pianoRollStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useRegionStore } from '../stores/regionStore';
+import { useDAWCollaborationContext } from '../contexts/useDAWCollaborationContext';
 
 const isEditableTarget = (event: KeyboardEvent) => {
   const target = event.target as HTMLElement | null;
@@ -28,11 +29,8 @@ export const useKeyboardShortcuts = () => {
   const setPlayhead = useProjectStore((state) => state.setPlayhead);
 
   const selectedNoteIds = usePianoRollStore((state) => state.selectedNoteIds);
-  const deleteSelectedNotes = usePianoRollStore((state) => state.deleteSelectedNotes);
-
+  const { handleRegionDelete, handleNoteDelete } = useDAWCollaborationContext();
   const selectedRegionIds = useRegionStore((state) => state.selectedRegionIds);
-  const removeRegion = useRegionStore((state) => state.removeRegion);
-  const clearRegionSelection = useRegionStore((state) => state.clearSelection);
 
   const undo = useHistoryStore((state) => state.undo);
   const redo = useHistoryStore((state) => state.redo);
@@ -65,11 +63,10 @@ export const useKeyboardShortcuts = () => {
         setTransportState('stopped');
       } else if (event.key === 'Delete' || event.key === 'Backspace') {
         if (selectedNoteIds.length) {
-          deleteSelectedNotes();
+          selectedNoteIds.forEach((noteId) => handleNoteDelete(noteId));
           event.preventDefault();
         } else if (selectedRegionIds.length) {
-          selectedRegionIds.forEach((regionId) => removeRegion(regionId));
-          clearRegionSelection();
+          selectedRegionIds.forEach((regionId) => handleRegionDelete(regionId));
           event.preventDefault();
         }
       } else if (hasCtrl && !event.shiftKey && event.key.toLowerCase() === 'z') {
@@ -85,13 +82,12 @@ export const useKeyboardShortcuts = () => {
       }
     },
     [
-      clearRegionSelection,
-      deleteSelectedNotes,
       isRecording,
       isRedoAvailable,
       isUndoAvailable,
       redo,
-      removeRegion,
+      handleNoteDelete,
+      handleRegionDelete,
       selectedNoteIds,
       selectedRegionIds,
       setPlayhead,

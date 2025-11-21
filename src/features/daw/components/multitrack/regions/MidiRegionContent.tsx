@@ -1,4 +1,4 @@
-import { Rect } from 'react-konva';
+import { Shape, Group } from 'react-konva';
 import type { MidiRegion } from '@/features/daw/types/daw';
 import type { RegionContentProps } from './types';
 
@@ -14,12 +14,9 @@ export const MidiRegionContent = ({
   beatWidth,
   isMainLoop,
   length,
+  // width,
   headResizeState,
 }: MidiRegionContentProps) => {
-  // Don't render if too many notes (performance)
-  if (region.notes.length > 100) {
-    return null;
-  }
 
   // Normalize MIDI notes for preview
   const minPitch = region.notes.reduce((min, note) => Math.min(min, note.pitch), 127);
@@ -38,39 +35,41 @@ export const MidiRegionContent = ({
     noteOffset = -delta; // Negative delta to maintain absolute position
   }
 
+  // Optimized: Use single Shape with custom drawing instead of individual Rects
   return (
-    <>
-      {region.notes
-        .map((note) => {
-          // Apply offset for head resize preview
-          const adjustedNoteStart = note.start + noteOffset;
+    <Group>
+      <Shape
+        sceneFunc={(context, shape) => {
+          context.fillStyle = '#1f2937';
+          context.globalAlpha = isMainLoop ? 0.6 : 0.3;
+          
+          // Draw all notes in a single pass
+          // Note: Viewport culling is already handled below to skip notes outside visible region
+          for (const note of region.notes) {
+            // Apply offset for head resize preview
+            const adjustedNoteStart = note.start + noteOffset;
 
-          // Filter out notes that would be outside visible region during preview
-          if (adjustedNoteStart + note.duration <= 0 || adjustedNoteStart >= length) {
-            return null;
+            // Filter out notes that would be outside visible region during preview
+            if (adjustedNoteStart + note.duration <= 0 || adjustedNoteStart >= length) {
+              continue;
+            }
+
+            const noteX = loopX + adjustedNoteStart * beatWidth;
+            const noteWidth = Math.max(note.duration * beatWidth, 2);
+            const normalizedPitch = (note.pitch - minPitch) / pitchRange;
+            const noteY = y + height - normalizedPitch * (height - 16) - 8;
+            const noteHeight = 4;
+
+            context.fillRect(noteX, noteY, noteWidth, noteHeight);
           }
-
-          const noteX = loopX + adjustedNoteStart * beatWidth;
-          const noteWidth = Math.max(note.duration * beatWidth, 2);
-          const normalizedPitch = (note.pitch - minPitch) / pitchRange;
-          const noteY = y + height - normalizedPitch * (height - 16) - 8;
-          const noteHeight = 4;
-
-          return (
-            <Rect
-              key={`${region.id}-${note.id}`}
-              x={noteX}
-              y={noteY}
-              width={noteWidth}
-              height={noteHeight}
-              fill="#1f2937"
-              opacity={isMainLoop ? 0.6 : 0.3}
-              listening={false}
-            />
-          );
-        })
-        .filter(Boolean)}
-    </>
+          
+          // Required for Konva
+          context.fillStrokeShape(shape);
+        }}
+        listening={false}
+        perfectDrawEnabled={false}
+      />
+    </Group>
   );
 };
 

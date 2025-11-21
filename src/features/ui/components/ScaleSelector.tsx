@@ -28,11 +28,11 @@ export default function ScaleSelector({
   }, [rootNote, scale, selectedSlotId, setSlot, isInitialized]);
 
   return (
-    <div className="flex gap-2">
+    <div className="flex gap-1 sm:gap-2">
       <select
         value={rootNote}
         onChange={(e) => onRootNoteChange(e.target.value)}
-        className={`select select-bordered select-${size}`}
+        className={`select select-bordered select-${size} min-w-0 w-14 sm:w-auto`}
       >
         {NOTE_NAMES.map((note) => (
           <option key={note} value={note}>
@@ -47,7 +47,8 @@ export default function ScaleSelector({
             scale === "major" ? "btn-accent" : "btn-outline"
           }`}
         >
-          Major
+          <span className="hidden sm:inline">Major</span>
+          <span className="sm:hidden">Maj</span>
         </button>
         <button
           onClick={() => onScaleChange("minor")}
@@ -55,7 +56,8 @@ export default function ScaleSelector({
             scale === "minor" ? "btn-accent" : "btn-outline"
           }`}
         >
-          Minor
+          <span className="hidden sm:inline">Minor</span>
+          <span className="sm:hidden">Min</span>
         </button>
       </div>
     </div>

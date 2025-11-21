@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { PianoKeys } from './PianoKeys';
 import { NoteCanvas } from './NoteCanvas';
@@ -15,20 +15,22 @@ import {
 import { usePianoRollStore } from '../../stores/pianoRollStore';
 import { useRegionStore } from '../../stores/regionStore';
 import { useTrackStore } from '../../stores/trackStore';
-import type { SustainEvent } from '../../types/daw';
+import type { MidiNote, SustainEvent } from '../../types/daw';
 import { useProjectStore } from '../../stores/projectStore';
+import { useDAWCollaborationContext } from '../../contexts/useDAWCollaborationContext';
+import { MAX_CANVAS_WIDTH, MAX_TIMELINE_ZOOM, MIN_TIMELINE_ZOOM } from '../../constants/canvas';
+import { usePianoRollRecording } from '../../hooks/usePianoRollRecording';
 
 const TOTAL_HEIGHT = TOTAL_KEYS * NOTE_HEIGHT;
 
 type LaneMode = 'velocity' | 'sustain';
 
-export const PianoRoll = () => {
+const PianoRollComponent = () => {
   const activeRegionId = usePianoRollStore((state) => state.activeRegionId);
   const selectedNoteIds = usePianoRollStore((state) => state.selectedNoteIds);
   const setSelectedNoteIds = usePianoRollStore((state) => state.setSelectedNoteIds);
   const toggleNoteSelection = usePianoRollStore((state) => state.toggleNoteSelection);
   const clearNoteSelection = usePianoRollStore((state) => state.clearSelection);
-  const addNote = usePianoRollStore((state) => state.addNote);
   const moveNotes = usePianoRollStore((state) => state.moveNotes);
   const duplicateNotes = usePianoRollStore((state) => state.duplicateNotes);
   const resizeNotes = usePianoRollStore((state) => state.resizeNotes);
@@ -36,6 +38,43 @@ export const PianoRoll = () => {
   const quantizeNotes = usePianoRollStore((state) => state.quantizeNotes);
   const quantizeAllNotes = usePianoRollStore((state) => state.quantizeAllNotes);
   const deleteSelectedNotes = usePianoRollStore((state) => state.deleteSelectedNotes);
+  const viewMode = usePianoRollStore((state) => state.viewMode);
+  const setViewMode = usePianoRollStore((state) => state.setViewMode);
+  const isPianoRollRecording = usePianoRollStore((state) => state.isPianoRollRecording);
+  const setPianoRollRecording = usePianoRollStore((state) => state.setPianoRollRecording);
+  
+  // Use collaboration handlers if available
+  const {
+    handleNoteAdd,
+    handleNoteUpdate,
+    handleNoteDelete,
+    handleRegionUpdate,
+    handleRegionRealtimeUpdates,
+    handleRegionRealtimeFlush,
+    handleNoteRealtimeUpdates,
+    handleNoteRealtimeFlush,
+  } = useDAWCollaborationContext();
+  const syncRegionNotes = useCallback(() => {
+    if (!activeRegionId) {
+      return;
+    }
+    const region = useRegionStore.getState().regions.find((r) => r.id === activeRegionId);
+    if (!region || region.type !== 'midi') {
+      return;
+    }
+    handleRegionUpdate(activeRegionId, { notes: region.notes });
+  }, [activeRegionId, handleRegionUpdate]);
+
+  const syncSustainEvents = useCallback(() => {
+    if (!activeRegionId) {
+      return;
+    }
+    const region = useRegionStore.getState().regions.find((r) => r.id === activeRegionId);
+    if (!region || region.type !== 'midi') {
+      return;
+    }
+    handleRegionUpdate(activeRegionId, { sustainEvents: region.sustainEvents });
+  }, [activeRegionId, handleRegionUpdate]);
   const selectedSustainIds = usePianoRollStore((state) => state.selectedSustainIds);
   const setSelectedSustainIds = usePianoRollStore((state) => state.setSelectedSustainIds);
   const addSustainEvent = usePianoRollStore((state) => state.addSustainEvent);
@@ -48,17 +87,29 @@ export const PianoRoll = () => {
   const playhead = useProjectStore((state) => state.playhead);
   const snapToGridEnabled = useProjectStore((state) => state.snapToGrid);
 
+  const regionPreviewStarts = usePianoRollStore((state) => state.regionPreviewStarts);
+
   const region = regions.find((item) => item.id === activeRegionId);
   
   // Piano roll only works with MIDI regions
   const midiRegion = region?.type === 'midi' ? region : null;
-  
   const track = useMemo(() => {
     if (!midiRegion) {
       return null;
     }
     return tracks.find((item) => item.id === midiRegion.trackId) ?? null;
   }, [midiRegion, tracks]);
+
+  const regionHighlight = useMemo(() => {
+    if (!midiRegion) {
+      return { start: 0, end: 0 };
+    }
+    const effectiveStart = regionPreviewStarts[midiRegion.id] ?? midiRegion.start;
+    return {
+      start: effectiveStart,
+      end: effectiveStart + midiRegion.length,
+    };
+  }, [midiRegion, regionPreviewStarts]);
 
   const totalBeats = useMemo(() => {
     // Calculate based on ALL regions to match multitrack view
@@ -92,6 +143,93 @@ export const PianoRoll = () => {
     return () => window.removeEventListener('resize', updateViewportSize);
   }, []);
 
+  const handleRealtimeNoteUpdates = useCallback(
+    (updates: Array<{ noteId: string; updates: Partial<MidiNote> }>) => {
+      if (!midiRegion || !updates.length) {
+        return;
+      }
+
+      const regionStart = midiRegion.start;
+      handleNoteRealtimeUpdates(
+        updates.map(({ noteId, updates: noteUpdates }) => {
+          const adjustedUpdates: Partial<MidiNote> = { ...noteUpdates };
+          if (typeof adjustedUpdates.start === 'number') {
+            adjustedUpdates.start = adjustedUpdates.start - regionStart;
+          }
+          return {
+            regionId: midiRegion.id,
+            noteId,
+            updates: adjustedUpdates,
+          };
+        })
+      );
+    },
+    [handleNoteRealtimeUpdates, midiRegion]
+  );
+
+  const flushRealtimeNotes = useCallback(() => {
+    handleNoteRealtimeFlush();
+  }, [handleNoteRealtimeFlush]);
+
+  const handleRealtimeSustainEvent = useCallback(
+    (eventId: string, updates: Partial<SustainEvent>) => {
+      if (!midiRegion) {
+        return;
+      }
+
+      const relativeUpdates: Partial<SustainEvent> = {};
+      if (typeof updates.start === 'number') {
+        relativeUpdates.start = updates.start - midiRegion.start;
+      }
+      if (typeof updates.end === 'number') {
+        relativeUpdates.end = updates.end - midiRegion.start;
+      }
+
+      const nextEvents = midiRegion.sustainEvents.map((event) =>
+        event.id === eventId ? { ...event, ...relativeUpdates } : event
+      );
+
+      handleRegionRealtimeUpdates([
+        {
+          regionId: midiRegion.id,
+          updates: { sustainEvents: nextEvents },
+        },
+      ]);
+    },
+    [handleRegionRealtimeUpdates, midiRegion]
+  );
+
+  const flushRealtimeSustainEvents = useCallback(() => {
+    handleRegionRealtimeFlush();
+  }, [handleRegionRealtimeFlush]);
+
+  const handleSetNotesVelocity = useCallback(
+    (noteIds: string[], velocity: number, options?: { commit?: boolean }) => {
+      if (!midiRegion || !noteIds.length) {
+        return;
+      }
+
+      const clampedVelocity = Math.min(127, Math.max(0, Math.round(velocity)));
+      setNotesVelocity(noteIds, clampedVelocity);
+
+      if (options?.commit) {
+        flushRealtimeNotes();
+        noteIds.forEach((noteId) => {
+          handleNoteUpdate(noteId, { velocity: clampedVelocity });
+        });
+        return;
+      }
+
+      handleRealtimeNoteUpdates(
+        noteIds.map((noteId) => ({
+          noteId,
+          updates: { velocity: clampedVelocity },
+        }))
+      );
+    },
+    [flushRealtimeNotes, handleNoteUpdate, handleRealtimeNoteUpdates, midiRegion, setNotesVelocity]
+  );
+
   const handleCreateNote = useCallback(
     (pitch: number, absoluteStart: number) => {
       if (!midiRegion) {
@@ -100,7 +238,7 @@ export const PianoRoll = () => {
       // Convert absolute position to region-relative position
       const relativeStart = absoluteStart - midiRegion.start;
       const clampedStart = Math.max(0, Math.min(relativeStart, midiRegion.length - 0.25));
-      const newNote = addNote({
+      const newNote = handleNoteAdd({
         pitch,
         start: clampedStart,
         duration: 1,
@@ -110,18 +248,91 @@ export const PianoRoll = () => {
         setSelectedNoteIds([newNote.id]);
       }
     },
-    [addNote, midiRegion, setSelectedNoteIds, velocityPreview]
+    [handleNoteAdd, midiRegion, setSelectedNoteIds, velocityPreview]
   );
+
+  // Handle region extension when recording beyond region boundaries
+  const handleRegionExtend = useCallback(
+    (regionId: string, newLength: number) => {
+      if (!midiRegion || regionId !== midiRegion.id) {
+        return;
+      }
+      handleRegionUpdate(regionId, { length: newLength });
+    },
+    [midiRegion, handleRegionUpdate]
+  );
+
+  // Piano roll recording hook
+  usePianoRollRecording({
+    onNoteAdd: handleNoteAdd,
+    onRegionExtend: handleRegionExtend,
+    enabled: isPianoRollRecording,
+  });
 
   const handleVelocityChange = useCallback(
     (value: number) => {
       setVelocityPreview(value);
-      if (selectedNoteIds.length) {
-        setNotesVelocity(selectedNoteIds, value);
+      if (!selectedNoteIds.length) {
+        return;
       }
+      handleSetNotesVelocity(selectedNoteIds, value, { commit: true });
     },
-    [selectedNoteIds, setNotesVelocity]
+    [handleSetNotesVelocity, selectedNoteIds]
   );
+
+  // Wrapper for moveNotes that syncs each note individually
+  const handleMoveNotes = useCallback(
+    (noteIds: string[], deltaBeats: number, deltaPitch: number) => {
+      if (!midiRegion) return;
+      // Get current note values before update
+      const region = useRegionStore.getState().regions.find((r) => r.id === midiRegion.id);
+      if (!region || region.type !== 'midi') return;
+      
+      const notesToUpdate = region.notes.filter((note) => noteIds.includes(note.id));
+      // Update locally first
+      moveNotes(noteIds, deltaBeats, deltaPitch);
+      // Then sync each note individually with calculated new values
+      notesToUpdate.forEach((note) => {
+        handleNoteUpdate(note.id, {
+          start: Math.max(0, note.start + deltaBeats),
+          pitch: Math.min(127, Math.max(0, note.pitch + deltaPitch)),
+        });
+      });
+    },
+    [moveNotes, handleNoteUpdate, midiRegion]
+  );
+
+  // Wrapper for resizeNotes that syncs each note individually
+  const handleResizeNotes = useCallback(
+    (noteIds: string[], deltaBeats: number) => {
+      if (!midiRegion) return;
+      // Get current note values before update
+      const region = useRegionStore.getState().regions.find((r) => r.id === midiRegion.id);
+      if (!region || region.type !== 'midi') return;
+      
+      const notesToUpdate = region.notes.filter((note) => noteIds.includes(note.id));
+      // Update locally first
+      resizeNotes(noteIds, deltaBeats);
+      // Then sync each note individually with calculated new values
+      notesToUpdate.forEach((note) => {
+        handleNoteUpdate(note.id, {
+          duration: Math.max(0.25, note.duration + deltaBeats),
+        });
+      });
+    },
+    [resizeNotes, handleNoteUpdate, midiRegion]
+  );
+
+  // Wrapper for deleteSelectedNotes that syncs each note individually
+  const handleDeleteSelectedNotes = useCallback(() => {
+    if (!selectedNoteIds.length) return;
+    // Delete locally first
+    deleteSelectedNotes();
+    // Then sync each note deletion
+    selectedNoteIds.forEach((noteId) => {
+      handleNoteDelete(noteId);
+    });
+  }, [deleteSelectedNotes, handleNoteDelete, selectedNoteIds]);
 
   const handleAddSustainEvent = useCallback(
     (absoluteStart: number) => {
@@ -133,9 +344,10 @@ export const PianoRoll = () => {
       const created = addSustainEvent({ start: relativeStart, end: relativeStart + 1 });
       if (created) {
         setSelectedSustainIds([created.id]);
+        syncSustainEvents();
       }
     },
-    [addSustainEvent, midiRegion, setSelectedSustainIds]
+    [addSustainEvent, midiRegion, setSelectedSustainIds, syncSustainEvents]
   );
   const handleUpdateSustainEvent = useCallback(
     (eventId: string, updates: Partial<SustainEvent>) => {
@@ -151,19 +363,22 @@ export const PianoRoll = () => {
         relativeUpdates.end = updates.end - midiRegion.start;
       }
       updateSustainEvent(eventId, relativeUpdates);
+      syncSustainEvents();
     },
-    [midiRegion, updateSustainEvent]
+    [midiRegion, updateSustainEvent, syncSustainEvents]
   );
   const handleRemoveSustainEvent = useCallback(
     (eventId: string) => {
       removeSustainEvent(eventId);
+      syncSustainEvents();
     },
-    [removeSustainEvent]
+    [removeSustainEvent, syncSustainEvents]
   );
   const handleDeleteSustainEvents = useCallback(() => {
     selectedSustainIds.forEach((id) => removeSustainEvent(id));
     setSelectedSustainIds([]);
-  }, [removeSustainEvent, selectedSustainIds, setSelectedSustainIds]);
+    syncSustainEvents();
+  }, [removeSustainEvent, selectedSustainIds, setSelectedSustainIds, syncSustainEvents]);
 
   useEffect(() => {
     if (!midiRegion || !selectedNoteIds.length) {
@@ -179,28 +394,58 @@ export const PianoRoll = () => {
   }, [midiRegion, selectedNoteIds]);
 
   const pixelsPerBeat = 64;
-  
-  // Handle zoom changes centered on playhead
-  const handleZoomChange = useCallback((newZoom: number) => {
+
+  const baseTimelineWidth = totalBeats * pixelsPerBeat;
+
+  const maxZoom = useMemo(() => {
+    if (baseTimelineWidth <= 0) {
+      return MAX_TIMELINE_ZOOM;
+    }
+    const widthLimitedZoom = MAX_CANVAS_WIDTH / baseTimelineWidth;
+    if (!Number.isFinite(widthLimitedZoom) || widthLimitedZoom <= 0) {
+      return MAX_TIMELINE_ZOOM;
+    }
+    return Math.min(MAX_TIMELINE_ZOOM, widthLimitedZoom);
+  }, [baseTimelineWidth]);
+
+  const minZoom = useMemo(() => {
+    return Math.min(MIN_TIMELINE_ZOOM, maxZoom);
+  }, [maxZoom]);
+
+  const clampZoom = useCallback((value: number) => {
+    const upperBound = maxZoom > 0 ? maxZoom : MIN_TIMELINE_ZOOM;
+    const lowerBound = Math.min(minZoom, upperBound);
+    const withinUpper = Math.min(upperBound, value);
+    return Math.max(lowerBound, withinUpper);
+  }, [maxZoom, minZoom]);
+
+  // Handle zoom changes centered on cursor or playhead
+  const handleZoomChange = useCallback((newZoom: number, cursorX?: number) => {
     if (!noteScrollRef.current) {
-      setZoom(newZoom);
+      setZoom(clampZoom(newZoom));
       return;
     }
+    const clampedZoom = clampZoom(newZoom);
+
+    // Use cursor position if provided, otherwise use playhead
+    const focusPoint = cursorX !== undefined 
+      ? (scrollLeft + cursorX) / (pixelsPerBeat * zoom)
+      : playhead;
     
-    // Calculate playhead position in pixels before zoom change
-    const oldPlayheadPixels = playhead * pixelsPerBeat * zoom;
+    // Calculate focus point position in pixels before zoom change
+    const oldFocusPixels = focusPoint * pixelsPerBeat * zoom;
     
-    // Calculate how far playhead is from left edge of viewport
-    const playheadOffsetInViewport = oldPlayheadPixels - scrollLeft;
+    // Calculate how far focus point is from left edge of viewport
+    const focusOffsetInViewport = cursorX !== undefined ? cursorX : oldFocusPixels - scrollLeft;
     
-    // Calculate playhead position in pixels after zoom change
-    const newPlayheadPixels = playhead * pixelsPerBeat * newZoom;
-    
-    // Adjust scroll to keep playhead at same position in viewport
-    const newScrollLeft = newPlayheadPixels - playheadOffsetInViewport;
-    
-    setZoom(newZoom);
-    
+    // Calculate focus point position in pixels after zoom change
+    const newFocusPixels = focusPoint * pixelsPerBeat * clampedZoom;
+
+    // Adjust scroll to keep focus point at same position in viewport
+    const newScrollLeft = newFocusPixels - focusOffsetInViewport;
+
+    setZoom(clampedZoom);
+
     // Apply new scroll position after zoom updates
     requestAnimationFrame(() => {
       if (noteScrollRef.current) {
@@ -210,30 +455,66 @@ export const PianoRoll = () => {
         laneScrollRef.current.scrollLeft = Math.max(0, newScrollLeft);
       }
     });
-  }, [playhead, zoom, scrollLeft, pixelsPerBeat]);
+  }, [playhead, zoom, scrollLeft, pixelsPerBeat, clampZoom]);
+
+  useEffect(() => {
+    setZoom((prev) => {
+      const clamped = clampZoom(prev);
+      return clamped === prev ? prev : clamped;
+    });
+  }, [clampZoom]);
+
+  // Handle wheel zoom with Ctrl key
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        
+        const delta = -e.deltaY;
+        const zoomSpeed = 0.001;
+        const newZoom = zoom + delta * zoomSpeed;
+
+        // Get cursor position relative to note canvas
+        const rect = noteScrollRef.current?.getBoundingClientRect();
+        const cursorX = rect ? e.clientX - rect.left : undefined;
+
+        handleZoomChange(newZoom, cursorX);
+      }
+    };
+
+    const noteCanvas = noteScrollRef.current;
+    if (noteCanvas) {
+      noteCanvas.addEventListener('wheel', handleWheel, { passive: false });
+      return () => noteCanvas.removeEventListener('wheel', handleWheel);
+    }
+  }, [zoom, handleZoomChange]);
   
   // Convert notes to absolute positions for display
   const absoluteNotes = useMemo(() => {
     if (!midiRegion) {
       return [];
     }
+    const effectiveStart = regionPreviewStarts[midiRegion.id] ?? midiRegion.start;
     return midiRegion.notes.map((note) => ({
       ...note,
-      start: midiRegion.start + note.start,
+      start: effectiveStart + note.start,
+      // adjust so notes visually follow region when start shifts
+      // but keep original duration/pitch
     }));
-  }, [midiRegion]);
+  }, [midiRegion, regionPreviewStarts]);
   
   // Convert sustain events to absolute positions for display
   const absoluteSustainEvents = useMemo(() => {
     if (!midiRegion) {
       return [];
     }
+    const effectiveStart = regionPreviewStarts[midiRegion.id] ?? midiRegion.start;
     return midiRegion.sustainEvents.map((event) => ({
       ...event,
-      start: midiRegion.start + event.start,
-      end: midiRegion.start + event.end,
+      start: effectiveStart + event.start,
+      end: effectiveStart + event.end,
     }));
-  }, [midiRegion]);
+  }, [midiRegion, regionPreviewStarts]);
 
   const scrollRafRef = useRef<number | null>(null);
   
@@ -294,7 +575,7 @@ export const PianoRoll = () => {
   }
 
   return (
-    <section className="flex h-full min-h-80 flex-col overflow-hidden rounded-lg border border-base-300 bg-base-100 shadow-sm touch-none">
+    <section className="flex h-full min-h-80 flex-col overflow-hidden rounded-lg border border-base-300 bg-base-100 shadow-sm">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-base-300 px-2 sm:px-4 py-1.5 sm:py-2 gap-2">
         <div className="flex items-center gap-4">
           <div>
@@ -303,18 +584,32 @@ export const PianoRoll = () => {
               Track: {track?.name ?? 'Unknown'}
             </p>
           </div>
-          <label className="flex items-center gap-1 sm:gap-2 text-xs text-base-content/70">
-            <span className="hidden sm:inline">Zoom</span>
-            <input
-              type="range"
-              min={0.5}
-              max={2}
-              step={0.1}
-              value={zoom}
-              onChange={(event) => handleZoomChange(Number(event.target.value))}
-              className="range range-xs w-20 sm:w-32"
-            />
-          </label>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className={`btn btn-xs ${isPianoRollRecording ? 'btn-error' : 'btn-outline'}`}
+              onClick={() => setPianoRollRecording(!isPianoRollRecording)}
+              title="Record MIDI input to piano roll"
+            >
+              <span className={isPianoRollRecording ? 'animate-pulse' : ''}>●</span>
+              <span className="hidden sm:inline">Capture</span>
+            </button>
+            <label className="flex items-center gap-1 text-xs text-base-content/70">
+              <span className="hidden sm:inline">View:</span>
+              <select
+                value={viewMode}
+                onChange={(e) => setViewMode(e.target.value as typeof viewMode)}
+                className="select select-xs bg-base-200"
+              >
+                <option value="all-keys">All Keys</option>
+                <option value="scale-keys">Scale Keys</option>
+                <option value="only-notes">Only Notes</option>
+              </select>
+            </label>
+            <span className="text-xs text-base-content/50 hidden lg:inline">
+              Ctrl+Scroll to zoom
+            </span>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs text-base-content/70 w-full sm:w-auto">
           <label className="flex items-center gap-1 sm:gap-2">
@@ -333,7 +628,7 @@ export const PianoRoll = () => {
             <button
               type="button"
               className="btn btn-xs btn-outline"
-              onClick={() => deleteSelectedNotes()}
+              onClick={handleDeleteSelectedNotes}
               disabled={!selectedNoteIds.length}
             >
               <span className="hidden sm:inline">Delete Notes</span>
@@ -367,7 +662,10 @@ export const PianoRoll = () => {
             <button
               type="button"
               className="btn btn-xs btn-primary"
-              onClick={() => quantizeNotes(selectedNoteIds, quantizeSize)}
+              onClick={() => {
+                quantizeNotes(selectedNoteIds, quantizeSize);
+                syncRegionNotes();
+              }}
               disabled={!selectedNoteIds.length}
               title="Quantize selected notes"
             >
@@ -377,7 +675,10 @@ export const PianoRoll = () => {
             <button
               type="button"
               className="btn btn-xs btn-primary"
-              onClick={() => quantizeAllNotes(quantizeSize)}
+              onClick={() => {
+                quantizeAllNotes(quantizeSize);
+                syncRegionNotes();
+              }}
               disabled={!midiRegion.notes.length}
               title="Quantize all notes in region"
             >
@@ -397,8 +698,8 @@ export const PianoRoll = () => {
             pixelsPerBeat={pixelsPerBeat}
             zoom={zoom}
             scrollLeft={scrollLeft}
-            highlightStart={midiRegion.start}
-            highlightEnd={midiRegion.start + midiRegion.length}
+            highlightStart={regionHighlight.start}
+            highlightEnd={regionHighlight.end}
             timeSignature={timeSignature}
             playheadBeats={playhead}
           />
@@ -435,22 +736,24 @@ export const PianoRoll = () => {
               playheadBeats={playhead}
               scrollLeft={scrollLeft}
               viewportWidth={viewportWidth}
-              regionHighlightStart={midiRegion.start}
-              regionHighlightEnd={midiRegion.start + midiRegion.length}
+              regionHighlightStart={regionHighlight.start}
+              regionHighlightEnd={regionHighlight.end}
               snapToGridEnabled={snapToGridEnabled}
               onSetSelectedNotes={setSelectedNoteIds}
               onToggleNoteSelection={toggleNoteSelection}
               onClearSelection={clearNoteSelection}
               onCreateNote={handleCreateNote}
-              onMoveNotes={moveNotes}
+              onMoveNotes={handleMoveNotes}
               onDuplicateNotes={duplicateNotes}
-              onResizeNotes={resizeNotes}
+              onResizeNotes={handleResizeNotes}
               onPan={(deltaX, deltaY) => {
                 if (noteScrollRef.current) {
                   noteScrollRef.current.scrollLeft += deltaX;
                   noteScrollRef.current.scrollTop += deltaY;
                 }
               }}
+              onRealtimeNoteUpdates={handleRealtimeNoteUpdates}
+              onRealtimeNotesFlush={flushRealtimeNotes}
             />
           </div>
         </div>
@@ -493,7 +796,7 @@ export const PianoRoll = () => {
                 scrollLeft={scrollLeft}
                 viewportWidth={viewportWidth}
                 playheadBeats={playhead}
-                onSetNotesVelocity={setNotesVelocity}
+                onSetNotesVelocity={handleSetNotesVelocity}
               />
             ) : (
               <SustainLane
@@ -510,6 +813,8 @@ export const PianoRoll = () => {
                 onUpdateEvent={handleUpdateSustainEvent}
                 onRemoveEvent={handleRemoveSustainEvent}
                 onSetSelectedEvents={setSelectedSustainIds}
+                onRealtimeEventUpdate={handleRealtimeSustainEvent}
+                onRealtimeFlush={flushRealtimeSustainEvents}
               />
             )}
           </div>
@@ -519,5 +824,5 @@ export const PianoRoll = () => {
   );
 };
 
-export default PianoRoll;
+export const PianoRoll = memo(PianoRollComponent);
 

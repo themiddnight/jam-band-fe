@@ -1,43 +1,33 @@
 import React, { useState } from 'react';
 import { useProjectManager } from '../hooks/useProjectManager';
+import { useRoom } from '@/features/rooms';
 
-export function ProjectMenu() {
+type ProjectMenuProps = {
+  canLoadProject?: boolean;
+};
+
+export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
   const {
     isSaving,
     isLoading,
     error,
-    // lastSaved,
     hasUnsavedChanges,
-    // saveProject,
     saveProjectAs,
     loadProject,
+    loadProjectAndUploadToRoom,
     recoverProject,
   } = useProjectManager({
     enableAutoSave: true,
     autoSaveInterval: 60000, // 1 minute
   });
 
-  const [projectName, setProjectName] = useState('Untitled Project');
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const { currentRoom, currentUser } = useRoom();
   const [showRecoverDialog, setShowRecoverDialog] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
-  // const handleSave = async () => {
-  //   try {
-  //     await saveProject(projectName);
-  //   } catch (err) {
-  //     console.error('Save failed:', err);
-  //   }
-  // };
-
-  const handleSaveAs = async () => {
-    setShowSaveDialog(true);
-  };
-
-  const handleSaveWithName = async (name: string) => {
+  const handleSave = async () => {
     try {
-      await saveProjectAs(name);
-      setProjectName(name);
-      setShowSaveDialog(false);
+      await saveProjectAs('project');
     } catch (err) {
       console.error('Save failed:', err);
     }
@@ -45,9 +35,23 @@ export function ProjectMenu() {
 
   const handleLoad = async () => {
     try {
-      await loadProject();
+      // If in a room, upload to server for distribution
+      if (currentRoom?.id && currentUser?.id && currentUser?.username) {
+        await loadProjectAndUploadToRoom(
+          currentRoom.id,
+          currentUser.id,
+          currentUser.username,
+          undefined,
+          setUploadProgress
+        );
+      } else {
+        // Otherwise just load locally
+        await loadProject();
+      }
     } catch (err) {
       console.error('Load failed:', err);
+    } finally {
+      setUploadProgress(0);
     }
   };
 
@@ -70,56 +74,43 @@ export function ProjectMenu() {
   return (
     <div className="project-menu">
       {/* Menu Bar */}
-      <div className="menu-bar flex items-center gap-2 p-2 bg-base-200">
-        {/* <button 
-          className="btn btn-xs btn-primary" 
-          onClick={handleSave} 
-          disabled={isSaving || !hasUnsavedChanges}
-        >
-          {isSaving ? 'Saving...' : 'Save'}
-        </button> */}
-        
+      <div className="menu-bar flex flex-wrap items-center gap-1 sm:gap-2 p-1 sm:p-2 bg-base-200 rounded-lg">
         <button 
-          className="btn btn-xs btn-secondary" 
-          onClick={handleSaveAs} 
+          className="btn btn-xs sm:btn-sm btn-secondary" 
+          onClick={handleSave} 
           disabled={isSaving}
         >
-          Save As...
+          <span className="hidden sm:inline">{isSaving ? 'Saving...' : 'Save Project'}</span>
+          <span className="sm:hidden">{isSaving ? 'Saving...' : 'Save'}</span>
         </button>
         
-        <button 
-          className="btn btn-xs btn-accent" 
-          onClick={handleLoad} 
-          disabled={isLoading}
-        >
-          {isLoading ? 'Loading...' : 'Load Project'}
-        </button>
+        {canLoadProject && (
+          <button 
+            className="btn btn-xs sm:btn-sm btn-accent" 
+            onClick={handleLoad} 
+            disabled={isLoading}
+          >
+            <span className="hidden sm:inline">{isLoading ? 'Loading...' : 'Load Project'}</span>
+            <span className="sm:hidden">{isLoading ? 'Loading...' : 'Load'}</span>
+          </button>
+        )}
 
-        {/* {lastSaved && (
-          <span className="text-sm text-base-content/70 ml-4">
-            Last saved: {lastSaved.toLocaleTimeString()}
+        {uploadProgress > 0 && uploadProgress < 100 && (
+          <span className="text-xs sm:text-sm text-info ml-1 sm:ml-2">
+            {Math.round(uploadProgress)}%
           </span>
-        )} */}
+        )}
 
         {hasUnsavedChanges && (
-          <span className="text-warning ml-2" title="Unsaved changes">●</span>
+          <span className="text-warning ml-1 sm:ml-2 text-sm sm:text-base" title="Unsaved changes">●</span>
         )}
       </div>
 
       {/* Error Display */}
       {error && (
-        <div className="alert alert-error m-2">
+        <div className="alert alert-error m-1 sm:m-2 text-xs sm:text-sm">
           <span>{error}</span>
         </div>
-      )}
-
-      {/* Save Dialog */}
-      {showSaveDialog && (
-        <SaveDialog
-          defaultName={projectName}
-          onSave={handleSaveWithName}
-          onCancel={() => setShowSaveDialog(false)}
-        />
       )}
 
       {/* Recover Dialog */}
@@ -129,43 +120,6 @@ export function ProjectMenu() {
           onCancel={() => setShowRecoverDialog(false)}
         />
       )}
-    </div>
-  );
-}
-
-// Save Dialog Component
-function SaveDialog({
-  defaultName,
-  onSave,
-  onCancel,
-}: {
-  defaultName: string;
-  onSave: (name: string) => void;
-  onCancel: () => void;
-}) {
-  const [name, setName] = useState(defaultName);
-
-  return (
-    <div className="modal modal-open">
-      <div className="modal-box">
-        <h2 className="font-bold text-lg mb-4">Save Project</h2>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Project name"
-          className="input input-bordered w-full"
-          autoFocus
-        />
-        <div className="modal-action">
-          <button className="btn btn-primary" onClick={() => onSave(name)}>
-            Save
-          </button>
-          <button className="btn" onClick={onCancel}>
-            Cancel
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -180,16 +134,16 @@ function RecoverDialog({
 }) {
   return (
     <div className="modal modal-open">
-      <div className="modal-box">
-        <h2 className="font-bold text-lg mb-4">Recover Project</h2>
-        <p className="mb-4">
+      <div className="modal-box max-w-sm sm:max-w-md">
+        <h2 className="font-bold text-base sm:text-lg mb-3 sm:mb-4">Recover Project</h2>
+        <p className="mb-3 sm:mb-4 text-sm sm:text-base">
           An auto-saved version of your project was found. Would you like to recover it?
         </p>
         <div className="modal-action">
-          <button className="btn btn-primary" onClick={onRecover}>
+          <button className="btn btn-xs sm:btn-sm btn-primary" onClick={onRecover}>
             Recover
           </button>
-          <button className="btn" onClick={onCancel}>
+          <button className="btn btn-xs sm:btn-sm" onClick={onCancel}>
             Cancel
           </button>
         </div>

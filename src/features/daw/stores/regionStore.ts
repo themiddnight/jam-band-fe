@@ -13,8 +13,15 @@ interface RegionStoreState {
   regions: Region[];
   selectedRegionIds: RegionId[];
   lastSelectedRegionId: RegionId | null;
-  addRegion: (trackId: TrackId, start: number, length?: number) => MidiRegion;
-  addAudioRegion: (trackId: TrackId, start: number, length: number, audioUrl: string, audioBuffer?: AudioBuffer) => AudioRegion;
+  addRegion: (trackId: TrackId, start: number, length?: number, options?: { id?: string }) => MidiRegion;
+  addAudioRegion: (
+    trackId: TrackId,
+    start: number,
+    length: number,
+    audioUrl: string,
+    audioBuffer?: AudioBuffer,
+    options?: { id?: string }
+  ) => AudioRegion;
   updateRegion: (regionId: RegionId, updates: Partial<Region>) => void;
   removeRegion: (regionId: RegionId) => void;
   moveRegion: (regionId: RegionId, deltaBeats: number) => void;
@@ -25,15 +32,30 @@ interface RegionStoreState {
   selectRegion: (regionId: RegionId, additive?: boolean) => void;
   selectRegions: (regionIds: RegionId[]) => void;
   toggleRegionSelection: (regionId: RegionId) => void;
+  deselectRegion: (regionId: RegionId) => void;
   clearSelection: () => void;
   duplicateRegion: (regionId: RegionId, offsetBeats: number) => Region | null;
   splitRegions: (regionIds: RegionId[], splitPosition: number) => void;
+  // Sync handlers (bypass undo history)
+  syncSetRegions: (regions: Region[]) => void;
+  syncAddRegion: (region: Region) => void;
+  syncUpdateRegion: (regionId: RegionId, updates: Partial<Region>) => void;
+  syncRemoveRegion: (regionId: RegionId) => void;
+  syncMoveRegion: (regionId: RegionId, newStart: number) => void;
+  syncSelectRegions: (regionIds: RegionId[]) => void;
 }
 
 const clampLength = (length: number) => Math.max(length, 0.25);
 
-const createRegion = (trackId: TrackId, index: number, start: number, length = 4): MidiRegion => {
-  const id = typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-${index}`;
+const createRegion = (
+  trackId: TrackId,
+  index: number,
+  start: number,
+  length = 4,
+  customId?: string
+): MidiRegion => {
+  const id =
+    customId ?? (typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-${index}`);
   const track = useTrackStore.getState().tracks.find((t) => t.id === trackId);
 
   return {
@@ -57,9 +79,11 @@ const createAudioRegion = (
   start: number,
   length: number,
   audioUrl: string,
-  audioBuffer?: AudioBuffer
+  audioBuffer?: AudioBuffer,
+  customId?: string
 ): AudioRegion => {
-  const id = typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-${index}`;
+  const id =
+    customId ?? (typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-${index}`);
   const track = useTrackStore.getState().tracks.find((t) => t.id === trackId);
 
   return {
@@ -83,9 +107,9 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
   regions: [],
   selectedRegionIds: [],
   lastSelectedRegionId: null,
-  addRegion: (trackId, start, length) => {
+  addRegion: (trackId, start, length, options) => {
     const index = get().regions.length;
-    const region = createRegion(trackId, index, start, length);
+    const region = createRegion(trackId, index, start, length, options?.id);
     set((state) => ({
       regions: [...state.regions, region],
       selectedRegionIds: [region.id],
@@ -94,9 +118,17 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
     useTrackStore.getState().attachRegionToTrack(trackId, region.id);
     return region;
   },
-  addAudioRegion: (trackId, start, length, audioUrl, audioBuffer) => {
+  addAudioRegion: (trackId, start, length, audioUrl, audioBuffer, options) => {
     const index = get().regions.length;
-    const region = createAudioRegion(trackId, index, start, length, audioUrl, audioBuffer);
+    const region = createAudioRegion(
+      trackId,
+      index,
+      start,
+      length,
+      audioUrl,
+      audioBuffer,
+      options?.id
+    );
     set((state) => ({
       regions: [...state.regions, region],
       selectedRegionIds: [region.id],
@@ -158,17 +190,25 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
     }),
   moveRegionsToTrack: (regionIds, targetTrackId, deltaBeats = 0) =>
     set((state) => {
-      return {
-        regions: state.regions.map((region) =>
-          regionIds.includes(region.id)
-            ? {
-                ...region,
-                trackId: targetTrackId,
-                start: Math.max(0, region.start + deltaBeats),
-              }
-            : region
-        ),
-      };
+      const trackStore = useTrackStore.getState();
+      const regions = state.regions.map((region) => {
+        if (!regionIds.includes(region.id)) {
+          return region;
+        }
+
+        if (region.trackId !== targetTrackId) {
+          trackStore.detachRegionFromTrack(region.trackId, region.id);
+          trackStore.attachRegionToTrack(targetTrackId, region.id);
+        }
+
+        return {
+          ...region,
+          trackId: targetTrackId,
+          start: Math.max(0, region.start + deltaBeats),
+        };
+      });
+
+      return { regions };
     }),
   resizeRegion: (regionId, newLength) =>
     set((state) => ({
@@ -224,6 +264,18 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
       return {
         selectedRegionIds: [...state.selectedRegionIds, regionId],
         lastSelectedRegionId: regionId,
+      };
+    }),
+  deselectRegion: (regionId) =>
+    set((state) => {
+      if (!state.selectedRegionIds.includes(regionId)) {
+        return state;
+      }
+      const selectedRegionIds = state.selectedRegionIds.filter((id) => id !== regionId);
+      return {
+        selectedRegionIds,
+        lastSelectedRegionId:
+          state.lastSelectedRegionId === regionId ? selectedRegionIds.at(-1) ?? null : state.lastSelectedRegionId,
       };
     }),
   clearSelection: () => set({ selectedRegionIds: [], lastSelectedRegionId: null }),
@@ -395,5 +447,66 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
       }
     });
   },
+  // Sync handlers (bypass undo history - called from DAWSyncService)
+  syncSetRegions: (regions) => set({ regions }),
+  syncAddRegion: (region) =>
+    set((state) => {
+      // Check if region already exists
+      if (state.regions.find((r) => r.id === region.id)) {
+        return state;
+      }
+      // Attach region to track
+      useTrackStore.getState().attachRegionToTrack(region.trackId, region.id);
+      return {
+        regions: [...state.regions, region],
+        selectedRegionIds: state.selectedRegionIds.includes(region.id)
+          ? state.selectedRegionIds
+          : [...state.selectedRegionIds, region.id],
+        lastSelectedRegionId: region.id,
+      };
+    }),
+  syncUpdateRegion: (regionId, updates) =>
+    set((state) => ({
+      regions: state.regions.map((region) => {
+        if (region.id !== regionId) {
+          return region;
+        }
+        // Type-safe update for different region types
+        if (region.type === 'midi') {
+          return { ...region, ...updates } as MidiRegion;
+        } else {
+          return { ...region, ...updates } as AudioRegion;
+        }
+      }),
+    })),
+  syncRemoveRegion: (regionId) =>
+    set((state) => {
+      const region = state.regions.find((r) => r.id === regionId);
+      if (region) {
+        useTrackStore.getState().detachRegionFromTrack(region.trackId, regionId);
+      }
+      return {
+        regions: state.regions.filter((region) => region.id !== regionId),
+        selectedRegionIds: state.selectedRegionIds.filter((id) => id !== regionId),
+        lastSelectedRegionId:
+          state.lastSelectedRegionId === regionId ? null : state.lastSelectedRegionId,
+      };
+    }),
+  syncMoveRegion: (regionId, newStart) =>
+    set((state) => ({
+      regions: state.regions.map((region) =>
+        region.id === regionId
+          ? {
+              ...region,
+              start: Math.max(0, newStart),
+            }
+          : region
+      ),
+    })),
+  syncSelectRegions: (regionIds) =>
+    set(() => ({
+      selectedRegionIds: Array.from(new Set(regionIds)),
+      lastSelectedRegionId: regionIds.at(-1) ?? null,
+    })),
 }));
 

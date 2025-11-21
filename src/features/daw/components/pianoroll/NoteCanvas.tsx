@@ -5,7 +5,7 @@ import { Layer, Line, Stage } from 'react-konva';
 import {
   HIGHEST_MIDI,
   NOTE_HEIGHT,
-  TOTAL_KEYS,
+  LOWEST_MIDI,
 } from './constants';
 import type { MidiNote, NoteId } from '../../types/daw';
 import { snapToGrid } from '../../utils/timeUtils';
@@ -17,6 +17,9 @@ import {
   NoteGridBackground,
   MarqueeSelection,
 } from './notes';
+import { usePianoRollStore } from '../../stores/pianoRollStore';
+import { useArrangeRoomScaleStore } from '../../stores/arrangeRoomStore';
+import { getVisibleMidiNumbers } from '../../utils/pianoRollViewUtils';
 
 interface NoteCanvasProps {
   notes: MidiNote[];
@@ -38,9 +41,15 @@ interface NoteCanvasProps {
   onResizeNotes: (noteIds: NoteId[], deltaBeats: number) => void;
   onDuplicateNotes: (noteIds: NoteId[], deltaBeats: number, deltaPitch: number) => void;
   onPan?: (deltaX: number, deltaY: number) => void;
+  onRealtimeNoteUpdates?: (
+    updates: Array<{
+      noteId: NoteId;
+      updates: Partial<MidiNote>;
+    }>
+  ) => void;
+  onRealtimeNotesFlush?: () => void;
 }
 
-const getNoteY = (pitch: number) => (HIGHEST_MIDI - pitch) * NOTE_HEIGHT;
 const clampPitch = (pitch: number) => Math.min(127, Math.max(0, pitch));
 
 interface DragState {
@@ -122,9 +131,83 @@ export const NoteCanvas = ({
   onResizeNotes,
   onDuplicateNotes,
   onPan,
+  onRealtimeNoteUpdates,
+  onRealtimeNotesFlush,
 }: NoteCanvasProps) => {
+  const viewMode = usePianoRollStore((state) => state.viewMode);
+  const rootNote = useArrangeRoomScaleStore((state) => state.rootNote);
+  const scale = useArrangeRoomScaleStore((state) => state.scale);
+  
+  // Import the scale checking function
+  const { isNoteOutOfScale: checkIsNoteOutOfScale } = useMemo(() => {
+    return {
+      isNoteOutOfScale: (midiNumber: number) => {
+        // Only check if in scale-keys mode
+        if (viewMode !== 'scale-keys') return false;
+        
+        const noteInOctave = midiNumber % 12;
+        const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const SCALES = {
+          major: [0, 2, 4, 5, 7, 9, 11],
+          minor: [0, 2, 3, 5, 7, 8, 10],
+        } as const;
+        
+        const rootIndex = NOTE_NAMES.indexOf(rootNote);
+        const scaleIntervals = SCALES[scale];
+        
+        for (const interval of scaleIntervals) {
+          if ((rootIndex + interval) % 12 === noteInOctave) {
+            return false; // In scale
+          }
+        }
+        
+        return true; // Out of scale
+      }
+    };
+  }, [viewMode, rootNote, scale]);
+  
+  // Get visible MIDI numbers based on view mode
+  const visibleMidiNumbers = useMemo(() => {
+    return getVisibleMidiNumbers(
+      viewMode,
+      rootNote,
+      scale,
+      notes,
+      LOWEST_MIDI,
+      HIGHEST_MIDI
+    );
+  }, [viewMode, rootNote, scale, notes]);
+  
+  // Create a map from MIDI number to row index for positioning
+  const midiToRowIndex = useMemo(() => {
+    const map = new Map<number, number>();
+    visibleMidiNumbers.forEach((midi, index) => {
+      map.set(midi, index);
+    });
+    return map;
+  }, [visibleMidiNumbers]);
+  
+  // Helper function to get Y position for a pitch
+  const getNoteY = useCallback((pitch: number) => {
+    const rowIndex = midiToRowIndex.get(pitch);
+    if (rowIndex === undefined) {
+      // If pitch is not visible, return a position off-screen
+      return -NOTE_HEIGHT;
+    }
+    return rowIndex * NOTE_HEIGHT;
+  }, [midiToRowIndex]);
+  
+  // Helper function to get pitch from Y position
+  const getPitchFromY = useCallback((y: number) => {
+    const rowIndex = Math.floor(y / NOTE_HEIGHT);
+    if (rowIndex < 0 || rowIndex >= visibleMidiNumbers.length) {
+      return null;
+    }
+    return visibleMidiNumbers[rowIndex];
+  }, [visibleMidiNumbers]);
+  
   const width = totalBeats * pixelsPerBeat * zoom;
-  const height = TOTAL_KEYS * NOTE_HEIGHT;
+  const height = visibleMidiNumbers.length * NOTE_HEIGHT;
   const beatWidth = pixelsPerBeat * zoom;
   // Since notes are now in absolute positions, playhead should also be absolute
   const playheadX = playheadBeats * beatWidth;
@@ -185,14 +268,17 @@ export const NoteCanvas = ({
         return null;
       }
       const beat = pointer.x / beatWidth;
-      const pitch = clampPitch(HIGHEST_MIDI - Math.floor(pointer.y / NOTE_HEIGHT));
+      const pitch = getPitchFromY(pointer.y);
+      if (pitch === null) {
+        return null;
+      }
       return {
         beat,
-        pitch,
+        pitch: clampPitch(pitch),
         pointer,
       };
     },
-    [beatWidth]
+    [beatWidth, getPitchFromY]
   );
 
   const handleBackgroundDoubleClick = useCallback(
@@ -332,7 +418,26 @@ export const NoteCanvas = ({
         const clampedDeltaPitch = Math.max(
           Math.min(deltaPitch, 127 - maxPitch),
           0 - minPitch
-        );
+        )
+
+        if (
+          !dragState.isDuplicate &&
+          onRealtimeNoteUpdates &&
+          (clampedDeltaBeats !== dragState.deltaBeats || clampedDeltaPitch !== dragState.deltaPitch)
+        ) {
+          const realtimeUpdates = dragState.noteIds.map((noteId) => {
+            const initial = dragState.initial[noteId];
+            return {
+              noteId,
+              updates: {
+                start: Math.max(0, initial.start + clampedDeltaBeats),
+                pitch: clampPitch(initial.pitch + clampedDeltaPitch),
+              },
+            };
+          });
+          onRealtimeNoteUpdates(realtimeUpdates);
+        }
+
         setDragState((prev) =>
           prev
             ? {
@@ -364,6 +469,15 @@ export const NoteCanvas = ({
           },
           {}
         );
+
+        if (onRealtimeNoteUpdates && deltaBeats !== resizeState.deltaBeats) {
+          const realtimeUpdates = resizeState.noteIds.map((id) => ({
+            noteId: id,
+            updates: { duration: previewDurations[id] },
+          }));
+          onRealtimeNoteUpdates(realtimeUpdates);
+        }
+
         setResizeState((prev) =>
           prev
             ? {
@@ -409,11 +523,26 @@ export const NoteCanvas = ({
         });
       }
     },
-    [dragState, getPointerData, holdState, marqueeState, onPan, panState, resizeState, snapBeat]
+    [
+      dragState,
+      getPointerData,
+      holdState,
+      marqueeState,
+      onPan,
+      onRealtimeNoteUpdates,
+      panState,
+      resizeState,
+      snapBeat,
+    ]
   );
 
   const handlePointerUp = useCallback(() => {
+      let didFlushRealtime = false;
       if (dragState) {
+        if (onRealtimeNotesFlush && !didFlushRealtime) {
+          onRealtimeNotesFlush();
+          didFlushRealtime = true;
+        }
         if (dragState.deltaBeats !== 0 || dragState.deltaPitch !== 0) {
           if (dragState.isDuplicate) {
             // Alt+drag: Duplicate notes
@@ -429,6 +558,10 @@ export const NoteCanvas = ({
         setPanState(null);
       }
       if (resizeState) {
+        if (onRealtimeNotesFlush && !didFlushRealtime) {
+          onRealtimeNotesFlush();
+          didFlushRealtime = true;
+        }
         if (resizeState.deltaBeats !== 0) {
           onResizeNotes(resizeState.noteIds, resizeState.deltaBeats);
         }
@@ -471,12 +604,14 @@ export const NoteCanvas = ({
     [
       beatWidth,
       dragState,
+      getNoteY,
       holdState,
       marqueeState,
       notes,
       onDuplicateNotes,
       onMoveNotes,
       onResizeNotes,
+      onRealtimeNotesFlush,
       onSetSelectedNotes,
       panState,
       resizeState,
@@ -596,6 +731,8 @@ export const NoteCanvas = ({
           gridInterval={gridInterval}
           regionHighlightStart={regionHighlightStart}
           regionHighlightEnd={regionHighlightEnd}
+          visibleMidiNumbers={visibleMidiNumbers}
+          midiToRowIndex={midiToRowIndex}
         />
       </Layer>
       
@@ -632,6 +769,12 @@ export const NoteCanvas = ({
           const previewDuration = previewDurations[note.id];
           const isSelected = selectedNoteIds.includes(note.id);
           
+          // Check if note is out of scale (considering drag offset)
+          const effectivePitch = dragOffset 
+            ? clampPitch(note.pitch + dragOffset.pitch)
+            : note.pitch;
+          const isOutOfScale = checkIsNoteOutOfScale(effectivePitch);
+          
           return (
             <BaseNote
               key={note.id}
@@ -641,6 +784,8 @@ export const NoteCanvas = ({
               isDragging={isDragging}
               dragOffset={dragOffset}
               previewDuration={previewDuration}
+              getNoteY={getNoteY}
+              isOutOfScale={isOutOfScale}
             />
           );
         })}
@@ -658,6 +803,7 @@ export const NoteCanvas = ({
                 beatWidth={beatWidth}
                 dragOffset={dragOffset}
                 previewDuration={previewDuration}
+                getNoteY={getNoteY}
               />
             );
           })}
@@ -671,12 +817,18 @@ export const NoteCanvas = ({
               return null;
             }
             
+            // Check if the duplicated note will be out of scale at its new position
+            const newPitch = clampPitch(note.pitch + dragOffset.pitch);
+            const isOutOfScale = checkIsNoteOutOfScale(newPitch);
+            
             return (
               <DuplicateNotePreview
                 key={`duplicate-preview-${note.id}`}
                 note={note}
                 beatWidth={beatWidth}
                 dragOffset={dragOffset}
+                getNoteY={getNoteY}
+                isOutOfScale={isOutOfScale}
               />
             );
           })}

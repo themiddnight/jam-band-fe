@@ -1,8 +1,12 @@
 import { useEffect, useState, useRef } from 'react';
 import * as Tone from 'tone';
-import { getOrCreateUserMedia } from '../utils/audioInput';
+import { getOrCreateUserMedia, isUserMediaAvailable } from '../utils/audioInput';
 
 let meter: Tone.Meter | null = null;
+
+// Threshold for updating state - only update if level changes by this amount
+// This prevents unnecessary re-renders when the level is stable
+const LEVEL_UPDATE_THRESHOLD = 0.02; // 2% change required to trigger update
 
 export const useInputMonitoring = (
   trackId: string | null,
@@ -11,6 +15,7 @@ export const useInputMonitoring = (
 ) => {
   const [level, setLevel] = useState(0);
   const intervalRef = useRef<number | null>(null);
+  const lastLevelRef = useRef<number>(0);
 
   useEffect(() => {
     if (!trackId || !showMeter) {
@@ -19,6 +24,7 @@ export const useInputMonitoring = (
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+      lastLevelRef.current = 0;
       setLevel(0);
       return;
     }
@@ -36,13 +42,30 @@ export const useInputMonitoring = (
         }
 
         // Update level at regular intervals
+        // Reduced from 50ms (20 FPS) to 100ms (10 FPS) for better performance
+        // 10 FPS is still smooth enough for VU meter visualization
         intervalRef.current = window.setInterval(() => {
-          if (meter) {
+          // Only update if mic is actually available and active
+          if (meter && isUserMediaAvailable()) {
             const value = meter.getValue();
             const levelValue = typeof value === 'number' ? value : Math.max(...value);
-            setLevel(Math.max(0, Math.min(1, levelValue)));
+            const newLevel = Math.max(0, Math.min(1, levelValue));
+            
+            // Only update state if the level has changed significantly
+            // This prevents unnecessary re-renders when the level is stable
+            const levelDiff = Math.abs(newLevel - lastLevelRef.current);
+            if (levelDiff >= LEVEL_UPDATE_THRESHOLD || newLevel === 0) {
+              lastLevelRef.current = newLevel;
+              setLevel(newLevel);
+            }
+          } else {
+            // Mic not available, set level to 0
+            if (lastLevelRef.current !== 0) {
+              lastLevelRef.current = 0;
+              setLevel(0);
+            }
           }
-        }, 50); // Update every 50ms for smooth meter
+        }, 100); // Update every 100ms (10 FPS) - smooth enough for meter
 
       } catch (error) {
         console.error('Failed to setup input monitoring:', error);

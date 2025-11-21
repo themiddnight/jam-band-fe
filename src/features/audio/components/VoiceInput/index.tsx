@@ -7,7 +7,7 @@ import {
 import { useVoiceStateStore } from "./stores/voiceStateStore";
 import { RTCLatencyDisplay, AdaptiveAudioStatus } from "@/features/audio";
 import { AnchoredPopup, Modal } from "@/features/ui";
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, memo } from "react";
 
 interface VoiceInputProps {
   isVisible: boolean;
@@ -37,7 +37,7 @@ export interface VoiceState {
   autoGain: boolean;
 }
 
-const VoiceInput: React.FC<VoiceInputProps> = ({
+const VoiceInputComponent: React.FC<VoiceInputProps> = ({
   isVisible,
   onVoiceStateChange,
   onStreamReady,
@@ -58,6 +58,7 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
   const [showHeadphoneModal, setShowHeadphoneModal] = useState(false);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const infoButtonRef = useRef<HTMLButtonElement>(null);
+  const lastStoredInputLevelRef = useRef<number>(0);
 
   // Use custom hooks for state and logic
   const {
@@ -170,12 +171,14 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
   }, [voiceState, onVoiceStateChange]);
 
   // Update local state when input level changes
+  // Use a ref to track the last value to avoid unnecessary updates
   useEffect(() => {
-    // Update input level in local state
-    if (inputLevel !== voiceState.inputLevel) {
+    // Only update if the value actually changed
+    if (inputLevel !== lastStoredInputLevelRef.current) {
+      lastStoredInputLevelRef.current = inputLevel;
       setInputLevel(inputLevel);
     }
-  }, [inputLevel, voiceState.inputLevel, setInputLevel]);
+  }, [inputLevel, setInputLevel]);
 
   // Update local state when connection status changes
   useEffect(() => {
@@ -617,4 +620,19 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
   );
 };
 
-export default VoiceInput;
+// Memoize VoiceInput to prevent unnecessary re-renders
+export default memo(VoiceInputComponent, (prevProps, nextProps) => {
+  // Only re-render if these props change
+  return (
+    prevProps.isVisible === nextProps.isVisible &&
+    prevProps.rtcLatency === nextProps.rtcLatency &&
+    prevProps.rtcLatencyActive === nextProps.rtcLatencyActive &&
+    prevProps.userCount === nextProps.userCount &&
+    prevProps.browserAudioLatency === nextProps.browserAudioLatency &&
+    prevProps.meshLatency === nextProps.meshLatency &&
+    prevProps.isConnecting === nextProps.isConnecting &&
+    prevProps.connectionError === nextProps.connectionError
+    // onVoiceStateChange, onStreamReady, onStreamRemoved, onConnectionRetry are callbacks
+    // They should be stable, but we don't compare them to avoid false positives
+  );
+});

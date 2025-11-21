@@ -6,6 +6,10 @@ interface UseInputLevelMonitoringProps {
   isMuted: boolean; // Add muted state parameter
 }
 
+// Threshold for updating state - only update if level changes by this amount
+// This prevents unnecessary re-renders when the level is stable
+const LEVEL_UPDATE_THRESHOLD = 0.02; // 2% change required to trigger update
+
 export const useInputLevelMonitoring = ({
   analyser,
   isConnected,
@@ -13,6 +17,7 @@ export const useInputLevelMonitoring = ({
 }: UseInputLevelMonitoringProps) => {
   const [inputLevel, setInputLevel] = useState(0);
   const animationFrameRef = useRef<number | null>(null);
+  const lastLevelRef = useRef<number>(0);
 
   // Start monitoring input levels
   const startInputLevelMonitoring = useCallback(() => {
@@ -42,7 +47,15 @@ export const useInputLevelMonitoring = ({
       const level = Math.min(1, rms * 1.5); // Normalize to 0..1 with soft gain
 
       // Only show input level when not muted
-      setInputLevel(isMuted ? 0 : level);
+      const newLevel = isMuted ? 0 : level;
+
+      // Only update state if the level has changed significantly
+      // This prevents unnecessary re-renders when the level is stable
+      const levelDiff = Math.abs(newLevel - lastLevelRef.current);
+      if (levelDiff >= LEVEL_UPDATE_THRESHOLD || newLevel === 0) {
+        lastLevelRef.current = newLevel;
+        setInputLevel(newLevel);
+      }
 
       animationFrameRef.current = requestAnimationFrame(updateLevel);
     };
@@ -56,6 +69,7 @@ export const useInputLevelMonitoring = ({
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
+    lastLevelRef.current = 0;
     setInputLevel(0);
   }, []);
 

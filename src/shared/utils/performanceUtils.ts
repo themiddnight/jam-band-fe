@@ -34,6 +34,90 @@ export const throttle = <T extends (...args: any[]) => any>(
   };
 };
 
+interface ThrottledEmitter<T> {
+  push(value: T): void;
+  flush(): void;
+  cancel(): void;
+}
+
+interface ThrottledEmitterOptions {
+  leading?: boolean;
+}
+
+/**
+ * Create a throttled emitter that batches frequent updates while ensuring
+ * a trailing flush. The first push triggers immediately by default.
+ */
+export const createThrottledEmitter = <T>(
+  callback: (value: T) => void,
+  interval: number,
+  options: ThrottledEmitterOptions = {},
+): ThrottledEmitter<T> => {
+  const { leading = true } = options;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let queuedValue: T | null = null;
+  let hasEmittedLeading = false;
+
+  const schedule = () => {
+    if (timer) {
+      return;
+    }
+
+    timer = setTimeout(() => {
+      timer = null;
+      if (queuedValue !== null) {
+        const value = queuedValue;
+        queuedValue = null;
+        callback(value);
+        hasEmittedLeading = true;
+        schedule();
+      } else {
+        hasEmittedLeading = false;
+      }
+    }, interval);
+  };
+
+  const flush = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+
+    if (queuedValue !== null) {
+      const value = queuedValue;
+      queuedValue = null;
+      callback(value);
+    }
+
+    hasEmittedLeading = false;
+  };
+
+  const cancel = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    queuedValue = null;
+    hasEmittedLeading = false;
+  };
+
+  return {
+    push: (value: T) => {
+      if (!hasEmittedLeading && leading) {
+        callback(value);
+        hasEmittedLeading = true;
+        schedule();
+        return;
+      }
+
+      queuedValue = value;
+      schedule();
+    },
+    flush,
+    cancel,
+  };
+};
+
 /**
  * Hook for optimized Set operations
  */

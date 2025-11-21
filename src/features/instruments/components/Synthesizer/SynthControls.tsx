@@ -4,7 +4,7 @@ import { DEFAULT_SYNTH_PRESETS } from "../../index";
 import type { SynthPreset } from "../../types/presets";
 import type { SynthState } from "../../utils/InstrumentEngine";
 import { LatencyControls } from "./LatencyControls";
-import { Knob } from "@/features/ui";
+import { Knob, type KnobProps } from "@/features/ui";
 import { SYNTHESIZER_INSTRUMENTS } from "@/shared/constants/instruments";
 import React from "react";
 
@@ -13,6 +13,9 @@ interface SynthControlsProps {
   synthState: SynthState;
   onParamChange: (params: Partial<SynthState>) => void;
   onLoadPreset?: (presetParams: SynthState) => void;
+  getParamLockProps?: (
+    param: keyof SynthState,
+  ) => Pick<KnobProps, "disabled" | "lockedLabel" | "onInteractionStart" | "onInteractionEnd">;
 }
 
 export const SynthControls: React.FC<SynthControlsProps> = ({
@@ -20,6 +23,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
   synthState,
   onParamChange,
   onLoadPreset,
+  getParamLockProps,
 }) => {
   const currentSynthData = SYNTHESIZER_INSTRUMENTS.find(
     (synth) => synth.value === currentInstrument,
@@ -29,6 +33,9 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
 
   const isAnalog = currentSynthData.type === "analog";
   const isFM = currentSynthData.type === "fm";
+
+  const resolveLockProps = (param: keyof SynthState) =>
+    getParamLockProps?.(param) ?? {};
 
   const handleSavePreset = (partialPreset: Partial<SynthPreset>) => {
     // This will be called by PresetManager with just the name
@@ -127,6 +134,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         onChange={(value) => onParamChange({ volume: value })}
                         size={50}
                         color="primary"
+                        {...resolveLockProps("volume")}
                       />
                       <label className="label">
                         <span className="label-text text-base-content text-xs">
@@ -155,6 +163,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         size={50}
                         curve="logarithmic"
                         color="secondary"
+                        {...resolveLockProps("filterFrequency")}
                       />
                       <label className="label">
                         <span className="label-text text-base-content text-xs">
@@ -174,6 +183,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         }
                         size={50}
                         color="secondary"
+                        {...resolveLockProps("filterResonance")}
                       />
                       <label className="label">
                         <span className="label-text text-base-content text-xs">
@@ -201,6 +211,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         }
                         size={50}
                         color="accent"
+                        {...resolveLockProps("ampAttack")}
                       />
                       <label className="label">
                         <span className="label-text text-base-content text-xs">
@@ -218,6 +229,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         onChange={(value) => onParamChange({ ampDecay: value })}
                         size={50}
                         color="accent"
+                        {...resolveLockProps("ampDecay")}
                       />
                       <label className="label">
                         <span className="label-text text-base-content text-xs">
@@ -237,6 +249,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         }
                         size={50}
                         color="accent"
+                        {...resolveLockProps("ampSustain")}
                       />
                       <label className="label">
                         <span className="label-text text-base-content text-xs">
@@ -256,6 +269,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         }
                         size={50}
                         color="accent"
+                        {...resolveLockProps("ampRelease")}
                       />
                       <label className="label">
                         <span className="label-text text-base-content text-xs">
@@ -283,6 +297,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         }
                         size={50}
                         color="info"
+                        {...resolveLockProps("filterAttack")}
                       />
                       <label className="label">
                         <span className="label-text text-base-content text-xs">
@@ -302,6 +317,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         }
                         size={50}
                         color="info"
+                        {...resolveLockProps("filterDecay")}
                       />
                       <label className="label">
                         <span className="label-text text-base-content text-xs">
@@ -321,6 +337,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         }
                         size={50}
                         color="info"
+                        {...resolveLockProps("filterSustain")}
                       />
                       <label className="label">
                         <span className="label-text text-base-content text-xs">
@@ -340,6 +357,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         }
                         size={50}
                         color="info"
+                        {...resolveLockProps("filterRelease")}
                       />
                       <label className="label">
                         <span className="label-text text-base-content text-xs">
@@ -371,6 +389,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       onChange={(value) => onParamChange({ volume: value })}
                       size={50}
                       color="primary"
+                      {...resolveLockProps("volume")}
                     />
                     <label className="label">
                       <span className="label-text text-base-content text-xs">
@@ -398,6 +417,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       }
                       size={50}
                       color="secondary"
+                      {...resolveLockProps("modulationIndex")}
                     />
                     <label className="label">
                       <span className="label-text text-base-content text-xs">
@@ -417,6 +437,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       }
                       size={50}
                       color="secondary"
+                      {...resolveLockProps("harmonicity")}
                     />
                     <label className="label">
                       <span className="label-text text-base-content text-xs">
@@ -442,6 +463,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       onChange={(value) => onParamChange({ ampAttack: value })}
                       size={50}
                       color="accent"
+                      {...resolveLockProps("ampAttack")}
                     />
                     <label className="label">
                       <span className="label-text text-base-content text-xs">
@@ -459,6 +481,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       onChange={(value) => onParamChange({ ampDecay: value })}
                       size={50}
                       color="accent"
+                      {...resolveLockProps("ampDecay")}
                     />
                     <label className="label">
                       <span className="label-text text-base-content text-xs">
@@ -476,6 +499,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       onChange={(value) => onParamChange({ ampSustain: value })}
                       size={50}
                       color="accent"
+                      {...resolveLockProps("ampSustain")}
                     />
                     <label className="label">
                       <span className="label-text text-base-content text-xs">
@@ -493,6 +517,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       onChange={(value) => onParamChange({ ampRelease: value })}
                       size={50}
                       color="accent"
+                      {...resolveLockProps("ampRelease")}
                     />
                     <label className="label">
                       <span className="label-text text-base-content text-xs">
@@ -518,6 +543,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       onChange={(value) => onParamChange({ modAttack: value })}
                       size={50}
                       color="info"
+                      {...resolveLockProps("modAttack")}
                     />
                     <label className="label">
                       <span className="label-text text-base-content text-xs">
@@ -535,6 +561,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       onChange={(value) => onParamChange({ modDecay: value })}
                       size={50}
                       color="info"
+                      {...resolveLockProps("modDecay")}
                     />
                     <label className="label">
                       <span className="label-text text-base-content text-xs">
@@ -552,6 +579,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       onChange={(value) => onParamChange({ modSustain: value })}
                       size={50}
                       color="info"
+                      {...resolveLockProps("modSustain")}
                     />
                     <label className="label">
                       <span className="label-text text-base-content text-xs">
@@ -569,6 +597,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                       onChange={(value) => onParamChange({ modRelease: value })}
                       size={50}
                       color="info"
+                      {...resolveLockProps("modRelease")}
                     />
                     <label className="label">
                       <span className="label-text text-base-content text-xs">

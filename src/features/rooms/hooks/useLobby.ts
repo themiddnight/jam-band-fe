@@ -289,15 +289,12 @@ export const useLobby = () => {
     if (!newRoomName.trim() || !username || !userId) return;
 
     try {
-      // Force arrange rooms to be hidden since they're demo rooms
-      const shouldBeHidden = newRoomType === "arrange" ? true : isHidden;
-      
       const result = await createRoomAPI(
         newRoomName.trim(),
         username,
         userId,
         isPrivate,
-        shouldBeHidden,
+        isHidden,
         newRoomDescription.trim() || undefined,
         newRoomType,
       );

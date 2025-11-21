@@ -1,16 +1,22 @@
-import { useCallback, useMemo, useState, useRef, useEffect } from "react";
+import { useCallback, useMemo, useState, useRef, useEffect, memo } from "react";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { Group, Layer, Rect, Stage, Text } from "react-konva";
 
 import { TRACK_HEIGHT } from "./constants";
 import { BaseRegion, DuplicateRegionPreview } from "./regions";
-import type { Region, RegionId, Track, TimeSignature } from "../../types/daw";
+import { usePianoRollStore } from "../../stores/pianoRollStore";
+import { useLockStore } from "../../stores/lockStore";
+import { getRegionLockId } from "../../utils/collaborationLocks";
+import { useUserStore } from "@/shared/stores/userStore";
+import type { AudioRegion, Region, RegionId, Track, TimeSignature } from "../../types/daw";
+import type { RegionRealtimeUpdate } from "../../contexts/DAWCollaborationContext.shared";
 import { snapToGrid as snapValueToGrid } from "../../utils/timeUtils";
 import { getGridDivisionForZoom, getGridInterval, getGridLineStyle } from "../../utils/gridUtils";
 import { beatsPerBar } from "../../utils/timeUtils";
 import { useRegionStore } from "../../stores/regionStore";
-import { useRecordingStore } from "../../stores/recordingStore";
+import { useRecordingStore, type RemoteRecordingPreview } from "../../stores/recordingStore";
 import { useProjectStore } from "../../stores/projectStore";
+import type { RegionDragUpdatePayload } from "../../services/dawSyncService";
 
 interface TrackCanvasProps {
   tracks: Track[];
@@ -30,10 +36,17 @@ interface TrackCanvasProps {
   onClearRegionSelection: () => void;
   onCreateRegion: (trackId: string, startBeat: number) => void;
   onMoveRegions: (regionIds: RegionId[], deltaBeats: number) => void;
+  onMoveRegionsToTrack: (regionIds: RegionId[], targetTrackId: string, deltaBeats: number) => void;
   onResizeRegion: (regionId: RegionId, newLength: number) => void;
   onSetLoopIterations: (regionId: RegionId, iterations: number) => void;
+  onHeadResizeRegion?: (regionId: RegionId, updates: Partial<Region>) => void;
   onMarqueeSelect: (regionIds: RegionId[], additive: boolean) => void;
   onPan?: (deltaX: number, deltaY: number) => void;
+  onRegionDragStart?: (regionIds: RegionId[]) => boolean;
+  onRegionDragRealtime?: (updates: RegionDragUpdatePayload[]) => void;
+  onRegionDragEnd?: (regionIds: RegionId[]) => void;
+  onRegionRealtimeUpdates?: (updates: RegionRealtimeUpdate[]) => void;
+  onRegionRealtimeFlush?: () => void;
 }
 
 interface DragState {
@@ -95,7 +108,7 @@ interface HoldState {
 const HOLD_DURATION = 400; // ms - duration to hold before starting marquee
 const HOLD_MOVE_THRESHOLD = 10; // pixels - max movement during hold
 
-export const TrackCanvas = ({
+const TrackCanvasComponent = ({
   tracks,
   regions,
   selectedTrackId,
@@ -113,11 +126,23 @@ export const TrackCanvas = ({
   onClearRegionSelection,
   onCreateRegion,
   onMoveRegions,
+  onMoveRegionsToTrack,
   onResizeRegion,
   onSetLoopIterations,
+  onHeadResizeRegion,
   onMarqueeSelect,
   onPan,
+  onRegionDragStart,
+  onRegionDragRealtime,
+  onRegionDragEnd,
+  onRegionRealtimeUpdates,
+  onRegionRealtimeFlush,
 }: TrackCanvasProps) => {
+  const activePianoRegionId = usePianoRollStore((state) => state.activeRegionId);
+  const setRegionPreviewStart = usePianoRollStore((state) => state.setRegionPreviewStart);
+  const clearRegionPreview = usePianoRollStore((state) => state.clearRegionPreview);
+  const lockMap = useLockStore((state) => state.locks);
+  const currentUserId = useUserStore((state) => state.userId);
   const width = totalBeats * pixelsPerBeat * zoom;
   const beatWidth = pixelsPerBeat * zoom;
   
@@ -130,6 +155,7 @@ export const TrackCanvas = ({
   const recordingTrackId = useRecordingStore((state) => state.recordingTrackId);
   const recordingStartBeat = useRecordingStore((state) => state.recordingStartBeat);
   const recordingDurationBeats = useRecordingStore((state) => state.recordingDurationBeats);
+  const remotePreviewsMap = useRecordingStore((state) => state.remotePreviews);
   
   // Dynamic grid division based on zoom level
   const dynamicGridDivision = useMemo(() => getGridDivisionForZoom(zoom), [zoom]);
@@ -172,6 +198,8 @@ export const TrackCanvas = ({
       }, 0) || TRACK_HEIGHT
     );
   }, [tracks, trackHeights]);
+
+  const remotePreviews = useMemo<RemoteRecordingPreview[]>(() => Object.values(remotePreviewsMap), [remotePreviewsMap]);
 
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [resizeState, setResizeState] = useState<ResizeState | null>(null);
@@ -318,6 +346,12 @@ export const TrackCanvas = ({
           initialTrackIds[id] = regionData.trackId;
         }
       });
+
+      const canStart = onRegionDragStart ? onRegionDragStart(regionIds) : true;
+      if (!canStart) {
+        return;
+      }
+
       setDragState({
         regionIds,
         originBeat: snappedBeat,
@@ -328,6 +362,13 @@ export const TrackCanvas = ({
         initialPositions,
         initialTrackIds,
       });
+
+      if (activePianoRegionId && regionIds.includes(activePianoRegionId)) {
+        const previewStart = initialPositions[activePianoRegionId];
+        if (typeof previewStart === "number") {
+          setRegionPreviewStart(activePianoRegionId, previewStart);
+        }
+      }
     },
     [
       getPointerData,
@@ -337,6 +378,9 @@ export const TrackCanvas = ({
       regions,
       selectedRegionIds,
       snapToGrid,
+      onRegionDragStart,
+      activePianoRegionId,
+      setRegionPreviewStart,
     ]
   );
 
@@ -378,6 +422,33 @@ export const TrackCanvas = ({
         // Determine target track based on Y position
         const targetTrackId = data.track?.id ?? null;
         
+        if (
+          !dragState.isDuplicate &&
+          onRegionDragRealtime &&
+          (delta !== dragState.delta || targetTrackId !== dragState.targetTrackId)
+        ) {
+          const updates: RegionDragUpdatePayload[] = dragState.regionIds.map((regionId) => {
+            const initialStart = dragState.initialPositions[regionId];
+            const nextStart = Math.max(0, initialStart + delta);
+            const fallbackTrackId = dragState.initialTrackIds[regionId];
+            const nextTrackId = targetTrackId ?? fallbackTrackId;
+            return {
+              regionId,
+              newStart: nextStart,
+              trackId: nextTrackId,
+            };
+          });
+          onRegionDragRealtime(updates);
+        }
+
+        if (activePianoRegionId && dragState.regionIds.includes(activePianoRegionId)) {
+          const initialStart = dragState.initialPositions[activePianoRegionId];
+          if (typeof initialStart === "number") {
+            const previewStart = Math.max(0, initialStart + delta);
+            setRegionPreviewStart(activePianoRegionId, previewStart);
+          }
+        }
+
         setDragState((prev) =>
           prev
             ? {
@@ -394,6 +465,7 @@ export const TrackCanvas = ({
         }
         
         // Calculate preview lengths using ABSOLUTE grid snapping
+        const realtimeUpdates: RegionRealtimeUpdate[] = [];
         const previewLengths = resizeState.regionIds.reduce<
           Record<RegionId, number>
         >((acc, regionId) => {
@@ -428,6 +500,13 @@ export const TrackCanvas = ({
           }
           
           acc[regionId] = newLength;
+
+          realtimeUpdates.push({
+            regionId,
+            updates: {
+              length: newLength,
+            },
+          });
           return acc;
         }, {});
         
@@ -440,6 +519,10 @@ export const TrackCanvas = ({
               }
             : prev
         );
+
+        if (onRegionRealtimeUpdates && realtimeUpdates.length > 0) {
+          onRegionRealtimeUpdates(realtimeUpdates);
+        }
       } else if (headResizeState) {
         const data = getPointerData(event);
         if (!data) {
@@ -449,6 +532,7 @@ export const TrackCanvas = ({
         // Calculate preview for each region using ABSOLUTE grid snapping
         const previewStarts: Record<RegionId, number> = {};
         const previewLengths: Record<RegionId, number> = {};
+        const realtimeUpdates: RegionRealtimeUpdate[] = [];
         
         headResizeState.regionIds.forEach((regionId) => {
           const r = regions.find((region) => region.id === regionId);
@@ -495,6 +579,22 @@ export const TrackCanvas = ({
           
           previewStarts[regionId] = newStart;
           previewLengths[regionId] = newLength;
+
+          const update: RegionRealtimeUpdate = {
+            regionId,
+            updates: {
+              start: newStart,
+              length: newLength,
+            },
+          };
+
+          if (r.type === 'audio') {
+            const currentTrimStart = r.trimStart ?? 0;
+            const actualDelta = newStart - r.start;
+            (update.updates as Partial<AudioRegion>).trimStart = Math.max(0, currentTrimStart + actualDelta);
+          }
+
+          realtimeUpdates.push(update);
         });
         
         setHeadResizeState((prev) =>
@@ -507,6 +607,10 @@ export const TrackCanvas = ({
               }
             : prev
         );
+
+        if (onRegionRealtimeUpdates && realtimeUpdates.length > 0) {
+          onRegionRealtimeUpdates(realtimeUpdates);
+        }
       } else if (loopState) {
         const stage = event.target.getStage();
         if (!stage) {
@@ -535,6 +639,18 @@ export const TrackCanvas = ({
               }
             : prev
         );
+
+        if (onRegionRealtimeUpdates) {
+          const updates: RegionRealtimeUpdate[] = loopState.regionIds.map((regionId) => ({
+            regionId,
+            updates: {
+              loopEnabled: newIterations > 1,
+              loopIterations: newIterations,
+            },
+          }));
+
+          onRegionRealtimeUpdates(updates);
+        }
       } else if (marqueeState) {
         const stage = event.target.getStage();
         if (!stage) {
@@ -585,11 +701,22 @@ export const TrackCanvas = ({
       regions,
       resizeState,
       snapToGrid,
+      onRegionDragRealtime,
+      onRegionRealtimeUpdates,
+      activePianoRegionId,
+      setRegionPreviewStart,
     ]
   );
 
   const handlePointerUp = useCallback(() => {
+    if ((resizeState || headResizeState || loopState) && onRegionRealtimeFlush) {
+      onRegionRealtimeFlush();
+    }
+
     if (dragState) {
+      if (onRegionDragEnd) {
+        onRegionDragEnd(dragState.regionIds);
+      }
       if (dragState.isDuplicate) {
         // Alt+drag: Duplicate regions
         const { duplicateRegion } = useRegionStore.getState();
@@ -607,8 +734,7 @@ export const TrackCanvas = ({
             dragState.initialTrackIds[id] === dragState.initialTrackIds[dragState.regionIds[0]]
           );
           if (allSameTrack) {
-            const moveRegionsToTrack = useRegionStore.getState().moveRegionsToTrack;
-            moveRegionsToTrack(dragState.regionIds, dragState.targetTrackId, dragState.delta);
+            onMoveRegionsToTrack(dragState.regionIds, dragState.targetTrackId, dragState.delta);
           } else if (dragState.delta !== 0) {
             // Different initial tracks, just move horizontally
             onMoveRegions(dragState.regionIds, dragState.delta);
@@ -619,6 +745,9 @@ export const TrackCanvas = ({
         }
       }
       setDragState(null);
+      if (activePianoRegionId && dragState.regionIds.includes(activePianoRegionId)) {
+        clearRegionPreview(activePianoRegionId);
+      }
     }
     if (panState) {
       setPanState(null);
@@ -633,7 +762,12 @@ export const TrackCanvas = ({
       setResizeState(null);
     }
     if (headResizeState) {
-      const { updateRegion } = useRegionStore.getState();
+      const applyHeadResize =
+        onHeadResizeRegion ??
+        ((regionId: RegionId, updates: Partial<Region>) => {
+          const { updateRegion } = useRegionStore.getState();
+          updateRegion(regionId, updates);
+        });
       headResizeState.regionIds.forEach((regionId) => {
         const r = regions.find((region) => region.id === regionId);
         if (!r) return;
@@ -647,7 +781,7 @@ export const TrackCanvas = ({
           if (r.type === 'audio') {
             const currentTrimStart = r.trimStart ?? 0;
             // When moving start right (positive delta), we're trimming more from the start
-            updateRegion(regionId, {
+            applyHeadResize(regionId, {
               start: newStart,
               length: newLength,
               trimStart: currentTrimStart + actualDelta,
@@ -655,30 +789,20 @@ export const TrackCanvas = ({
           } else if (r.type === 'midi') {
             // For MIDI regions, adjust note positions to maintain absolute timeline position
             // When region.start moves right by delta, notes need to move left by delta (relatively)
-            const adjustedNotes = r.notes
-              .map((note) => ({
-                ...note,
-                start: note.start - actualDelta, // Subtract delta to maintain absolute position
-              }))
-              .filter((note) => {
-                // Filter out notes that are now outside the visible region
-                const noteEnd = note.start + note.duration;
-                return noteEnd > 0 && note.start < newLength;
-              });
+            // Notes can exist outside the visible region bounds (negative start or beyond length)
+            const adjustedNotes = r.notes.map((note) => ({
+              ...note,
+              start: note.start - actualDelta, // Subtract delta to maintain absolute position
+            }));
             
             // Also adjust sustain events
-            const adjustedSustainEvents = r.sustainEvents
-              .map((event) => ({
-                ...event,
-                start: event.start - actualDelta,
-                end: event.end - actualDelta,
-              }))
-              .filter((event) => {
-                // Filter out events that are now outside the visible region
-                return event.end > 0 && event.start < newLength;
-              });
+            const adjustedSustainEvents = r.sustainEvents.map((event) => ({
+              ...event,
+              start: event.start - actualDelta,
+              end: event.end - actualDelta,
+            }));
             
-            updateRegion(regionId, {
+            applyHeadResize(regionId, {
               start: newStart,
               length: newLength,
               notes: adjustedNotes,
@@ -747,15 +871,21 @@ export const TrackCanvas = ({
     holdState,
     loopState,
     marqueeState,
+    onHeadResizeRegion,
     onMarqueeSelect,
     onMoveRegions,
+    onMoveRegionsToTrack,
     onResizeRegion,
     onSetLoopIterations,
+    onRegionDragEnd,
+    onRegionRealtimeFlush,
     panState,
     regions,
     resizeState,
     trackYPositions,
     tracks,
+    activePianoRegionId,
+    clearRegionPreview,
   ]);
 
   const handleLengthHandleDown = useCallback(
@@ -940,7 +1070,9 @@ export const TrackCanvas = ({
     );
   }
 
-  return (
+  const regionBadgePositions: Array<{ regionId: string; x: number; y: number; width: number }> = [];
+
+  const stageContent = (
     <Stage
       width={width}
       height={height}
@@ -1041,6 +1173,12 @@ export const TrackCanvas = ({
           const isSelected = selectedRegionIds.includes(region.id);
           const isMovingToNewTrack = Boolean(isDragging && effectiveTrackId !== region.trackId);
 
+          const lock = lockMap.get(getRegionLockId(region.id));
+          const isLockedByRemote = Boolean(lock && lock.userId !== currentUserId);
+          if (isLockedByRemote) {
+            regionBadgePositions.push({ regionId: region.id, x, y, width: widthPixels });
+          }
+
           return (
             <BaseRegion
               key={region.id}
@@ -1053,6 +1191,7 @@ export const TrackCanvas = ({
               isSelected={isSelected}
               isMovingToNewTrack={isMovingToNewTrack}
               loops={loops}
+              isLockedByRemote={isLockedByRemote}
               headResizeState={headResizeState}
               onPointerDown={(event) => handleRegionPointerDown(region, event)}
               onHeadHandleDown={(event) => handleHeadHandleDown(region, event)}
@@ -1140,6 +1279,59 @@ export const TrackCanvas = ({
             </Group>
           );
         })()}
+
+        {/* Remote recording previews */}
+        {remotePreviews.map((preview) => {
+          const track = tracks.find((t) => t.id === preview.trackId);
+          if (!track) {
+            return null;
+          }
+
+          const pos = trackYPositions[preview.trackId];
+          if (!pos) {
+            return null;
+          }
+
+          const sanitizedStart = Math.max(0, preview.startBeat);
+          const sanitizedLength = Math.max(0.25, preview.durationBeats);
+          const x = sanitizedStart * beatWidth;
+          const y = pos.y + 6;
+          const regionHeight = pos.height - 12;
+          const widthPixels = sanitizedLength * beatWidth;
+
+          const isVisible = x + widthPixels >= visibleStartBeat * beatWidth && x <= visibleEndBeat * beatWidth;
+          if (!isVisible) {
+            return null;
+          }
+
+          const strokeColor = preview.recordingType === 'midi' ? '#a855f7' : '#f97316';
+          const fillColor = (track.color ?? strokeColor) + '55';
+
+          return (
+            <Group key={`remote-preview-${preview.userId}-${preview.trackId}`}>
+              <Rect
+                x={x}
+                y={y}
+                width={widthPixels}
+                height={regionHeight}
+                fill={fillColor}
+                stroke={strokeColor}
+                strokeWidth={2}
+                dash={[6, 4]}
+                cornerRadius={4}
+                listening={false}
+              />
+              <Text
+                x={x + 8}
+                y={y + 6}
+                text={`● ${preview.username}`}
+                fontSize={12}
+                fill={strokeColor}
+                listening={false}
+              />
+            </Group>
+          );
+        })}
         
         {marqueeState && (
           <Rect
@@ -1155,4 +1347,35 @@ export const TrackCanvas = ({
       </Layer>
     </Stage>
   );
+
+  return (
+    <div className="relative" style={{ width, height }}>
+      {stageContent}
+      <div className="pointer-events-none absolute left-0 top-0" style={{ width, height }}>
+        {regionBadgePositions.map(({ regionId, x, y, width: regionWidth }) => {
+          const lock = lockMap.get(getRegionLockId(regionId));
+          if (!lock) {
+            return null;
+          }
+          const badgeX = x + regionWidth / 2;
+          const badgeY = Math.max(0, y - 12);
+          return (
+            <div
+              key={`region-lock-${regionId}`}
+              className="absolute -translate-x-1/2"
+              style={{ left: badgeX, top: badgeY }}
+            >
+              <div className="badge badge-xs badge-warning shadow">
+                <span className="mr-1">🔒</span>
+                <span>{lock.username}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 };
+
+// Memoize TrackCanvas with shallow comparison for arrays/objects
+export const TrackCanvas = memo(TrackCanvasComponent);

@@ -10,6 +10,12 @@ export const scheduleAudioRegionPlayback = async (region: AudioRegion, track: Tr
   }
 
   const audioContext = Tone.getContext().rawContext as AudioContext;
+  if (!audioContext || audioContext.state === 'closed') {
+    console.warn('Skipping audio playback scheduling because AudioContext is closed', {
+      regionId: region.id,
+    });
+    return;
+  }
   const bpm = Tone.Transport.bpm.value;
   const secondsPerBeat = 60 / bpm;
   const trimStartSeconds = (region.trimStart ?? 0) * secondsPerBeat;

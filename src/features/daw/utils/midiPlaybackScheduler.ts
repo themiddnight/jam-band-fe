@@ -32,14 +32,17 @@ const computeScheduledNotes = (region: MidiRegion): ScheduledNoteEvent[] => {
     region.notes.forEach((note) => {
       const noteEnd = note.start + note.duration;
 
+      // Skip notes that are completely outside the region bounds
       if (note.start >= region.length || noteEnd <= 0) {
         return;
       }
 
+      // Clip notes that partially overlap the region bounds
       const clippedStart = Math.max(0, note.start);
       const clippedEnd = Math.min(region.length, noteEnd);
       const clippedDuration = clippedEnd - clippedStart;
 
+      // Only schedule if there's audible duration within the region
       if (clippedDuration > 0.01) {
         const startBeat = iterationOffset + clippedStart;
         const endBeat = iterationOffset + clippedEnd;
@@ -66,22 +69,27 @@ const computeSustainEvents = (region: MidiRegion): SustainSchedule[] => {
     const iterationOffset = region.start + iteration * region.length;
 
     region.sustainEvents.forEach((event) => {
+      // Skip sustain events that are completely outside the region bounds
       if (event.start >= region.length || event.end <= 0) {
         return;
       }
 
+      // Clip sustain events to region bounds
       const clippedStart = Math.max(0, event.start);
       const clippedEnd = Math.min(region.length, event.end);
 
-      events.push({
-        time: iterationOffset + clippedStart,
-        active: true,
-      });
+      // Only schedule if there's a valid duration within the region
+      if (clippedEnd > clippedStart) {
+        events.push({
+          time: iterationOffset + clippedStart,
+          active: true,
+        });
 
-      events.push({
-        time: iterationOffset + clippedEnd,
-        active: false,
-      });
+        events.push({
+          time: iterationOffset + clippedEnd,
+          active: false,
+        });
+      }
     });
   }
 

@@ -87,6 +87,7 @@ export default function EffectChain({ chainType, title, mode = 'perform' }: Effe
   };
 
   const sortedEffects = [...chain.effects].sort((a, b) => a.order - b.order);
+  const lockScopeId = chainType;
 
   return (
     <div className='effect-chain p-3 rounded-lg border border-base-300 bg-base-100'>
@@ -152,6 +153,7 @@ export default function EffectChain({ chainType, title, mode = 'perform' }: Effe
               <EffectModule
                 effect={effect}
                 chainType={chainType}
+                lockScopeId={lockScopeId}
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
                 isDragging={draggingEffectId === effect.id}

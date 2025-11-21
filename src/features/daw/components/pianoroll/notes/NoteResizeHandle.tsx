@@ -2,7 +2,7 @@ import { Rect } from 'react-konva';
 import type { NoteResizeHandleProps } from './types';
 import { HIGHEST_MIDI, NOTE_HEIGHT } from '../constants';
 
-const getNoteY = (pitch: number) => (HIGHEST_MIDI - pitch) * NOTE_HEIGHT;
+const defaultGetNoteY = (pitch: number) => (HIGHEST_MIDI - pitch) * NOTE_HEIGHT;
 const clampPitch = (pitch: number) => Math.min(127, Math.max(0, pitch));
 
 export const NoteResizeHandle = ({
@@ -10,6 +10,7 @@ export const NoteResizeHandle = ({
   beatWidth,
   dragOffset,
   previewDuration,
+  getNoteY = defaultGetNoteY,
 }: NoteResizeHandleProps) => {
   const start = note.start + (dragOffset?.beat ?? 0);
   const pitch = clampPitch(note.pitch + (dragOffset?.pitch ?? 0));

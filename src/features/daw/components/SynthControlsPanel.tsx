@@ -1,15 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, memo } from "react";
 import { useTrackStore } from "../stores/trackStore";
 import { trackInstrumentRegistry } from "../utils/trackInstrumentRegistry";
 import { InstrumentCategory } from "@/shared/constants/instruments";
 import { LazySynthControlsWrapper as SynthControls } from "@/features/instruments";
 import type { SynthState } from "@/features/instruments/utils/InstrumentEngine";
+import { useSynthStore } from "../stores/synthStore";
+import { useLockStore } from "../stores/lockStore";
+import { useUserStore } from "@/shared/stores/userStore";
+import { getSynthParamLockId } from "../utils/collaborationLocks";
+import { useDAWCollaborationContext } from "../contexts/useDAWCollaborationContext";
 
 /**
  * SynthControlsPanel - Shows synth controls when a MIDI track with synth instrument is selected
  * Placed between RegionEditor and VirtualInstrumentPanel in ArrangeRoom
  */
-export const SynthControlsPanel = () => {
+export const SynthControlsPanel = memo(() => {
   const tracks = useTrackStore((state) => state.tracks);
   const selectedTrackId = useTrackStore((state) => state.selectedTrackId);
 
@@ -18,8 +23,21 @@ export const SynthControlsPanel = () => {
     return tracks.find((track) => track.id === selectedTrackId) ?? null;
   }, [selectedTrackId, tracks]);
 
-  const [synthState, setSynthState] = useState<SynthState | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const synthState = useSynthStore((state) =>
+    selectedTrack?.id ? state.synthStates[selectedTrack.id] ?? null : null
+  );
+  const setSynthStateStore = useSynthStore((state) => state.setSynthState);
+  const updateSynthStateStore = useSynthStore((state) => state.updateSynthState);
+  const removeSynthState = useSynthStore((state) => state.removeSynthState);
+
+  const currentUserId = useUserStore((state) => state.userId);
+  const isLocked = useLockStore((state) => state.isLocked);
+  const {
+    handleSynthParamsChange,
+    acquireInteractionLock,
+    releaseInteractionLock,
+  } = useDAWCollaborationContext();
 
   // Check if the selected track is a synth track
   const isSynthTrack = useMemo(() => {
@@ -32,7 +50,10 @@ export const SynthControlsPanel = () => {
   // Load synth state when track changes
   useEffect(() => {
     if (!selectedTrack || !isSynthTrack) {
-      setSynthState(null);
+      setIsLoading(false);
+      if (selectedTrack?.id) {
+        removeSynthState(selectedTrack.id);
+      }
       return;
     }
 
@@ -46,17 +67,17 @@ export const SynthControlsPanel = () => {
         });
 
         const state = engine.getSynthState();
-        setSynthState(state);
+        setSynthStateStore(selectedTrack.id, state);
       } catch (error) {
         console.error("Failed to load synth state", error);
-        setSynthState(null);
+        removeSynthState(selectedTrack.id);
       } finally {
         setIsLoading(false);
       }
     };
 
     void loadSynthState();
-  }, [selectedTrack, isSynthTrack]);
+  }, [selectedTrack, isSynthTrack, setSynthStateStore, removeSynthState]);
 
   // Handle synth parameter changes
   const handleParamChange = useCallback(
@@ -73,13 +94,13 @@ export const SynthControlsPanel = () => {
         // Update the engine with new parameters
         await engine.updateSynthParams(params);
 
-        // Update local state
-        setSynthState((prev) => (prev ? { ...prev, ...params } : null));
+        updateSynthStateStore(selectedTrack.id, params);
+        handleSynthParamsChange(selectedTrack.id, params);
       } catch (error) {
         console.error("Failed to update synth parameters", error);
       }
     },
-    [selectedTrack, isSynthTrack],
+    [selectedTrack, isSynthTrack, handleSynthParamsChange, updateSynthStateStore],
   );
 
   // Handle preset loading
@@ -97,13 +118,13 @@ export const SynthControlsPanel = () => {
         // Update the engine with preset parameters
         await engine.updateSynthParams(presetParams);
 
-        // Update local state
-        setSynthState(presetParams);
+        setSynthStateStore(selectedTrack.id, presetParams);
+        handleSynthParamsChange(selectedTrack.id, presetParams);
       } catch (error) {
         console.error("Failed to load preset", error);
       }
     },
-    [selectedTrack, isSynthTrack],
+    [selectedTrack, isSynthTrack, handleSynthParamsChange, setSynthStateStore],
   );
 
   // Don't render if not a synth track
@@ -114,10 +135,10 @@ export const SynthControlsPanel = () => {
   // Show loading state
   if (isLoading || !synthState) {
     return (
-      <section className="flex flex-col items-center justify-center rounded-lg border border-base-300 bg-base-100 p-4 shadow-sm">
+      <section className="flex flex-col items-center justify-center rounded-lg border border-base-300 bg-base-100 p-3 sm:p-4 shadow-sm">
         <div className="flex flex-col items-center gap-2">
-          <span className="loading loading-spinner loading-md" />
-          <span className="text-sm text-base-content/70">Loading synth controls...</span>
+          <span className="loading loading-spinner loading-sm sm:loading-md" />
+          <span className="text-xs sm:text-sm text-base-content/70">Loading synth controls...</span>
         </div>
       </section>
     );
@@ -130,9 +151,39 @@ export const SynthControlsPanel = () => {
         synthState={synthState}
         onParamChange={handleParamChange}
         onLoadPreset={handleLoadPreset}
+        getParamLockProps={(param: string) => {
+          if (!selectedTrack) {
+            return {};
+          }
+
+          const lockId = getSynthParamLockId(selectedTrack.id, param);
+          const lock = isLocked(lockId);
+          const isLockedByRemote = Boolean(
+            lock && lock.userId !== currentUserId,
+          );
+
+          return {
+            disabled: isLockedByRemote,
+            lockedLabel: isLockedByRemote && lock ? `🔒 ${lock.username}` : undefined,
+            onInteractionStart: () => {
+              if (!selectedTrack) {
+                return false;
+              }
+              const currentLock = isLocked(lockId);
+              if (currentLock && currentLock.userId !== currentUserId) {
+                return false;
+              }
+              return acquireInteractionLock(lockId, "control");
+            },
+            onInteractionEnd: () => {
+              releaseInteractionLock(lockId);
+            },
+          };
+        }}
       />
     </section>
   );
-};
+});
+SynthControlsPanel.displayName = 'SynthControlsPanel';
 
 export default SynthControlsPanel;

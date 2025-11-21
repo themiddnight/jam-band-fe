@@ -91,20 +91,20 @@ export default function BaseInstrument({
 
   return (
     <div className="card bg-base-100 shadow-lg w-full max-w-6xl">
-      <div className="card-body p-3">
-        <div className="flex justify-between items-center mb-1">
+      <div className="card-body p-2 sm:p-3">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-1">
           <div className="flex items-center gap-2">
-            <h3 className="card-title text-base">{title}</h3>
+            <h3 className="card-title text-sm sm:text-base">{title}</h3>
           </div>
 
-          <div className="flex gap-3 flex-wrap justify-end">{modeControls}</div>
+          <div className="flex gap-2 sm:gap-3 flex-wrap justify-start sm:justify-end w-full sm:w-auto">{modeControls}</div>
         </div>
 
-        <div className="bg-neutral p-4 rounded-lg overflow-auto">
+        <div className="bg-neutral p-2 sm:p-4 rounded-lg overflow-auto touch-none">
           {children}
         </div>
 
-        <div className="flex justify-center items-center gap-3 flex-wrap mt-1">
+        <div className="flex justify-center items-center gap-2 sm:gap-3 flex-wrap mt-1">
           {/* Sustain Controls */}
           {controlConfig.sustain && sustain !== undefined && setSustain && (
             <div className="join">
@@ -177,7 +177,7 @@ export default function BaseInstrument({
                 onContextMenu={(e) => {
                   e.preventDefault();
                 }}
-                className={`btn btn-sm join-item touch-manipulation select-none ${
+                className={`btn btn-xs sm:btn-sm join-item touch-manipulation select-none ${
                   (sustain && !sustainToggle) ||
                   (sustainToggle && hasSustainedNotes)
                     ? "btn-warning"
@@ -190,8 +190,9 @@ export default function BaseInstrument({
                   touchAction: "manipulation",
                 }}
               >
-                Sustain{" "}
-                <kbd className="kbd kbd-xs">
+                <span className="hidden sm:inline">Sustain</span>
+                <span className="sm:hidden">Sus</span>{" "}
+                <kbd className="kbd kbd-xs hidden sm:inline">
                   {getKeyDisplayName(shortcuts.sustain?.key || "")}
                 </kbd>
               </button>
@@ -200,12 +201,12 @@ export default function BaseInstrument({
                   onClick={() => {
                     setSustainToggle(!sustainToggle);
                   }}
-                  className={`btn btn-sm join-item touch-manipulation ${
+                  className={`btn btn-xs sm:btn-sm join-item touch-manipulation ${
                     sustainToggle ? "btn-success" : "btn-outline"
                   }`}
                 >
                   {sustainToggle ? "🔒" : "🔓"}
-                  <kbd className="kbd kbd-xs">
+                  <kbd className="kbd kbd-xs hidden sm:inline">
                     {getKeyDisplayName(shortcuts.sustainToggle?.key || "")}
                   </kbd>
                 </button>
@@ -215,10 +216,12 @@ export default function BaseInstrument({
 
           {/* Velocity Control */}
           {controlConfig.velocity && velocity !== undefined && setVelocity && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <label className="label py-1">
-                <span className="label-text text-sm">
-                  Velocity: {Math.round(velocity * 9)}
+                <span className="label-text text-xs sm:text-sm">
+                  <span className="hidden sm:inline">Velocity: </span>
+                  <span className="sm:hidden">Vel: </span>
+                  {Math.round(velocity * 9)}
                 </span>
               </label>
               <input
@@ -227,7 +230,7 @@ export default function BaseInstrument({
                 max="9"
                 value={Math.round(velocity * 9)}
                 onChange={(e) => setVelocity(parseInt(e.target.value) / 9)}
-                className="range range-sm range-primary w-20"
+                className="range range-xs sm:range-sm range-primary w-16 sm:w-20"
               />
             </div>
           )}
@@ -236,10 +239,12 @@ export default function BaseInstrument({
           {controlConfig.octave &&
             currentOctave !== undefined &&
             setCurrentOctave && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 sm:gap-2">
                 <label className="label py-1">
-                  <span className="label-text text-sm">
-                    Octave: {currentOctave}
+                  <span className="label-text text-xs sm:text-sm">
+                    <span className="hidden sm:inline">Octave: </span>
+                    <span className="sm:hidden">Oct: </span>
+                    {currentOctave}
                   </span>
                 </label>
                 <div className="join">
@@ -247,10 +252,10 @@ export default function BaseInstrument({
                     onClick={() =>
                       setCurrentOctave(Math.max(0, currentOctave - 1))
                     }
-                    className="btn btn-sm btn-outline join-item touch-manipulation"
+                    className="btn btn-xs sm:btn-sm btn-outline join-item touch-manipulation"
                   >
                     -{" "}
-                    <kbd className="kbd kbd-xs">
+                    <kbd className="kbd kbd-xs hidden sm:inline">
                       {getKeyDisplayName(shortcuts.octaveDown?.key || "")}
                     </kbd>
                   </button>
@@ -258,10 +263,10 @@ export default function BaseInstrument({
                     onClick={() =>
                       setCurrentOctave(Math.min(8, currentOctave + 1))
                     }
-                    className="btn btn-sm btn-outline join-item touch-manipulation"
+                    className="btn btn-xs sm:btn-sm btn-outline join-item touch-manipulation"
                   >
                     +{" "}
-                    <kbd className="kbd kbd-xs">
+                    <kbd className="kbd kbd-xs hidden sm:inline">
                       {getKeyDisplayName(shortcuts.octaveUp?.key || "")}
                     </kbd>
                   </button>
@@ -273,10 +278,12 @@ export default function BaseInstrument({
           {controlConfig.chordVoicing &&
             chordVoicing !== undefined &&
             setChordVoicing && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 sm:gap-2">
                 <label className="label py-1">
-                  <span className="label-text text-sm">
-                    Voicing: {chordVoicing}
+                  <span className="label-text text-xs sm:text-sm">
+                    <span className="hidden sm:inline">Voicing: </span>
+                    <span className="sm:hidden">Voi: </span>
+                    {chordVoicing}
                   </span>
                 </label>
                 <div className="join">
@@ -284,10 +291,10 @@ export default function BaseInstrument({
                     onClick={() =>
                       setChordVoicing(Math.max(-2, chordVoicing - 1))
                     }
-                    className="btn btn-sm btn-outline join-item touch-manipulation"
+                    className="btn btn-xs sm:btn-sm btn-outline join-item touch-manipulation"
                   >
                     -{" "}
-                    <kbd className="kbd kbd-xs">
+                    <kbd className="kbd kbd-xs hidden sm:inline">
                       {getKeyDisplayName(shortcuts.voicingDown?.key || "")}
                     </kbd>
                   </button>
@@ -295,10 +302,10 @@ export default function BaseInstrument({
                     onClick={() =>
                       setChordVoicing(Math.min(4, chordVoicing + 1))
                     }
-                    className="btn btn-sm btn-outline join-item touch-manipulation"
+                    className="btn btn-xs sm:btn-sm btn-outline join-item touch-manipulation"
                   >
                     +{" "}
-                    <kbd className="kbd kbd-xs">
+                    <kbd className="kbd kbd-xs hidden sm:inline">
                       {getKeyDisplayName(shortcuts.voicingUp?.key || "")}
                     </kbd>
                   </button>
@@ -310,16 +317,21 @@ export default function BaseInstrument({
           {controlConfig.brushingSpeed &&
             brushingSpeed !== undefined &&
             setBrushingSpeed && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 sm:gap-2">
                 <label className="label py-1">
-                  <span className="label-text text-sm">
-                    Brushing:{" "}
-                    {
-                      BRUSHING_TIME_LABELS[
-                        brushingSpeed as keyof typeof BRUSHING_TIME_LABELS
-                      ]
-                    }{" "}
-                    ({brushingSpeed}ms)
+                  <span className="label-text text-xs sm:text-sm">
+                    <span className="hidden sm:inline">
+                      Brushing:{" "}
+                      {
+                        BRUSHING_TIME_LABELS[
+                          brushingSpeed as keyof typeof BRUSHING_TIME_LABELS
+                        ]
+                      }{" "}
+                      ({brushingSpeed}ms)
+                    </span>
+                    <span className="sm:hidden">
+                      Brush: {brushingSpeed}ms
+                    </span>
                   </span>
                 </label>
                 <div className="join">
@@ -333,10 +345,10 @@ export default function BaseInstrument({
                         setBrushingSpeed(newSpeed);
                       }
                     }}
-                    className="btn btn-sm btn-outline join-item touch-manipulation"
+                    className="btn btn-xs sm:btn-sm btn-outline join-item touch-manipulation"
                   >
                     -{" "}
-                    <kbd className="kbd kbd-xs">
+                    <kbd className="kbd kbd-xs hidden sm:inline">
                       {getKeyDisplayName(
                         shortcuts.brushingSpeedDown?.key || "N",
                       )}
@@ -352,10 +364,10 @@ export default function BaseInstrument({
                         setBrushingSpeed(newSpeed);
                       }
                     }}
-                    className="btn btn-sm btn-outline join-item touch-manipulation"
+                    className="btn btn-xs sm:btn-sm btn-outline join-item touch-manipulation"
                   >
                     +{" "}
-                    <kbd className="kbd kbd-xs">
+                    <kbd className="kbd kbd-xs hidden sm:inline">
                       {getKeyDisplayName(shortcuts.brushingSpeedUp?.key || "M")}
                     </kbd>
                   </button>

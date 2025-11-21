@@ -1,8 +1,13 @@
-import { useCallback, useMemo, useState } from 'react';
-import { Layer, Line, Rect, Stage, Text } from 'react-konva';
+import { useCallback, useMemo, useState, useRef, memo } from 'react';
+import { Layer, Line, Rect, Shape, Stage, Text } from 'react-konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import type { AudioRegion } from '@/features/daw/types/daw';
-import { useWaveformData } from '@/features/daw/hooks/useWaveformData';
+import {
+  getOrGenerateLOD,
+  selectLODLevel,
+  calculateOptimalBarWidth,
+  shouldApplyViewportCulling,
+} from '@/features/daw/utils/progressiveWaveformRenderer';
 
 interface WaveformCanvasProps {
   region: AudioRegion;
@@ -11,8 +16,8 @@ interface WaveformCanvasProps {
   pixelsPerBeat: number;
   onTrimStartChange: (trimStart: number) => void;
   onTrimEndChange: (trimEnd: number) => void;
-  onFadeInChange: (duration: number) => void;
-  onFadeOutChange: (duration: number) => void;
+  onFadeInChange: (duration: number, options?: { commit?: boolean }) => void;
+  onFadeOutChange: (duration: number, options?: { commit?: boolean }) => void;
 }
 
 // Base canvas height (will be multiplied by zoomY)
@@ -28,7 +33,7 @@ interface DragState {
   initialTrimEnd?: number; // For trim-end drag, store the initial trim end position
 }
 
-export const WaveformCanvas = ({
+const WaveformCanvasComponent = ({
   region,
   zoomX,
   zoomY,
@@ -39,22 +44,98 @@ export const WaveformCanvas = ({
   onFadeOutChange,
 }: WaveformCanvasProps) => {
   const [dragState, setDragState] = useState<DragState | null>(null);
+  const layerRef = useRef<any>(null);
+  const lastScrollX = useRef<number>(0);
+  const scrollThrottleTimer = useRef<number | null>(null);
+  const hasWarnedAboutCanvasSize = useRef<boolean>(false);
+  
+  const stageRef = useCallback((node: any) => {
+    if (node) {
+      const container = node.container();
+      if (container && container.parentElement) {
+        const scrollContainer = container.parentElement;
+        
+        // Throttled scroll handler for better performance
+        const handleScroll = () => {
+          const currentScrollX = scrollContainer.scrollLeft;
+          
+          // Only redraw if scroll changed significantly (>10px)
+          if (Math.abs(currentScrollX - lastScrollX.current) > 10) {
+            lastScrollX.current = currentScrollX;
+            
+            // Throttle redraws to max 30 FPS during scroll
+            if (scrollThrottleTimer.current) {
+              return;
+            }
+            
+            scrollThrottleTimer.current = window.setTimeout(() => {
+              if (layerRef.current) {
+                layerRef.current.batchDraw();
+              }
+              scrollThrottleTimer.current = null;
+            }, 33); // ~30 FPS
+          }
+        };
+        
+        scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+        
+        return () => {
+          scrollContainer.removeEventListener('scroll', handleScroll);
+          if (scrollThrottleTimer.current) {
+            clearTimeout(scrollThrottleTimer.current);
+          }
+        };
+      }
+    }
+  }, []);
 
   const beatWidth = pixelsPerBeat * zoomX;
   const originalLength = region.originalLength || region.length;
   const canvasHeight = BASE_CANVAS_HEIGHT; // Fixed height, don't scale with zoomY
 
-  // Generate waveform data for the FULL recording
+  // Generate waveform data for the FULL recording using LOD
   const fullWidth = originalLength * beatWidth;
-  const samples = Math.max(200, Math.floor(fullWidth / 2));
-  const { data: waveformData } = useWaveformData(region.audioBuffer ?? null, samples, { normalize: false });
-
-  const waveformPeaks = useMemo(() => {
-    if (!waveformData || waveformData.length === 0) {
-      return [] as number[];
+  
+  // CRITICAL: Define canvas size limit BEFORE using it
+  // Browsers have max canvas size (~32k pixels for Chrome, ~16k for Safari)
+  const MAX_CANVAS_WIDTH = 16000; // Conservative limit for Safari compatibility
+  
+  // Use progressive LOD rendering for efficient waveform display
+  const visiblePeaks = useMemo(() => {
+    if (!region.audioBuffer) {
+      return new Float32Array(0);
     }
-    return Array.from(waveformData);
-  }, [waveformData]);
+
+    try {
+      // Generate or retrieve LOD data with higher max width for editor
+      const lodData = getOrGenerateLOD(region.audioBuffer, region.id, 20000);
+      
+      if (!lodData || !lodData.levels || lodData.levels.length === 0) {
+        console.warn('Invalid LOD data for audio editor:', region.id);
+        return new Float32Array(0);
+      }
+      
+      // Select appropriate LOD level based on ACTUAL canvas width (not virtual width)
+      // This prevents selecting too high detail when canvas is capped
+      const effectiveWidth = Math.min(fullWidth, MAX_CANVAS_WIDTH);
+      const lodLevel = selectLODLevel(lodData, effectiveWidth, originalLength);
+      
+      if (!lodLevel || !lodLevel.peaks || lodLevel.peaks.length === 0) {
+        console.warn('Invalid LOD level for audio editor:', region.id);
+        return new Float32Array(0);
+      }
+      
+      // For the editor, we show the full waveform (no trim extraction here)
+      return lodLevel.peaks;
+    } catch (error) {
+      console.error('Failed to generate waveform LOD for editor:', error, {
+        regionId: region.id,
+        fullWidth,
+        originalLength,
+      });
+      return new Float32Array(0);
+    }
+  }, [region.audioBuffer, region.id, fullWidth, originalLength, MAX_CANVAS_WIDTH]);
 
   // Calculate positions (absolute positions in the full waveform)
   const trimStart = region.trimStart || 0;
@@ -159,61 +240,160 @@ export const WaveformCanvas = ({
   }, [dragState, beatWidth, onTrimStartChange, onTrimEndChange, onFadeInChange, onFadeOutChange]);
 
   const handlePointerUp = useCallback(() => {
+    if (dragState?.type === 'fade-in') {
+      onFadeInChange(region.fadeInDuration || 0, { commit: true });
+    } else if (dragState?.type === 'fade-out') {
+      onFadeOutChange(region.fadeOutDuration || 0, { commit: true });
+    }
     setDragState(null);
-  }, []);
+  }, [dragState, onFadeInChange, onFadeOutChange, region.fadeInDuration, region.fadeOutDuration]);
 
   // Width for rendering (full original length)
   const fullWaveformWidth = originalLength * beatWidth;
+  
+  // CRITICAL: Limit canvas width to prevent browser canvas size limits
+  // MAX_CANVAS_WIDTH is defined earlier before useMemo
+  const stageWidth = Math.min(fullWaveformWidth, MAX_CANVAS_WIDTH);
+  
+  // Warn if canvas would exceed limits (only once)
+  const isCanvasTooLarge = fullWaveformWidth > MAX_CANVAS_WIDTH;
+  
+  // Calculate zoom limit to prevent canvas overflow
+  const maxSafeZoom = MAX_CANVAS_WIDTH / (originalLength * pixelsPerBeat);
+  
+  if (isCanvasTooLarge && process.env.NODE_ENV === 'development' && !hasWarnedAboutCanvasSize.current) {
+    console.warn(
+      `Canvas width (${fullWaveformWidth}px) exceeds safe limit (${MAX_CANVAS_WIDTH}px). ` +
+      `Current zoom: ${zoomX.toFixed(1)}×, Max safe zoom: ${maxSafeZoom.toFixed(1)}×. ` +
+      `Capping canvas width to prevent white canvas error.`
+    );
+    hasWarnedAboutCanvasSize.current = true;
+  }
+  
+  // Reset warning flag when zoom goes back below limit
+  if (!isCanvasTooLarge && hasWarnedAboutCanvasSize.current) {
+    hasWarnedAboutCanvasSize.current = false;
+  }
 
   return (
     <Stage
-      width={fullWaveformWidth}
+      ref={stageRef}
+      width={stageWidth}
       height={canvasHeight}
       onPointerMove={handlePointerMove}
       onTouchMove={(e) => handlePointerMove(e as unknown as KonvaEventObject<PointerEvent>)}
       onPointerUp={handlePointerUp}
       onTouchEnd={handlePointerUp}
     >
-      <Layer>
+      <Layer ref={layerRef}>
         {/* Background */}
         <Rect
           x={0}
           y={0}
-          width={fullWaveformWidth}
+          width={stageWidth}
           height={canvasHeight}
           fill="#1f2937"
         />
 
-        {/* Waveform - full recording */}
-        {waveformPeaks.map((amplitude, index) => {
-          const x = (index / waveformPeaks.length) * fullWaveformWidth;
-          const availableHeight = Math.max(canvasHeight - VERTICAL_PADDING * 2, 0);
-          const baseHeight = Math.max(amplitude * gainMultiplier * availableHeight, 1);
-          const waveHeight = baseHeight * zoomY;
-          const centerY = canvasHeight / 2;
-          const topLimit = VERTICAL_PADDING;
-          const bottomLimit = canvasHeight - VERTICAL_PADDING;
-          const rectTop = Math.max(topLimit, centerY - waveHeight / 2);
-          const rectBottom = Math.min(bottomLimit, rectTop + waveHeight);
-          const clampedHeight = Math.max(rectBottom - rectTop, 1);
-
-          return (
-            <Rect
-              key={`wave-${index}`}
-              x={x}
-              y={rectTop}
-              width={Math.max(fullWaveformWidth / waveformPeaks.length, 1)}
-              height={clampedHeight}
-              fill="#34d399"
-              opacity={0.8}
-              listening={false}
-            />
-          );
-        })}
+        {/* Waveform - full recording - optimized rendering with smart viewport culling */}
+        {visiblePeaks.length > 0 && (
+          <Shape
+            sceneFunc={(context, shape) => {
+              context.fillStyle = '#34d399';
+              context.globalAlpha = 0.8;
+              
+              const availableHeight = Math.max(canvasHeight - VERTICAL_PADDING * 2, 0);
+              const centerY = canvasHeight / 2;
+              const topLimit = VERTICAL_PADDING;
+              const bottomLimit = canvasHeight - VERTICAL_PADDING;
+              
+              // Each peak is a min/max pair
+              const peakCount = Math.floor(visiblePeaks.length / 2);
+              
+              // Use stageWidth (capped) instead of fullWaveformWidth for rendering
+              const renderWidth = stageWidth;
+              
+              // Calculate optimal bar width to prevent overdraw
+              const barWidth = calculateOptimalBarWidth(renderWidth, peakCount, 0.5, 3);
+              
+              // Viewport culling: Get the visible range from the stage
+              const stage = shape.getStage();
+              let viewportStartX = 0;
+              let viewportEndX = renderWidth;
+              let startPeakIndex = 0;
+              let endPeakIndex = peakCount;
+              
+              if (stage) {
+                const container = stage.container();
+                if (container && container.parentElement) {
+                  const scrollContainer = container.parentElement;
+                  const containerWidth = scrollContainer.clientWidth;
+                  viewportStartX = scrollContainer.scrollLeft;
+                  viewportEndX = viewportStartX + containerWidth;
+                  
+                  // Adaptive buffer based on zoom level
+                  const currentPixelsPerBeat = renderWidth / originalLength;
+                  let buffer = containerWidth * 0.15; // Default 15%
+                  
+                  if (currentPixelsPerBeat > 300) {
+                    buffer = containerWidth * 0.1; // High zoom: smaller buffer
+                  } else if (currentPixelsPerBeat < 100) {
+                    buffer = containerWidth * 0.2; // Low zoom: larger buffer
+                  }
+                  
+                  viewportStartX = Math.max(0, viewportStartX - buffer);
+                  viewportEndX = Math.min(renderWidth, viewportEndX + buffer);
+                  
+                  // Calculate visible peak range
+                  startPeakIndex = Math.floor((viewportStartX / renderWidth) * peakCount);
+                  endPeakIndex = Math.ceil((viewportEndX / renderWidth) * peakCount);
+                  
+                  // Only apply culling if it provides significant benefit
+                  const visiblePeakCount = endPeakIndex - startPeakIndex;
+                  if (!shouldApplyViewportCulling(peakCount, visiblePeakCount)) {
+                    // Not worth culling, render everything
+                    startPeakIndex = 0;
+                    endPeakIndex = peakCount;
+                  }
+                }
+              }
+              
+              // Batch rendering for better performance
+              context.beginPath();
+              
+              // Only draw visible peaks
+              for (let index = startPeakIndex; index < Math.min(endPeakIndex, peakCount); index++) {
+                const minValue = visiblePeaks[index * 2] || 0;
+                const maxValue = visiblePeaks[index * 2 + 1] || 0;
+                
+                const x = (index / peakCount) * renderWidth;
+                
+                // Use max value for height (representing peak amplitude)
+                const amplitude = Math.max(Math.abs(minValue), Math.abs(maxValue));
+                const baseHeight = Math.max(amplitude * gainMultiplier * availableHeight, 1);
+                const waveHeight = baseHeight * zoomY;
+                
+                const rectTop = Math.max(topLimit, centerY - waveHeight / 2);
+                const rectBottom = Math.min(bottomLimit, rectTop + waveHeight);
+                const clampedHeight = Math.max(rectBottom - rectTop, 1);
+                
+                if (isFinite(x) && isFinite(rectTop) && isFinite(clampedHeight)) {
+                  context.fillRect(x, rectTop, barWidth, clampedHeight);
+                }
+              }
+              
+              // Required for Konva
+              context.fillStrokeShape(shape);
+            }}
+            listening={false}
+            perfectDrawEnabled={false}
+            shadowForStrokeEnabled={false}
+          />
+        )}
 
         {/* Center line */}
         <Line
-          points={[0, canvasHeight / 2, fullWaveformWidth, canvasHeight / 2]}
+          points={[0, canvasHeight / 2, stageWidth, canvasHeight / 2]}
           stroke="#4b5563"
           strokeWidth={1}
           dash={[4, 4]}
@@ -233,7 +413,7 @@ export const WaveformCanvas = ({
         <Rect
           x={trimEndX}
           y={0}
-          width={fullWaveformWidth - trimEndX}
+          width={Math.max(0, stageWidth - trimEndX)}
           height={canvasHeight}
           fill="#000000"
           opacity={0.6}
@@ -397,8 +577,41 @@ export const WaveformCanvas = ({
             }}
           />
         )}
+        
+        {/* Canvas Size Limit Warning */}
+        {isCanvasTooLarge && (
+          <>
+            <Rect
+              x={stageWidth - 300}
+              y={10}
+              width={290}
+              height={60}
+              fill="#ff6b6b"
+              opacity={0.9}
+              cornerRadius={4}
+            />
+            <Text
+              x={stageWidth - 290}
+              y={20}
+              text="⚠️ Maximum Zoom Reached"
+              fontSize={14}
+              fontStyle="bold"
+              fill="#ffffff"
+            />
+            <Text
+              x={stageWidth - 290}
+              y={40}
+              text={`Max safe zoom: ${maxSafeZoom.toFixed(1)}× (current: ${zoomX.toFixed(1)}×)`}
+              fontSize={11}
+              fill="#ffffff"
+            />
+          </>
+        )}
       </Layer>
     </Stage>
   );
 };
+
+// Memoize WaveformCanvas to prevent unnecessary re-renders
+export const WaveformCanvas = memo(WaveformCanvasComponent);
 

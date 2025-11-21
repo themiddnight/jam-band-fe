@@ -31,6 +31,7 @@ interface TrackStoreState {
   toggleSolo: (trackId: TrackId, value?: boolean) => void;
   moveTrackUp: (trackId: TrackId) => void;
   moveTrackDown: (trackId: TrackId) => void;
+  reorderTrack: (trackId: TrackId, newIndex: number) => void;
   setTrackInstrument: (
     trackId: TrackId,
     instrumentId: string,
@@ -40,6 +41,18 @@ interface TrackStoreState {
   detachRegionFromTrack: (trackId: TrackId, regionId: string) => void;
   selectTrack: (trackId: TrackId | null) => void;
   clearTracks: () => void;
+  // Sync handlers (bypass undo history)
+  syncSetTracks: (tracks: Track[]) => void;
+  syncAddTrack: (track: Track) => void;
+  syncUpdateTrack: (trackId: TrackId, updates: Partial<Track>) => void;
+  syncRemoveTrack: (trackId: TrackId) => void;
+  syncSetTrackInstrument: (
+    trackId: TrackId,
+    instrumentId: string,
+    instrumentCategory?: InstrumentCategory,
+  ) => void;
+  syncSelectTrack: (trackId: TrackId | null) => void;
+  syncReorderTracks: (trackIds: TrackId[]) => void;
 }
 
 const createTrack = (index: number, overrides?: Partial<Track>): Track => {
@@ -153,6 +166,19 @@ export const useTrackStore = create<TrackStoreState>((set, get) => ({
 
       return { ...state, tracks: updatedTracks };
     }),
+  reorderTrack: (trackId, newIndex) =>
+    set((state) => {
+      const currentIndex = state.tracks.findIndex((track) => track.id === trackId);
+      if (currentIndex === -1 || newIndex < 0 || newIndex >= state.tracks.length) {
+        return state;
+      }
+
+      const updatedTracks = [...state.tracks];
+      const [movedTrack] = updatedTracks.splice(currentIndex, 1);
+      updatedTracks.splice(newIndex, 0, movedTrack);
+
+      return { ...state, tracks: updatedTracks };
+    }),
   setTrackInstrument: (trackId, instrumentId, instrumentCategory) =>
     set((state) => ({
       tracks: state.tracks.map((track) =>
@@ -187,5 +213,59 @@ export const useTrackStore = create<TrackStoreState>((set, get) => ({
     })),
   selectTrack: (trackId) => set({ selectedTrackId: trackId }),
   clearTracks: () => set({ tracks: [], selectedTrackId: null }),
+  // Sync handlers (bypass undo history - called from DAWSyncService)
+  syncSetTracks: (tracks) => set({ tracks }),
+  syncAddTrack: (track) =>
+    set((state) => {
+      const exists = state.tracks.some((t) => t.id === track.id);
+      if (exists) {
+        return state;
+      }
+
+      return {
+        tracks: [...state.tracks, track],
+        selectedTrackId: state.selectedTrackId ?? track.id,
+      };
+    }),
+  syncUpdateTrack: (trackId, updates) =>
+    set((state) => ({
+      tracks: state.tracks.map((track) =>
+        track.id === trackId ? { ...track, ...updates } : track
+      ),
+    })),
+  syncRemoveTrack: (trackId) =>
+    set((state) => ({
+      tracks: state.tracks.filter((track) => track.id !== trackId),
+      selectedTrackId:
+        state.selectedTrackId === trackId ? null : state.selectedTrackId,
+    })),
+  syncSetTrackInstrument: (trackId, instrumentId, instrumentCategory) =>
+    set((state) => ({
+      tracks: state.tracks.map((track) =>
+        track.id === trackId
+          ? {
+              ...track,
+              instrumentId,
+              instrumentCategory:
+                instrumentCategory ?? track.instrumentCategory,
+            }
+          : track
+      ),
+    })),
+  syncSelectTrack: (trackId) => set({ selectedTrackId: trackId }),
+  syncReorderTracks: (trackIds) =>
+    set((state) => {
+      // Reorder tracks based on the provided order of track IDs
+      const trackMap = new Map(state.tracks.map((track) => [track.id, track]));
+      const reorderedTracks = trackIds
+        .map((id) => trackMap.get(id))
+        .filter((track): track is Track => track !== undefined);
+      
+      // Add any tracks that weren't in the reorder list (shouldn't happen, but safety check)
+      const existingIds = new Set(trackIds);
+      const remainingTracks = state.tracks.filter((track) => !existingIds.has(track.id));
+      
+      return { ...state, tracks: [...reorderedTracks, ...remainingTracks] };
+    }),
 }));
 

@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from "react";
 
 import { useProjectStore } from "../stores/projectStore";
 import { useTrackStore } from "../stores/trackStore";
+import { usePianoRollStore } from "../stores/pianoRollStore";
 import { trackInstrumentRegistry } from "../utils/trackInstrumentRegistry";
 import { noteNameToMidi } from "../utils/midiUtils";
+import { pianoRollRecordingBus } from "../utils/pianoRollRecordingBus";
 
 import {
   LazyKeyboardWrapper as Keyboard,
@@ -57,10 +59,11 @@ interface VirtualInstrumentPanelProps {
   onRecordMidiMessage: PlayHandler;
 }
 
-export const VirtualInstrumentPanel = ({ onRecordMidiMessage }: VirtualInstrumentPanelProps) => {
+export const VirtualInstrumentPanel = memo(({ onRecordMidiMessage }: VirtualInstrumentPanelProps) => {
   const transportState = useProjectStore((state) => state.transportState);
   const tracks = useTrackStore((state) => state.tracks);
   const selectedTrackId = useTrackStore((state) => state.selectedTrackId);
+  const isPianoRollRecording = usePianoRollStore((state) => state.isPianoRollRecording);
 
   const selectedTrack = useMemo(() => {
     if (!selectedTrackId) return null;
@@ -159,50 +162,91 @@ export const VirtualInstrumentPanel = ({ onRecordMidiMessage }: VirtualInstrumen
         console.error("Failed to play notes", error);
       }
 
-      if (transportState !== "recording") {
-        return;
+      // Send to main transport recording
+      if (transportState === "recording") {
+        notes.forEach((note) => {
+          const midiNumber = noteNameToMidi(note);
+          if (midiNumber === null) {
+            console.warn('[Recording] Failed to convert note to MIDI', { note });
+            return;
+          }
+
+          const message: MidiMessage = {
+            type: "noteon",
+            channel: 0,
+            note: midiNumber,
+            velocity: clampVelocity(velocity),
+            monitoringHandled: true,
+            raw: {
+              data: new Uint8Array([0x90, midiNumber, clampVelocity(velocity)]),
+              timeStamp: performance.now(),
+            } as unknown as MIDIMessageEvent,
+          };
+          onRecordMidiMessage(message);
+
+          // For one-shot drum hits (isKeyHeld = false), send note-off after a short delay
+          if (!isKeyHeld && selectedTrack.instrumentCategory === InstrumentCategory.DrumBeat) {
+            setTimeout(() => {
+              const noteOffMessage: MidiMessage = {
+                type: "noteoff",
+                channel: 0,
+                note: midiNumber,
+                velocity: 0,
+                monitoringHandled: true,
+                raw: {
+                  data: new Uint8Array([0x80, midiNumber, 0]),
+                  timeStamp: performance.now(),
+                } as unknown as MIDIMessageEvent,
+              };
+              onRecordMidiMessage(noteOffMessage);
+            }, 100); // 100ms duration for drum hits
+          }
+        });
       }
 
-      notes.forEach((note) => {
-        const midiNumber = noteNameToMidi(note);
-        if (midiNumber === null) {
-          console.warn('[Recording] Failed to convert note to MIDI', { note });
-          return;
-        }
+      // Send to piano roll recording
+      if (isPianoRollRecording) {
+        notes.forEach((note) => {
+          const midiNumber = noteNameToMidi(note);
+          if (midiNumber === null) {
+            console.warn('[Piano Roll Recording] Failed to convert note to MIDI', { note });
+            return;
+          }
 
-        const message: MidiMessage = {
-          type: "noteon",
-          channel: 0,
-          note: midiNumber,
-          velocity: clampVelocity(velocity),
-          monitoringHandled: true,
-          raw: {
-            data: new Uint8Array([0x90, midiNumber, clampVelocity(velocity)]),
-            timeStamp: performance.now(),
-          } as unknown as MIDIMessageEvent,
-        };
-        onRecordMidiMessage(message);
+          const message: MidiMessage = {
+            type: "noteon",
+            channel: 0,
+            note: midiNumber,
+            velocity: clampVelocity(velocity),
+            monitoringHandled: true,
+            raw: {
+              data: new Uint8Array([0x90, midiNumber, clampVelocity(velocity)]),
+              timeStamp: performance.now(),
+            } as unknown as MIDIMessageEvent,
+          };
+          pianoRollRecordingBus.emit(message);
 
-        // For one-shot drum hits (isKeyHeld = false), send note-off after a short delay
-        if (!isKeyHeld && selectedTrack.instrumentCategory === InstrumentCategory.DrumBeat) {
-          setTimeout(() => {
-            const noteOffMessage: MidiMessage = {
-              type: "noteoff",
-              channel: 0,
-              note: midiNumber,
-              velocity: 0,
-              monitoringHandled: true,
-              raw: {
-                data: new Uint8Array([0x80, midiNumber, 0]),
-                timeStamp: performance.now(),
-              } as unknown as MIDIMessageEvent,
-            };
-            onRecordMidiMessage(noteOffMessage);
-          }, 100); // 100ms duration for drum hits
-        }
-      });
+          // For one-shot drum hits, send note-off after a short delay
+          if (!isKeyHeld && selectedTrack.instrumentCategory === InstrumentCategory.DrumBeat) {
+            setTimeout(() => {
+              const noteOffMessage: MidiMessage = {
+                type: "noteoff",
+                channel: 0,
+                note: midiNumber,
+                velocity: 0,
+                monitoringHandled: true,
+                raw: {
+                  data: new Uint8Array([0x80, midiNumber, 0]),
+                  timeStamp: performance.now(),
+                } as unknown as MIDIMessageEvent,
+              };
+              pianoRollRecordingBus.emit(noteOffMessage);
+            }, 100);
+          }
+        });
+      }
     },
-    [selectedTrack, transportState, onRecordMidiMessage],
+    [selectedTrack, transportState, isPianoRollRecording, onRecordMidiMessage],
   );
 
   const stopNotes = useCallback(
@@ -217,32 +261,55 @@ export const VirtualInstrumentPanel = ({ onRecordMidiMessage }: VirtualInstrumen
         console.error("Failed to stop notes", error);
       }
 
-      if (transportState !== "recording") {
-        return;
+      // Send to main transport recording
+      if (transportState === "recording") {
+        notes.forEach((note) => {
+          const midiNumber = noteNameToMidi(note);
+          if (midiNumber === null) {
+            console.warn('[Recording] Failed to convert note to MIDI for noteoff', { note });
+            return;
+          }
+
+          const message: MidiMessage = {
+            type: "noteoff",
+            channel: 0,
+            note: midiNumber,
+            velocity: 0,
+            monitoringHandled: true,
+            raw: {
+              data: new Uint8Array([0x80, midiNumber, 0]),
+              timeStamp: performance.now(),
+            } as unknown as MIDIMessageEvent,
+          };
+          onRecordMidiMessage(message);
+        });
       }
 
-      notes.forEach((note) => {
-        const midiNumber = noteNameToMidi(note);
-        if (midiNumber === null) {
-          console.warn('[Recording] Failed to convert note to MIDI for noteoff', { note });
-          return;
-        }
+      // Send to piano roll recording
+      if (isPianoRollRecording) {
+        notes.forEach((note) => {
+          const midiNumber = noteNameToMidi(note);
+          if (midiNumber === null) {
+            console.warn('[Piano Roll Recording] Failed to convert note to MIDI for noteoff', { note });
+            return;
+          }
 
-        const message: MidiMessage = {
-          type: "noteoff",
-          channel: 0,
-          note: midiNumber,
-          velocity: 0,
-          monitoringHandled: true,
-          raw: {
-            data: new Uint8Array([0x80, midiNumber, 0]),
-            timeStamp: performance.now(),
-          } as unknown as MIDIMessageEvent,
-        };
-        onRecordMidiMessage(message);
-      });
+          const message: MidiMessage = {
+            type: "noteoff",
+            channel: 0,
+            note: midiNumber,
+            velocity: 0,
+            monitoringHandled: true,
+            raw: {
+              data: new Uint8Array([0x80, midiNumber, 0]),
+              timeStamp: performance.now(),
+            } as unknown as MIDIMessageEvent,
+          };
+          pianoRollRecordingBus.emit(message);
+        });
+      }
     },
-    [selectedTrack, transportState, onRecordMidiMessage],
+    [selectedTrack, transportState, isPianoRollRecording, onRecordMidiMessage],
   );
 
   const handleSustainChange = useCallback(
@@ -349,17 +416,17 @@ export const VirtualInstrumentPanel = ({ onRecordMidiMessage }: VirtualInstrumen
 
   const renderInstrument = () => {
     if (!selectedTrackId) {
-      return <div className="rounded-lg bg-base-200 px-4 py-3 text-sm text-base-content/70">Select a track to play its instrument.</div>;
+      return <div className="rounded-lg bg-base-200 px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-base-content/70">Select a track to play its instrument.</div>;
     }
 
     if (!selectedTrack || selectedTrack.type !== "midi") {
-      return <div className="rounded-lg bg-base-200 px-4 py-3 text-sm text-base-content/70">Virtual instruments are only available for MIDI tracks.</div>;
+      return <div className="rounded-lg bg-base-200 px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-base-content/70">Virtual instruments are only available for MIDI tracks.</div>;
     }
 
     if (isLoadingInstrument) {
       return (
-        <div className="flex flex-col items-center justify-center rounded-lg bg-base-200 px-4 py-6 text-sm text-base-content/70">
-          <span className="loading loading-spinner loading-md mb-2" />
+        <div className="flex flex-col items-center justify-center rounded-lg bg-base-200 px-3 sm:px-4 py-4 sm:py-6 text-xs sm:text-sm text-base-content/70">
+          <span className="loading loading-spinner loading-sm sm:loading-md mb-2" />
           Loading instrument...
         </div>
       );
@@ -367,9 +434,9 @@ export const VirtualInstrumentPanel = ({ onRecordMidiMessage }: VirtualInstrumen
 
     if (loadError) {
       return (
-        <div className="rounded-lg bg-error/10 px-4 py-3">
-          <div className="flex flex-col gap-3">
-            <p className="text-sm text-error">{loadError}</p>
+        <div className="rounded-lg bg-error/10 px-3 sm:px-4 py-2 sm:py-3">
+          <div className="flex flex-col gap-2 sm:gap-3">
+            <p className="text-xs sm:text-sm text-error">{loadError}</p>
             <p className="text-xs text-base-content/60">
               Audio requires user interaction to start. Click the button below to initialize audio.
             </p>
@@ -475,12 +542,13 @@ export const VirtualInstrumentPanel = ({ onRecordMidiMessage }: VirtualInstrumen
   };
 
   return (
-    <section className="flex flex-col gap-3 rounded-lg border border-base-300 bg-base-100 p-1 shadow-sm overflow-auto">
-      <div className="mx-auto">
+    <section className="flex flex-col gap-2 sm:gap-3 rounded-lg border border-base-300 bg-base-100 p-1 sm:p-2 shadow-sm overflow-auto">
+      <div className="flex justify-center w-full">
         {renderInstrument()}
       </div>
     </section>
   );
-};
+});
+VirtualInstrumentPanel.displayName = 'VirtualInstrumentPanel';
 
 export default VirtualInstrumentPanel;

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, memo } from 'react';
 import { Layer, Line, Rect, Stage, Text } from 'react-konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import * as Tone from 'tone';
@@ -19,7 +19,7 @@ interface TimeRulerProps {
   playheadBeats?: number;
 }
 
-export const TimeRuler = ({
+const TimeRulerComponent = ({
   totalBeats,
   pixelsPerBeat,
   zoom,
@@ -180,6 +180,8 @@ export const TimeRuler = ({
             points={[0, height - 1, width, height - 1]}
             stroke="#a1a1aa"
             strokeWidth={1}
+            listening={false}
+            perfectDrawEnabled={false}
           />
           {/* Beat/bar markers */}
           {markers.map((marker) => {
@@ -191,6 +193,8 @@ export const TimeRuler = ({
                   points={[marker.x, height, marker.x, 0]}
                   stroke="#52525b"
                   strokeWidth={2}
+                  listening={false}
+                  perfectDrawEnabled={false}
                 />
               );
             }
@@ -202,6 +206,8 @@ export const TimeRuler = ({
                   points={[marker.x, height, marker.x, height * 0.35]}
                   stroke="#a1a1aa"
                   strokeWidth={1}
+                  listening={false}
+                  perfectDrawEnabled={false}
                 />
               );
             }
@@ -213,6 +219,8 @@ export const TimeRuler = ({
                 stroke="#d4d4d8"
                 strokeWidth={1}
                 opacity={0.5}
+                listening={false}
+                perfectDrawEnabled={false}
               />
             );
           })}
@@ -227,6 +235,8 @@ export const TimeRuler = ({
                 y={4}
                 fontSize={12}
                 fill="#52525b"
+                listening={false}
+                perfectDrawEnabled={false}
               />
             ))}
           {/* Loop region highlight */}
@@ -283,4 +293,18 @@ export const TimeRuler = ({
     </div>
   );
 };
+
+export const TimeRuler = memo(TimeRulerComponent, (prevProps, nextProps) => {
+  // Custom comparison function for better performance
+  return (
+    prevProps.totalBeats === nextProps.totalBeats &&
+    prevProps.pixelsPerBeat === nextProps.pixelsPerBeat &&
+    prevProps.zoom === nextProps.zoom &&
+    prevProps.scrollLeft === nextProps.scrollLeft &&
+    prevProps.height === nextProps.height &&
+    prevProps.timeSignature.numerator === nextProps.timeSignature.numerator &&
+    prevProps.timeSignature.denominator === nextProps.timeSignature.denominator &&
+    prevProps.playheadBeats === nextProps.playheadBeats
+  );
+});
 

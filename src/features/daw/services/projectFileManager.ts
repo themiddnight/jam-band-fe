@@ -86,8 +86,8 @@ export async function loadProjectFromZip(file: File): Promise<void> {
           const arrayBuffer = await audioFile.async('arraybuffer');
           const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
-          // Extract region ID from filename (e.g., "audio/region-123.wav" -> "region-123")
-          const fileName = audioPath.split('/').pop()?.replace('.wav', '');
+          // Extract region ID from filename (supports both .webm and .wav for backward compatibility)
+          const fileName = audioPath.split('/').pop()?.replace(/\.(webm|wav)$/, '');
           if (fileName) {
             audioBuffers.set(fileName, audioBuffer);
           }
