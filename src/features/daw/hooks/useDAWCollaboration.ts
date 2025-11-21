@@ -1,9 +1,10 @@
 import { useEffect, useRef, useCallback } from 'react';
 import type { Socket } from 'socket.io-client';
 import { dawSyncService, type RegionDragUpdatePayload } from '../services/dawSyncService';
-import { useLockStore } from '../stores/lockStore';
+import { useLockStore, type LockType } from '../stores/lockStore';
 import { useTrackStore } from '../stores/trackStore';
 import { useRegionStore } from '../stores/regionStore';
+import { useRecordingStore, type RecordingType } from '../stores/recordingStore';
 import { usePianoRollStore } from '../stores/pianoRollStore';
 import { useSynthStore } from '../stores/synthStore';
 import { useProjectStore } from '../stores/projectStore';
@@ -16,6 +17,7 @@ import type { InstrumentCategory } from '@/shared/constants/instruments';
 import { createThrottledEmitter } from '@/shared/utils/performanceUtils';
 import { COLLAB_THROTTLE_INTERVALS } from '@/features/daw/config/collaborationThrottles';
 import type { RegionRealtimeUpdate } from '../contexts/DAWCollaborationContext.shared';
+import { getRegionLockId, getTrackPanLockId, getTrackVolumeLockId } from '../utils/collaborationLocks';
 
 interface UseDAWCollaborationOptions {
   socket: Socket | null;
@@ -34,9 +36,10 @@ export const useDAWCollaboration = ({
 }: UseDAWCollaborationOptions) => {
   const { userId, username } = useUserStore();
   const isInitializedRef = useRef(false);
-  const trackDragLockRef = useRef<string | null>(null); // trackId being dragged
+  const activeTrackControlLockRef = useRef<{ lockId: string; control: 'volume' | 'pan' } | null>(null);
   const effectChainSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevEffectChainsRef = useRef<Record<string, string>>({}); // Store JSON strings for comparison
+  const isBroadcastingRecordingRef = useRef(false);
   const regionDragQueueRef = useRef<Map<string, RegionDragUpdatePayload>>(new Map());
   const regionDragEmitterRef = useRef(
     createThrottledEmitter<void>(() => {
@@ -138,6 +141,23 @@ export const useDAWCollaboration = ({
     }, COLLAB_THROTTLE_INTERVALS.effectChainMs)
   );
 
+  type RecordingPreviewPayload = {
+    trackId: string;
+    recordingType: RecordingType;
+    startBeat: number;
+    durationBeats: number;
+  };
+
+  const recordingPreviewEmitterRef = useRef(
+    createThrottledEmitter<RecordingPreviewPayload | null>((payload) => {
+      if (!payload) {
+        dawSyncService.syncRecordingPreviewEnd();
+        return;
+      }
+
+      dawSyncService.syncRecordingPreview(payload);
+    }, COLLAB_THROTTLE_INTERVALS.recordingPreviewMs)
+  );
   const synthParamsQueueRef = useRef<Map<string, Partial<SynthState>>>(new Map());
   const synthParamsEmitterRef = useRef(
     createThrottledEmitter<void>(() => {
@@ -191,7 +211,6 @@ export const useDAWCollaboration = ({
   const setTrackInstrument = useTrackStore((state) => state.setTrackInstrument);
   const reorderTrack = useTrackStore((state) => state.reorderTrack);
   const selectTrack = useTrackStore((state) => state.selectTrack);
-  const selectedTrackId = useTrackStore((state) => state.selectedTrackId);
 
   // Region store
   const addRegion = useRegionStore((state) => state.addRegion);
@@ -202,6 +221,7 @@ export const useDAWCollaboration = ({
   const moveRegionsToTrack = useRegionStore((state) => state.moveRegionsToTrack);
   const splitRegions = useRegionStore((state) => state.splitRegions);
   const selectRegion = useRegionStore((state) => state.selectRegion);
+  const deselectRegion = useRegionStore((state) => state.deselectRegion);
   const clearSelection = useRegionStore((state) => state.clearSelection);
   const selectedRegionIds = useRegionStore((state) => state.selectedRegionIds);
 
@@ -265,6 +285,8 @@ export const useDAWCollaboration = ({
     const synthParamsEmitter = synthParamsEmitterRef.current;
     const synthParamsQueue = synthParamsQueueRef.current;
 
+    const recordingPreviewEmitter = recordingPreviewEmitterRef.current;
+
     return () => {
       regionDragEmitter.cancel();
       regionDragQueue.clear();
@@ -278,8 +300,58 @@ export const useDAWCollaboration = ({
       effectChainQueue.clear();
       synthParamsEmitter.cancel();
       synthParamsQueue.clear();
+      recordingPreviewEmitter.cancel();
     };
   }, []);
+
+  useEffect(() => {
+    if (!enabled || !roomId) {
+      useRecordingStore.getState().clearRemoteRecordingPreviews();
+    }
+  }, [enabled, roomId]);
+
+  const emitRecordingPreview = useCallback(
+    (preview: RecordingPreviewPayload | null) => {
+      if (!enabled || !roomId) {
+        return;
+      }
+      recordingPreviewEmitterRef.current.push(preview);
+    },
+    [enabled, roomId]
+  );
+
+  useEffect(() => {
+    const unsubscribe = useRecordingStore.subscribe((next) => {
+      const isActive =
+        enabled &&
+        roomId &&
+        userId &&
+        next.isRecording &&
+        !!next.recordingTrackId &&
+        !!next.recordingType;
+
+      if (isActive) {
+        emitRecordingPreview({
+          trackId: next.recordingTrackId!,
+          recordingType: next.recordingType as RecordingType,
+          startBeat: next.recordingStartBeat,
+          durationBeats: Math.max(0, next.recordingDurationBeats),
+        });
+        isBroadcastingRecordingRef.current = true;
+      } else if (isBroadcastingRecordingRef.current) {
+        emitRecordingPreview(null);
+        isBroadcastingRecordingRef.current = false;
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      if (isBroadcastingRecordingRef.current) {
+        emitRecordingPreview(null);
+        isBroadcastingRecordingRef.current = false;
+      }
+    };
+  }, [emitRecordingPreview, enabled, roomId, userId]);
 
   // ========== Track sync handlers ==========
 
@@ -334,69 +406,86 @@ export const useDAWCollaboration = ({
 
   const handleTrackVolumeChange = useCallback(
     (trackId: string, volume: number) => {
-      const lockKey = `track_${trackId}_property`;
-      if (!isLockedByUser(lockKey, userId || '')) {
-        if (acquireLock(lockKey, {
-          userId: userId || '',
-          username: username || '',
-          type: 'track_property',
-          timestamp: Date.now(),
-        })) {
-          dawSyncService.acquireLock(lockKey, 'track_property');
-          trackDragLockRef.current = trackId;
-        } else {
-          return;
-        }
+      const lockId = getTrackVolumeLockId(trackId);
+      const currentUserId = userId || '';
+      if (!currentUserId) {
+        return;
       }
 
+      if (!isLockedByUser(lockId, currentUserId)) {
+        const didAcquire = acquireLock(lockId, {
+          userId: currentUserId,
+          username: username || '',
+          type: 'control',
+          timestamp: Date.now(),
+        });
+
+        if (!didAcquire) {
+          return;
+        }
+
+        dawSyncService.acquireLock(lockId, 'control');
+      }
+
+      activeTrackControlLockRef.current = { lockId, control: 'volume' };
       setTrackVolume(trackId, volume);
       queueTrackPropertyUpdate(trackId, { volume });
     },
-    [setTrackVolume, isLockedByUser, acquireLock, userId, username, queueTrackPropertyUpdate]
+    [acquireLock, isLockedByUser, queueTrackPropertyUpdate, setTrackVolume, userId, username]
   );
 
   const handleTrackPanChange = useCallback(
     (trackId: string, pan: number) => {
-      const lockKey = `track_${trackId}_property`;
-      if (!isLockedByUser(lockKey, userId || '')) {
-        if (acquireLock(lockKey, {
-          userId: userId || '',
-          username: username || '',
-          type: 'track_property',
-          timestamp: Date.now(),
-        })) {
-          dawSyncService.acquireLock(lockKey, 'track_property');
-          trackDragLockRef.current = trackId;
-        } else {
-          return;
-        }
+      const lockId = getTrackPanLockId(trackId);
+      const currentUserId = userId || '';
+      if (!currentUserId) {
+        return;
       }
 
+      if (!isLockedByUser(lockId, currentUserId)) {
+        const didAcquire = acquireLock(lockId, {
+          userId: currentUserId,
+          username: username || '',
+          type: 'control',
+          timestamp: Date.now(),
+        });
+
+        if (!didAcquire) {
+          return;
+        }
+
+        dawSyncService.acquireLock(lockId, 'control');
+      }
+
+      activeTrackControlLockRef.current = { lockId, control: 'pan' };
       setTrackPan(trackId, pan);
       queueTrackPropertyUpdate(trackId, { pan });
     },
-    [setTrackPan, isLockedByUser, acquireLock, userId, username, queueTrackPropertyUpdate]
+    [acquireLock, isLockedByUser, queueTrackPropertyUpdate, setTrackPan, userId, username]
+  );
+
+  const releaseTrackControlLock = useCallback(
+    (control: 'volume' | 'pan') => {
+      if (activeTrackControlLockRef.current?.control !== control) {
+        return;
+      }
+
+      const { lockId } = activeTrackControlLockRef.current;
+      flushTrackPropertyUpdates();
+      releaseLock(lockId, userId || '');
+      dawSyncService.releaseLock(lockId);
+      activeTrackControlLockRef.current = null;
+    },
+    [flushTrackPropertyUpdates, releaseLock, userId]
   );
 
   const handleTrackVolumeDragEnd = useCallback(() => {
-    if (trackDragLockRef.current) {
-      flushTrackPropertyUpdates();
-      const lockKey = `track_${trackDragLockRef.current}_property`;
-      releaseLock(lockKey, userId || '');
-      dawSyncService.releaseLock(lockKey);
-      trackDragLockRef.current = null;
-    }
-  }, [releaseLock, userId, flushTrackPropertyUpdates]);
+    releaseTrackControlLock('volume');
+  }, [releaseTrackControlLock]);
 
   const handleTrackPanDragEnd = useCallback(() => {
-    if (trackDragLockRef.current) {
-      flushTrackPropertyUpdates();
-      const lockKey = `track_${trackDragLockRef.current}_property`;
-      releaseLock(lockKey, userId || '');
-      dawSyncService.releaseLock(lockKey);
-      trackDragLockRef.current = null;
-    }
-  }, [releaseLock, userId, flushTrackPropertyUpdates]);
+    releaseTrackControlLock('pan');
+  }, [releaseTrackControlLock]);
 
   const handleTrackInstrumentChange = useCallback(
     (trackId: string, instrumentId: string, instrumentCategory?: InstrumentCategory) => {
@@ -420,9 +509,8 @@ export const useDAWCollaboration = ({
   const handleTrackSelect = useCallback(
     (trackId: string | null) => {
       selectTrack(trackId);
-      dawSyncService.syncSelectionChange(trackId, selectedRegionIds);
     },
-    [selectTrack, selectedRegionIds]
+    [selectTrack]
   );
 
   // ========== Region sync handlers ==========
@@ -484,7 +572,8 @@ export const useDAWCollaboration = ({
       if (!updates || Object.keys(updates).length === 0) {
         return;
       }
-      const lock = isLocked(regionId);
+      const lockId = getRegionLockId(regionId);
+      const lock = isLocked(lockId);
       if (lock && lock.userId !== userId) {
         return; // Locked by someone else
       }
@@ -505,7 +594,7 @@ export const useDAWCollaboration = ({
       const currentUsername = username || '';
 
       const hasConflict = regionIds.some((regionId) => {
-        const lock = isLocked(regionId);
+        const lock = isLocked(getRegionLockId(regionId));
         return lock && lock.userId !== currentUserId;
       });
 
@@ -516,11 +605,12 @@ export const useDAWCollaboration = ({
       const acquired: string[] = [];
 
       for (const regionId of regionIds) {
-        if (isLockedByUser(regionId, currentUserId)) {
+        const lockId = getRegionLockId(regionId);
+        if (isLockedByUser(lockId, currentUserId)) {
           continue;
         }
 
-        const didAcquire = acquireLock(regionId, {
+        const didAcquire = acquireLock(lockId, {
           userId: currentUserId,
           username: currentUsername,
           type: 'region',
@@ -535,8 +625,8 @@ export const useDAWCollaboration = ({
           return false;
         }
 
-        dawSyncService.acquireLock(regionId, 'region');
-        acquired.push(regionId);
+        dawSyncService.acquireLock(lockId, 'region');
+        acquired.push(lockId);
       }
 
       return true;
@@ -564,15 +654,18 @@ export const useDAWCollaboration = ({
       regionDragQueueRef.current.clear();
 
       const currentUserId = userId || '';
+      const stillSelectedIds = new Set(selectedRegionIds);
 
       regionIds.forEach((regionId) => {
-        if (isLockedByUser(regionId, currentUserId)) {
-          releaseLock(regionId, currentUserId);
-          dawSyncService.releaseLock(regionId);
+        const lockId = getRegionLockId(regionId);
+        const shouldRelease = !stillSelectedIds.has(regionId);
+        if (shouldRelease && isLockedByUser(lockId, currentUserId)) {
+          releaseLock(lockId, currentUserId);
+          dawSyncService.releaseLock(lockId);
         }
       });
     },
-    [isLockedByUser, releaseLock, userId]
+    [isLockedByUser, releaseLock, selectedRegionIds, userId]
   );
 
   const handleRegionRealtimeUpdates = useCallback((updates: RegionRealtimeUpdate[]) => {
@@ -637,7 +730,8 @@ export const useDAWCollaboration = ({
 
   const handleRegionMove = useCallback(
     (regionId: string, deltaBeats: number) => {
-      const lock = isLocked(regionId);
+      const lockId = getRegionLockId(regionId);
+      const lock = isLocked(lockId);
       if (lock && lock.userId !== userId) {
         return; // Locked by someone else
       }
@@ -658,7 +752,7 @@ export const useDAWCollaboration = ({
       }
 
       const lockConflict = regionIds.some((regionId) => {
-        const lock = isLocked(regionId);
+        const lock = isLocked(getRegionLockId(regionId));
         return lock && lock.userId !== userId;
       });
 
@@ -691,7 +785,7 @@ export const useDAWCollaboration = ({
       }
 
       const lockConflict = regionIds.some((regionId) => {
-        const lock = isLocked(regionId);
+        const lock = isLocked(getRegionLockId(regionId));
         return lock && lock.userId !== userId;
       });
 
@@ -727,7 +821,8 @@ export const useDAWCollaboration = ({
 
   const handleRegionDelete = useCallback(
     (regionId: string) => {
-      const lock = isLocked(regionId);
+      const lockId = getRegionLockId(regionId);
+      const lock = isLocked(lockId);
       if (lock && lock.userId !== userId) {
         return; // Locked by someone else
       }
@@ -740,52 +835,106 @@ export const useDAWCollaboration = ({
 
   const handleRegionSelect = useCallback(
     (regionId: string, additive = false) => {
-      const lock = isLocked(regionId);
-      if (lock && lock.userId !== userId) {
-        return; // Locked by someone else, can't select
+      const currentUserId = userId || '';
+      const lockId = getRegionLockId(regionId);
+      const lock = isLocked(lockId);
+      if (!currentUserId || (lock && lock.userId !== currentUserId)) {
+        return false;
       }
 
-      // Acquire lock on selection
-      if (!isLockedByUser(regionId, userId || '')) {
-        if (acquireLock(regionId, {
-          userId: userId || '',
+      if (!isLockedByUser(lockId, currentUserId)) {
+        const didAcquire = acquireLock(lockId, {
+          userId: currentUserId,
           username: username || '',
           type: 'region',
           timestamp: Date.now(),
-        })) {
-          dawSyncService.acquireLock(regionId, 'region');
-        } else {
-          return; // Failed to acquire lock
+        });
+
+        if (!didAcquire) {
+          return false;
         }
+
+        dawSyncService.acquireLock(lockId, 'region');
+      }
+
+      if (!additive) {
+        selectedRegionIds.forEach((selectedId) => {
+          if (selectedId === regionId) {
+            return;
+          }
+          const selectedLockId = getRegionLockId(selectedId);
+          if (isLockedByUser(selectedLockId, currentUserId)) {
+            releaseLock(selectedLockId, currentUserId);
+            dawSyncService.releaseLock(selectedLockId);
+          }
+        });
       }
 
       selectRegion(regionId, additive);
       const newSelectedIds = additive
-        ? [...selectedRegionIds, regionId]
+        ? Array.from(new Set([...selectedRegionIds, regionId]))
         : [regionId];
-      dawSyncService.syncSelectionChange(selectedTrackId, newSelectedIds);
+      dawSyncService.syncSelectionChange({ selectedRegionIds: newSelectedIds });
+      return true;
     },
-    [selectRegion, isLocked, isLockedByUser, acquireLock, userId, username, selectedRegionIds, selectedTrackId]
+    [
+      selectRegion,
+      isLocked,
+      isLockedByUser,
+      acquireLock,
+      releaseLock,
+      userId,
+      username,
+      selectedRegionIds,
+    ]
   );
 
   const handleRegionDeselect = useCallback(
     (regionId: string) => {
-      if (isLockedByUser(regionId, userId || '')) {
-        releaseLock(regionId, userId || '');
-        dawSyncService.releaseLock(regionId);
+      if (!selectedRegionIds.includes(regionId)) {
+        return;
       }
-      clearSelection();
-      dawSyncService.syncSelectionChange(selectedTrackId, []);
+
+      const currentUserId = userId || '';
+      const lockId = getRegionLockId(regionId);
+      if (currentUserId && isLockedByUser(lockId, currentUserId)) {
+        releaseLock(lockId, currentUserId);
+        dawSyncService.releaseLock(lockId);
+      }
+
+      deselectRegion(regionId);
+      const nextSelectedIds = selectedRegionIds.filter((id) => id !== regionId);
+      dawSyncService.syncSelectionChange({ selectedRegionIds: nextSelectedIds });
     },
-    [isLockedByUser, releaseLock, userId, clearSelection, selectedTrackId]
+    [
+      deselectRegion,
+      selectedRegionIds,
+      userId,
+      isLockedByUser,
+      releaseLock,
+    ]
   );
+
+  const handleRegionClearSelection = useCallback(() => {
+    const currentUserId = userId || '';
+    selectedRegionIds.forEach((regionId) => {
+      const lockId = getRegionLockId(regionId);
+      if (currentUserId && isLockedByUser(lockId, currentUserId)) {
+        releaseLock(lockId, currentUserId);
+        dawSyncService.releaseLock(lockId);
+      }
+    });
+    clearSelection();
+    dawSyncService.syncSelectionChange({ selectedRegionIds: [] });
+  }, [selectedRegionIds, userId, isLockedByUser, releaseLock, clearSelection]);
 
   // ========== Note sync handlers ==========
 
   const handleNoteAdd = useCallback(
     (note: Parameters<typeof addNote>[0]) => {
       if (!activeRegionId) return null;
-      const lock = isLocked(activeRegionId);
+      const lockId = getRegionLockId(activeRegionId);
+      const lock = isLocked(lockId);
       if (lock && lock.userId !== userId) {
         return null; // Region locked by someone else
       }
@@ -802,7 +951,8 @@ export const useDAWCollaboration = ({
   const handleNoteUpdate = useCallback(
     (noteId: string, updates: Parameters<typeof updateNote>[1]) => {
       if (!activeRegionId) return;
-      const lock = isLocked(activeRegionId);
+      const lockId = getRegionLockId(activeRegionId);
+      const lock = isLocked(lockId);
       if (lock && lock.userId !== userId) {
         return; // Region locked by someone else
       }
@@ -852,6 +1002,50 @@ export const useDAWCollaboration = ({
       synthParamsEmitterRef.current.push(undefined);
     },
     [updateSynthStateStore]
+  );
+
+  const acquireInteractionLock = useCallback(
+    (elementId: string, type: LockType) => {
+      const currentUserId = userId || '';
+      const currentUsername = username || '';
+      if (!currentUserId) {
+        return false;
+      }
+
+      if (isLockedByUser(elementId, currentUserId)) {
+          return true;
+      }
+
+      const didAcquire = acquireLock(elementId, {
+        userId: currentUserId,
+        username: currentUsername,
+        type,
+        timestamp: Date.now(),
+      });
+
+      if (!didAcquire) {
+        return false;
+      }
+
+      dawSyncService.acquireLock(elementId, type);
+      return true;
+    },
+    [acquireLock, isLockedByUser, userId, username]
+  );
+
+  const releaseInteractionLock = useCallback(
+    (elementId: string) => {
+      const currentUserId = userId || '';
+      if (!currentUserId) {
+        return;
+      }
+
+      const didRelease = releaseLock(elementId, currentUserId);
+      if (didRelease) {
+        dawSyncService.releaseLock(elementId);
+      }
+    },
+    [releaseLock, userId]
   );
 
   const handleBpmChange = useCallback(
@@ -975,6 +1169,7 @@ export const useDAWCollaboration = ({
     handleRegionSplit,
     handleRegionSelect,
     handleRegionDeselect,
+    handleRegionClearSelection,
 
     // Note handlers
     handleNoteAdd,
@@ -994,6 +1189,8 @@ export const useDAWCollaboration = ({
     // Lock utilities
     isLocked,
     isLockedByUser: (elementId: string) => isLockedByUser(elementId, userId || ''),
+    acquireInteractionLock,
+    releaseInteractionLock,
   };
 };
 

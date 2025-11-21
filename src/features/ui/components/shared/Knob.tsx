@@ -30,6 +30,9 @@ export interface KnobProps {
     | "success"
     | "warning"
     | "error";
+  onInteractionStart?: () => boolean | void;
+  onInteractionEnd?: () => void;
+  lockedLabel?: string;
 }
 
 export const Knob: React.FC<KnobProps> = ({
@@ -46,6 +49,9 @@ export const Knob: React.FC<KnobProps> = ({
   showTooltip = true,
   tooltipFormat = (val) => val.toFixed(3),
   color = "primary",
+  onInteractionStart,
+  onInteractionEnd,
+  lockedLabel,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
@@ -92,6 +98,12 @@ export const Knob: React.FC<KnobProps> = ({
   >(
     (e) => {
       if (disabled) return;
+      if (onInteractionStart) {
+        const canStart = onInteractionStart();
+        if (canStart === false) {
+          return;
+        }
+      }
       e.preventDefault();
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
       setIsDragging(true);
@@ -99,7 +111,7 @@ export const Knob: React.FC<KnobProps> = ({
       setStartPos(initialAxis);
       setStartValue(value);
     },
-    [disabled, orientation, value],
+    [disabled, orientation, value, onInteractionStart],
   );
 
   const handlePointerMove = useCallback<
@@ -140,8 +152,11 @@ export const Knob: React.FC<KnobProps> = ({
   const handlePointerUp = useCallback<
     React.PointerEventHandler<HTMLDivElement>
   >(() => {
+    if (isDragging) {
+      onInteractionEnd?.();
+    }
     setIsDragging(false);
-  }, []);
+  }, [isDragging, onInteractionEnd]);
 
   // Tooltip visibility
   const showTooltipNow = showTooltip && !disabled && (isHovering || isDragging);
@@ -271,6 +286,13 @@ export const Knob: React.FC<KnobProps> = ({
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
     >
+      {lockedLabel && disabled && (
+        <div className="absolute -top-2 left-1/2 z-20 -translate-x-1/2">
+          <div className="badge badge-xs badge-warning whitespace-nowrap">
+            {lockedLabel}
+          </div>
+        </div>
+      )}
       {/* Adjustable range arc (acts as the "border") */}
       <svg
         className={`absolute inset-0 z-10 pointer-events-none ${getColorClasses("text")}`}

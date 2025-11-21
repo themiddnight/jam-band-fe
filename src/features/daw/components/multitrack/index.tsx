@@ -21,10 +21,6 @@ export const MultitrackView = () => {
   const selectTrack = useTrackStore((state) => state.selectTrack);
   const regions = useRegionStore((state) => state.regions);
   const selectedRegionIds = useRegionStore((state) => state.selectedRegionIds);
-  const selectRegion = useRegionStore((state) => state.selectRegion);
-  const toggleRegionSelection = useRegionStore((state) => state.toggleRegionSelection);
-  const clearRegionSelection = useRegionStore((state) => state.clearSelection);
-  const selectRegions = useRegionStore((state) => state.selectRegions);
   
   // Use collaboration handlers if available
   const {
@@ -39,6 +35,9 @@ export const MultitrackView = () => {
     handleRegionRealtimeFlush,
     handleRegionDelete,
     handleRegionSplit,
+    handleRegionSelect,
+    handleRegionDeselect,
+    handleRegionClearSelection,
   } = useDAWCollaborationContext();
   const playhead = useProjectStore((state) => state.playhead);
   const timeSignature = useProjectStore((state) => state.timeSignature);
@@ -354,18 +353,30 @@ export const MultitrackView = () => {
                   }
                 }}
                 onSelectRegion={(regionId, additive) => {
-                  selectRegion(regionId, additive ?? false);
+                  const didSelect = handleRegionSelect(regionId, additive ?? false);
+                  if (!didSelect) {
+                    return;
+                  }
                   setActiveRegion(regionId);
 
                   // Automatically select the track that the region belongs to
-                  const region = regions.find(r => r.id === regionId);
+                  const region = regions.find((r) => r.id === regionId);
                   if (region) {
                     selectTrack(region.trackId);
                   }
                 }}
-                onToggleRegionSelection={toggleRegionSelection}
+                onToggleRegionSelection={(regionId) => {
+                  if (selectedRegionIds.includes(regionId)) {
+                    handleRegionDeselect(regionId);
+                  } else {
+                    const didSelect = handleRegionSelect(regionId, true);
+                    if (didSelect) {
+                      setActiveRegion(regionId);
+                    }
+                  }
+                }}
                 onClearRegionSelection={() => {
-                  clearRegionSelection();
+                  handleRegionClearSelection();
                   setActiveRegion(null);
                 }}
                 onCreateRegion={(trackId, startBeat) => {
@@ -398,18 +409,24 @@ export const MultitrackView = () => {
                   })
                 }
                 onMarqueeSelect={(regionIds, additive) => {
-                  if (additive) {
-                    const combined = Array.from(new Set([...selectedRegionIds, ...regionIds]));
-                    selectRegions(combined);
-                  } else {
-                    selectRegions(regionIds);
+                  if (!regionIds.length) {
+                    return;
                   }
+
+                  if (!additive) {
+                    handleRegionClearSelection();
+                  }
+
+                  regionIds.forEach((regionId) => {
+                    handleRegionSelect(regionId, true);
+                  });
+
                   const lastRegionId = regionIds.at(-1) ?? null;
                   setActiveRegion(lastRegionId);
 
                   // Automatically select the track of the last selected region
                   if (lastRegionId) {
-                    const region = regions.find(r => r.id === lastRegionId);
+                    const region = regions.find((r) => r.id === lastRegionId);
                     if (region) {
                       selectTrack(region.trackId);
                     }

@@ -21,6 +21,7 @@ export { VirtualKeyButton } from "./components/shared/VirtualKeyButton";
 
 // Types exports
 export type { FretboardConfig } from "./components/shared/FretboardBase";
+export type { KnobProps } from "./components/shared/Knob";
 export type { ChordKey } from "./components/shared/ChordKeys";
 export type { NoteKey } from "./components/shared/NoteKeys";
 export type { GroupedOption } from "./components/shared/GroupedDropdown";

@@ -81,8 +81,9 @@ export default function ArrangeRoom() {
 
   // WebRTC Voice Communication
   const isVoiceEnabled = !!currentUser?.role;
+  const isRoomOwner = currentUser?.role === "room_owner";
   const canTransmitVoice =
-    currentUser?.role === "room_owner" || currentUser?.role === "band_member";
+    isRoomOwner || currentUser?.role === "band_member";
 
   const webRTCParams = useMemo(
     () => ({
@@ -348,7 +349,7 @@ export default function ArrangeRoom() {
                     </span>
                   )}
                   {/* Room Settings Button - Only for room owner */}
-                  {currentUser?.role === "room_owner" && (
+                  {isRoomOwner && (
                     <button
                       onClick={handleOpenRoomSettings}
                       className="btn btn-xs btn-ghost"
@@ -373,7 +374,7 @@ export default function ArrangeRoom() {
               </div>
               <div className="flex items-center gap-2">
                 {/* Pending notification button for room owner */}
-                {currentUser?.role === "room_owner" && (
+                {isRoomOwner && (
                   <div className="relative">
                     <button
                       ref={pendingBtnRef}
@@ -449,7 +450,7 @@ export default function ArrangeRoom() {
                     </AnchoredPopup>
                   </div>
                 )}
-                <ProjectMenu />
+                <ProjectMenu canLoadProject={isRoomOwner} />
                 <button
                   onClick={handleLeaveRoomClick}
                   className="btn btn-outline btn-sm"

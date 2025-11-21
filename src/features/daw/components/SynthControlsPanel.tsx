@@ -5,6 +5,9 @@ import { InstrumentCategory } from "@/shared/constants/instruments";
 import { LazySynthControlsWrapper as SynthControls } from "@/features/instruments";
 import type { SynthState } from "@/features/instruments/utils/InstrumentEngine";
 import { useSynthStore } from "../stores/synthStore";
+import { useLockStore } from "../stores/lockStore";
+import { useUserStore } from "@/shared/stores/userStore";
+import { getSynthParamLockId } from "../utils/collaborationLocks";
 import { useDAWCollaborationContext } from "../contexts/useDAWCollaborationContext";
 
 /**
@@ -28,7 +31,13 @@ export const SynthControlsPanel = memo(() => {
   const updateSynthStateStore = useSynthStore((state) => state.updateSynthState);
   const removeSynthState = useSynthStore((state) => state.removeSynthState);
 
-  const { handleSynthParamsChange } = useDAWCollaborationContext();
+  const currentUserId = useUserStore((state) => state.userId);
+  const isLocked = useLockStore((state) => state.isLocked);
+  const {
+    handleSynthParamsChange,
+    acquireInteractionLock,
+    releaseInteractionLock,
+  } = useDAWCollaborationContext();
 
   // Check if the selected track is a synth track
   const isSynthTrack = useMemo(() => {
@@ -142,6 +151,35 @@ export const SynthControlsPanel = memo(() => {
         synthState={synthState}
         onParamChange={handleParamChange}
         onLoadPreset={handleLoadPreset}
+        getParamLockProps={(param) => {
+          if (!selectedTrack) {
+            return {};
+          }
+
+          const lockId = getSynthParamLockId(selectedTrack.id, param);
+          const lock = isLocked(lockId);
+          const isLockedByRemote = Boolean(
+            lock && lock.userId !== currentUserId,
+          );
+
+          return {
+            disabled: isLockedByRemote,
+            lockedLabel: isLockedByRemote && lock ? `🔒 ${lock.username}` : undefined,
+            onInteractionStart: () => {
+              if (!selectedTrack) {
+                return false;
+              }
+              const currentLock = isLocked(lockId);
+              if (currentLock && currentLock.userId !== currentUserId) {
+                return false;
+              }
+              return acquireInteractionLock(lockId, "control");
+            },
+            onInteractionEnd: () => {
+              releaseInteractionLock(lockId);
+            },
+          };
+        }}
       />
     </section>
   );

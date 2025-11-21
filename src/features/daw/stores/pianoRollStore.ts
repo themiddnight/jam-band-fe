@@ -34,6 +34,7 @@ interface PianoRollStoreState {
   selectedNoteIds: NoteId[];
   selectedSustainIds: string[];
   viewMode: PianoRollViewMode;
+  regionPreviewStarts: Record<RegionId, number | undefined>;
   setViewMode: (mode: PianoRollViewMode) => void;
   setActiveRegion: (regionId: RegionId | null) => void;
   addNote: (note: Omit<MidiNote, 'id'>) => MidiNote | null;
@@ -54,6 +55,8 @@ interface PianoRollStoreState {
   updateSustainEvent: (eventId: string, updates: Partial<SustainEvent>) => void;
   removeSustainEvent: (eventId: string) => void;
   setSelectedSustainIds: (eventIds: string[]) => void;
+  setRegionPreviewStart: (regionId: RegionId, start: number | undefined) => void;
+  clearRegionPreview: (regionId: RegionId) => void;
   // Sync handlers (bypass undo history)
   syncAddNote: (regionId: RegionId, note: MidiNote) => void;
   syncUpdateNote: (regionId: RegionId, noteId: NoteId, updates: Partial<MidiNote>) => void;
@@ -65,12 +68,14 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
   selectedNoteIds: [],
   selectedSustainIds: [],
   viewMode: 'all-keys',
+  regionPreviewStarts: {},
   setViewMode: (mode) => set({ viewMode: mode }),
   setActiveRegion: (regionId) => {
     set({
       activeRegionId: regionId,
       selectedNoteIds: [],
       selectedSustainIds: [],
+      regionPreviewStarts: regionId ? get().regionPreviewStarts : {},
     });
   },
   addNote: (note) => {
@@ -218,7 +223,7 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
     const wouldOverlap = region.notes
       .filter((note) => noteIds.includes(note.id))
       .some((note) => {
-        const newStart = Math.max(0, note.start + deltaBeats);
+        const newStart = note.start + deltaBeats; // Allow negative positions
         const newPitch = Math.min(127, Math.max(0, note.pitch + deltaPitch));
         return checkNoteOverlap(region.notes, note.id, newStart, note.duration, newPitch);
       });
@@ -233,7 +238,7 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
       .map((note) => ({
         id: note.id,
         updates: {
-          start: Math.max(0, note.start + deltaBeats),
+          start: note.start + deltaBeats, // Allow negative positions
           pitch: Math.min(127, Math.max(0, note.pitch + deltaPitch)),
         },
       }));
@@ -260,7 +265,7 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
     const wouldOverlap = region.notes
       .filter((note) => noteIds.includes(note.id))
       .some((note) => {
-        const newStart = Math.max(0, note.start + deltaBeats);
+        const newStart = note.start + deltaBeats; // Allow negative positions
         const newPitch = Math.min(127, Math.max(0, note.pitch + deltaPitch));
         // Use empty string as noteId since this is a new note
         return checkNoteOverlap(region.notes, '', newStart, note.duration, newPitch);
@@ -277,7 +282,7 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
       .forEach((note) => {
         const newNote = get().addNote({
           pitch: Math.min(127, Math.max(0, note.pitch + deltaPitch)),
-          start: Math.max(0, note.start + deltaBeats),
+          start: note.start + deltaBeats, // Allow negative positions
           duration: note.duration,
           velocity: note.velocity,
         });
@@ -456,6 +461,22 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
   setSelectedSustainIds: (eventIds) =>
     set({
       selectedSustainIds: Array.from(new Set(eventIds)),
+    }),
+  setRegionPreviewStart: (regionId, start) =>
+    set((state) => ({
+      regionPreviewStarts: {
+        ...state.regionPreviewStarts,
+        [regionId]: start,
+      },
+    })),
+  clearRegionPreview: (regionId) =>
+    set((state) => {
+      if (!(regionId in state.regionPreviewStarts)) {
+        return state;
+      }
+      const next = { ...state.regionPreviewStarts };
+      delete next[regionId];
+      return { regionPreviewStarts: next } as Partial<PianoRollStoreState>;
     }),
   // Sync handlers (bypass undo history - called from DAWSyncService)
   syncAddNote: (regionId, note) => {

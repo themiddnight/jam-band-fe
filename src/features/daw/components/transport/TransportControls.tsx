@@ -60,7 +60,7 @@ export const TransportControls = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isMod = isMac ? e.metaKey : e.ctrlKey;
-      
+
       if (isMod && e.key === ',') {
         e.preventDefault();
         handleBackToStart();
@@ -123,7 +123,9 @@ export const TransportControls = () => {
           aria-label="Record"
         >
           <kbd className="kbd kbd-xs">{`${modifierKey}+R`}</kbd>
-          ●
+          <p className="text-red-500">
+            {isRecording ? '●' : '○'}
+          </p>
         </button>
       </div>
     </div>

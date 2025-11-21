@@ -32,12 +32,17 @@ const computeScheduledNotes = (region: MidiRegion): ScheduledNoteEvent[] => {
     region.notes.forEach((note) => {
       const noteEnd = note.start + note.duration;
 
-      // Allow notes to exist outside region boundaries
-      // Only clip for playback timing, but don't skip notes entirely
-      const clippedStart = note.start;
-      const clippedEnd = noteEnd;
+      // Skip notes that are completely outside the region bounds
+      if (note.start >= region.length || noteEnd <= 0) {
+        return;
+      }
+
+      // Clip notes that partially overlap the region bounds
+      const clippedStart = Math.max(0, note.start);
+      const clippedEnd = Math.min(region.length, noteEnd);
       const clippedDuration = clippedEnd - clippedStart;
 
+      // Only schedule if there's audible duration within the region
       if (clippedDuration > 0.01) {
         const startBeat = iterationOffset + clippedStart;
         const endBeat = iterationOffset + clippedEnd;
@@ -64,19 +69,27 @@ const computeSustainEvents = (region: MidiRegion): SustainSchedule[] => {
     const iterationOffset = region.start + iteration * region.length;
 
     region.sustainEvents.forEach((event) => {
-      // Allow sustain events to exist outside region boundaries
-      const clippedStart = event.start;
-      const clippedEnd = event.end;
+      // Skip sustain events that are completely outside the region bounds
+      if (event.start >= region.length || event.end <= 0) {
+        return;
+      }
 
-      events.push({
-        time: iterationOffset + clippedStart,
-        active: true,
-      });
+      // Clip sustain events to region bounds
+      const clippedStart = Math.max(0, event.start);
+      const clippedEnd = Math.min(region.length, event.end);
 
-      events.push({
-        time: iterationOffset + clippedEnd,
-        active: false,
-      });
+      // Only schedule if there's a valid duration within the region
+      if (clippedEnd > clippedStart) {
+        events.push({
+          time: iterationOffset + clippedStart,
+          active: true,
+        });
+
+        events.push({
+          time: iterationOffset + clippedEnd,
+          active: false,
+        });
+      }
     });
   }
 

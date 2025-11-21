@@ -84,6 +84,8 @@ const PianoRollComponent = () => {
   const playhead = useProjectStore((state) => state.playhead);
   const snapToGridEnabled = useProjectStore((state) => state.snapToGrid);
 
+  const regionPreviewStarts = usePianoRollStore((state) => state.regionPreviewStarts);
+
   const region = regions.find((item) => item.id === activeRegionId);
   
   // Piano roll only works with MIDI regions
@@ -94,6 +96,17 @@ const PianoRollComponent = () => {
     }
     return tracks.find((item) => item.id === midiRegion.trackId) ?? null;
   }, [midiRegion, tracks]);
+
+  const regionHighlight = useMemo(() => {
+    if (!midiRegion) {
+      return { start: 0, end: 0 };
+    }
+    const effectiveStart = regionPreviewStarts[midiRegion.id] ?? midiRegion.start;
+    return {
+      start: effectiveStart,
+      end: effectiveStart + midiRegion.length,
+    };
+  }, [midiRegion, regionPreviewStarts]);
 
   const totalBeats = useMemo(() => {
     // Calculate based on ALL regions to match multitrack view
@@ -460,23 +473,27 @@ const PianoRollComponent = () => {
     if (!midiRegion) {
       return [];
     }
+    const effectiveStart = regionPreviewStarts[midiRegion.id] ?? midiRegion.start;
     return midiRegion.notes.map((note) => ({
       ...note,
-      start: midiRegion.start + note.start,
+      start: effectiveStart + note.start,
+      // adjust so notes visually follow region when start shifts
+      // but keep original duration/pitch
     }));
-  }, [midiRegion]);
+  }, [midiRegion, regionPreviewStarts]);
   
   // Convert sustain events to absolute positions for display
   const absoluteSustainEvents = useMemo(() => {
     if (!midiRegion) {
       return [];
     }
+    const effectiveStart = regionPreviewStarts[midiRegion.id] ?? midiRegion.start;
     return midiRegion.sustainEvents.map((event) => ({
       ...event,
-      start: midiRegion.start + event.start,
-      end: midiRegion.start + event.end,
+      start: effectiveStart + event.start,
+      end: effectiveStart + event.end,
     }));
-  }, [midiRegion]);
+  }, [midiRegion, regionPreviewStarts]);
 
   const scrollRafRef = useRef<number | null>(null);
   
@@ -651,8 +668,8 @@ const PianoRollComponent = () => {
             pixelsPerBeat={pixelsPerBeat}
             zoom={zoom}
             scrollLeft={scrollLeft}
-            highlightStart={midiRegion.start}
-            highlightEnd={midiRegion.start + midiRegion.length}
+            highlightStart={regionHighlight.start}
+            highlightEnd={regionHighlight.end}
             timeSignature={timeSignature}
             playheadBeats={playhead}
           />
@@ -689,8 +706,8 @@ const PianoRollComponent = () => {
               playheadBeats={playhead}
               scrollLeft={scrollLeft}
               viewportWidth={viewportWidth}
-              regionHighlightStart={midiRegion.start}
-              regionHighlightEnd={midiRegion.start + midiRegion.length}
+              regionHighlightStart={regionHighlight.start}
+              regionHighlightEnd={regionHighlight.end}
               snapToGridEnabled={snapToGridEnabled}
               onSetSelectedNotes={setSelectedNoteIds}
               onToggleNoteSelection={toggleNoteSelection}

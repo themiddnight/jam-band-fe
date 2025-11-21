@@ -4,13 +4,17 @@ import { Group, Layer, Rect, Stage, Text } from "react-konva";
 
 import { TRACK_HEIGHT } from "./constants";
 import { BaseRegion, DuplicateRegionPreview } from "./regions";
+import { usePianoRollStore } from "../../stores/pianoRollStore";
+import { useLockStore } from "../../stores/lockStore";
+import { getRegionLockId } from "../../utils/collaborationLocks";
+import { useUserStore } from "@/shared/stores/userStore";
 import type { AudioRegion, Region, RegionId, Track, TimeSignature } from "../../types/daw";
 import type { RegionRealtimeUpdate } from "../../contexts/DAWCollaborationContext.shared";
 import { snapToGrid as snapValueToGrid } from "../../utils/timeUtils";
 import { getGridDivisionForZoom, getGridInterval, getGridLineStyle } from "../../utils/gridUtils";
 import { beatsPerBar } from "../../utils/timeUtils";
 import { useRegionStore } from "../../stores/regionStore";
-import { useRecordingStore } from "../../stores/recordingStore";
+import { useRecordingStore, type RemoteRecordingPreview } from "../../stores/recordingStore";
 import { useProjectStore } from "../../stores/projectStore";
 import type { RegionDragUpdatePayload } from "../../services/dawSyncService";
 
@@ -134,6 +138,11 @@ const TrackCanvasComponent = ({
   onRegionRealtimeUpdates,
   onRegionRealtimeFlush,
 }: TrackCanvasProps) => {
+  const activePianoRegionId = usePianoRollStore((state) => state.activeRegionId);
+  const setRegionPreviewStart = usePianoRollStore((state) => state.setRegionPreviewStart);
+  const clearRegionPreview = usePianoRollStore((state) => state.clearRegionPreview);
+  const lockMap = useLockStore((state) => state.locks);
+  const currentUserId = useUserStore((state) => state.userId);
   const width = totalBeats * pixelsPerBeat * zoom;
   const beatWidth = pixelsPerBeat * zoom;
   
@@ -146,6 +155,7 @@ const TrackCanvasComponent = ({
   const recordingTrackId = useRecordingStore((state) => state.recordingTrackId);
   const recordingStartBeat = useRecordingStore((state) => state.recordingStartBeat);
   const recordingDurationBeats = useRecordingStore((state) => state.recordingDurationBeats);
+  const remotePreviewsMap = useRecordingStore((state) => state.remotePreviews);
   
   // Dynamic grid division based on zoom level
   const dynamicGridDivision = useMemo(() => getGridDivisionForZoom(zoom), [zoom]);
@@ -188,6 +198,8 @@ const TrackCanvasComponent = ({
       }, 0) || TRACK_HEIGHT
     );
   }, [tracks, trackHeights]);
+
+  const remotePreviews = useMemo<RemoteRecordingPreview[]>(() => Object.values(remotePreviewsMap), [remotePreviewsMap]);
 
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [resizeState, setResizeState] = useState<ResizeState | null>(null);
@@ -350,6 +362,13 @@ const TrackCanvasComponent = ({
         initialPositions,
         initialTrackIds,
       });
+
+      if (activePianoRegionId && regionIds.includes(activePianoRegionId)) {
+        const previewStart = initialPositions[activePianoRegionId];
+        if (typeof previewStart === "number") {
+          setRegionPreviewStart(activePianoRegionId, previewStart);
+        }
+      }
     },
     [
       getPointerData,
@@ -360,6 +379,8 @@ const TrackCanvasComponent = ({
       selectedRegionIds,
       snapToGrid,
       onRegionDragStart,
+      activePianoRegionId,
+      setRegionPreviewStart,
     ]
   );
 
@@ -418,6 +439,14 @@ const TrackCanvasComponent = ({
             };
           });
           onRegionDragRealtime(updates);
+        }
+
+        if (activePianoRegionId && dragState.regionIds.includes(activePianoRegionId)) {
+          const initialStart = dragState.initialPositions[activePianoRegionId];
+          if (typeof initialStart === "number") {
+            const previewStart = Math.max(0, initialStart + delta);
+            setRegionPreviewStart(activePianoRegionId, previewStart);
+          }
         }
 
         setDragState((prev) =>
@@ -674,6 +703,8 @@ const TrackCanvasComponent = ({
       snapToGrid,
       onRegionDragRealtime,
       onRegionRealtimeUpdates,
+      activePianoRegionId,
+      setRegionPreviewStart,
     ]
   );
 
@@ -714,6 +745,9 @@ const TrackCanvasComponent = ({
         }
       }
       setDragState(null);
+      if (activePianoRegionId && dragState.regionIds.includes(activePianoRegionId)) {
+        clearRegionPreview(activePianoRegionId);
+      }
     }
     if (panState) {
       setPanState(null);
@@ -755,28 +789,18 @@ const TrackCanvasComponent = ({
           } else if (r.type === 'midi') {
             // For MIDI regions, adjust note positions to maintain absolute timeline position
             // When region.start moves right by delta, notes need to move left by delta (relatively)
-            const adjustedNotes = r.notes
-              .map((note) => ({
-                ...note,
-                start: note.start - actualDelta, // Subtract delta to maintain absolute position
-              }))
-              .filter((note) => {
-                // Filter out notes that are now outside the visible region
-                const noteEnd = note.start + note.duration;
-                return noteEnd > 0 && note.start < newLength;
-              });
+            // Notes can exist outside the visible region bounds (negative start or beyond length)
+            const adjustedNotes = r.notes.map((note) => ({
+              ...note,
+              start: note.start - actualDelta, // Subtract delta to maintain absolute position
+            }));
             
             // Also adjust sustain events
-            const adjustedSustainEvents = r.sustainEvents
-              .map((event) => ({
-                ...event,
-                start: event.start - actualDelta,
-                end: event.end - actualDelta,
-              }))
-              .filter((event) => {
-                // Filter out events that are now outside the visible region
-                return event.end > 0 && event.start < newLength;
-              });
+            const adjustedSustainEvents = r.sustainEvents.map((event) => ({
+              ...event,
+              start: event.start - actualDelta,
+              end: event.end - actualDelta,
+            }));
             
             applyHeadResize(regionId, {
               start: newStart,
@@ -860,6 +884,8 @@ const TrackCanvasComponent = ({
     resizeState,
     trackYPositions,
     tracks,
+    activePianoRegionId,
+    clearRegionPreview,
   ]);
 
   const handleLengthHandleDown = useCallback(
@@ -1044,7 +1070,9 @@ const TrackCanvasComponent = ({
     );
   }
 
-  return (
+  const regionBadgePositions: Array<{ regionId: string; x: number; y: number; width: number }> = [];
+
+  const stageContent = (
     <Stage
       width={width}
       height={height}
@@ -1145,6 +1173,12 @@ const TrackCanvasComponent = ({
           const isSelected = selectedRegionIds.includes(region.id);
           const isMovingToNewTrack = Boolean(isDragging && effectiveTrackId !== region.trackId);
 
+          const lock = lockMap.get(getRegionLockId(region.id));
+          const isLockedByRemote = Boolean(lock && lock.userId !== currentUserId);
+          if (isLockedByRemote) {
+            regionBadgePositions.push({ regionId: region.id, x, y, width: widthPixels });
+          }
+
           return (
             <BaseRegion
               key={region.id}
@@ -1157,6 +1191,7 @@ const TrackCanvasComponent = ({
               isSelected={isSelected}
               isMovingToNewTrack={isMovingToNewTrack}
               loops={loops}
+              isLockedByRemote={isLockedByRemote}
               headResizeState={headResizeState}
               onPointerDown={(event) => handleRegionPointerDown(region, event)}
               onHeadHandleDown={(event) => handleHeadHandleDown(region, event)}
@@ -1244,6 +1279,59 @@ const TrackCanvasComponent = ({
             </Group>
           );
         })()}
+
+        {/* Remote recording previews */}
+        {remotePreviews.map((preview) => {
+          const track = tracks.find((t) => t.id === preview.trackId);
+          if (!track) {
+            return null;
+          }
+
+          const pos = trackYPositions[preview.trackId];
+          if (!pos) {
+            return null;
+          }
+
+          const sanitizedStart = Math.max(0, preview.startBeat);
+          const sanitizedLength = Math.max(0.25, preview.durationBeats);
+          const x = sanitizedStart * beatWidth;
+          const y = pos.y + 6;
+          const regionHeight = pos.height - 12;
+          const widthPixels = sanitizedLength * beatWidth;
+
+          const isVisible = x + widthPixels >= visibleStartBeat * beatWidth && x <= visibleEndBeat * beatWidth;
+          if (!isVisible) {
+            return null;
+          }
+
+          const strokeColor = preview.recordingType === 'midi' ? '#a855f7' : '#f97316';
+          const fillColor = (track.color ?? strokeColor) + '55';
+
+          return (
+            <Group key={`remote-preview-${preview.userId}-${preview.trackId}`}>
+              <Rect
+                x={x}
+                y={y}
+                width={widthPixels}
+                height={regionHeight}
+                fill={fillColor}
+                stroke={strokeColor}
+                strokeWidth={2}
+                dash={[6, 4]}
+                cornerRadius={4}
+                listening={false}
+              />
+              <Text
+                x={x + 8}
+                y={y + 6}
+                text={`● ${preview.username}`}
+                fontSize={12}
+                fill={strokeColor}
+                listening={false}
+              />
+            </Group>
+          );
+        })}
         
         {marqueeState && (
           <Rect
@@ -1258,6 +1346,34 @@ const TrackCanvasComponent = ({
         )}
       </Layer>
     </Stage>
+  );
+
+  return (
+    <div className="relative" style={{ width, height }}>
+      {stageContent}
+      <div className="pointer-events-none absolute left-0 top-0" style={{ width, height }}>
+        {regionBadgePositions.map(({ regionId, x, y, width: regionWidth }) => {
+          const lock = lockMap.get(getRegionLockId(regionId));
+          if (!lock) {
+            return null;
+          }
+          const badgeX = x + regionWidth / 2;
+          const badgeY = Math.max(0, y - 12);
+          return (
+            <div
+              key={`region-lock-${regionId}`}
+              className="absolute -translate-x-1/2"
+              style={{ left: badgeX, top: badgeY }}
+            >
+              <div className="badge badge-xs badge-warning shadow">
+                <span className="mr-1">🔒</span>
+                <span>{lock.username}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 };
 

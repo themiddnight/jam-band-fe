@@ -32,6 +32,7 @@ interface RegionStoreState {
   selectRegion: (regionId: RegionId, additive?: boolean) => void;
   selectRegions: (regionIds: RegionId[]) => void;
   toggleRegionSelection: (regionId: RegionId) => void;
+  deselectRegion: (regionId: RegionId) => void;
   clearSelection: () => void;
   duplicateRegion: (regionId: RegionId, offsetBeats: number) => Region | null;
   splitRegions: (regionIds: RegionId[], splitPosition: number) => void;
@@ -263,6 +264,18 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
       return {
         selectedRegionIds: [...state.selectedRegionIds, regionId],
         lastSelectedRegionId: regionId,
+      };
+    }),
+  deselectRegion: (regionId) =>
+    set((state) => {
+      if (!state.selectedRegionIds.includes(regionId)) {
+        return state;
+      }
+      const selectedRegionIds = state.selectedRegionIds.filter((id) => id !== regionId);
+      return {
+        selectedRegionIds,
+        lastSelectedRegionId:
+          state.lastSelectedRegionId === regionId ? selectedRegionIds.at(-1) ?? null : state.lastSelectedRegionId,
       };
     }),
   clearSelection: () => set({ selectedRegionIds: [], lastSelectedRegionId: null }),

@@ -21,6 +21,9 @@ import {
 } from '@/features/instruments/utils/instrumentLookup';
 import { InstrumentCategory } from '@/shared/constants/instruments';
 import { useDAWCollaborationContext } from '../../contexts/useDAWCollaborationContext';
+import { useLockStore } from '../../stores/lockStore';
+import { useUserStore } from '@/shared/stores/userStore';
+import { getTrackPanLockId, getTrackVolumeLockId } from '../../utils/collaborationLocks';
 
 interface TrackHeaderProps {
   track: Track;
@@ -59,6 +62,7 @@ export const TrackHeader = ({
   const toggleMute = useTrackStore((state) => state.toggleMute);
   const toggleSolo = useTrackStore((state) => state.toggleSolo);
   const tracks = useTrackStore((state) => state.tracks);
+  const currentUserId = useUserStore((state) => state.userId);
   
   // Use collaboration handlers if available
   const { 
@@ -74,6 +78,14 @@ export const TrackHeader = ({
 
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const instrumentButtonRef = useRef<HTMLButtonElement | null>(null);
+  const volumeLockId = useMemo(() => getTrackVolumeLockId(track.id), [track.id]);
+  const panLockId = useMemo(() => getTrackPanLockId(track.id), [track.id]);
+  const volumeLock = useLockStore((state) => state.isLocked(volumeLockId));
+  const panLock = useLockStore((state) => state.isLocked(panLockId));
+  const isVolumeLockedByRemote = Boolean(
+    volumeLock && volumeLock.userId !== currentUserId,
+  );
+  const isPanLockedByRemote = Boolean(panLock && panLock.userId !== currentUserId);
 
   const resolvedCategory = useMemo(() => {
     if (track.instrumentCategory) {
@@ -263,6 +275,9 @@ export const TrackHeader = ({
   };
 
   const handleVolumeChange = (event: ChangeEvent<HTMLInputElement>) => {
+    if (isVolumeLockedByRemote) {
+      return;
+    }
     handleTrackVolumeChange(track.id, Number(event.target.value) / 100);
   };
 
@@ -271,6 +286,9 @@ export const TrackHeader = ({
   };
 
   const handlePanChange = (event: ChangeEvent<HTMLInputElement>) => {
+    if (isPanLockedByRemote) {
+      return;
+    }
     handleTrackPanChange(track.id, Number(event.target.value) / 100);
   };
 
@@ -358,29 +376,59 @@ export const TrackHeader = ({
       <div className="flex items-center gap-2 text-xs">
         <label className="flex items-center gap-1">
           <span className="uppercase text-[10px] text-base-content/60">Vol</span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={Math.round(track.volume * 100)}
-            onChange={handleVolumeChange}
-            onMouseUp={handleVolumeMouseUp}
-            onTouchEnd={handleVolumeMouseUp}
-            className="range range-xs max-w-[90px]"
-          />
+          <div className="relative flex items-center">
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(track.volume * 100)}
+              onChange={handleVolumeChange}
+              onMouseUp={handleVolumeMouseUp}
+              onTouchEnd={handleVolumeMouseUp}
+              disabled={isVolumeLockedByRemote}
+              title={
+                isVolumeLockedByRemote && volumeLock
+                  ? `Locked by ${volumeLock.username}`
+                  : undefined
+              }
+              className={`range range-xs max-w-[90px] ${
+                isVolumeLockedByRemote ? 'cursor-not-allowed opacity-60' : ''
+              }`}
+            />
+            {isVolumeLockedByRemote && volumeLock && (
+              <span className="pointer-events-none absolute -top-4 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-base-100/95 px-1.5 py-0.5 text-[10px] font-medium text-base-content shadow-lg ring-1 ring-base-300">
+                🔒 {volumeLock.username}
+              </span>
+            )}
+          </div>
         </label>
         <label className="flex items-center gap-1">
           <span className="uppercase text-[10px] text-base-content/60">Pan</span>
-          <input
-            type="range"
-            min={-100}
-            max={100}
-            value={Math.round(track.pan * 100)}
-            onChange={handlePanChange}
-            onMouseUp={handlePanMouseUp}
-            onTouchEnd={handlePanMouseUp}
-            className='range range-xs max-w-[90px] [--range-bg:black] [--range-thumb:white] [--range-fill:0]'
-          />
+          <div className="relative flex items-center">
+            <input
+              type="range"
+              min={-100}
+              max={100}
+              value={Math.round(track.pan * 100)}
+              onChange={handlePanChange}
+              onMouseUp={handlePanMouseUp}
+              onTouchEnd={handlePanMouseUp}
+              disabled={isPanLockedByRemote}
+              title={
+                isPanLockedByRemote && panLock
+                  ? `Locked by ${panLock.username}`
+                  : undefined
+              }
+              className={`range range-xs max-w-[90px] [--range-bg:black] [--range-thumb:white] [--range-fill:0] ${
+                isPanLockedByRemote ? 'cursor-not-allowed opacity-60' : ''
+              }`}
+            />
+            {isPanLockedByRemote && panLock && (
+              <span className="pointer-events-none absolute -top-4 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-base-100/95 px-1.5 py-0.5 text-[10px] font-medium text-base-content shadow-lg ring-1 ring-base-300">
+                🔒 {panLock.username}
+              </span>
+            )}
+          </div>
         </label>
       </div>
       <div className="flex items-center gap-2">

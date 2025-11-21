@@ -1,12 +1,17 @@
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { EffectInstance, EffectChainType } from '@/features/effects/types';
 import { useEffectsStore } from '@/features/effects/stores/effectsStore';
 import { EFFECT_CONFIGS } from '@/features/effects/constants/effectConfigs';
 import { AnchoredPopup, Knob } from '@/features/ui';
+import { useLockStore } from '@/features/daw/stores/lockStore';
+import { useUserStore } from '@/shared/stores/userStore';
+import { useDAWCollaborationContext } from '@/features/daw/contexts/useDAWCollaborationContext';
+import { getEffectParamLockId } from '@/features/daw/utils/collaborationLocks';
 
 interface EffectModuleProps {
   effect: EffectInstance;
   chainType: EffectChainType;
+  lockScopeId?: string;
   onDragStart?: (effectId: string) => void;
   onDragEnd?: () => void;
   isDragging?: boolean;
@@ -16,6 +21,7 @@ interface EffectModuleProps {
 export default function EffectModule({
   effect,
   chainType,
+  lockScopeId,
   onDragStart,
   onDragEnd,
   isDragging = false,
@@ -23,6 +29,7 @@ export default function EffectModule({
 }: EffectModuleProps) {
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const activeParamLocksRef = useRef(new Set<string>());
   
   const {
     removeEffect,
@@ -30,6 +37,72 @@ export default function EffectModule({
     updateEffectParameter,
     resetEffect,
   } = useEffectsStore();
+  const currentUserId = useUserStore((state) => state.userId);
+  const lockStoreLookup = useLockStore((state) => state.isLocked);
+  const { acquireInteractionLock, releaseInteractionLock } = useDAWCollaborationContext();
+
+  useEffect(() => {
+    return () => {
+      const locksToRelease = new Set(activeParamLocksRef.current);
+      locksToRelease.forEach((lockId) => {
+        releaseInteractionLock(lockId);
+      });
+      activeParamLocksRef.current.clear();
+    };
+  }, [releaseInteractionLock]);
+
+  const getLockMeta = useCallback(
+    (parameterId: string) => {
+      if (!lockScopeId) {
+        return null;
+      }
+      const lockId = getEffectParamLockId(lockScopeId, effect.id, parameterId);
+      const lock = lockStoreLookup(lockId);
+      const lockedByRemote = Boolean(lock && lock.userId !== currentUserId);
+      return { lockId, lock, lockedByRemote };
+    },
+    [lockScopeId, effect.id, lockStoreLookup, currentUserId],
+  );
+
+  const handleParamInteractionStart = useCallback(
+    (parameterId: string) => {
+      if (!lockScopeId) {
+        return true;
+      }
+      const meta = getLockMeta(parameterId);
+      if (!meta) {
+        return true;
+      }
+      if (meta.lockedByRemote) {
+        return false;
+      }
+      if (activeParamLocksRef.current.has(meta.lockId)) {
+        return true;
+      }
+      const acquired = acquireInteractionLock(meta.lockId, 'control');
+      if (acquired) {
+        activeParamLocksRef.current.add(meta.lockId);
+      }
+      return acquired;
+    },
+    [acquireInteractionLock, getLockMeta, lockScopeId],
+  );
+
+  const handleParamInteractionEnd = useCallback(
+    (parameterId: string) => {
+      if (!lockScopeId) {
+        return;
+      }
+      const meta = getLockMeta(parameterId);
+      if (!meta) {
+        return;
+      }
+      if (activeParamLocksRef.current.delete(meta.lockId)) {
+        releaseInteractionLock(meta.lockId);
+      }
+    },
+    [getLockMeta, lockScopeId, releaseInteractionLock],
+  );
 
   const handleSettingsClick = () => {
     setShowSettings(!showSettings);
@@ -53,7 +126,20 @@ export default function EffectModule({
   };
 
   const renderParameterControl = (parameter: typeof effect.parameters[0]) => {
+    const lockMeta = getLockMeta(parameter.id);
+    const isLockedByRemote = lockMeta?.lockedByRemote ?? false;
+    const lockedLabel = isLockedByRemote && lockMeta?.lock ? `🔒 ${lockMeta.lock.username}` : undefined;
+
     if (parameter.type === 'knob') {
+      const knobLockProps = lockScopeId
+        ? {
+            disabled: isLockedByRemote,
+            lockedLabel,
+            onInteractionStart: () => handleParamInteractionStart(parameter.id),
+            onInteractionEnd: () => handleParamInteractionEnd(parameter.id),
+          }
+        : {};
+
       return (
         <div key={parameter.id} className="flex flex-col items-center gap-1">
           <Knob
@@ -71,24 +157,53 @@ export default function EffectModule({
               return val.toFixed(3);
             }}
             color="primary"
+            {...knobLockProps}
           />
           <span className="text-xs text-center">{parameter.name}</span>
         </div>
       );
     } else {
       // slider type
+      const title = isLockedByRemote && lockMeta?.lock ? `Locked by ${lockMeta.lock.username}` : undefined;
+
+      const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (isLockedByRemote) {
+          return;
+        }
+        const value = parseFloat(e.target.value);
+        if (lockScopeId && handleParamInteractionStart(parameter.id) === false) {
+          return;
+        }
+        handleParameterChange(parameter.id, value);
+      };
+
       return (
         <div key={parameter.id} className="flex flex-col gap-1">
           <label className="text-xs">{parameter.name}</label>
-          <input
-            type="range"
-            min={parameter.min}
-            max={parameter.max}
-            step={parameter.step}
-            value={parameter.value}
-            onChange={(e) => handleParameterChange(parameter.id, parseFloat(e.target.value))}
-            className="range range-primary range-sm"
-          />
+          <div className="flex items-center gap-2">
+            <input
+              type="range"
+              min={parameter.min}
+              max={parameter.max}
+              step={parameter.step}
+              value={parameter.value}
+              onChange={handleChange}
+              onPointerDown={() => handleParamInteractionStart(parameter.id)}
+              onPointerUp={() => handleParamInteractionEnd(parameter.id)}
+              onPointerCancel={() => handleParamInteractionEnd(parameter.id)}
+              onPointerLeave={() => handleParamInteractionEnd(parameter.id)}
+              disabled={isLockedByRemote}
+              title={title}
+              className={`range range-primary range-sm ${
+                isLockedByRemote ? 'cursor-not-allowed opacity-60' : ''
+              }`}
+            />
+            {lockedLabel && (
+              <span className="badge badge-outline badge-xs whitespace-nowrap text-[10px]">
+                {lockedLabel}
+              </span>
+            )}
+          </div>
           <span className="text-xs text-center">
             {parameter.value.toFixed(3)}{parameter.unit || ''}
           </span>

@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import { useProjectManager } from '../hooks/useProjectManager';
 import { useRoom } from '@/features/rooms';
 
-export function ProjectMenu() {
+type ProjectMenuProps = {
+  canLoadProject?: boolean;
+};
+
+export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
   const {
     isSaving,
     isLoading,
@@ -79,13 +83,15 @@ export function ProjectMenu() {
           {isSaving ? 'Saving...' : 'Save Project'}
         </button>
         
-        <button 
-          className="btn btn-xs btn-accent" 
-          onClick={handleLoad} 
-          disabled={isLoading}
-        >
-          {isLoading ? 'Loading...' : currentRoom?.id ? 'Load & Share' : 'Load Project'}
-        </button>
+        {canLoadProject && (
+          <button 
+            className="btn btn-xs btn-accent" 
+            onClick={handleLoad} 
+            disabled={isLoading}
+          >
+            {isLoading ? 'Loading...' : 'Load Project'}
+          </button>
+        )}
 
         {uploadProgress > 0 && uploadProgress < 100 && (
           <span className="text-sm text-info ml-2">

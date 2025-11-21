@@ -2,6 +2,7 @@ import { createContext } from 'react';
 
 import type { SynthState } from '@/features/instruments';
 import type { InstrumentCategory } from '@/shared/constants/instruments';
+import type { LockType } from '../stores/lockStore';
 
 import type { RegionDragUpdatePayload } from '../services/dawSyncService';
 import type { MidiNote, Region, TimeSignature } from '../types/daw';
@@ -49,8 +50,9 @@ export interface DAWCollaborationContextValue {
   handleRegionRealtimeFlush: () => void;
   handleRegionDelete: (regionId: string) => void;
   handleRegionSplit: (regionIds: string[], splitPosition: number) => void;
-  handleRegionSelect: (regionId: string, additive?: boolean) => void;
+  handleRegionSelect: (regionId: string, additive?: boolean) => boolean;
   handleRegionDeselect: (regionId: string) => void;
+  handleRegionClearSelection: () => void;
 
   // Note handlers
   handleNoteAdd: (note: any) => any;
@@ -76,6 +78,8 @@ export interface DAWCollaborationContextValue {
   // Lock utilities
   isLocked: (elementId: string) => any;
   isLockedByUser: (elementId: string) => boolean;
+  acquireInteractionLock: (elementId: string, type: LockType) => boolean;
+  releaseInteractionLock: (elementId: string) => void;
 }
 
 export interface RegionRealtimeUpdate {
@@ -156,8 +160,11 @@ export const createNoopDAWCollaborationValue = (): DAWCollaborationContextValue 
   handleRegionSplit: (regionIds: string[], splitPosition: number) => {
     useRegionStore.getState().splitRegions(regionIds, splitPosition);
   },
-  handleRegionSelect: () => {},
+  handleRegionSelect: () => false,
   handleRegionDeselect: () => {},
+  handleRegionClearSelection: () => {
+    useRegionStore.getState().clearSelection();
+  },
   handleNoteAdd: () => null,
   handleNoteUpdate: () => {},
   handleNoteDelete: () => {},
@@ -178,4 +185,6 @@ export const createNoopDAWCollaborationValue = (): DAWCollaborationContextValue 
   },
   isLocked: () => null,
   isLockedByUser: () => false,
+  acquireInteractionLock: () => false,
+  releaseInteractionLock: () => {},
 });

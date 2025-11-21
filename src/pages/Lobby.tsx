@@ -417,13 +417,9 @@ export default function Lobby() {
                       <div className="card-body p-4">
                         <div className="flex items-center gap-2">
                           <h4 className="card-title text-sm">Arrange Room</h4>
-                          <span className="badge badge-sm badge-outline">
-                            Demo
-                          </span>
                         </div>
                         <p className="text-xs opacity-70">
-                          Multi-track production with async editing
-                          (collaboration features comming soon)
+                          Multi-track arrangement with asynchronous editing
                         </p>
                       </div>
                     </div>

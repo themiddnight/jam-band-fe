@@ -4,6 +4,7 @@ interface LockIndicatorProps {
   elementId: string;
   position?: 'top' | 'bottom' | 'left' | 'right';
   className?: string;
+  label?: string;
 }
 
 /**
@@ -13,6 +14,7 @@ export const LockIndicator = ({
   elementId,
   position = 'top',
   className = '',
+  label,
 }: LockIndicatorProps) => {
   const lock = useLockStore((state) => state.isLocked(elementId));
 
@@ -34,7 +36,7 @@ export const LockIndicator = ({
     >
       <div className="badge badge-sm badge-warning gap-1 whitespace-nowrap">
         <span>🔒</span>
-        <span>{lock.username}</span>
+        <span>{label ?? lock.username}</span>
       </div>
     </div>
   );

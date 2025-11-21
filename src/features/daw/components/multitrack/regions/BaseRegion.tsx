@@ -24,14 +24,28 @@ export const BaseRegion = ({
   isSelected,
   isMovingToNewTrack,
   loops,
+  isLockedByRemote,
   headResizeState,
   onPointerDown,
   onHeadHandleDown,
   onLengthHandleDown,
   onLoopHandleDown,
 }: ExtendedBaseRegionProps) => {
+  const setCursor = (event: KonvaEventObject<PointerEvent>, cursor: string) => {
+    const container = event.target.getStage()?.container();
+    if (!container) {
+      return;
+    }
+    container.style.cursor = cursor;
+  };
+
+  const handleLockedPointerDown = (event: KonvaEventObject<PointerEvent>) => {
+    event.cancelBubble = true;
+    setCursor(event, 'not-allowed');
+  };
+
   return (
-    <Group>
+    <Group opacity={isLockedByRemote ? 0.5 : 1}>
       {/* Draw each loop iteration */}
       {Array.from({ length: loops }).map((_, loopIndex) => {
         const loopX = x + loopIndex * width;
@@ -56,7 +70,25 @@ export const BaseRegion = ({
               strokeWidth={isMovingToNewTrack ? 3 : isSelected ? 2 : 1}
               dash={isMovingToNewTrack ? [6, 3] : undefined}
               cornerRadius={4}
-              onPointerDown={isMainLoop ? onPointerDown : undefined}
+              onPointerDown={
+                isMainLoop
+                  ? isLockedByRemote
+                    ? handleLockedPointerDown
+                    : onPointerDown
+                  : undefined
+              }
+              onPointerEnter={(event) => {
+                if (!isMainLoop) {
+                  return;
+                }
+                setCursor(event, isLockedByRemote ? 'not-allowed' : 'pointer');
+              }}
+              onPointerLeave={(event) => {
+                if (!isMainLoop) {
+                  return;
+                }
+                setCursor(event, 'default');
+              }}
               listening={isMainLoop}
             />
 
@@ -108,6 +140,7 @@ export const BaseRegion = ({
         height={height}
         loops={loops}
         handleSize={HANDLE_SIZE}
+        disabled={isLockedByRemote}
         onHeadHandleDown={onHeadHandleDown}
         onLengthHandleDown={onLengthHandleDown}
         onLoopHandleDown={onLoopHandleDown}

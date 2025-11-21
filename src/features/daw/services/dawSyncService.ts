@@ -2,10 +2,11 @@ import type { Socket } from 'socket.io-client';
 import { useTrackStore } from '../stores/trackStore';
 import { useRegionStore } from '../stores/regionStore';
 import { usePianoRollStore } from '../stores/pianoRollStore';
-import { useLockStore } from '../stores/lockStore';
+import { useLockStore, type LockType } from '../stores/lockStore';
 import { useEffectsStore } from '../../effects/stores/effectsStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useSynthStore } from '../stores/synthStore';
+import { useRecordingStore } from '../stores/recordingStore';
 import { trackInstrumentRegistry } from '../utils/trackInstrumentRegistry';
 import type { Track, Region, MidiNote, TimeSignature } from '../types/daw';
 import type { SynthState } from '@/features/instruments';
@@ -94,6 +95,8 @@ export class DAWSyncService {
     this.socket.on('arrange:note_added', this.handleNoteAdded.bind(this));
     this.socket.on('arrange:note_updated', this.handleNoteUpdated.bind(this));
     this.socket.on('arrange:note_deleted', this.handleNoteDeleted.bind(this));
+    this.socket.on('arrange:recording_preview', this.handleRecordingPreview.bind(this));
+    this.socket.on('arrange:recording_preview_end', this.handleRecordingPreviewEnd.bind(this));
     this.socket.on('arrange:effect_chain_updated', this.handleEffectChainUpdated.bind(this));
     this.socket.on('arrange:synth_params_updated', this.handleSynthParamsUpdated.bind(this));
     this.socket.on('arrange:bpm_changed', this.handleBpmChanged.bind(this));
@@ -125,6 +128,8 @@ export class DAWSyncService {
     this.socket.off('arrange:note_added');
     this.socket.off('arrange:note_updated');
     this.socket.off('arrange:note_deleted');
+    this.socket.off('arrange:recording_preview');
+    this.socket.off('arrange:recording_preview_end');
     this.socket.off('arrange:effect_chain_updated');
     this.socket.off('arrange:synth_params_updated');
     this.socket.off('arrange:bpm_changed');
@@ -306,20 +311,29 @@ export class DAWSyncService {
 
   /**
    * Sync selection change
+   * Track selections remain local, so callers should only include region data when needed.
    */
-  syncSelectionChange(selectedTrackId: string | null, selectedRegionIds: string[]): void {
+  syncSelectionChange(payload: { selectedTrackId?: string | null; selectedRegionIds?: string[] }): void {
     if (!this.socket || !this.roomId || this.isSyncing) return;
+
+    const hasPayload =
+      Object.prototype.hasOwnProperty.call(payload, 'selectedTrackId') ||
+      Object.prototype.hasOwnProperty.call(payload, 'selectedRegionIds');
+
+    if (!hasPayload) {
+      return;
+    }
+
     this.socket.emit('arrange:selection_change', {
       roomId: this.roomId,
-      selectedTrackId,
-      selectedRegionIds,
+      ...payload,
     });
   }
 
   /**
    * Acquire lock
    */
-  acquireLock(elementId: string, type: 'region' | 'track' | 'track_property'): void {
+  acquireLock(elementId: string, type: LockType): void {
     if (!this.socket || !this.roomId || !this.userId || !this.username) return;
     this.socket.emit('arrange:lock_acquire', {
       roomId: this.roomId,
@@ -336,6 +350,26 @@ export class DAWSyncService {
     this.socket.emit('arrange:lock_release', {
       roomId: this.roomId,
       elementId,
+    });
+  }
+
+  syncRecordingPreview(preview: {
+    trackId: string;
+    recordingType: 'midi' | 'audio';
+    startBeat: number;
+    durationBeats: number;
+  }): void {
+    if (!this.socket || !this.roomId || this.isSyncing) return;
+    this.socket.emit('arrange:recording_preview', {
+      roomId: this.roomId,
+      preview,
+    });
+  }
+
+  syncRecordingPreviewEnd(): void {
+    if (!this.socket || !this.roomId || this.isSyncing) return;
+    this.socket.emit('arrange:recording_preview_end', {
+      roomId: this.roomId,
     });
   }
 
@@ -388,9 +422,8 @@ export class DAWSyncService {
         }))
       );
 
-      // Set selection using sync handlers
-      useTrackStore.getState().syncSelectTrack(data.selectedTrackId);
-      useRegionStore.getState().syncSelectRegions(data.selectedRegionIds);
+      // Track selection stays local per collaborator, so we intentionally do not
+      // apply remote selection state here.
 
       // Apply synth params to engines
       if (data.synthStates) {
@@ -497,6 +530,7 @@ export class DAWSyncService {
     this.isSyncing = true;
     try {
       useRegionStore.getState().syncAddRegion(data.region);
+      useRecordingStore.getState().removeRemoteRecordingPreview(data.userId);
     } finally {
       this.isSyncing = false;
     }
@@ -696,17 +730,7 @@ export class DAWSyncService {
     username: string;
   }): void {
     if (this.isSyncing || data.userId === this.userId) return;
-    this.isSyncing = true;
-    try {
-      if (data.selectedTrackId !== undefined) {
-        useTrackStore.getState().syncSelectTrack(data.selectedTrackId);
-      }
-      if (data.selectedRegionIds !== undefined) {
-        useRegionStore.getState().syncSelectRegions(data.selectedRegionIds);
-      }
-    } finally {
-      this.isSyncing = false;
-    }
+    // Track and region selections remain local so other users don't see our highlight state.
   }
 
   private handleLockAcquired(data: {
@@ -779,6 +803,33 @@ export class DAWSyncService {
         this.isSyncing = false;
       }
     });
+  }
+
+  private handleRecordingPreview(data: {
+    userId: string;
+    username: string;
+    preview: {
+      trackId: string;
+      recordingType: 'midi' | 'audio';
+      startBeat: number;
+      durationBeats: number;
+    };
+  }): void {
+    if (this.isSyncing || data.userId === this.userId) return;
+    const store = useRecordingStore.getState();
+    store.setRemoteRecordingPreview({
+      userId: data.userId,
+      username: data.username,
+      trackId: data.preview.trackId,
+      recordingType: data.preview.recordingType,
+      startBeat: data.preview.startBeat,
+      durationBeats: data.preview.durationBeats,
+    });
+  }
+
+  private handleRecordingPreviewEnd(data: { userId: string }): void {
+    if (this.isSyncing || data.userId === this.userId) return;
+    useRecordingStore.getState().removeRemoteRecordingPreview(data.userId);
   }
 }
 
