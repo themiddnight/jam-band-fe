@@ -14,14 +14,14 @@ interface WaveformCanvasProps {
   zoomX: number;
   zoomY: number;
   pixelsPerBeat: number;
+  containerHeight: number;
+  playheadBeats?: number;
   onTrimStartChange: (trimStart: number) => void;
   onTrimEndChange: (trimEnd: number) => void;
   onFadeInChange: (duration: number, options?: { commit?: boolean }) => void;
   onFadeOutChange: (duration: number, options?: { commit?: boolean }) => void;
 }
 
-// Base canvas height (will be multiplied by zoomY)
-const BASE_CANVAS_HEIGHT = 280;
 const VERTICAL_PADDING = 40;
 const HANDLE_WIDTH = 8;
 const FADE_HANDLE_SIZE = 12;
@@ -38,6 +38,8 @@ const WaveformCanvasComponent = ({
   zoomX,
   zoomY,
   pixelsPerBeat,
+  containerHeight,
+  playheadBeats = 0,
   onTrimStartChange,
   onTrimEndChange,
   onFadeInChange,
@@ -91,7 +93,8 @@ const WaveformCanvasComponent = ({
 
   const beatWidth = pixelsPerBeat * zoomX;
   const originalLength = region.originalLength || region.length;
-  const canvasHeight = BASE_CANVAS_HEIGHT; // Fixed height, don't scale with zoomY
+  // Use dynamic container height, with a minimum fallback
+  const canvasHeight = Math.max(containerHeight, 200);
 
   // Generate waveform data for the FULL recording using LOD
   const fullWidth = originalLength * beatWidth;
@@ -142,6 +145,11 @@ const WaveformCanvasComponent = ({
   const trimEnd = trimStart + region.length;
   const trimStartX = trimStart * beatWidth;
   const trimEndX = trimEnd * beatWidth;
+  
+  // Calculate playhead position relative to waveform start
+  // The waveform starts at (region.start - trimStart) on the main timeline
+  const absoluteStartBeat = region.start - trimStart;
+  const playheadX = (playheadBeats - absoluteStartBeat) * beatWidth;
   
   // Calculate fade positions (relative to visible region)
   const fadeInDuration = region.fadeInDuration || 0;
@@ -575,6 +583,16 @@ const WaveformCanvasComponent = ({
               const container = e.target.getStage()?.container();
               if (container) container.style.cursor = 'default';
             }}
+          />
+        )}
+        
+        {/* Playhead indicator */}
+        {playheadX >= 0 && playheadX <= stageWidth && (
+          <Line
+            points={[playheadX, 0, playheadX, canvasHeight]}
+            stroke="#3b82f6"
+            strokeWidth={2}
+            listening={false}
           />
         )}
         

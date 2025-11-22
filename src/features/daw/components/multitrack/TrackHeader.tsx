@@ -299,16 +299,15 @@ export const TrackHeader = ({
   return (
     <div
       ref={containerRef}
-      className={`flex flex-col gap-2 border-b border-base-200 bg-base-100/80 px-3 py-2 transition-colors ${isSelected ? 'bg-primary/10' : ''
+      onClick={() => onSelect(track.id)}
+      className={`flex flex-col gap-2 border-b border-base-200 bg-base-100/80 px-3 py-2 transition-colors cursor-pointer ${isSelected ? 'bg-primary/10' : ''
         }`}
     >
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => onSelect(track.id)}
+        <div
           className="h-3 w-3 rounded-full"
           style={{ backgroundColor: track.color }}
-          aria-label={`Select ${track.name}`}
+          aria-label={`Track color indicator`}
         />
         <div className="flex-1">
           {isEditingName ? (
@@ -323,7 +322,10 @@ export const TrackHeader = ({
           ) : (
             <button
               type="button"
-              onDoubleClick={startEditingName}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                startEditingName();
+              }}
               onKeyDown={handleNameLabelKeyDown}
               className="flex w-full cursor-text items-center rounded px-2 py-1 text-left text-sm font-medium text-base-content/90 hover:bg-base-200/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
               title={track.name}
@@ -335,7 +337,8 @@ export const TrackHeader = ({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               const currentIndex = tracks.findIndex((t) => t.id === track.id);
               if (currentIndex > 0) {
                 handleTrackReorder(track.id, currentIndex - 1);
@@ -350,7 +353,8 @@ export const TrackHeader = ({
           </button>
           <button
             type="button"
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               const currentIndex = tracks.findIndex((t) => t.id === track.id);
               if (currentIndex < tracks.length - 1) {
                 handleTrackReorder(track.id, currentIndex + 1);
@@ -366,7 +370,10 @@ export const TrackHeader = ({
         </div>
         <button
           type="button"
-          onClick={() => handleTrackDelete(track.id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleTrackDelete(track.id);
+          }}
           className="btn btn-xs btn-ghost btn-circle text-error hover:bg-error/20"
           title="Delete Track"
         >
@@ -374,7 +381,7 @@ export const TrackHeader = ({
         </button>
       </div>
       <div className="flex items-center gap-2 text-xs">
-        <label className="flex items-center gap-1">
+        <label className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
           <span className="uppercase text-[10px] text-base-content/60">Vol</span>
           <div className="relative flex items-center">
             <input
@@ -402,7 +409,7 @@ export const TrackHeader = ({
             )}
           </div>
         </label>
-        <label className="flex items-center gap-1">
+        <label className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
           <span className="uppercase text-[10px] text-base-content/60">Pan</span>
           <div className="relative flex items-center">
             <input
@@ -435,14 +442,20 @@ export const TrackHeader = ({
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => toggleMute(track.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleMute(track.id);
+            }}
             className={`btn btn-xs ${track.mute ? 'btn-warning' : 'btn-ghost'}`}
           >
             M
           </button>
           <button
             type="button"
-            onClick={() => toggleSolo(track.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleSolo(track.id);
+            }}
             className={`btn btn-xs ${track.solo ? 'btn-accent text-white' : 'btn-ghost'}`}
           >
             S
@@ -450,7 +463,10 @@ export const TrackHeader = ({
           {track.type === 'audio' && (
             <button
               type="button"
-              onClick={() => setInputFeedback(!inputFeedback)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setInputFeedback(!inputFeedback);
+              }}
               className={`btn btn-xs ${inputFeedback ? 'btn-info text-white' : 'btn-ghost'}`}
               title="Input Monitoring Feedback (Hear yourself)"
             >
@@ -484,7 +500,10 @@ export const TrackHeader = ({
               <button
                 ref={instrumentButtonRef}
                 type="button"
-                onClick={handleInstrumentButtonClick}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleInstrumentButtonClick();
+                }}
                 className="btn btn-xs btn-outline"
               >
                 {currentInstrumentLabel}

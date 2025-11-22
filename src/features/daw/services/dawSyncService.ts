@@ -12,6 +12,7 @@ import type { Track, Region, MidiNote, TimeSignature } from '../types/daw';
 import type { SynthState } from '@/features/instruments';
 import type { EffectChainState } from '@/shared/types';
 import { DEFAULT_BPM, DEFAULT_TIME_SIGNATURE } from '../types/daw';
+import { InstrumentCategory } from '@/shared/constants/instruments';
 import { debounce } from 'lodash';
 
 export type RegionDragUpdatePayload = {
@@ -698,6 +699,46 @@ export class DAWSyncService {
     }
   }
 
+  /**
+   * Apply synth states from loaded project to instrument engines
+   */
+  private async applySynthStatesFromProject(projectData: any): Promise<void> {
+    if (!projectData.synthStates || Object.keys(projectData.synthStates).length === 0) {
+      return;
+    }
+
+    const tracks = useTrackStore.getState().tracks;
+
+    for (const track of tracks) {
+      // Only apply to synth tracks
+      if (track.type !== 'midi' || track.instrumentCategory !== InstrumentCategory.Synthesizer) {
+        continue;
+      }
+
+      const synthState = projectData.synthStates[track.id];
+      if (!synthState) {
+        continue;
+      }
+
+      try {
+        // Ensure the engine is loaded (without sync callback during project load)
+        const { engine } = await trackInstrumentRegistry.ensureEngine(track, {
+          instrumentId: track.instrumentId,
+          instrumentCategory: track.instrumentCategory,
+          // Don't trigger synth param change callbacks during project load
+          onSynthParamsChange: undefined,
+        });
+
+        // Apply the saved synth parameters (isSyncing flag prevents broadcasts)
+        await engine.updateSynthParams(synthState);
+        
+        console.log(`Applied synth state to track ${track.name} from server project`);
+      } catch (error) {
+        console.warn(`Failed to apply synth state to track ${track.id}:`, error);
+      }
+    }
+  }
+
   private handleBpmChanged(data: { bpm: number; userId: string }): void {
     if (this.isSyncing) return;
     if (data.userId === this.userId) return;
@@ -779,7 +820,7 @@ export class DAWSyncService {
     console.log(`🎵 Loading project from ${data.uploadedBy}:`, data.projectData.metadata?.name);
     
     // Import the deserialize functions
-    import('./projectSerializer').then(({ deserializeProject }) => {
+    import('./projectSerializer').then(async ({ deserializeProject }) => {
       this.isSyncing = true;
       try {
         // Deserialize and load the project settings
@@ -792,10 +833,14 @@ export class DAWSyncService {
           selectedRegionIds: [],
           lastSelectedRegionId: null,
         });
+
+        // Apply synth states to instrument engines
+        await this.applySynthStatesFromProject(data.projectData);
         
         console.log('Project loaded successfully from server', {
           tracks: data.projectData.tracks?.length || 0,
           regions: data.projectData.regions?.length || 0,
+          synthStates: Object.keys(data.projectData.synthStates || {}).length,
         });
       } catch (error) {
         console.error('Failed to load project from server:', error);

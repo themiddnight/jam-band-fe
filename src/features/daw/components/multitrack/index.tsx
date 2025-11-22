@@ -14,6 +14,7 @@ import { useRegionStore } from '../../stores/regionStore';
 import { useTrackStore } from '../../stores/trackStore';
 import { LoopToggle } from '../transport/LoopToggle';
 import { useDAWCollaborationContext } from '../../contexts/useDAWCollaborationContext';
+import { InfoTooltip } from '../common/InfoTooltip';
 
 export const MultitrackView = () => {
   const tracks = useTrackStore((state) => state.tracks);
@@ -209,16 +210,14 @@ export const MultitrackView = () => {
   }, [tracks, trackHeights]);
 
   return (
-    <section className="flex h-full max-h-[70vh] min-h-80 flex-col overflow-hidden rounded-lg border border-base-300 bg-base-100 shadow-sm">
+    <section className="flex h-full flex-col overflow-hidden rounded-lg border border-base-300 bg-base-100 shadow-sm">
       <div className="flex items-center justify-between border-b border-base-300 px-2 sm:px-4 py-1.5 sm:py-2">
         <div className="flex items-center gap-4">
           <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-wide text-base-content/70">
             Tracks
           </h2>
           <LoopToggle />
-          <span className="text-xs text-base-content/50">
-            Ctrl+Scroll to zoom
-          </span>
+          <InfoTooltip>Ctrl+Scroll to zoom</InfoTooltip>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1">
@@ -298,7 +297,7 @@ export const MultitrackView = () => {
         <div
           ref={headerRef}
           onScroll={handleHeaderScroll}
-          className="flex flex-col overflow-y-auto border-r border-base-300 bg-base-100"
+          className="flex flex-col overflow-y-auto border-r border-base-300 bg-base-100 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
           style={{ width: `${TRACK_HEADER_WIDTH}px` }}
         >
           {tracks.map((track, index) => (

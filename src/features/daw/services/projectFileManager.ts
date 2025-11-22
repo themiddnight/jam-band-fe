@@ -7,6 +7,9 @@ import {
   type SerializedProject,
 } from './projectSerializer';
 import { useRegionStore } from '../stores/regionStore';
+import { useTrackStore } from '../stores/trackStore';
+import { trackInstrumentRegistry } from '../utils/trackInstrumentRegistry';
+import { InstrumentCategory } from '@/shared/constants/instruments';
 
 /**
  * Save the current project as a .collab (zip) file
@@ -122,6 +125,9 @@ export async function loadProjectFromZip(file: File): Promise<void> {
 
     // 6. Restore regions with audio buffers
     deserializeRegions(projectData.regions, audioBuffers);
+
+    // 7. Apply synth states to instrument engines
+    await applySynthStatesToEngines(projectData);
 
     console.log(`Project "${projectData.metadata.name}" loaded successfully`);
   } catch (error) {
@@ -242,6 +248,48 @@ function downloadBlob(blob: Blob, fileName: string): void {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Helper: Apply synth states to instrument engines after project load
+ * Note: This only applies the states to the engines, not to the store.
+ * The store is already updated by deserializeProject().
+ */
+async function applySynthStatesToEngines(projectData: SerializedProject): Promise<void> {
+  if (!projectData.synthStates || Object.keys(projectData.synthStates).length === 0) {
+    return;
+  }
+
+  const tracks = useTrackStore.getState().tracks;
+
+  for (const track of tracks) {
+    // Only apply to synth tracks
+    if (track.type !== 'midi' || track.instrumentCategory !== InstrumentCategory.Synthesizer) {
+      continue;
+    }
+
+    const synthState = projectData.synthStates[track.id];
+    if (!synthState) {
+      continue;
+    }
+
+    try {
+      // Ensure the engine is loaded
+      const { engine } = await trackInstrumentRegistry.ensureEngine(track, {
+        instrumentId: track.instrumentId,
+        instrumentCategory: track.instrumentCategory,
+        // Don't trigger synth param change callbacks during project load
+        onSynthParamsChange: undefined,
+      });
+
+      // Apply the saved synth parameters (without triggering sync)
+      await engine.updateSynthParams(synthState);
+      
+      console.log(`Applied synth state to track ${track.name}`, synthState);
+    } catch (error) {
+      console.warn(`Failed to apply synth state to track ${track.id}:`, error);
+    }
+  }
 }
 
 /**

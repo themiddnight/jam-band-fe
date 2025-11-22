@@ -20,6 +20,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useDAWCollaborationContext } from '../../contexts/useDAWCollaborationContext';
 import { MAX_CANVAS_WIDTH, MAX_TIMELINE_ZOOM, MIN_TIMELINE_ZOOM } from '../../constants/canvas';
 import { usePianoRollRecording } from '../../hooks/usePianoRollRecording';
+import { InfoTooltip } from '../common/InfoTooltip';
 
 const TOTAL_HEIGHT = TOTAL_KEYS * NOTE_HEIGHT;
 
@@ -606,9 +607,7 @@ const PianoRollComponent = () => {
                 <option value="only-notes">Only Notes</option>
               </select>
             </label>
-            <span className="text-xs text-base-content/50 hidden lg:inline">
-              Ctrl+Scroll to zoom
-            </span>
+            <InfoTooltip className="hidden lg:flex">Ctrl+Scroll to zoom</InfoTooltip>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs text-base-content/70 w-full sm:w-auto">
@@ -692,7 +691,7 @@ const PianoRollComponent = () => {
         <div className="h-full w-[80px] border-r border-base-300 bg-base-100">
           <div className="h-[32px] border-b border-base-300 bg-base-200/60" />
         </div>
-        <div className="overflow-hidden" style={{ height: `${RULER_HEIGHT}px` }}>
+        <div className="overflow-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" style={{ height: `${RULER_HEIGHT}px` }}>
           <PianoRollRuler
             totalBeats={totalBeats}
             pixelsPerBeat={pixelsPerBeat}

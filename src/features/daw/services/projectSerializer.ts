@@ -3,8 +3,10 @@ import { useTrackStore } from '../stores/trackStore';
 import { useRegionStore } from '../stores/regionStore';
 import { useArrangeRoomScaleStore } from '../stores/arrangeRoomStore';
 import { useEffectsStore } from '@/features/effects/stores/effectsStore';
+import { useSynthStore } from '../stores/synthStore';
 import type { AudioRegion, MidiRegion, Region } from '../types/daw';
 import type { EffectChain } from '@/features/effects/types';
+import type { SynthState } from '@/features/instruments';
 
 export interface SerializedProject {
   version: string;
@@ -35,6 +37,7 @@ export interface SerializedProject {
   tracks: any[];
   regions: SerializedRegion[];
   effectChains: Record<string, EffectChain>;
+  synthStates: Record<string, SynthState>;
 }
 
 export interface SerializedRegion {
@@ -74,6 +77,7 @@ export function serializeProject(projectName: string): SerializedProject {
   const regions = useRegionStore.getState().regions;
   const scale = useArrangeRoomScaleStore.getState();
   const effectsState = useEffectsStore.getState();
+  const synthState = useSynthStore.getState();
 
   // Collect all effect chains (including track-specific ones)
   const effectChains: Record<string, EffectChain> = {};
@@ -118,6 +122,7 @@ export function serializeProject(projectName: string): SerializedProject {
     })),
     regions: regions.map((region: any) => serializeRegion(region)),
     effectChains,
+    synthStates: synthState.synthStates,
   };
 }
 
@@ -321,6 +326,11 @@ export function deserializeProject(data: SerializedProject): void {
         },
       }));
     });
+  }
+
+  // Restore synth states
+  if (data.synthStates) {
+    useSynthStore.getState().setAllSynthStates(data.synthStates);
   }
 
   // Note: Regions will be restored separately after audio files are loaded

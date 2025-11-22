@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useResizeDetector } from 'react-resize-detector';
 import type { AudioRegion } from '@/features/daw/types/daw';
 import { useRegionStore } from '@/features/daw/stores/regionStore';
 import { useProjectStore } from '@/features/daw/stores/projectStore';
@@ -6,6 +7,7 @@ import { WaveformCanvas } from './WaveformCanvas';
 import { TimeRuler } from './TimeRuler';
 import { useDAWCollaborationContext } from '@/features/daw/contexts/useDAWCollaborationContext';
 import { MAX_CANVAS_WIDTH, MAX_AUDIO_ZOOM, MIN_AUDIO_ZOOM } from '@/features/daw/constants/canvas';
+import { InfoTooltip } from '../../common/InfoTooltip';
 
 interface AudioEditorProps {
   region: AudioRegion;
@@ -26,7 +28,20 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
   const rulerRef = useRef<HTMLDivElement>(null);
   const waveformRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(800);
+  const [containerHeight, setContainerHeight] = useState(400);
   const [scrollLeft, setScrollLeft] = useState(0);
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef<{ x: number; scrollLeft: number } | null>(null);
+
+  // Use react-resize-detector to track waveform container size
+  const { ref: resizeRef } = useResizeDetector({
+    onResize: (payload) => {
+      if (payload?.width) setContainerWidth(payload.width);
+      if (payload?.height) setContainerHeight(payload.height);
+    },
+    refreshMode: 'debounce',
+    refreshRate: 100,
+  });
 
   const applyRegionUpdate = useCallback(
     (updates: Partial<AudioRegion>) => {
@@ -133,18 +148,7 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
     setZoomY(newZoom);
   }, []);
 
-  // Update container width on mount and resize
-  useEffect(() => {
-    const updateWidth = () => {
-      if (waveformRef.current) {
-        setContainerWidth(waveformRef.current.clientWidth);
-      }
-    };
 
-    updateWidth();
-    window.addEventListener('resize', updateWidth);
-    return () => window.removeEventListener('resize', updateWidth);
-  }, []);
 
   // Reset zoom to fit when region changes
   useEffect(() => {
@@ -226,6 +230,72 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
     }
   }, []);
 
+  // Handle Ctrl+drag panning
+  useEffect(() => {
+    const handlePointerDown = (e: PointerEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        setIsPanning(true);
+        panStartRef.current = {
+          x: e.clientX,
+          scrollLeft: waveformRef.current?.scrollLeft || 0,
+        };
+        // Change cursor to grabbing
+        if (waveformRef.current) {
+          waveformRef.current.style.cursor = 'grabbing';
+        }
+      }
+    };
+
+    const handlePointerMove = (e: PointerEvent) => {
+      if (isPanning && panStartRef.current && waveformRef.current) {
+        e.preventDefault();
+        const deltaX = panStartRef.current.x - e.clientX;
+        waveformRef.current.scrollLeft = panStartRef.current.scrollLeft + deltaX;
+      }
+    };
+
+    const handlePointerUp = () => {
+      if (isPanning) {
+        setIsPanning(false);
+        panStartRef.current = null;
+        // Reset cursor
+        if (waveformRef.current) {
+          waveformRef.current.style.cursor = '';
+        }
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && waveformRef.current && !isPanning) {
+        waveformRef.current.style.cursor = 'grab';
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (!e.ctrlKey && !e.metaKey && waveformRef.current && !isPanning) {
+        waveformRef.current.style.cursor = '';
+      }
+    };
+
+    const waveform = waveformRef.current;
+    if (waveform) {
+      waveform.addEventListener('pointerdown', handlePointerDown);
+      window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerup', handlePointerUp);
+      window.addEventListener('keydown', handleKeyDown);
+      window.addEventListener('keyup', handleKeyUp);
+      
+      return () => {
+        waveform.removeEventListener('pointerdown', handlePointerDown);
+        window.removeEventListener('pointermove', handlePointerMove);
+        window.removeEventListener('pointerup', handlePointerUp);
+        window.removeEventListener('keydown', handleKeyDown);
+        window.removeEventListener('keyup', handleKeyUp);
+      };
+    }
+  }, [isPanning]);
+
   // Handle wheel zoom with Ctrl key
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
@@ -265,9 +335,13 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
         <div className="flex items-center gap-4">
           <h3 className="text-sm font-semibold">{region.name}</h3>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-base-content/50">
-              Ctrl+Scroll to zoom X • Ctrl+Shift+Scroll to zoom Y
-            </span>
+            <InfoTooltip>
+              <ul className="space-y-1 list-disc ml-3">
+                <li>Ctrl+Drag to pan</li>
+                <li>Ctrl+Scroll to zoom X</li>
+                <li>Ctrl+Shift+Scroll to zoom Y</li>
+              </ul>
+            </InfoTooltip>
             <button
               type="button"
               onClick={() => handleZoomXChange(defaultZoomX)}
@@ -350,7 +424,7 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
       {/* Time Ruler */}
       <div
         ref={rulerRef}
-        className="border-b border-base-300 overflow-x-auto overflow-y-hidden"
+        className="border-b border-base-300 overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
         onScroll={handleRulerScroll}
       >
         <TimeRuler
@@ -366,7 +440,13 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
 
       {/* Waveform Canvas */}
       <div
-        ref={waveformRef}
+        ref={(node) => {
+          // Combine refs for both scroll tracking and resize detection
+          if (node) {
+            waveformRef.current = node;
+            resizeRef(node);
+          }
+        }}
         className="flex-1 overflow-x-auto overflow-y-hidden"
         onScroll={handleWaveformScroll}
       >
@@ -375,6 +455,8 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
           zoomX={zoomX}
           zoomY={zoomY}
           pixelsPerBeat={PIXELS_PER_BEAT}
+          containerHeight={containerHeight}
+          playheadBeats={playhead}
           onTrimStartChange={handleTrimStartChange}
           onTrimEndChange={handleTrimEndChange}
           onFadeInChange={handleFadeInChange}

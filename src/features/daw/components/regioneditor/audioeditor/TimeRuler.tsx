@@ -1,6 +1,10 @@
 import { getGridDivisionForZoom, getGridInterval, isBarLine, isBeatLine } from '@/features/daw/utils/gridUtils';
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState, useCallback } from 'react';
 import { Layer, Line, Rect, Stage, Text } from 'react-konva';
+import type { KonvaEventObject } from 'konva/lib/Node';
+import * as Tone from 'tone';
+import { useProjectStore } from '@/features/daw/stores/projectStore';
+import { snapToGrid } from '@/features/daw/utils/timeUtils';
 
 interface TimeRulerProps {
   totalBeats: number;
@@ -23,12 +27,67 @@ const TimeRulerComponent = ({
   trimEnd,
   playheadBeats = 0,
 }: TimeRulerProps) => {
+  const setPlayhead = useProjectStore((state) => state.setPlayhead);
+  const snapToGridEnabled = useProjectStore((state) => state.snapToGrid);
+  const [isDragging, setIsDragging] = useState(false);
+  
   const beatWidth = pixelsPerBeat * zoomX;
   const width = totalBeats * beatWidth;
 
   // Calculate absolute start position (where the full waveform starts on main timeline)
   // If region starts at beat 1 and trimStart is 0.5, the waveform starts at 0.5 on main timeline
   const absoluteStartBeat = regionStart - trimStart;
+
+  const updatePlayheadFromPointer = useCallback((pointer: { x: number; y: number }) => {
+    // Convert pointer position to absolute beat on main timeline
+    let absoluteBeat = absoluteStartBeat + (pointer.x / beatWidth);
+    absoluteBeat = Math.max(0, absoluteBeat);
+
+    if (snapToGridEnabled) {
+      const division = getGridDivisionForZoom(zoomX);
+      absoluteBeat = snapToGrid(absoluteBeat, division);
+    }
+    
+    // Update store
+    setPlayhead(absoluteBeat);
+    
+    // Update Tone.js Transport position without stopping
+    const bars = Math.floor(absoluteBeat / 4); // 4 beats per bar
+    const beats = absoluteBeat % 4;
+    Tone.Transport.position = `${bars}:${beats}:0`;
+  }, [absoluteStartBeat, beatWidth, setPlayhead, snapToGridEnabled, zoomX]);
+  
+  const handlePointerDown = useCallback((event: KonvaEventObject<PointerEvent>) => {
+    const stage = event.target.getStage();
+    if (!stage) {
+      return;
+    }
+    const pointer = stage.getPointerPosition();
+    if (!pointer) {
+      return;
+    }
+    setIsDragging(true);
+    updatePlayheadFromPointer(pointer);
+  }, [updatePlayheadFromPointer]);
+  
+  const handlePointerMove = useCallback((event: KonvaEventObject<PointerEvent>) => {
+    if (!isDragging) {
+      return;
+    }
+    const stage = event.target.getStage();
+    if (!stage) {
+      return;
+    }
+    const pointer = stage.getPointerPosition();
+    if (!pointer) {
+      return;
+    }
+    updatePlayheadFromPointer(pointer);
+  }, [isDragging, updatePlayheadFromPointer]);
+  
+  const handlePointerUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
 
   // Dynamic grid division based on zoom level
   const dynamicGridDivision = useMemo(() => getGridDivisionForZoom(zoomX), [zoomX]);
@@ -64,7 +123,18 @@ const TimeRulerComponent = ({
   const trimEndX = trimEnd * beatWidth;
 
   return (
-    <Stage width={width} height={RULER_HEIGHT} perfectDrawEnabled={false} style={{ scrollbarWidth: 'none' }}>
+    <Stage 
+      width={width} 
+      height={RULER_HEIGHT} 
+      perfectDrawEnabled={false} 
+      style={{ scrollbarWidth: 'none' }}
+      onPointerDown={handlePointerDown}
+      onTouchStart={(e) => handlePointerDown(e as unknown as KonvaEventObject<PointerEvent>)}
+      onPointerMove={handlePointerMove}
+      onTouchMove={(e) => handlePointerMove(e as unknown as KonvaEventObject<PointerEvent>)}
+      onPointerUp={handlePointerUp}
+      onTouchEnd={handlePointerUp}
+    >
       <Layer>
         {/* Background */}
         <Rect x={0} y={0} width={width} height={RULER_HEIGHT} fill="#18181b" />
