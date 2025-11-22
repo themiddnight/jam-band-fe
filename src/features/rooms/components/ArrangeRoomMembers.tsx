@@ -9,13 +9,20 @@ interface VoiceUser {
   audioLevel: number;
 }
 
+interface BroadcastUser {
+  userId: string;
+  username: string;
+  trackId: string;
+}
+
 interface ArrangeRoomMembersProps {
   users: RoomUser[];
   voiceUsers?: VoiceUser[];
+  broadcastUsers?: BroadcastUser[];
 }
 
 const ArrangeRoomMembers = memo(
-  ({ users, voiceUsers = [] }: ArrangeRoomMembersProps) => {
+  ({ users, voiceUsers = [], broadcastUsers = [] }: ArrangeRoomMembersProps) => {
     const { userId: currentUserId } = useUserStore();
 
     // Separate users by role
@@ -35,6 +42,7 @@ const ArrangeRoomMembers = memo(
 
     const renderUser = (user: RoomUser) => {
       const voiceUser = voiceUsers.find((v) => v.userId === user.id);
+      const broadcastUser = broadcastUsers.find((b) => b.userId === user.id);
       const isCurrentUser = user.id === currentUserId;
       // const isAudience = user.role === "audience";
 
@@ -57,6 +65,13 @@ const ArrangeRoomMembers = memo(
           {/* Role indicator */}
           {user.role === "room_owner" && <div className="text-sm">👑</div>}
           {/* {isAudience && <div className="text-sm">👥</div>} */}
+
+          {/* Broadcast indicator */}
+          {broadcastUser && (
+            <div className="text-sm" title="Broadcasting instrument">
+              🎹
+            </div>
+          )}
 
           {/* Username */}
           <span className="font-medium text-sm flex-1">{user.username}</span>

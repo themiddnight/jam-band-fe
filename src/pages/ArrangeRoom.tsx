@@ -31,6 +31,8 @@ import { KickUserModal, RoomSettingsModal } from "@/features/rooms";
 import type { Socket } from "socket.io-client";
 import { useDAWCollaboration } from "@/features/daw/hooks/useDAWCollaboration";
 import { useAudioRegionLoader } from "@/features/daw/hooks/playback/useAudioRegionLoader";
+import { useBroadcast } from "@/features/daw/hooks/useBroadcast";
+import { useBroadcastPlayback } from "@/features/daw/hooks/useBroadcastPlayback";
 
 /**
  * Arrange Room page for multi-track production with async editing
@@ -49,14 +51,14 @@ export default function ArrangeRoom() {
   const [isPendingPopupOpen, setIsPendingPopupOpen] = useState(false);
   const pendingBtnRef = useRef<HTMLButtonElement>(null);
   const recordingHandlerRef = useRef<(message: MidiMessage) => void>(() => {});
-  const [recordingHandler, setRecordingHandler] = useState<
+  const [recordingHandlerBase, setRecordingHandlerBase] = useState<
     (message: MidiMessage) => void
   >(() => () => {});
 
   // Keep ref in sync with state
   useEffect(() => {
-    recordingHandlerRef.current = recordingHandler;
-  }, [recordingHandler]);
+    recordingHandlerRef.current = recordingHandlerBase;
+  }, [recordingHandlerBase]);
 
   // Room management
   const {
@@ -184,6 +186,37 @@ export default function ArrangeRoom() {
     };
   }, []);
 
+  // Broadcast setup
+  const {
+    handleBroadcastToggle,
+    broadcastMidiMessage,
+    getBroadcastUsers,
+  } = useBroadcast({
+    socket: activeSocket,
+    roomId: currentRoom?.id || null,
+    userId: userId || "",
+    username: username || "",
+    enabled: isConnected && !!currentRoom,
+  });
+
+  // Broadcast playback (receive and play notes from other users)
+  useBroadcastPlayback({
+    socket: activeSocket,
+    enabled: isConnected && !!currentRoom,
+  });
+
+  // Wrap recording handler to also broadcast virtual instrument notes
+  const recordingHandler = useCallback(
+    (message: MidiMessage) => {
+      console.log('[ArrangeRoom] recordingHandler called with message:', message.type, message.note);
+      // Use ref to avoid closure issues with late initialization
+      recordingHandlerRef.current(message);
+      // Broadcast virtual instrument notes if broadcasting is enabled
+      broadcastMidiMessage(message);
+    },
+    [broadcastMidiMessage]
+  );
+
   // MIDI setup
   const setMidiStatus = useMidiStore((state) => state.setStatus);
   const setLastMidiMessage = useMidiStore((state) => state.setLastMessage);
@@ -191,9 +224,10 @@ export default function ArrangeRoom() {
   const handleMidiMessage = useCallback(
     (message: MidiMessage) => {
       setLastMidiMessage(message);
-      recordingHandlerRef.current(message);
+      // Use the wrapped recordingHandler which includes broadcasting
+      recordingHandler(message);
     },
-    [setLastMidiMessage]
+    [setLastMidiMessage, recordingHandler]
   );
 
   const midi = useMidiInput({
@@ -355,7 +389,7 @@ export default function ArrangeRoom() {
     >
       <TrackAudioParamsBridge />
       <KeyboardShortcutsBridge />
-      <RecordingEngineBridge onHandlerReady={setRecordingHandler} />
+      <RecordingEngineBridge onHandlerReady={setRecordingHandlerBase} />
       <div className="min-h-dvh bg-base-200 flex flex-col">
         <div className="flex-1 p-3">
           <div className="">
@@ -576,6 +610,8 @@ export default function ArrangeRoom() {
                         userCount: currentRoom?.users?.length || 0,
                         roomUsers: currentRoom?.users || [],
                         voiceUsers,
+                        broadcastUsers: getBroadcastUsers(),
+                        onBroadcastChange: handleBroadcastToggle,
                       }),
                       [
                         isVoiceEnabled,
@@ -590,6 +626,8 @@ export default function ArrangeRoom() {
                         voiceConnectionError,
                         currentRoom?.users,
                         voiceUsers,
+                        getBroadcastUsers,
+                        handleBroadcastToggle,
                       ]
                     )}
                   />

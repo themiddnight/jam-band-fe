@@ -162,47 +162,47 @@ export const VirtualInstrumentPanel = memo(({ onRecordMidiMessage }: VirtualInst
         console.error("Failed to play notes", error);
       }
 
-      // Send to main transport recording
-      if (transportState === "recording") {
-        notes.forEach((note) => {
-          const midiNumber = noteNameToMidi(note);
-          if (midiNumber === null) {
-            console.warn('[Recording] Failed to convert note to MIDI', { note });
-            return;
-          }
+      // Send MIDI messages for recording and broadcasting
+      notes.forEach((note) => {
+        const midiNumber = noteNameToMidi(note);
+        if (midiNumber === null) {
+          console.warn('[VirtualInstrument] Failed to convert note to MIDI', { note });
+          return;
+        }
 
-          const message: MidiMessage = {
-            type: "noteon",
-            channel: 0,
-            note: midiNumber,
-            velocity: clampVelocity(velocity),
-            monitoringHandled: true,
-            raw: {
-              data: new Uint8Array([0x90, midiNumber, clampVelocity(velocity)]),
-              timeStamp: performance.now(),
-            } as unknown as MIDIMessageEvent,
-          };
-          onRecordMidiMessage(message);
+        const message: MidiMessage = {
+          type: "noteon",
+          channel: 0,
+          note: midiNumber,
+          velocity: clampVelocity(velocity),
+          monitoringHandled: true,
+          raw: {
+            data: new Uint8Array([0x90, midiNumber, clampVelocity(velocity)]),
+            timeStamp: performance.now(),
+          } as unknown as MIDIMessageEvent,
+        };
+        
+        // Always send to handler (for both recording and broadcasting)
+        onRecordMidiMessage(message);
 
-          // For one-shot drum hits (isKeyHeld = false), send note-off after a short delay
-          if (!isKeyHeld && selectedTrack.instrumentCategory === InstrumentCategory.DrumBeat) {
-            setTimeout(() => {
-              const noteOffMessage: MidiMessage = {
-                type: "noteoff",
-                channel: 0,
-                note: midiNumber,
-                velocity: 0,
-                monitoringHandled: true,
-                raw: {
-                  data: new Uint8Array([0x80, midiNumber, 0]),
-                  timeStamp: performance.now(),
-                } as unknown as MIDIMessageEvent,
-              };
-              onRecordMidiMessage(noteOffMessage);
-            }, 100); // 100ms duration for drum hits
-          }
-        });
-      }
+        // For one-shot drum hits (isKeyHeld = false), send note-off after a short delay
+        if (!isKeyHeld && selectedTrack.instrumentCategory === InstrumentCategory.DrumBeat) {
+          setTimeout(() => {
+            const noteOffMessage: MidiMessage = {
+              type: "noteoff",
+              channel: 0,
+              note: midiNumber,
+              velocity: 0,
+              monitoringHandled: true,
+              raw: {
+                data: new Uint8Array([0x80, midiNumber, 0]),
+                timeStamp: performance.now(),
+              } as unknown as MIDIMessageEvent,
+            };
+            onRecordMidiMessage(noteOffMessage);
+          }, 100); // 100ms duration for drum hits
+        }
+      });
 
       // Send to piano roll recording
       if (isPianoRollRecording) {
@@ -246,7 +246,7 @@ export const VirtualInstrumentPanel = memo(({ onRecordMidiMessage }: VirtualInst
         });
       }
     },
-    [selectedTrack, transportState, isPianoRollRecording, onRecordMidiMessage],
+    [selectedTrack, isPianoRollRecording, onRecordMidiMessage],
   );
 
   const stopNotes = useCallback(
@@ -261,29 +261,29 @@ export const VirtualInstrumentPanel = memo(({ onRecordMidiMessage }: VirtualInst
         console.error("Failed to stop notes", error);
       }
 
-      // Send to main transport recording
-      if (transportState === "recording") {
-        notes.forEach((note) => {
-          const midiNumber = noteNameToMidi(note);
-          if (midiNumber === null) {
-            console.warn('[Recording] Failed to convert note to MIDI for noteoff', { note });
-            return;
-          }
+      // Send MIDI messages for recording and broadcasting
+      notes.forEach((note) => {
+        const midiNumber = noteNameToMidi(note);
+        if (midiNumber === null) {
+          console.warn('[VirtualInstrument] Failed to convert note to MIDI for noteoff', { note });
+          return;
+        }
 
-          const message: MidiMessage = {
-            type: "noteoff",
-            channel: 0,
-            note: midiNumber,
-            velocity: 0,
-            monitoringHandled: true,
-            raw: {
-              data: new Uint8Array([0x80, midiNumber, 0]),
-              timeStamp: performance.now(),
-            } as unknown as MIDIMessageEvent,
-          };
-          onRecordMidiMessage(message);
-        });
-      }
+        const message: MidiMessage = {
+          type: "noteoff",
+          channel: 0,
+          note: midiNumber,
+          velocity: 0,
+          monitoringHandled: true,
+          raw: {
+            data: new Uint8Array([0x80, midiNumber, 0]),
+            timeStamp: performance.now(),
+          } as unknown as MIDIMessageEvent,
+        };
+        
+        // Always send to handler (for both recording and broadcasting)
+        onRecordMidiMessage(message);
+      });
 
       // Send to piano roll recording
       if (isPianoRollRecording) {
@@ -309,7 +309,7 @@ export const VirtualInstrumentPanel = memo(({ onRecordMidiMessage }: VirtualInst
         });
       }
     },
-    [selectedTrack, transportState, isPianoRollRecording, onRecordMidiMessage],
+    [selectedTrack, isPianoRollRecording, onRecordMidiMessage],
   );
 
   const handleSustainChange = useCallback(
