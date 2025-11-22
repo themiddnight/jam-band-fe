@@ -44,15 +44,20 @@ export const PianoKeys = React.memo(() => {
   
   // Generate keys only for visible MIDI numbers
   const keys = useMemo(() => {
+    const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const rootIndex = NOTE_NAMES.indexOf(rootNote);
+    
     return visibleMidiNumbers.map((midi) => {
       const noteInOctave = midi % 12;
       const isBlack = BLACK_KEYS.has(noteInOctave);
       const isOutOfScale = viewMode === 'scale-keys' && isNoteOutOfScale(midi, rootNote, scale);
+      const isRootNote = noteInOctave === rootIndex;
       
       return {
         midi,
         isBlack,
         isOutOfScale,
+        isRootNote,
         label: midiNumberToNoteName(midi),
       };
     });
@@ -109,6 +114,9 @@ export const PianoKeys = React.memo(() => {
           if (key.isOutOfScale) {
             // Out of scale notes - dimmed/muted color
             fillColor = key.isBlack ? '#374151' : '#d1d5db';
+          } else if (viewMode === 'scale-keys' && key.isRootNote) {
+            // Root note in scale mode - highlighted with blue
+            fillColor = key.isBlack ? '#1e3a8a' : '#bfdbfe';
           } else {
             // In scale or all-keys mode - normal colors
             fillColor = key.isBlack ? '#1f2937' : '#e5e7eb';

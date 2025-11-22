@@ -733,6 +733,8 @@ export const NoteCanvas = ({
           regionHighlightEnd={regionHighlightEnd}
           visibleMidiNumbers={visibleMidiNumbers}
           midiToRowIndex={midiToRowIndex}
+          viewMode={viewMode}
+          rootNote={rootNote}
         />
       </Layer>
       

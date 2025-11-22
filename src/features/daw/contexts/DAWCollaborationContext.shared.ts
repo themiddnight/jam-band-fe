@@ -6,10 +6,12 @@ import type { LockType } from '../stores/lockStore';
 
 import type { RegionDragUpdatePayload } from '../services/dawSyncService';
 import type { MidiNote, Region, TimeSignature } from '../types/daw';
+import type { TimeMarker } from '../types/marker';
 import { useProjectStore } from '../stores/projectStore';
 import { useRegionStore } from '../stores/regionStore';
 import { useSynthStore } from '../stores/synthStore';
 import { useTrackStore } from '../stores/trackStore';
+import { useMarkerStore } from '../stores/markerStore';
 
 export interface DAWCollaborationContextValue {
   // Track handlers
@@ -74,6 +76,12 @@ export interface DAWCollaborationContextValue {
   handleSynthParamsChange: (trackId: string, params: Partial<SynthState>) => void;
   handleBpmChange: (bpm: number) => void;
   handleTimeSignatureChange: (timeSignature: TimeSignature) => void;
+
+  // Marker handlers
+  handleMarkerAdd: (marker: TimeMarker) => void;
+  handleMarkerUpdate: (markerId: string, updates: Partial<TimeMarker>) => void;
+  handleMarkerUpdateFlush: () => void;
+  handleMarkerDelete: (markerId: string) => void;
 
   // Lock utilities
   isLocked: (elementId: string) => any;
@@ -182,6 +190,16 @@ export const createNoopDAWCollaborationValue = (): DAWCollaborationContextValue 
   },
   handleTimeSignatureChange: (timeSignature: TimeSignature) => {
     useProjectStore.getState().setTimeSignature(timeSignature);
+  },
+  handleMarkerAdd: (marker: TimeMarker) => {
+    useMarkerStore.getState().addMarker(marker);
+  },
+  handleMarkerUpdate: (markerId: string, updates: Partial<TimeMarker>) => {
+    useMarkerStore.getState().updateMarker(markerId, updates);
+  },
+  handleMarkerUpdateFlush: () => {},
+  handleMarkerDelete: (markerId: string) => {
+    useMarkerStore.getState().removeMarker(markerId);
   },
   isLocked: () => null,
   isLockedByUser: () => false,

@@ -2,6 +2,7 @@
 
 // Components
 export { MetronomeControls } from "./components/MetronomeControls";
+export { BPMControl } from "./components/BPMControl";
 
 // Hooks
 export { useMetronome } from "./hooks/useMetronome";

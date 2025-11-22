@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "🧪 Running frontend tests before commit..."
+
+# Run tests with Bun
+bun run test:run
+
+# Check exit code
+if [ $? -ne 0 ]; then
+  echo "❌ Frontend tests failed! Commit aborted."
+  echo "💡 Fix the failing tests and try again."
+  exit 1
+fi
+
+echo "✅ All frontend tests passed! Proceeding with commit..."

@@ -29,7 +29,7 @@ export const TrackEffects = memo(() => {
           <p className="text-xs mt-1">Add a track to configure effects</p>
         </div>
       ) : (
-        <div className="flex flex-row xl:flex-col flex-wrap gap-4 w-full">
+        <div className="flex flex-col md:flex-row xl:flex-col flex-wrap gap-4 w-full">
           {tracks.map((track) => {
             const chainType = `track:${track.id}` as EffectChainType;
             const isSelected = track.id === selectedTrackId;
@@ -41,7 +41,7 @@ export const TrackEffects = memo(() => {
               <div
                 key={track.id}
                 onClick={() => selectTrack(track.id)}
-                className={`w-fit xl:w-full min-w-64 rounded-lg transition-all duration-150 cursor-pointer ${highlightClasses}`}
+                className={`w-full sm:w-fit xl:w-full min-w-64 rounded-lg transition-all duration-150 cursor-pointer ${highlightClasses}`}
               >
                 <TrackEffectChain
                   chainType={chainType}
