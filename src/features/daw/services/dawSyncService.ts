@@ -7,8 +7,10 @@ import { useEffectsStore } from '../../effects/stores/effectsStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useSynthStore } from '../stores/synthStore';
 import { useRecordingStore } from '../stores/recordingStore';
+import { useMarkerStore } from '../stores/markerStore';
 import { trackInstrumentRegistry } from '../utils/trackInstrumentRegistry';
 import type { Track, Region, MidiNote, TimeSignature } from '../types/daw';
+import type { TimeMarker } from '../types/marker';
 import type { SynthState } from '@/features/instruments';
 import type { EffectChainState } from '@/shared/types';
 import { DEFAULT_BPM, DEFAULT_TIME_SIGNATURE } from '../types/daw';
@@ -107,6 +109,9 @@ export class DAWSyncService {
     this.socket.on('arrange:lock_released', this.handleLockReleased.bind(this));
     this.socket.on('arrange:lock_conflict', this.handleLockConflict.bind(this));
     this.socket.on('arrange:project_loaded', this.handleProjectLoaded.bind(this));
+    this.socket.on('arrange:marker_added', this.handleMarkerAdded.bind(this));
+    this.socket.on('arrange:marker_updated', this.handleMarkerUpdated.bind(this));
+    this.socket.on('arrange:marker_deleted', this.handleMarkerDeleted.bind(this));
   }
 
   /**
@@ -140,6 +145,9 @@ export class DAWSyncService {
     this.socket.off('arrange:lock_released');
     this.socket.off('arrange:lock_conflict');
     this.socket.off('arrange:project_loaded');
+    this.socket.off('arrange:marker_added');
+    this.socket.off('arrange:marker_updated');
+    this.socket.off('arrange:marker_deleted');
   }
 
   // ========== Outgoing sync methods (called from stores) ==========
@@ -385,6 +393,7 @@ export class DAWSyncService {
     bpm?: number;
     timeSignature?: TimeSignature;
     synthStates?: Record<string, SynthState>;
+    markers?: TimeMarker[];
   }): void {
     this.isSyncing = true;
     try {
@@ -407,6 +416,11 @@ export class DAWSyncService {
       // Set synth states
       if (data.synthStates) {
         useSynthStore.getState().setAllSynthStates(data.synthStates);
+      }
+
+      // Set markers
+      if (data.markers) {
+        useMarkerStore.getState().syncSetMarkers(data.markers);
       }
 
       // Update project settings
@@ -875,6 +889,65 @@ export class DAWSyncService {
   private handleRecordingPreviewEnd(data: { userId: string }): void {
     if (this.isSyncing || data.userId === this.userId) return;
     useRecordingStore.getState().removeRemoteRecordingPreview(data.userId);
+  }
+
+  // ========== Marker sync methods ==========
+
+  /**
+   * Sync marker add
+   */
+  syncMarkerAdd(marker: TimeMarker): void {
+    if (!this.socket || !this.roomId || this.isSyncing) return;
+    this.socket.emit('arrange:marker_add', { roomId: this.roomId, marker });
+  }
+
+  /**
+   * Sync marker update
+   */
+  syncMarkerUpdate(markerId: string, updates: Partial<TimeMarker>): void {
+    if (!this.socket || !this.roomId || this.isSyncing) return;
+    this.socket.emit('arrange:marker_update', { roomId: this.roomId, markerId, updates });
+  }
+
+  /**
+   * Sync marker delete
+   */
+  syncMarkerDelete(markerId: string): void {
+    if (!this.socket || !this.roomId || this.isSyncing) return;
+    this.socket.emit('arrange:marker_delete', { roomId: this.roomId, markerId });
+  }
+
+  private handleMarkerAdded(data: { marker: TimeMarker; userId: string }): void {
+    if (this.isSyncing || data.userId === this.userId) return;
+
+    this.isSyncing = true;
+    try {
+      useMarkerStore.getState().syncAddMarker(data.marker);
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+
+  private handleMarkerUpdated(data: { markerId: string; updates: Partial<TimeMarker>; userId: string }): void {
+    if (this.isSyncing || data.userId === this.userId) return;
+
+    this.isSyncing = true;
+    try {
+      useMarkerStore.getState().syncUpdateMarker(data.markerId, data.updates);
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+
+  private handleMarkerDeleted(data: { markerId: string; userId: string }): void {
+    if (this.isSyncing || data.userId === this.userId) return;
+
+    this.isSyncing = true;
+    try {
+      useMarkerStore.getState().syncRemoveMarker(data.markerId);
+    } finally {
+      this.isSyncing = false;
+    }
   }
 }
 

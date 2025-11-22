@@ -2,6 +2,7 @@ import { useHistoryStore } from './historyStore';
 import { usePianoRollStore } from './pianoRollStore';
 import { useRegionStore } from './regionStore';
 import { useTrackStore } from './trackStore';
+import { useMarkerStore } from './markerStore';
 
 let initialized = false;
 let timeoutId: number | undefined;
@@ -37,12 +38,17 @@ export const initializeStoreObservers = () => {
     () => scheduleHistoryRecord()
   );
 
+  const markerUnsubscribe = useMarkerStore.subscribe(
+    () => scheduleHistoryRecord()
+  );
+
   scheduleHistoryRecord(0);
 
   return () => {
     trackUnsubscribe();
     regionUnsubscribe();
     pianoRollUnsubscribe();
+    markerUnsubscribe();
     if (timeoutId && typeof window !== 'undefined') {
       window.clearTimeout(timeoutId);
     }

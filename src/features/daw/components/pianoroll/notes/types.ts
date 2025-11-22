@@ -39,6 +39,8 @@ export interface NoteGridBackgroundProps {
   regionHighlightEnd?: number;
   visibleMidiNumbers?: number[];
   midiToRowIndex?: Map<number, number>;
+  viewMode?: 'all-keys' | 'scale-keys' | 'only-notes';
+  rootNote?: string;
 }
 
 export interface MarqueeSelectionProps {

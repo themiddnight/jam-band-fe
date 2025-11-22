@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, memo } from 'react';
+import { useState, useCallback, useMemo, memo, useEffect } from 'react';
 import { Layer, Line, Rect, Stage, Text } from 'react-konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import * as Tone from 'tone';
@@ -7,7 +7,12 @@ import { RULER_HEIGHT } from './constants';
 import { beatsPerBar, snapToGrid as snapValueToGrid } from '@/features/daw/utils/timeUtils';
 import type { TimeSignature } from '@/features/daw/types/daw';
 import { useProjectStore } from '@/features/daw/stores/projectStore';
+import { useMarkerStore } from '@/features/daw/stores/markerStore';
+import { useDAWCollaborationContext } from '@/features/daw/contexts/useDAWCollaborationContext';
 import { getGridDivisionForZoom, getGridInterval, isBarLine, isBeatLine } from '@/features/daw/utils/gridUtils';
+import { TimeRulerMarker } from './TimeRulerMarker';
+import { MarkerEditDialog } from './MarkerEditDialog';
+import type { TimeMarker } from '@/features/daw/types/marker';
 
 interface TimeRulerProps {
   totalBeats: number;
@@ -34,6 +39,19 @@ const TimeRulerComponent = ({
   const setLoop = useProjectStore((state) => state.setLoop);
   const [isDragging, setIsDragging] = useState(false);
   const [loopDragState, setLoopDragState] = useState<'start' | 'end' | null>(null);
+  
+  // Marker state
+  const markers = useMarkerStore((state) => state.markers);
+  const selectedMarkerId = useMarkerStore((state) => state.selectedMarkerId);
+  const isEditMode = useMarkerStore((state) => state.isEditMode);
+  const selectMarker = useMarkerStore((state) => state.selectMarker);
+  const [editingMarker, setEditingMarker] = useState<TimeMarker | null>(null);
+  const [clickCount, setClickCount] = useState(0);
+  const [lastClickTime, setLastClickTime] = useState(0);
+  const [lastClickX, setLastClickX] = useState(0);
+  const [draggingMarkerId, setDraggingMarkerId] = useState<string | null>(null);
+  
+  const { handleMarkerAdd, handleMarkerUpdate, handleMarkerUpdateFlush, handleMarkerDelete } = useDAWCollaborationContext();
   
   const width = totalBeats * pixelsPerBeat * zoom;
   const beatWidth = pixelsPerBeat * zoom;
@@ -98,6 +116,72 @@ const TimeRulerComponent = ({
       return;
     }
     
+    // Check if clicking on a marker (check both target and parent)
+    let markerName = targetName;
+    if (!markerName || !markerName.startsWith('marker-')) {
+      // Check parent (in case we clicked on a child element like Line or Text)
+      const parent = target.getParent();
+      if (parent) {
+        markerName = parent.name();
+      }
+    }
+    
+    if (markerName && markerName.startsWith('marker-')) {
+      const markerId = markerName.replace('marker-', '');
+      if (isEditMode) {
+        // Single click to select marker
+        selectMarker(markerId);
+        setDraggingMarkerId(markerId);
+        return;
+      }
+    }
+    
+    // In edit mode, don't set playhead - only handle marker operations
+    if (isEditMode) {
+      const stage = event.target.getStage();
+      if (!stage) {
+        return;
+      }
+      const pointer = stage.getPointerPosition();
+      if (!pointer) {
+        return;
+      }
+      
+      // Handle double-click for adding markers
+      const now = Date.now();
+      const timeDiff = now - lastClickTime;
+      const xDiff = Math.abs(pointer.x - lastClickX);
+      
+      if (timeDiff < 300 && xDiff < 10) {
+        // Double click detected - add empty marker immediately
+        let clickedBeat = Math.max(0, Math.min(pointer.x / beatWidth, totalBeats));
+        if (snapToGrid) {
+          clickedBeat = snapValueToGrid(clickedBeat, dynamicGridDivision);
+        }
+        
+        const newMarker: TimeMarker = {
+          id: crypto.randomUUID(),
+          position: clickedBeat,
+          description: '', // Empty description
+          color: '#3b82f6',
+        };
+        
+        // Add marker immediately (no dialog)
+        handleMarkerAdd(newMarker);
+        selectMarker(newMarker.id);
+        setClickCount(0);
+        return;
+      }
+      
+      setClickCount(clickCount + 1);
+      setLastClickTime(now);
+      setLastClickX(pointer.x);
+      
+      // Don't set playhead in edit mode
+      return;
+    }
+    
+    // Normal mode - set playhead
     const stage = event.target.getStage();
     if (!stage) {
       return;
@@ -106,6 +190,7 @@ const TimeRulerComponent = ({
     if (!pointer) {
       return;
     }
+    
     setIsDragging(true);
     updatePlayheadFromPointer(pointer);
   };
@@ -120,7 +205,14 @@ const TimeRulerComponent = ({
       return;
     }
     
-    if (loopDragState) {
+    if (draggingMarkerId) {
+      // Dragging a marker
+      let newPosition = Math.max(0, Math.min(pointer.x / beatWidth, totalBeats));
+      if (snapToGrid) {
+        newPosition = snapValueToGrid(newPosition, dynamicGridDivision);
+      }
+      handleMarkerUpdate(draggingMarkerId, { position: newPosition });
+    } else if (loopDragState) {
       updateLoopHandleFromPointer(pointer, loopDragState);
     } else if (isDragging) {
       updatePlayheadFromPointer(pointer);
@@ -128,12 +220,50 @@ const TimeRulerComponent = ({
   };
   
   const handlePointerUp = () => {
+    if (draggingMarkerId) {
+      handleMarkerUpdateFlush();
+      setDraggingMarkerId(null);
+    }
     setIsDragging(false);
     setLoopDragState(null);
   };
 
-  // Generate markers based on dynamic grid subdivision
-  const markers = useMemo(() => {
+  // Marker handlers
+  const handleMarkerDoubleClick = useCallback((markerId: string) => {
+    const marker = markers.find(m => m.id === markerId);
+    if (marker) {
+      setEditingMarker(marker);
+    }
+  }, [markers]);
+
+  const handleMarkerSave = useCallback((description: string) => {
+    if (editingMarker) {
+      handleMarkerUpdate(editingMarker.id, { description });
+      handleMarkerUpdateFlush();
+    }
+    setEditingMarker(null);
+  }, [editingMarker, handleMarkerUpdate, handleMarkerUpdateFlush]);
+
+  const handleMarkerCancel = useCallback(() => {
+    setEditingMarker(null);
+  }, []);
+
+  // Handle keyboard delete for markers
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isEditMode && selectedMarkerId && (e.key === 'Delete' || e.key === 'Backspace')) {
+        e.preventDefault();
+        handleMarkerDelete(selectedMarkerId);
+        selectMarker(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isEditMode, selectedMarkerId, handleMarkerDelete, selectMarker]);
+
+  // Generate grid markers based on dynamic grid subdivision
+  const gridMarkers = useMemo(() => {
     const markerList = [];
     for (let beat = 0; beat <= totalBeats; beat += gridInterval) {
       const x = beat * beatWidth;
@@ -153,8 +283,14 @@ const TimeRulerComponent = ({
   const playheadX = playheadBeats * beatWidth;
 
   return (
-    <div className="relative overflow-hidden border-b border-base-300 bg-base-200">
-      <div style={{ position: 'relative', left: -scrollLeft, width: width }}>
+    <>
+      <MarkerEditDialog
+        marker={editingMarker}
+        onSave={handleMarkerSave}
+        onCancel={handleMarkerCancel}
+      />
+      <div className="relative overflow-hidden border-b border-base-300 bg-base-200">
+        <div style={{ position: 'relative', left: -scrollLeft, width: width }}>
         <Stage
           width={width}
           height={height}
@@ -183,8 +319,8 @@ const TimeRulerComponent = ({
             listening={false}
             perfectDrawEnabled={false}
           />
-          {/* Beat/bar markers */}
-          {markers.map((marker) => {
+          {/* Beat/bar grid markers */}
+          {gridMarkers.map((marker) => {
             // Bar lines: full height, thick, dark
             if (marker.isBar) {
               return (
@@ -225,7 +361,7 @@ const TimeRulerComponent = ({
             );
           })}
           {/* Bar labels */}
-          {markers
+          {gridMarkers
             .filter((marker) => marker.isBar && marker.label !== null)
             .map((marker) => (
               <Text
@@ -239,6 +375,20 @@ const TimeRulerComponent = ({
                 perfectDrawEnabled={false}
               />
             ))}
+          
+          {/* Time markers */}
+          {markers.map((marker) => (
+            <TimeRulerMarker
+              key={marker.id}
+              marker={marker}
+              pixelsPerBeat={pixelsPerBeat}
+              zoom={zoom}
+              height={height}
+              isEditMode={isEditMode}
+              isSelected={marker.id === selectedMarkerId}
+              onDoubleClick={handleMarkerDoubleClick}
+            />
+          ))}
           {/* Loop region highlight */}
           {loop.enabled && (
             <Rect
@@ -289,8 +439,9 @@ const TimeRulerComponent = ({
           />
         </Layer>
         </Stage>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

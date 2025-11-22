@@ -17,13 +17,15 @@
 
 Jam Band lets you create music together with friends in real-time using **virtual instruments with music theory assistance** for low-mid level musicians, and **physical instrument support** for high-level players who want to plug in their real instruments.
 
-**Current: Perform Room** - Perfect for **live jamming sessions** with synchronized instruments, step sequencers, and ultra-low latency voice chat. Ideal for remote jam sessions, music lessons, skill development, or just having fun making music together.
+### Two Room Types:
 
-**Future: Produce Room** - Revolutionary **collaborative DAW** where multiple users can simultaneously create tracks, record audio/MIDI regions, edit notes, and mix projects in real-time. Think **Miro or Figma but for music production** - a paradigm shift from traditional single-user DAWs to real-time collaborative music creation.
+**Perform Room** - Perfect for **live jamming sessions** with synchronized instruments, step sequencers, and ultra-low latency voice chat. Ideal for remote jam sessions, music lessons, skill development, or just having fun making music together.
+
+**Arrange Room** - **Collaborative DAW** where multiple users can simultaneously create tracks, record audio/MIDI regions, edit notes in a piano roll, and work on music production projects in real-time. Features multi-track timeline editing, region recording, MIDI editing, and collaborative mixing - think **Google Docs but for music production**.
 
 ## ✨ Key Features
 
-### Current Features (Live Jamming)
+### Perform Room (Live Jamming)
 - **🎸 Virtual Instruments**: Guitar, Bass, Keyboard, Drums, Synthesizer with real-time collaboration
 - **🎤 Ultra-Low Latency Voice Chat**: WebRTC mesh network optimized for musical timing
 - **🥁 Synchronized Metronome**: BPM synchronization across all users with visual indicators
@@ -35,19 +37,22 @@ Jam Band lets you create music together with friends in real-time using **virtua
 - **📱 PWA Support**: Installable app with offline capabilities and push notifications
 - **🎵 Music Theory Assistance**: Scale helpers
 - **⚡ Performance Optimization**: Dynamic polyphony, adaptive audio quality, browser-specific optimizations
+
+### Arrange Room (Collaborative DAW)
+- **🎛️ Multi-track Timeline**: Create and arrange multiple audio/MIDI tracks with visual timeline editing
+- **🎹 Piano Roll Editor**: Real-time MIDI note editing with velocity control and quantization
+- **🎙️ Audio Recording**: Record audio regions directly into tracks with waveform visualization
+- **🎵 MIDI Recording**: Record MIDI performances from virtual instruments or external MIDI controllers
+- **🎚️ Synthesizer Integration**: Built-in synthesizers with real-time parameter control per track
+- **🔊 Track Effects**: Per-track effect chains with collaborative parameter adjustments
+- **📊 Real-time Collaboration**: Multiple users editing tracks, regions, and notes simultaneously
+- **🔒 Collaborative Locking**: Smart locking system prevents editing conflicts between users
+- **👥 Presence Tracking**: See what other users are editing in real-time
+- **💾 Project Management**: Save and load collaborative projects with full state preservation
+- **📱 Mobile Responsive**: Full touch support for mobile devices with optimized UI
+- **🎤 Voice Chat Integration**: Ultra-low latency voice communication while producing
+- **⌨️ Keyboard Shortcuts**: Professional DAW-style shortcuts for efficient workflow
 - **🧪 Comprehensive Testing**: 76 passing tests with regression prevention for all features
-
-### 🚀 Future: Collaborative DAW (Produce Room)
-*Coming Soon: Revolutionary real-time collaborative music production*
-
-- **🎛️ Real-time Collaborative DAW**: Multiple users editing tracks simultaneously like Google Docs for music
-- **🎨 Canvas-style Interface**: Miro/Figma-like collaboration patterns adapted for music production
-- **👥 Multi-user Timeline Editing**: Simultaneous track editing with presence tracking and conflict resolution
-- **🎵 Collaborative Region Recording**: Multiple users recording audio/MIDI regions to different tracks in real-time
-- **🎚️ Collaborative Mixing**: Real-time parameter adjustments across users with operational transform
-- **💾 Project Persistence**: Save and resume collaborative music projects with version history
-- **👀 Presence Tracking**: See where other users are working (cursors, selections, active regions)
-- **🔧 Smart Conflict Resolution**: Automatic handling of simultaneous edits using operational transform patterns
 
 ## 🚀 Quick Start
 
@@ -126,7 +131,7 @@ Jam Band lets you create music together with friends in real-time using **virtua
 
 ## 🎯 Perfect For
 
-### Current (Perform Room - Live Jamming)
+### Perform Room (Live Jamming)
 - **🎵 Low-Mid Level Musicians**: Virtual instruments with built-in music theory assistance
 - **🎸 High-Level Players**: Plug in physical instruments for real-time collaboration
 - **🎤 Singers**: Minimal delay between singing and hearing playback
@@ -134,13 +139,15 @@ Jam Band lets you create music together with friends in real-time using **virtua
 - **🎛️ Music Producers**: Brainstorm ideas, experiment with synthesizers, create patterns
 - **🌍 Remote Collaboration**: Jam with friends anywhere in the world
 
-### Future (Produce Room - Collaborative Production)
+### Arrange Room (Collaborative Production)
 - **🎼 Music Production Teams**: Collaborate on full tracks like working on a shared document
 - **🎧 Remix Artists**: Multiple producers working on the same project simultaneously
 - **🎵 Songwriters**: Real-time collaborative composition with multi-user MIDI editing
 - **🎚️ Mix Engineers**: Collaborative mixing sessions with live parameter adjustments
 - **🎓 Music Education**: Teachers and students working together on production projects
 - **🏢 Music Studios**: Distributed production workflows across multiple locations
+- **🎹 Beat Makers**: Create and arrange beats collaboratively with shared timeline
+- **🎸 Band Rehearsals**: Record and arrange song ideas together in real-time
 
 ## 🛠️ Tech Stack
 
@@ -163,14 +170,19 @@ src/
 │   │   ├── constants/  # Including General MIDI percussion mapping
 │   │   └── utils/      # Including GM note mapper service
 │   ├── rooms/          # Room management & Socket.IO integration
-│   │   ├── core/       # Room type architecture (Perform + Future Produce)
+│   │   ├── core/       # Room type architecture (Perform + Arrange)
 │   │   └── types/      # RoomType configurations & factory patterns
 │   ├── metronome/      # Synchronized timing across users
 │   ├── sequencer/      # Step sequencer for pattern creation (uses GM notes for drums)
 │   ├── effects/        # Audio effects chains
+│   ├── daw/            # Arrange Room DAW features
+│   │   ├── components/ # Multi-track, piano roll, region editor, transport
+│   │   ├── hooks/      # Playback, recording, collaboration hooks
+│   │   ├── stores/     # DAW state management (tracks, regions, notes)
+│   │   └── contexts/   # Collaboration context for real-time sync
 │   └── ui/             # Shared UI components & state
 ├── shared/             # Cross-feature utilities & stores
-├── pages/              # Main app routes (Lobby, PerformRoom, Invite)
+├── pages/              # Main app routes (Lobby, PerformRoom, ArrangeRoom, Invite)
 ├── app-config/         # Router & provider configuration
 ├── test/               # Test setup & utilities
 └── __tests__/          # Integration tests & testing documentation

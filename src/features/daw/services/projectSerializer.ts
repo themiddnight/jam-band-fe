@@ -4,9 +4,11 @@ import { useRegionStore } from '../stores/regionStore';
 import { useArrangeRoomScaleStore } from '../stores/arrangeRoomStore';
 import { useEffectsStore } from '@/features/effects/stores/effectsStore';
 import { useSynthStore } from '../stores/synthStore';
+import { useMarkerStore } from '../stores/markerStore';
 import type { AudioRegion, MidiRegion, Region } from '../types/daw';
 import type { EffectChain } from '@/features/effects/types';
 import type { SynthState } from '@/features/instruments';
+import type { TimeMarker } from '../types/marker';
 
 export interface SerializedProject {
   version: string;
@@ -38,6 +40,7 @@ export interface SerializedProject {
   regions: SerializedRegion[];
   effectChains: Record<string, EffectChain>;
   synthStates: Record<string, SynthState>;
+  markers?: TimeMarker[]; // Optional for backward compatibility
 }
 
 export interface SerializedRegion {
@@ -78,6 +81,7 @@ export function serializeProject(projectName: string): SerializedProject {
   const scale = useArrangeRoomScaleStore.getState();
   const effectsState = useEffectsStore.getState();
   const synthState = useSynthStore.getState();
+  const markerState = useMarkerStore.getState();
 
   // Collect all effect chains (including track-specific ones)
   const effectChains: Record<string, EffectChain> = {};
@@ -123,6 +127,7 @@ export function serializeProject(projectName: string): SerializedProject {
     regions: regions.map((region: any) => serializeRegion(region)),
     effectChains,
     synthStates: synthState.synthStates,
+    markers: markerState.markers,
   };
 }
 
@@ -331,6 +336,20 @@ export function deserializeProject(data: SerializedProject): void {
   // Restore synth states
   if (data.synthStates) {
     useSynthStore.getState().setAllSynthStates(data.synthStates);
+  }
+
+  // Restore markers
+  if (data.markers) {
+    useMarkerStore.setState({
+      markers: data.markers,
+      selectedMarkerId: null,
+    });
+  } else {
+    // Backward compatibility: clear markers if not present
+    useMarkerStore.setState({
+      markers: [],
+      selectedMarkerId: null,
+    });
   }
 
   // Note: Regions will be restored separately after audio files are loaded

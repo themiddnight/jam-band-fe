@@ -10,7 +10,8 @@ import {
   NOTE_HEIGHT,
   RULER_HEIGHT,
   SUSTAIN_LANE_HEIGHT,
-  TOTAL_KEYS,
+  LOWEST_MIDI,
+  HIGHEST_MIDI,
 } from './constants';
 import { usePianoRollStore } from '../../stores/pianoRollStore';
 import { useRegionStore } from '../../stores/regionStore';
@@ -21,8 +22,8 @@ import { useDAWCollaborationContext } from '../../contexts/useDAWCollaborationCo
 import { MAX_CANVAS_WIDTH, MAX_TIMELINE_ZOOM, MIN_TIMELINE_ZOOM } from '../../constants/canvas';
 import { usePianoRollRecording } from '../../hooks/usePianoRollRecording';
 import { InfoTooltip } from '../common/InfoTooltip';
-
-const TOTAL_HEIGHT = TOTAL_KEYS * NOTE_HEIGHT;
+import { getVisibleMidiNumbers } from '../../utils/pianoRollViewUtils';
+import { useArrangeRoomScaleStore } from '../../stores/arrangeRoomStore';
 
 type LaneMode = 'velocity' | 'sustain';
 
@@ -43,6 +44,8 @@ const PianoRollComponent = () => {
   const setViewMode = usePianoRollStore((state) => state.setViewMode);
   const isPianoRollRecording = usePianoRollStore((state) => state.isPianoRollRecording);
   const setPianoRollRecording = usePianoRollStore((state) => state.setPianoRollRecording);
+  const rootNote = useArrangeRoomScaleStore((state) => state.rootNote);
+  const scale = useArrangeRoomScaleStore((state) => state.scale);
   
   // Use collaboration handlers if available
   const {
@@ -120,6 +123,23 @@ const PianoRollComponent = () => {
     }, 0);
     return Math.max(32, Math.ceil(furthestRegionBeat + 8));
   }, [regions]);
+
+  // Calculate visible MIDI numbers and dynamic height based on view mode
+  const visibleMidiNumbers = useMemo(() => {
+    const notes = midiRegion?.notes ?? [];
+    return getVisibleMidiNumbers(
+      viewMode,
+      rootNote,
+      scale,
+      notes,
+      LOWEST_MIDI,
+      HIGHEST_MIDI
+    );
+  }, [viewMode, rootNote, scale, midiRegion?.notes]);
+
+  const dynamicHeight = useMemo(() => {
+    return visibleMidiNumbers.length * NOTE_HEIGHT;
+  }, [visibleMidiNumbers.length]);
 
   const [velocityPreview, setVelocityPreview] = useState(100);
   const [zoom, setZoom] = useState(1);
@@ -576,7 +596,7 @@ const PianoRollComponent = () => {
   }
 
   return (
-    <section className="flex h-full min-h-80 flex-col overflow-hidden rounded-lg border border-base-300 bg-base-100 shadow-sm">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-base-300 bg-base-100 shadow-sm">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-base-300 px-2 sm:px-4 py-1.5 sm:py-2 gap-2">
         <div className="flex items-center gap-4">
           <div>
@@ -711,7 +731,7 @@ const PianoRollComponent = () => {
           className="overflow-y-auto border-r border-base-300 bg-base-100"
           style={{ width: KEYBOARD_WIDTH, height: '100%' }}
         >
-          <div style={{ height: TOTAL_HEIGHT }}>
+          <div style={{ height: dynamicHeight }}>
             <PianoKeys />
           </div>
         </div>
@@ -723,7 +743,7 @@ const PianoRollComponent = () => {
           <div
             style={{
               width: totalBeats * pixelsPerBeat * zoom,
-              height: TOTAL_HEIGHT,
+              height: dynamicHeight,
             }}
           >
             <NoteCanvas

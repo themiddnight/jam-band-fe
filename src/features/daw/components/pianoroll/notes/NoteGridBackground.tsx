@@ -19,6 +19,8 @@ export const NoteGridBackground = React.memo<NoteGridBackgroundProps>(
     regionHighlightEnd = 0,
     visibleMidiNumbers,
     midiToRowIndex,
+    viewMode,
+    rootNote,
   }) => {
     // Region highlight dimensions
     const highlightX = regionHighlightStart * beatWidth;
@@ -46,9 +48,19 @@ export const NoteGridBackground = React.memo<NoteGridBackgroundProps>(
       );
     }
 
-    // Generate horizontal lines and black key backgrounds
+    // Generate horizontal lines, black key backgrounds, and root note highlights
     const horizontalLines = [];
     const blackKeyBackgrounds = [];
+    const rootNoteHighlights = [];
+    
+    // Helper to check if a MIDI note is a root note
+    const isRootNote = (midi: number): boolean => {
+      if (!rootNote) return false;
+      const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+      const noteInOctave = midi % 12;
+      const rootIndex = NOTE_NAMES.indexOf(rootNote);
+      return noteInOctave === rootIndex;
+    };
 
     // Use visible MIDI numbers if provided, otherwise fall back to all keys
     const midiNumbers = visibleMidiNumbers || [];
@@ -78,6 +90,21 @@ export const NoteGridBackground = React.memo<NoteGridBackgroundProps>(
               />
             );
           }
+          
+          // Add root note highlight in scale-keys mode
+          if (viewMode === 'scale-keys' && isRootNote(midi)) {
+            rootNoteHighlights.push(
+              <Rect
+                key={`root-highlight-${rowIndex}`}
+                x={0}
+                y={y}
+                width={width}
+                height={NOTE_HEIGHT}
+                fill="rgba(59, 130, 246, 0.12)"
+                listening={false}
+              />
+            );
+          }
         }
 
         horizontalLines.push(
@@ -102,6 +129,21 @@ export const NoteGridBackground = React.memo<NoteGridBackgroundProps>(
               width={width}
               height={NOTE_HEIGHT}
               fill="rgba(0,0,0,0.08)"
+              listening={false}
+            />
+          );
+        }
+        
+        // Add root note highlight in scale-keys mode
+        if (viewMode === 'scale-keys' && isRootNote(midi)) {
+          rootNoteHighlights.push(
+            <Rect
+              key={`root-highlight-${keyIndex}`}
+              x={0}
+              y={y}
+              width={width}
+              height={NOTE_HEIGHT}
+              fill="rgba(59, 130, 246, 0.12)"
               listening={false}
             />
           );
@@ -136,6 +178,7 @@ export const NoteGridBackground = React.memo<NoteGridBackgroundProps>(
           />
         )}
         {blackKeyBackgrounds}
+        {rootNoteHighlights}
         {verticalLines}
         {horizontalLines}
       </>

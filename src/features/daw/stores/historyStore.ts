@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { usePianoRollStore } from './pianoRollStore';
 import { useRegionStore } from './regionStore';
 import { useTrackStore } from './trackStore';
+import { useMarkerStore } from './markerStore';
 import type {
   Region,
   NoteId,
@@ -10,6 +11,7 @@ import type {
   Track,
   TrackId,
 } from '../types/daw';
+import type { TimeMarker } from '../types/marker';
 
 const MAX_HISTORY_LENGTH = 50;
 
@@ -30,10 +32,16 @@ interface PianoRollSnapshot {
   selectedSustainIds: string[];
 }
 
+interface MarkerSnapshot {
+  markers: TimeMarker[];
+  selectedMarkerId: string | null;
+}
+
 interface HistorySnapshot {
   track: TrackSnapshot;
   region: RegionSnapshot;
   pianoRoll: PianoRollSnapshot;
+  markers?: MarkerSnapshot; // Optional for backward compatibility
 }
 
 interface HistoryStoreState {
@@ -59,6 +67,7 @@ const captureSnapshot = (): HistorySnapshot => {
   const trackState = useTrackStore.getState();
   const regionState = useRegionStore.getState();
   const pianoRollState = usePianoRollStore.getState();
+  const markerState = useMarkerStore.getState();
 
   // Clone regions but preserve AudioBuffer references (can't be cloned)
   const clonedRegions = regionState.regions.map((region) => {
@@ -87,6 +96,10 @@ const captureSnapshot = (): HistorySnapshot => {
       activeRegionId: pianoRollState.activeRegionId,
       selectedNoteIds: pianoRollState.selectedNoteIds,
       selectedSustainIds: pianoRollState.selectedSustainIds,
+    }),
+    markers: clone({
+      markers: markerState.markers,
+      selectedMarkerId: markerState.selectedMarkerId,
     }),
   };
 };
@@ -120,6 +133,14 @@ const applySnapshot = (snapshot: HistorySnapshot) => {
     selectedNoteIds: snapshot.pianoRoll.selectedNoteIds,
     selectedSustainIds: snapshot.pianoRoll.selectedSustainIds,
   });
+  
+  // Restore markers
+  if (snapshot.markers) {
+    useMarkerStore.setState({
+      markers: clone(snapshot.markers.markers),
+      selectedMarkerId: snapshot.markers.selectedMarkerId,
+    });
+  }
 };
 
 const snapshotsEqual = (a: HistorySnapshot | null, b: HistorySnapshot | null) => {

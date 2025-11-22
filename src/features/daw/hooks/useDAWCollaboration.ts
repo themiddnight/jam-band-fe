@@ -18,6 +18,8 @@ import { createThrottledEmitter } from '@/shared/utils/performanceUtils';
 import { COLLAB_THROTTLE_INTERVALS } from '@/features/daw/config/collaborationThrottles';
 import type { RegionRealtimeUpdate } from '../contexts/DAWCollaborationContext.shared';
 import { getRegionLockId, getTrackPanLockId, getTrackVolumeLockId } from '../utils/collaborationLocks';
+import { useMarkerStore } from '../stores/markerStore';
+import type { TimeMarker } from '../types/marker';
 
 interface UseDAWCollaborationOptions {
   socket: Socket | null;
@@ -177,6 +179,25 @@ export const useDAWCollaboration = ({
     }, COLLAB_THROTTLE_INTERVALS.synthParamsMs)
   );
 
+  const markerQueueRef = useRef<Map<string, Partial<TimeMarker>>>(new Map());
+  const markerEmitterRef = useRef(
+    createThrottledEmitter<void>(() => {
+      const queue = markerQueueRef.current;
+      if (queue.size === 0) {
+        return;
+      }
+
+      queue.forEach((updates, markerId) => {
+        if (!updates || Object.keys(updates).length === 0) {
+          return;
+        }
+        dawSyncService.syncMarkerUpdate(markerId, updates);
+      });
+
+      queue.clear();
+    }, COLLAB_THROTTLE_INTERVALS.markerMs)
+  );
+
   const queueTrackPropertyUpdate = useCallback((trackId: string, updates: Partial<Track>) => {
     if (!updates || Object.keys(updates).length === 0) {
       return;
@@ -238,6 +259,11 @@ export const useDAWCollaboration = ({
   // Synth store
   const updateSynthStateStore = useSynthStore((state) => state.updateSynthState);
 
+  // Marker store
+  const addMarker = useMarkerStore((state) => state.addMarker);
+  const updateMarker = useMarkerStore((state) => state.updateMarker);
+  const removeMarker = useMarkerStore((state) => state.removeMarker);
+
   // Initialize sync service
   useEffect(() => {
     if (!enabled || !socket || !roomId || !userId || !username) {
@@ -284,6 +310,8 @@ export const useDAWCollaboration = ({
     const effectChainQueue = effectChainQueueRef.current;
     const synthParamsEmitter = synthParamsEmitterRef.current;
     const synthParamsQueue = synthParamsQueueRef.current;
+    const markerEmitter = markerEmitterRef.current;
+    const markerQueue = markerQueueRef.current;
 
     const recordingPreviewEmitter = recordingPreviewEmitterRef.current;
 
@@ -298,6 +326,8 @@ export const useDAWCollaboration = ({
       trackPropertyQueue.clear();
       effectChainEmitter.cancel();
       effectChainQueue.clear();
+      markerEmitter.cancel();
+      markerQueue.clear();
       synthParamsEmitter.cancel();
       synthParamsQueue.clear();
       recordingPreviewEmitter.cancel();
@@ -1064,6 +1094,42 @@ export const useDAWCollaboration = ({
     [setTimeSignature]
   );
 
+  // ========== Marker sync handlers ==========
+
+  const handleMarkerAdd = useCallback(
+    (marker: TimeMarker) => {
+      addMarker(marker);
+      dawSyncService.syncMarkerAdd(marker);
+    },
+    [addMarker]
+  );
+
+  const handleMarkerUpdate = useCallback(
+    (markerId: string, updates: Partial<TimeMarker>) => {
+      updateMarker(markerId, updates);
+      
+      const queue = markerQueueRef.current;
+      const existing = queue.get(markerId) ?? {};
+      queue.set(markerId, { ...existing, ...updates });
+      markerEmitterRef.current.push(undefined);
+    },
+    [updateMarker]
+  );
+
+  const handleMarkerUpdateFlush = useCallback(() => {
+    markerEmitterRef.current.flush();
+    markerEmitterRef.current.cancel();
+    markerQueueRef.current.clear();
+  }, []);
+
+  const handleMarkerDelete = useCallback(
+    (markerId: string) => {
+      removeMarker(markerId);
+      dawSyncService.syncMarkerDelete(markerId);
+    },
+    [removeMarker]
+  );
+
   // Subscribe to track-specific effect chain changes (debounced by dawSyncService)
   useEffect(() => {
     if (!enabled) return;
@@ -1185,6 +1251,12 @@ export const useDAWCollaboration = ({
     handleSynthParamsChange,
     handleBpmChange,
     handleTimeSignatureChange,
+
+    // Marker handlers
+    handleMarkerAdd,
+    handleMarkerUpdate,
+    handleMarkerUpdateFlush,
+    handleMarkerDelete,
 
     // Lock utilities
     isLocked,

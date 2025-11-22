@@ -6,6 +6,7 @@ import { TrackCanvas } from './TrackCanvas';
 import { TrackHeader } from './TrackHeader';
 import { AddTrackMenu } from './AddTrackMenu';
 import { AddAudioClipButton } from './AddAudioClipButton';
+import { MarkerEditToggle } from './MarkerEditToggle';
 import { PIXELS_PER_BEAT, TRACK_HEADER_WIDTH, TRACK_HEIGHT } from './constants';
 import { MAX_CANVAS_WIDTH, MAX_TIMELINE_ZOOM, MIN_TIMELINE_ZOOM } from '../../constants/canvas';
 import { usePianoRollStore } from '../../stores/pianoRollStore';
@@ -277,10 +278,11 @@ export const MultitrackView = () => {
       </div>
       <div className="grid grid-cols-[auto_1fr] items-stretch border-b border-base-300">
         <div
-          className="h-full border-r border-base-300 bg-base-100 p-2"
+          className="h-full border-r border-base-300 bg-base-100 p-2 flex justify-between items-center gap-2"
           style={{ width: `${TRACK_HEADER_WIDTH}px` }}
         >
           <AddTrackMenu />
+          <MarkerEditToggle />
         </div>
         <div className="relative h-[36px] overflow-hidden">
           <TimeRuler

@@ -340,7 +340,7 @@ export default function ArrangeRoom() {
       typeof window !== "undefined" && window.innerWidth < 640 ? 220 : 320,
     minHeight: 200,
     maxHeight:
-      typeof window !== "undefined" && window.innerWidth < 640 ? 350 : 600,
+      typeof window !== "undefined" && window.innerWidth < 640 ? 350 : 1000,
   });
 
   // Computed values
