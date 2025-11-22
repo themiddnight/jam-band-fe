@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { VoiceInput } from "@/features/audio";
 import { ArrangeRoomMembers } from "@/features/rooms";
+import { BroadcastToggle } from "./BroadcastToggle";
 import type { RoomUser } from "@/shared/types";
 
 interface VoiceUser {
@@ -8,6 +9,12 @@ interface VoiceUser {
   username: string;
   isMuted: boolean;
   audioLevel: number;
+}
+
+interface BroadcastUser {
+  userId: string;
+  username: string;
+  trackId: string;
 }
 
 export interface CollaboratorsProps {
@@ -27,6 +34,9 @@ export interface CollaboratorsProps {
   // Room members props (simplified for ArrangeRoom)
   roomUsers?: RoomUser[];
   voiceUsers?: VoiceUser[];
+  broadcastUsers?: BroadcastUser[];
+  // Broadcast props
+  onBroadcastChange?: (broadcasting: boolean, trackId: string | null) => void;
 }
 
 export const Collaborators = memo(({
@@ -44,6 +54,8 @@ export const Collaborators = memo(({
   userCount = 0,
   roomUsers = [],
   voiceUsers = [],
+  broadcastUsers = [],
+  onBroadcastChange,
 }: CollaboratorsProps) => {
 
   return (
@@ -54,7 +66,7 @@ export const Collaborators = memo(({
 
         {/* Voice Input - Mic Input */}
         {isVoiceEnabled && canTransmitVoice && (
-          <div className="border-t border-base-300 pt-4">
+          <div className="border border-base-300">
             <VoiceInput
               isVisible={true}
               onStreamReady={onStreamReady}
@@ -71,12 +83,18 @@ export const Collaborators = memo(({
           </div>
         )}
 
+        {/* Broadcast Toggle - Instrument Broadcasting */}
+        <div className="border border-base-300">
+          <BroadcastToggle onBroadcastChange={onBroadcastChange} />
+        </div>
+
         {/* Room Members */}
         {roomUsers.length > 0 && (
-          <div className="border-t border-base-300 pt-4">
+          <div className="border border-base-300 p-3">
             <ArrangeRoomMembers
               users={roomUsers}
               voiceUsers={voiceUsers}
+              broadcastUsers={broadcastUsers}
             />
           </div>
         )}
