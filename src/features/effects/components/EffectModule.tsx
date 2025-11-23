@@ -42,12 +42,13 @@ export default function EffectModule({
   const { acquireInteractionLock, releaseInteractionLock } = useDAWCollaborationContext();
 
   useEffect(() => {
+    const currentLocksRef = activeParamLocksRef;
     return () => {
-      const locksToRelease = new Set(activeParamLocksRef.current);
+      const locksToRelease = new Set(currentLocksRef.current);
       locksToRelease.forEach((lockId) => {
         releaseInteractionLock(lockId);
       });
-      activeParamLocksRef.current.clear();
+      currentLocksRef.current.clear();
     };
   }, [releaseInteractionLock]);
 

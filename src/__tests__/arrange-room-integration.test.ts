@@ -70,17 +70,6 @@ describe('Arrange Room Integration Tests', () => {
     });
 
     it('should handle arrange room state sync', () => {
-      const stateSync = {
-        tracks: [],
-        regions: [],
-        locks: [],
-        selectedTrackId: null,
-        selectedRegionIds: [],
-        bpm: 120,
-        timeSignature: { numerator: 4, denominator: 4 },
-        synthStates: {},
-      };
-
       mockSocket.emit('arrange:request_state', { roomId: 'test-room' });
       expect(mockSocket.emit).toHaveBeenCalledWith('arrange:request_state', { roomId: 'test-room' });
     });

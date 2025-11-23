@@ -1,7 +1,16 @@
 import { PingDisplay, usePingMeasurement } from "@/features/audio";
 import { ConnectionState } from "@/features/audio/types/connectionState";
 import { useLobby, InviteUrlInput } from "@/features/rooms";
-import { Modal, Footer, TechnicalInfoPanel } from "@/features/ui";
+import { Footer, TechnicalInfoPanel } from "@/features/ui";
+import { Announcement } from "@/features/lobby/components/Announcement";
+import {
+  KickedModal,
+  WaitingApprovalModal,
+  UsernameModal,
+  CreateRoomModal,
+  RejectionModal,
+} from "@/features/lobby/components/modals";
+import { RoomItem } from "@/features/lobby/components/rooms";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -116,41 +125,17 @@ export default function Lobby() {
           </div>
 
           {/* Kicked info modal */}
-          <Modal
+          <KickedModal
             open={showKickedModal}
-            setOpen={setShowKickedModal}
-            title="Removed from Room"
-            showCancelButton={false}
-            okText="OK"
-            onOk={() => setShowKickedModal(false)}
-            allowClose={true}
-            size="md"
-          >
-            <p className="text-base-content/70">{kickedReason}</p>
-          </Modal>
+            onClose={() => setShowKickedModal(false)}
+            reason={kickedReason}
+          />
 
           {/* Waiting for approval modal */}
-          <Modal
+          <WaitingApprovalModal
             open={connectionState === ConnectionState.REQUESTING}
-            setOpen={() => {}}
-            title="Waiting for Approval"
-            showOkButton={false}
-            showCancelButton={true}
-            cancelText="Cancel Request"
             onCancel={cancelApproval}
-            allowClose={false}
-            size="md"
-          >
-            <div className="space-y-4">
-              <p className="text-base-content/70">
-                Your request to join the private room as a band member is
-                pending owner approval.
-              </p>
-              <div className="flex justify-center">
-                <div className="loading loading-spinner mx-auto loading-lg text-primary"></div>
-              </div>
-            </div>
-          </Modal>
+          />
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 h-full">
             {/* Available Rooms Card */}
@@ -214,76 +199,13 @@ export default function Lobby() {
                   ) : (
                     <div className="space-y-3">
                       {rooms.map((room: any) => (
-                        <div key={room.id} className="card bg-base-200">
-                          <div className="card-body p-4">
-                            <div className="flex justify-between items-start">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <h3 className="font-semibold">{room.name}</h3>
-                                  <span
-                                    className={`badge badge-sm ${room.roomType === "perform" ? "badge-primary" : "badge-secondary"}`}
-                                  >
-                                    {room.roomType === "perform"
-                                      ? "Perform"
-                                      : "Arrange"}
-                                  </span>
-                                  {room.isPrivate && (
-                                    <span className="badge badge-warning badge-sm">
-                                      Private
-                                    </span>
-                                  )}
-                                  {room.isHidden && (
-                                    <span className="badge badge-neutral badge-sm">
-                                      Hidden
-                                    </span>
-                                  )}
-                                </div>
-                                {room.description && (
-                                  <p className="text-sm text-base-content/80 mt-1">
-                                    {room.description}
-                                  </p>
-                                )}
-                                <p className="text-xs text-base-content/70 mt-1">
-                                  {room.userCount} member
-                                  {room.userCount !== 1 ? "s" : ""}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-2 flex-wrap justify-end">
-                                <span className="text-xs text-base-content/70">
-                                  Join as:
-                                </span>
-                                <button
-                                  onClick={() =>
-                                    handleJoinRoom(room.id, "band_member")
-                                  }
-                                  className="btn btn-xs btn-primary"
-                                  disabled={
-                                    isConnecting ||
-                                    connectionState ===
-                                      ConnectionState.REQUESTING
-                                  }
-                                >
-                                  Band Member
-                                </button>
-                                {room.roomType === "perform" && (
-                                  <button
-                                    onClick={() =>
-                                      handleJoinRoom(room.id, "audience")
-                                    }
-                                    className="btn btn-xs btn-outline"
-                                    disabled={
-                                      isConnecting ||
-                                      connectionState ===
-                                        ConnectionState.REQUESTING
-                                    }
-                                  >
-                                    Audience
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                        <RoomItem
+                          key={room.id}
+                          room={room}
+                          onJoinRoom={handleJoinRoom}
+                          isConnecting={isConnecting}
+                          connectionState={connectionState}
+                        />
                       ))}
                     </div>
                   )}
@@ -295,189 +217,52 @@ export default function Lobby() {
               {/* Invite URL Input */}
               <InviteUrlInput />
 
+              {/* Announcement Card */}
+              <Announcement
+                emoji="🎉"
+                title="New Feature Available!"
+                highlight="Arrange Room"
+                message="is now available! Create multi-track arrangements with asynchronous editing and collaborate on complex compositions."
+              />
+
               {/* Technical Information Panel */}
               <TechnicalInfoPanel />
             </div>
           </div>
 
           {/* Username Modal */}
-          <Modal
+          <UsernameModal
             open={showUsernameModal}
-            setOpen={handleUsernameModalClose}
-            title={username ? "Change Username" : "Welcome to COLLAB!"}
-            onCancel={handleUsernameModalClose}
-            onOk={handleUsernameSubmit}
-            okText={username ? "Update" : "Continue"}
-            cancelText="Cancel"
-            showOkButton={!!tempUsername.trim()}
-            showCancelButton={!!username}
-            allowClose={!!username || !!tempUsername.trim()}
-          >
-            <div className="space-y-4">
-              {!username && (
-                <>
-                  <p className="text-base-content/70 mb-0">
-                    Please enter your username to continue
-                  </p>
-                  <p className="text-base-content/30 text-xs">
-                    We don't store your username—it's only saved in your
-                    browser.
-                  </p>
-                </>
-              )}
-              <div className="form-control">
-                <label className="label" htmlFor="username">
-                  Username
-                </label>
-                <input
-                  id="username"
-                  type="text"
-                  placeholder="Enter your username"
-                  className="input input-bordered w-full"
-                  value={tempUsername}
-                  onChange={(e) => setTempUsername(e.target.value)}
-                  autoFocus
-                  required
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && tempUsername.trim()) {
-                      handleUsernameSubmit();
-                    }
-                  }}
-                />
-              </div>
-            </div>
-          </Modal>
+            onClose={handleUsernameModalClose}
+            onSubmit={handleUsernameSubmit}
+            username={username}
+            tempUsername={tempUsername}
+            onTempUsernameChange={setTempUsername}
+          />
 
           {/* Create Room Modal */}
-          <Modal
+          <CreateRoomModal
             open={showCreateRoomModal}
-            setOpen={handleCreateRoomModalClose}
-            title="Create New Room"
-            onCancel={handleCreateRoomModalClose}
-            onOk={handleCreateRoomSubmit}
-            okText="Create Room"
-            cancelText="Cancel"
-            showOkButton={!!newRoomName.trim()}
-            size="xl"
-          >
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-              }}
-            >
-              <div className="space-y-4">
-                <div className="form-control">
-                  <label className="label" htmlFor="newRoomName">
-                    Room Name
-                  </label>
-                  <input
-                    id="newRoomName"
-                    type="text"
-                    placeholder="Enter room name"
-                    className="input input-bordered w-full"
-                    value={newRoomName}
-                    onChange={(e) => setNewRoomName(e.target.value)}
-                    autoFocus
-                    required
-                  />
-                </div>
-
-                <div className="form-control">
-                  <label className="label" htmlFor="newRoomDescription">
-                    Description (Optional)
-                  </label>
-                  <textarea
-                    id="newRoomDescription"
-                    placeholder="Describe your room..."
-                    className="textarea textarea-bordered w-full"
-                    value={newRoomDescription}
-                    onChange={(e) => setNewRoomDescription(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-
-                <div className="form-control">
-                  <label className="label">Room Type</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div
-                      className={`card cursor-pointer transition-all ${newRoomType === "perform" ? "bg-primary text-primary-content" : "bg-base-200 hover:bg-base-300"}`}
-                      onClick={() => setNewRoomType("perform")}
-                    >
-                      <div className="card-body p-4">
-                        <h4 className="card-title text-sm">Perform Room</h4>
-                        <p className="text-xs opacity-70">
-                          Real-time jamming with instruments and voice chat
-                        </p>
-                      </div>
-                    </div>
-                    <div
-                      className={`card cursor-pointer transition-all ${newRoomType === "arrange" ? "bg-secondary text-secondary-content" : "bg-base-200 hover:bg-base-300"}`}
-                      onClick={() => setNewRoomType("arrange")}
-                    >
-                      <div className="card-body p-4">
-                        <div className="flex items-center gap-2">
-                          <h4 className="card-title text-sm">Arrange Room</h4>
-                        </div>
-                        <p className="text-xs opacity-70">
-                          Multi-track arrangement with asynchronous editing
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="form-control">
-                  <label className="label cursor-pointer flex items-start gap-2">
-                    <input
-                      type="checkbox"
-                      className="checkbox checkbox-primary"
-                      checked={isPrivate}
-                      onChange={(e) => setIsPrivate(e.target.checked)}
-                    />
-                    <div className="flex flex-col">
-                      <span className="label-text select-none">
-                        Private Room
-                      </span>
-                      <p className="text-sm text-base-content/50">
-                        Band members need approval to join
-                      </p>
-                    </div>
-                  </label>
-                </div>
-
-                <div className="form-control">
-                  <label className="label cursor-pointer flex items-start gap-2">
-                    <input
-                      type="checkbox"
-                      className="checkbox checkbox-primary"
-                      checked={isHidden}
-                      onChange={(e) => setIsHidden(e.target.checked)}
-                    />
-                    <div className="flex flex-col">
-                      <span className="label-text select-none">
-                        Hidden Room
-                      </span>
-                      <p className="text-sm text-base-content/50">
-                        Room won't appear in the public list
-                      </p>
-                    </div>
-                  </label>
-                </div>
-              </div>
-            </form>
-          </Modal>
+            onClose={handleCreateRoomModalClose}
+            onSubmit={handleCreateRoomSubmit}
+            roomName={newRoomName}
+            roomDescription={newRoomDescription}
+            roomType={newRoomType}
+            isPrivate={isPrivate}
+            isHidden={isHidden}
+            onRoomNameChange={setNewRoomName}
+            onRoomDescriptionChange={setNewRoomDescription}
+            onRoomTypeChange={setNewRoomType}
+            onIsPrivateChange={setIsPrivate}
+            onIsHiddenChange={setIsHidden}
+          />
 
           {/* Rejection Modal */}
-          <Modal
+          <RejectionModal
             open={showRejectionModal}
-            setOpen={handleRejectionModalClose}
-            title="Request Rejected"
-            onOk={handleRejectionModalClose}
-            okText="Return to Lobby"
-            showCancelButton={false}
-          >
-            <p className="text-base-content/70">{rejectionMessage}</p>
-          </Modal>
+            onClose={handleRejectionModalClose}
+            message={rejectionMessage}
+          />
         </div>
       </div>
       <Footer />

@@ -28,10 +28,10 @@ export const PianoKeys = React.memo(() => {
   
   const region = regions.find((r) => r.id === activeRegionId);
   const track = region ? tracks.find((t) => t.id === region.trackId) : null;
-  const notes = region && region.type === 'midi' ? region.notes : [];
   
   // Get visible MIDI numbers based on view mode
   const visibleMidiNumbers = useMemo(() => {
+    const notes = region && region.type === 'midi' ? region.notes : [];
     return getVisibleMidiNumbers(
       viewMode,
       rootNote,
@@ -40,7 +40,7 @@ export const PianoKeys = React.memo(() => {
       LOWEST_MIDI,
       HIGHEST_MIDI
     );
-  }, [viewMode, rootNote, scale, notes]);
+  }, [viewMode, rootNote, scale, region]);
   
   // Generate keys only for visible MIDI numbers
   const keys = useMemo(() => {

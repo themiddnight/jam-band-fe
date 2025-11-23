@@ -446,8 +446,6 @@ describe('Sequencer Presets Integration', () => {
           speed: 1,
           length: 16,
           bankMode: 'single',
-          displayMode: 'all_notes',
-          editMode: 'note',
         },
         instrumentCategory: InstrumentCategory.Melodic,
         createdAt: Date.now(),

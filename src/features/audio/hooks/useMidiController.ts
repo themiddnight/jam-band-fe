@@ -51,7 +51,10 @@ export const useMidiController = ({
 
   // Memoize MIDI message handler to prevent recreation
   const handleMidiMessage = useCallback((event: WebMidi.MIDIMessageEvent) => {
-    const [status, data1, data2] = event.data;
+    const data = Array.from(event.data ?? []);
+    const status = data[0] ?? 0;
+    const data1 = data[1] ?? 0;
+    const data2 = data[2] ?? 0;
     const channel = status & 0x0f;
     const messageType = status & 0xf0;
 

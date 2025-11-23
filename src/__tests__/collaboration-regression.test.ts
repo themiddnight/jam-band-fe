@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { COLLAB_THROTTLE_INTERVALS } from '@/features/daw/config/collaborationThrottles';
 
 /**
@@ -56,7 +56,7 @@ describe('Collaboration System Integrity', () => {
     });
 
     it('should maintain reasonable throttle intervals for network efficiency', () => {
-      Object.entries(COLLAB_THROTTLE_INTERVALS).forEach(([key, value]) => {
+      Object.entries(COLLAB_THROTTLE_INTERVALS).forEach(([, value]) => {
         // Too fast (< 50ms) = network flooding, server overload
         expect(value).toBeGreaterThanOrEqual(50);
         
@@ -399,6 +399,7 @@ describe('Collaboration System Integrity', () => {
         audioBuffer: {} as AudioBuffer, // Mock
       };
 
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { audioBuffer, ...sanitized } = audioRegion;
       
       expect(sanitized).not.toHaveProperty('audioBuffer');

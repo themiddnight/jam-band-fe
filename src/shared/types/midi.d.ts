@@ -1,43 +1,13 @@
-declare namespace WebMidi {
-  interface MIDIAccess {
-    inputs: Map<string, MIDIInput>;
-    outputs: Map<string, MIDIOutput>;
-    onstatechange: ((event: MIDIConnectionEvent) => void) | null;
+export {};
+
+declare global {
+  namespace WebMidi {
+    type MIDIAccess = globalThis.MIDIAccess;
+    type MIDIInput = globalThis.MIDIInput;
+    type MIDIOutput = globalThis.MIDIOutput;
+    type MIDIMessageEvent = globalThis.MIDIMessageEvent;
+    type MIDIConnectionEvent = globalThis.MIDIConnectionEvent;
+    type MIDIPort = globalThis.MIDIPort;
+    type MIDIPortDeviceState = globalThis.MIDIPortDeviceState;
   }
-
-  interface MIDIInput {
-    id: string;
-    name: string | null;
-    manufacturer: string | null;
-    state: MIDIPortDeviceState;
-    onmidimessage: ((event: MIDIMessageEvent) => void) | null;
-  }
-
-  interface MIDIOutput {
-    id: string;
-    name: string | null;
-    manufacturer: string | null;
-    state: MIDIPortDeviceState;
-  }
-
-  interface MIDIMessageEvent {
-    data: Uint8Array;
-  }
-
-  interface MIDIConnectionEvent {
-    port: MIDIPort;
-  }
-
-  interface MIDIPort {
-    id: string;
-    name: string | null;
-    manufacturer: string | null;
-    state: MIDIPortDeviceState;
-  }
-
-  type MIDIPortDeviceState = "connected" | "disconnected";
-}
-
-interface Navigator {
-  requestMIDIAccess(): Promise<WebMidi.MIDIAccess>;
 }
