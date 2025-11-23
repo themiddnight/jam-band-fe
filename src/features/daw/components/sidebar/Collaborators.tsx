@@ -23,6 +23,7 @@ export interface CollaboratorsProps {
   canTransmitVoice?: boolean;
   onStreamReady?: (stream: MediaStream) => void;
   onStreamRemoved?: () => void;
+  onMuteStateChange?: (isMuted: boolean) => void;
   rtcLatency?: number | null;
   rtcLatencyActive?: boolean;
   browserAudioLatency?: number;
@@ -35,6 +36,7 @@ export interface CollaboratorsProps {
   roomUsers?: RoomUser[];
   voiceUsers?: VoiceUser[];
   broadcastUsers?: BroadcastUser[];
+  voiceMuteStates?: Record<string, boolean>;
   // Broadcast props
   onBroadcastChange?: (broadcasting: boolean, trackId: string | null) => void;
 }
@@ -44,6 +46,7 @@ export const Collaborators = memo(({
   canTransmitVoice = false,
   onStreamReady,
   onStreamRemoved,
+  onMuteStateChange,
   rtcLatency,
   rtcLatencyActive = false,
   browserAudioLatency,
@@ -55,6 +58,7 @@ export const Collaborators = memo(({
   roomUsers = [],
   voiceUsers = [],
   broadcastUsers = [],
+  voiceMuteStates = {},
   onBroadcastChange,
 }: CollaboratorsProps) => {
 
@@ -71,6 +75,7 @@ export const Collaborators = memo(({
               isVisible={true}
               onStreamReady={onStreamReady}
               onStreamRemoved={onStreamRemoved}
+              onMuteStateChange={onMuteStateChange}
               rtcLatency={rtcLatency}
               rtcLatencyActive={rtcLatencyActive}
               userCount={userCount}
@@ -95,6 +100,7 @@ export const Collaborators = memo(({
               users={roomUsers}
               voiceUsers={voiceUsers}
               broadcastUsers={broadcastUsers}
+              voiceMuteStates={voiceMuteStates}
             />
           </div>
         )}

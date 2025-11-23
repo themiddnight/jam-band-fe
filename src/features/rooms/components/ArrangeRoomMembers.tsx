@@ -19,10 +19,11 @@ interface ArrangeRoomMembersProps {
   users: RoomUser[];
   voiceUsers?: VoiceUser[];
   broadcastUsers?: BroadcastUser[];
+  voiceMuteStates?: Record<string, boolean>;
 }
 
 const ArrangeRoomMembers = memo(
-  ({ users, voiceUsers = [], broadcastUsers = [] }: ArrangeRoomMembersProps) => {
+  ({ users, voiceUsers = [], broadcastUsers = [], voiceMuteStates = {} }: ArrangeRoomMembersProps) => {
     const { userId: currentUserId } = useUserStore();
 
     // Separate users by role
@@ -46,6 +47,8 @@ const ArrangeRoomMembers = memo(
       const isCurrentUser = user.id === currentUserId;
       // const isAudience = user.role === "audience";
 
+      const isMuted = voiceMuteStates[user.id] ?? voiceUser?.isMuted ?? false;
+
       // Determine border color based on speaking activity
       const borderColor =
         voiceUser?.audioLevel && voiceUser.audioLevel > 0.01
@@ -66,15 +69,22 @@ const ArrangeRoomMembers = memo(
           {user.role === "room_owner" && <div className="text-sm">👑</div>}
           {/* {isAudience && <div className="text-sm">👥</div>} */}
 
-          {/* Broadcast indicator */}
-          {broadcastUser && (
-            <div className="text-sm" title="Broadcasting instrument">
-              🎹
+          {/* Mute indicator */}
+          {isMuted && (
+            <div className="text-sm" title="Voice input muted">
+              🔇
             </div>
           )}
 
-          {/* Username */}
-          <span className="font-medium text-sm flex-1">{user.username}</span>
+          {/* Username + broadcast */}
+          <span className="font-medium text-sm flex-1 flex items-center gap-1">
+            {user.username}
+            {broadcastUser && (
+              <span className="text-sm" title="Broadcasting instrument">
+                🎹
+              </span>
+            )}
+          </span>
         </div>
       );
     };

@@ -8,6 +8,8 @@ import { useProjectStore } from '../stores/projectStore';
 import { useSynthStore } from '../stores/synthStore';
 import { useRecordingStore } from '../stores/recordingStore';
 import { useMarkerStore } from '../stores/markerStore';
+import { useBroadcastStore } from '../stores/broadcastStore';
+import { useArrangeUserStateStore } from '../stores/userStateStore';
 import { trackInstrumentRegistry } from '../utils/trackInstrumentRegistry';
 import type { Track, Region, MidiNote, TimeSignature } from '../types/daw';
 import type { TimeMarker } from '../types/marker';
@@ -112,6 +114,7 @@ export class DAWSyncService {
     this.socket.on('arrange:marker_added', this.handleMarkerAdded.bind(this));
     this.socket.on('arrange:marker_updated', this.handleMarkerUpdated.bind(this));
     this.socket.on('arrange:marker_deleted', this.handleMarkerDeleted.bind(this));
+    this.socket.on('arrange:voice_state', this.handleVoiceStateUpdate.bind(this));
   }
 
   /**
@@ -148,6 +151,7 @@ export class DAWSyncService {
     this.socket.off('arrange:marker_added');
     this.socket.off('arrange:marker_updated');
     this.socket.off('arrange:marker_deleted');
+    this.socket.off('arrange:voice_state');
   }
 
   // ========== Outgoing sync methods (called from stores) ==========
@@ -394,6 +398,8 @@ export class DAWSyncService {
     timeSignature?: TimeSignature;
     synthStates?: Record<string, SynthState>;
     markers?: TimeMarker[];
+    voiceStates?: Record<string, { isMuted: boolean }>;
+    broadcastStates?: Record<string, { username: string; trackId: string | null }>;
   }): void {
     this.isSyncing = true;
     try {
@@ -422,6 +428,12 @@ export class DAWSyncService {
       if (data.markers) {
         useMarkerStore.getState().syncSetMarkers(data.markers);
       }
+
+      const arrangeUserStore = useArrangeUserStateStore.getState();
+      arrangeUserStore.setVoiceStates(data.voiceStates ?? {});
+
+      const broadcastStore = useBroadcastStore.getState();
+      broadcastStore.setBroadcastStates(data.broadcastStates ?? {});
 
       // Update project settings
       const setBpm = useProjectStore.getState().setBpm;
@@ -940,8 +952,8 @@ export class DAWSyncService {
   }
 
   private handleMarkerDeleted(data: { markerId: string; userId: string }): void {
-    if (this.isSyncing || data.userId === this.userId) return;
-
+    if (this.isSyncing) return;
+    if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
       useMarkerStore.getState().syncRemoveMarker(data.markerId);
@@ -949,8 +961,12 @@ export class DAWSyncService {
       this.isSyncing = false;
     }
   }
+
+  private handleVoiceStateUpdate(data: { userId: string; isMuted: boolean }): void {
+    if (!data?.userId) return;
+    useArrangeUserStateStore.getState().setVoiceState(data.userId, data.isMuted);
+  }
 }
 
 // Singleton instance
 export const dawSyncService = new DAWSyncService();
-

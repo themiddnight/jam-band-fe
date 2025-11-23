@@ -12,6 +12,7 @@ import React, { useState, useRef, useEffect, useCallback, memo } from "react";
 interface VoiceInputProps {
   isVisible: boolean;
   onVoiceStateChange?: (state: VoiceState) => void;
+  onMuteStateChange?: (isMuted: boolean) => void;
   onStreamReady?: (stream: MediaStream) => void;
   onStreamRemoved?: () => void;
   rtcLatency?: number | null;
@@ -40,6 +41,7 @@ export interface VoiceState {
 const VoiceInputComponent: React.FC<VoiceInputProps> = ({
   isVisible,
   onVoiceStateChange,
+  onMuteStateChange,
   onStreamReady,
   onStreamRemoved,
   rtcLatency = null,
@@ -169,6 +171,11 @@ const VoiceInputComponent: React.FC<VoiceInputProps> = ({
   useEffect(() => {
     onVoiceStateChange?.(voiceState);
   }, [voiceState, onVoiceStateChange]);
+
+  // Notify parent specifically when mute state changes
+  useEffect(() => {
+    onMuteStateChange?.(voiceState.isMuted);
+  }, [voiceState.isMuted, onMuteStateChange]);
 
   // Update local state when input level changes
   // Use a ref to track the last value to avoid unnecessary updates

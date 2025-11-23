@@ -33,6 +33,7 @@ import { useDAWCollaboration } from "@/features/daw/hooks/useDAWCollaboration";
 import { useAudioRegionLoader } from "@/features/daw/hooks/playback/useAudioRegionLoader";
 import { useBroadcast } from "@/features/daw/hooks/useBroadcast";
 import { useBroadcastPlayback } from "@/features/daw/hooks/useBroadcastPlayback";
+import { useArrangeUserStateStore } from "@/features/daw/stores/userStateStore";
 
 /**
  * Arrange Room page for multi-track production with async editing
@@ -199,11 +200,31 @@ export default function ArrangeRoom() {
     enabled: isConnected && !!currentRoom,
   });
 
+  const voiceMuteStates = useArrangeUserStateStore((state) => state.voiceStates);
+  const setVoiceMuteState = useArrangeUserStateStore((state) => state.setVoiceState);
+
+  const activeRoomId = currentRoom?.id ?? null;
+
   // Broadcast playback (receive and play notes from other users)
   useBroadcastPlayback({
     socket: activeSocket,
     enabled: isConnected && !!currentRoom,
   });
+
+  const handleVoiceMuteStateChange = useCallback(
+    (isMuted: boolean) => {
+      if (!userId) return;
+      setVoiceMuteState(userId, isMuted);
+
+      if (activeSocket && activeRoomId) {
+        activeSocket.emit("arrange:voice_state", {
+          roomId: activeRoomId,
+          isMuted,
+        });
+      }
+    },
+    [userId, setVoiceMuteState, activeSocket, activeRoomId]
+  );
 
   // Wrap recording handler to also broadcast virtual instrument notes
   const recordingHandler = useCallback(
@@ -611,6 +632,8 @@ export default function ArrangeRoom() {
                         roomUsers: currentRoom?.users || [],
                         voiceUsers,
                         broadcastUsers: getBroadcastUsers(),
+                        voiceMuteStates,
+                        onMuteStateChange: handleVoiceMuteStateChange,
                         onBroadcastChange: handleBroadcastToggle,
                       }),
                       [
@@ -627,6 +650,8 @@ export default function ArrangeRoom() {
                         currentRoom?.users,
                         voiceUsers,
                         getBroadcastUsers,
+                        voiceMuteStates,
+                        handleVoiceMuteStateChange,
                         handleBroadcastToggle,
                       ]
                     )}

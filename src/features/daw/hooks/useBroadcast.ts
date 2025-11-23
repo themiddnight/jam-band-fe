@@ -29,6 +29,7 @@ export const useBroadcast = ({
   const setBroadcasting = useBroadcastStore((state) => state.setBroadcasting);
   const addBroadcastingUser = useBroadcastStore((state) => state.addBroadcastingUser);
   const removeBroadcastingUser = useBroadcastStore((state) => state.removeBroadcastingUser);
+  const updateBroadcastingUserTrack = useBroadcastStore((state) => state.updateBroadcastingUserTrack);
   const broadcastingUsers = useBroadcastStore((state) => state.broadcastingUsers);
   const selectedTrackId = useTrackStore((state) => state.selectedTrackId);
   
@@ -42,6 +43,12 @@ export const useBroadcast = ({
       setBroadcasting(broadcasting);
       currentTrackIdRef.current = trackId;
 
+      if (broadcasting && trackId) {
+        addBroadcastingUser(userId, username, trackId);
+      } else {
+        removeBroadcastingUser(userId);
+      }
+
       // Emit broadcast state change to server
       socket.emit('arrange:broadcast_state', {
         roomId,
@@ -51,7 +58,16 @@ export const useBroadcast = ({
         trackId,
       });
     },
-    [socket, roomId, userId, username, enabled, setBroadcasting]
+    [
+      socket,
+      roomId,
+      userId,
+      username,
+      enabled,
+      setBroadcasting,
+      addBroadcastingUser,
+      removeBroadcastingUser,
+    ]
   );
 
   // Broadcast MIDI message
@@ -99,6 +115,7 @@ export const useBroadcast = ({
     // If track changed while broadcasting, notify others
     if (selectedTrackId && selectedTrackId !== currentTrackIdRef.current) {
       currentTrackIdRef.current = selectedTrackId;
+      updateBroadcastingUserTrack(userId, selectedTrackId);
       socket.emit('arrange:broadcast_state', {
         roomId,
         userId,
@@ -107,7 +124,16 @@ export const useBroadcast = ({
         trackId: selectedTrackId,
       });
     }
-  }, [socket, roomId, userId, username, enabled, isBroadcasting, selectedTrackId]);
+  }, [
+    socket,
+    roomId,
+    userId,
+    username,
+    enabled,
+    isBroadcasting,
+    selectedTrackId,
+    updateBroadcastingUserTrack,
+  ]);
 
   // Listen for broadcast state changes from other users
   useEffect(() => {
@@ -153,9 +179,10 @@ export const useBroadcast = ({
           trackId: null,
         });
         setBroadcasting(false);
+        removeBroadcastingUser(userId);
       }
     };
-  }, [socket, roomId, userId, username, isBroadcasting, setBroadcasting]);
+  }, [socket, roomId, userId, username, isBroadcasting, setBroadcasting, removeBroadcastingUser]);
 
   return {
     handleBroadcastToggle,

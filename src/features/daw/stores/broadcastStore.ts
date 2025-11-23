@@ -19,6 +19,7 @@ interface BroadcastStoreState {
   removeBroadcastingUser: (userId: string) => void;
   updateBroadcastingUserTrack: (userId: string, trackId: string) => void;
   clearBroadcastingUsers: () => void;
+  setBroadcastStates: (states: Record<string, { username: string; trackId: string | null }>) => void;
 }
 
 export const useBroadcastStore = create<BroadcastStoreState>((set) => ({
@@ -53,4 +54,21 @@ export const useBroadcastStore = create<BroadcastStoreState>((set) => ({
   
   clearBroadcastingUsers: () =>
     set({ broadcastingUsers: new Map() }),
+
+  setBroadcastStates: (states) =>
+    set(() => {
+      const newMap = new Map<string, BroadcastUser>();
+      if (states) {
+        Object.entries(states).forEach(([userId, info]) => {
+          if (info?.trackId) {
+            newMap.set(userId, {
+              userId,
+              username: info.username,
+              trackId: info.trackId,
+            });
+          }
+        });
+      }
+      return { broadcastingUsers: newMap };
+    }),
 }));
