@@ -412,6 +412,7 @@ export class DAWSyncService {
     timeSignature?: TimeSignature;
     projectScale?: { rootNote: string; scale: 'major' | 'minor' };
     synthStates?: Record<string, SynthState>;
+    effectChains?: Record<string, EffectChainState>;
     markers?: TimeMarker[];
     voiceStates?: Record<string, { isMuted: boolean }>;
     broadcastStates?: Record<string, { username: string; trackId: string | null }>;
@@ -458,6 +459,14 @@ export class DAWSyncService {
       setTimeSignature(data.timeSignature ?? DEFAULT_TIME_SIGNATURE);
       if (data.projectScale) {
         setProjectScale(data.projectScale.rootNote, data.projectScale.scale);
+      }
+
+      // Restore effect chains
+      if (data.effectChains) {
+        const effectsStore = useEffectsStore.getState();
+        Object.entries(data.effectChains).forEach(([chainType, effectChain]) => {
+          effectsStore.syncUpdateEffectChain(chainType as any, effectChain);
+        });
       }
 
       // Set locks (cast type to ensure it matches LockInfo)

@@ -84,13 +84,45 @@ export function serializeProject(projectName: string): SerializedProject {
   const markerState = useMarkerStore.getState();
 
   // Collect all effect chains (including track-specific ones)
+  // Sanitize effect chains to ensure they're serializable
   const effectChains: Record<string, EffectChain> = {};
+  console.log(`🎛️ Processing ${Object.keys(effectsState.chains).length} effect chains...`);
+  
   Object.entries(effectsState.chains).forEach(([chainType, chain]) => {
-    // Only save chains that have effects or are track-specific
-    if (chain.effects.length > 0 || chainType.startsWith('track:')) {
-      effectChains[chainType] = chain;
+    // Only save chains that have effects
+    if (chain && chain.effects && chain.effects.length > 0) {
+      console.log(`  Sanitizing chain ${chainType} with ${chain.effects.length} effects...`);
+      try {
+        // Create a clean copy to avoid circular references
+        effectChains[chainType] = {
+          type: chain.type,
+          effects: chain.effects.map(effect => ({
+            id: effect.id,
+            type: effect.type,
+            name: effect.name,
+            bypassed: effect.bypassed,
+            order: effect.order,
+            parameters: effect.parameters.map(param => ({
+              id: param.id,
+              name: param.name,
+              value: param.value,
+              min: param.min,
+              max: param.max,
+              step: param.step,
+              type: param.type,
+              unit: param.unit,
+              curve: param.curve,
+            })),
+          })),
+        };
+        console.log(`  ✅ Chain ${chainType} sanitized`);
+      } catch (error) {
+        console.error(`  ❌ Error sanitizing chain ${chainType}:`, error);
+      }
     }
   });
+  
+  console.log(`✅ Effect chains processed: ${Object.keys(effectChains).length}`);
 
   return {
     version: '1.0.0',
@@ -175,25 +207,21 @@ export async function extractAudioFiles(
   regions: Region[]
 ): Promise<AudioFileData[]> {
   const audioFiles: AudioFileData[] = [];
+  console.log(`🎵 Extracting audio from ${regions.length} regions...`);
 
   for (const region of regions) {
     if (region.type === 'audio') {
       const audioRegion = region as AudioRegion;
+      console.log(`  Processing audio region ${region.id}...`);
       
-      if (audioRegion.audioBuffer) {
-        // Convert AudioBuffer to WebM/Opus blob (compressed)
-        const blob = await audioBufferToWebM(audioRegion.audioBuffer);
-        audioFiles.push({
-          regionId: region.id,
-          fileName: `${region.id}.webm`,
-          blob,
-        });
-      } else if (audioRegion.audioUrl) {
-        // Fetch audio from URL if buffer is not available
+      // Prioritize audioUrl (much faster - no conversion needed)
+      if (audioRegion.audioUrl) {
+        console.log(`    Fetching from URL: ${audioRegion.audioUrl.substring(0, 50)}...`);
         try {
           const response = await fetch(audioRegion.audioUrl);
           if (response.ok) {
             const blob = await response.blob();
+            console.log(`    ✅ Fetched: ${(blob.size / 1024).toFixed(2)} KB`);
             audioFiles.push({
               regionId: region.id,
               fileName: `${region.id}.webm`,
@@ -205,6 +233,16 @@ export async function extractAudioFiles(
         } catch (error) {
           console.error(`Error fetching audio for region ${region.id}:`, error);
         }
+      } else if (audioRegion.audioBuffer) {
+        console.log(`    Converting AudioBuffer to WAV (fast)...`);
+        // Use fast WAV conversion instead of slow WebM encoding
+        const blob = audioBufferToWav(audioRegion.audioBuffer);
+        console.log(`    ✅ Converted: ${(blob.size / 1024).toFixed(2)} KB`);
+        audioFiles.push({
+          regionId: region.id,
+          fileName: `${region.id}.wav`,
+          blob,
+        });
       }
     }
   }
@@ -213,76 +251,57 @@ export async function extractAudioFiles(
 }
 
 /**
- * Convert AudioBuffer to WebM/Opus Blob (compressed)
+ * Convert AudioBuffer to WAV Blob (fast, uncompressed)
+ * This is much faster than WebM encoding as it doesn't require real-time recording
  */
-async function audioBufferToWebM(audioBuffer: AudioBuffer): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    // Create an offline audio context to render the buffer
-    const offlineContext = new OfflineAudioContext(
-      audioBuffer.numberOfChannels,
-      audioBuffer.length,
-      audioBuffer.sampleRate
-    );
+function audioBufferToWav(audioBuffer: AudioBuffer): Blob {
+  const numberOfChannels = audioBuffer.numberOfChannels;
+  const length = audioBuffer.length * numberOfChannels * 2; // 16-bit samples
+  const sampleRate = audioBuffer.sampleRate;
+  const buffer = new ArrayBuffer(44 + length);
+  const view = new DataView(buffer);
 
-    // Create a buffer source
-    const source = offlineContext.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(offlineContext.destination);
-    source.start(0);
+  // Write WAV header
+  const writeString = (offset: number, string: string) => {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  };
 
-    // Render the audio
-    offlineContext.startRendering().then((renderedBuffer) => {
-      // Create a MediaStreamDestination to capture the audio
-      const audioContext = new AudioContext();
-      const destination = audioContext.createMediaStreamDestination();
-      
-      // Create a buffer source with the rendered audio
-      const bufferSource = audioContext.createBufferSource();
-      bufferSource.buffer = renderedBuffer;
-      bufferSource.connect(destination);
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + length, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true); // fmt chunk size
+  view.setUint16(20, 1, true); // PCM format
+  view.setUint16(22, numberOfChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * numberOfChannels * 2, true); // byte rate
+  view.setUint16(32, numberOfChannels * 2, true); // block align
+  view.setUint16(34, 16, true); // bits per sample
+  writeString(36, 'data');
+  view.setUint32(40, length, true);
 
-      // Set up MediaRecorder with Opus codec
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : 'audio/webm';
-      
-      const mediaRecorder = new MediaRecorder(destination.stream, {
-        mimeType,
-        audioBitsPerSecond: 128000, // 128kbps - good quality, reasonable size
-      });
+  // Write audio data
+  const channels: Float32Array[] = [];
+  for (let i = 0; i < numberOfChannels; i++) {
+    channels.push(audioBuffer.getChannelData(i));
+  }
 
-      const chunks: Blob[] = [];
+  let offset = 44;
+  for (let i = 0; i < audioBuffer.length; i++) {
+    for (let channel = 0; channel < numberOfChannels; channel++) {
+      const sample = Math.max(-1, Math.min(1, channels[channel][i]));
+      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+      offset += 2;
+    }
+  }
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          chunks.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: mimeType });
-        audioContext.close();
-        resolve(blob);
-      };
-
-      mediaRecorder.onerror = (event) => {
-        audioContext.close();
-        reject(new Error('MediaRecorder error: ' + event));
-      };
-
-      // Start recording and play the buffer
-      mediaRecorder.start();
-      bufferSource.start(0);
-
-      // Stop recording after the buffer duration
-      const durationMs = (renderedBuffer.length / renderedBuffer.sampleRate) * 1000;
-      setTimeout(() => {
-        mediaRecorder.stop();
-        bufferSource.stop();
-      }, durationMs + 100); // Add 100ms buffer
-    }).catch(reject);
-  });
+  return new Blob([buffer], { type: 'audio/wav' });
 }
+
+// Removed audioBufferToWebM - it was too slow (required real-time recording)
+// Now using fast WAV conversion instead
 
 /**
  * Restore project state from serialized data

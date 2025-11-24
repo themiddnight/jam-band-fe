@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import * as Tone from 'tone';
 import { getOrCreateUserMedia, isUserMediaAvailable } from '../utils/audioInput';
+import { getOrCreateGlobalMixer } from '@/features/audio/utils/effectsArchitecture';
 
 let meter: Tone.Meter | null = null;
 
@@ -82,22 +83,54 @@ export const useInputMonitoring = (
     };
   }, [trackId, showMeter]);
 
-  // Handle feedback monitoring (hearing yourself)
+  // Handle feedback monitoring (hearing yourself) through track's effect chain
   useEffect(() => {
     if (!trackId) {
       return;
     }
 
+    let trackChannelRef: any = null;
+
     const setupFeedback = async () => {
       try {
         const userMedia = await getOrCreateUserMedia();
+        const mixer = await getOrCreateGlobalMixer();
 
         if (enableFeedback) {
-          // Connect to destination to hear yourself
-          userMedia.connect(Tone.getDestination());
+          // Get the track's channel which has the track-specific effect chain
+          // For track effects, the channel ID is the track ID itself
+          let trackChannel = mixer.getChannel(trackId);
+          
+          if (!trackChannel) {
+            // Create the track channel if it doesn't exist
+            mixer.createUserChannel(trackId, `Track ${trackId}`);
+            trackChannel = mixer.getChannel(trackId);
+          }
+          
+          if (trackChannel) {
+            // Store reference for cleanup
+            trackChannelRef = trackChannel.inputGain;
+            
+            // Connect to the track's channel input, which will route through effects
+            try {
+              userMedia.connect(trackChannel.inputGain);
+              console.log(`🎤 Input monitoring connected through track ${trackId} effect chain`);
+            } catch (error) {
+              console.warn('Failed to connect to track channel, falling back to direct connection:', error);
+              // Fallback: connect directly to destination
+              userMedia.connect(Tone.getDestination());
+              trackChannelRef = Tone.getDestination();
+            }
+          } else {
+            // Fallback: connect directly to destination if channel creation failed
+            userMedia.connect(Tone.getDestination());
+            trackChannelRef = Tone.getDestination();
+            console.log('🎤 Input monitoring connected directly (no effect chain)');
+          }
         } else {
-          // Disconnect from destination
+          // Disconnect only from output destinations, keep meter connected
           try {
+            // Try to disconnect from destination
             userMedia.disconnect(Tone.getDestination());
           } catch {
             // Already disconnected, ignore
@@ -113,7 +146,12 @@ export const useInputMonitoring = (
     return () => {
       getOrCreateUserMedia().then((userMedia) => {
         try {
-          userMedia.disconnect(Tone.getDestination());
+          // Disconnect only from the specific output, not from meter
+          if (trackChannelRef) {
+            userMedia.disconnect(trackChannelRef);
+          } else {
+            userMedia.disconnect(Tone.getDestination());
+          }
         } catch {
           // Already disconnected, ignore
         }

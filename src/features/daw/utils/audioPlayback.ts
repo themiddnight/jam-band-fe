@@ -88,16 +88,29 @@ export const scheduleAudioRegionPlayback = async (region: AudioRegion, track: Tr
     
     let bufferOffset = trimStartSeconds;
     let playDuration = regionDurationSeconds;
-    let scheduleTime = audioContext.currentTime + (loopStartBeat * secondsPerBeat) - Tone.Transport.seconds;
+    
+    // Calculate when this loop should start relative to current time
+    const loopStartTimeInTransport = loopStartBeat * secondsPerBeat;
+    const currentTransportTime = Tone.Transport.seconds;
+    const timeUntilLoopStart = loopStartTimeInTransport - currentTransportTime;
+    let scheduleTime = audioContext.currentTime + timeUntilLoopStart;
     
     // Determine which part of the region is playing
     const offsetBeats = currentPlayheadBeats > loopStartBeat ? currentPlayheadBeats - loopStartBeat : 0;
     const offsetSeconds = offsetBeats * secondsPerBeat;
     
-    // If playhead is in the middle of this loop iteration
-    if (currentPlayheadBeats > loopStartBeat && currentPlayheadBeats < loopEndBeat) {
-      bufferOffset = trimStartSeconds + (offsetBeats * secondsPerBeat);
-      playDuration = regionDurationSeconds - (offsetSeconds);
+    // If playhead is in the middle of this loop iteration or the schedule time is in the past
+    // (which can happen for regions at beat 0 when transport just started)
+    const isInPast = scheduleTime < audioContext.currentTime - 0.001;
+    const isInMiddle = currentPlayheadBeats > loopStartBeat && currentPlayheadBeats < loopEndBeat;
+    
+    if (isInMiddle || isInPast) {
+      // Calculate how far into the region we should start playing
+      const actualOffsetBeats = Math.max(0, currentPlayheadBeats - loopStartBeat);
+      const actualOffsetSeconds = actualOffsetBeats * secondsPerBeat;
+      
+      bufferOffset = trimStartSeconds + actualOffsetSeconds;
+      playDuration = Math.max(0, regionDurationSeconds - actualOffsetSeconds);
       scheduleTime = audioContext.currentTime;
     }
     
@@ -150,12 +163,16 @@ export const scheduleAudioRegionPlayback = async (region: AudioRegion, track: Tr
     }
     
     // Only schedule if we have duration to play
-    // Allow a small tolerance for timing precision (1ms in the past)
-    const minScheduleTime = audioContext.currentTime - 0.001;
-    if (playDuration > 0 && scheduleTime >= minScheduleTime) {
-      // Ensure schedule time is not in the past
+    if (playDuration > 0) {
+      // Ensure schedule time is not in the past (with small tolerance for timing precision)
       const safeScheduleTime = Math.max(scheduleTime, audioContext.currentTime);
-      source.start(safeScheduleTime, bufferOffset, playDuration);
+      
+      // Add a small buffer (10ms) for regions starting immediately to ensure they play
+      const finalScheduleTime = safeScheduleTime === audioContext.currentTime 
+        ? audioContext.currentTime + 0.01 
+        : safeScheduleTime;
+      
+      source.start(finalScheduleTime, bufferOffset, playDuration);
       sources.push(source);
     }
   }

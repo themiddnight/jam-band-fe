@@ -16,40 +16,59 @@ import { InstrumentCategory } from '@/shared/constants/instruments';
  */
 export async function saveProjectAsZip(projectName: string): Promise<void> {
   try {
+    console.log('🔄 Starting project save...');
+    
     // 1. Serialize project data
+    console.log('📝 Serializing project data...');
     const projectData = serializeProject(projectName);
+    console.log('✅ Project data serialized:', {
+      tracks: projectData.tracks.length,
+      regions: projectData.regions.length,
+      effectChains: Object.keys(projectData.effectChains).length,
+    });
 
     // 2. Extract audio files from regions
+    console.log('🎵 Extracting audio files...');
     const audioFiles = await extractAudioFiles(useRegionStore.getState().regions);
+    console.log('✅ Audio files extracted:', audioFiles.length);
 
     // 3. Create ZIP file
+    console.log('📦 Creating ZIP file...');
     const zip = new JSZip();
 
     // Add project.json
-    zip.file('project.json', JSON.stringify(projectData, null, 2));
+    console.log('📄 Adding project.json to ZIP...');
+    const projectJson = JSON.stringify(projectData, null, 2);
+    console.log('✅ Project JSON size:', (projectJson.length / 1024).toFixed(2), 'KB');
+    zip.file('project.json', projectJson);
 
     // Add audio files
     if (audioFiles.length > 0) {
+      console.log('🎵 Adding audio files to ZIP...');
       const audioFolder = zip.folder('audio');
       if (audioFolder) {
         for (const audioFile of audioFiles) {
+          console.log(`  Adding ${audioFile.fileName}...`);
           audioFolder.file(audioFile.fileName, audioFile.blob);
         }
       }
     }
 
     // 4. Generate ZIP blob
+    console.log('🗜️ Compressing ZIP file...');
     const zipBlob = await zip.generateAsync({
       type: 'blob',
       compression: 'DEFLATE',
       compressionOptions: { level: 6 },
     });
+    console.log('✅ ZIP generated:', (zipBlob.size / 1024).toFixed(2), 'KB');
 
     // 5. Download the file
     const fileName = `${sanitizeFileName(projectName)}.collab`;
+    console.log('💾 Downloading file:', fileName);
     downloadBlob(zipBlob, fileName);
 
-    console.log(`Project "${projectName}" saved successfully`);
+    console.log(`✅ Project "${projectName}" saved successfully`);
   } catch (error) {
     console.error('Failed to save project:', error);
     throw new Error(`Failed to save project: ${error}`);

@@ -153,7 +153,7 @@ const TimeRulerComponent = ({
       const xDiff = Math.abs(pointer.x - lastClickX);
       
       if (timeDiff < 300 && xDiff < 10) {
-        // Double click detected - add empty marker immediately
+        // Double click detected - show dialog to add marker with description
         let clickedBeat = Math.max(0, Math.min(pointer.x / beatWidth, totalBeats));
         if (snapToGrid) {
           clickedBeat = snapValueToGrid(clickedBeat, dynamicGridDivision);
@@ -162,13 +162,12 @@ const TimeRulerComponent = ({
         const newMarker: TimeMarker = {
           id: crypto.randomUUID(),
           position: clickedBeat,
-          description: '', // Empty description
+          description: '', // Will be set in dialog
           color: '#3b82f6',
         };
         
-        // Add marker immediately (no dialog)
-        handleMarkerAdd(newMarker);
-        selectMarker(newMarker.id);
+        // Show dialog to set description
+        setEditingMarker(newMarker);
         setClickCount(0);
         return;
       }
@@ -238,11 +237,22 @@ const TimeRulerComponent = ({
 
   const handleMarkerSave = useCallback((description: string) => {
     if (editingMarker) {
-      handleMarkerUpdate(editingMarker.id, { description });
-      handleMarkerUpdateFlush();
+      // Check if this is a new marker (not yet in the store)
+      const existingMarker = markers.find(m => m.id === editingMarker.id);
+      
+      if (existingMarker) {
+        // Editing existing marker
+        handleMarkerUpdate(editingMarker.id, { description });
+        handleMarkerUpdateFlush();
+      } else {
+        // Adding new marker
+        const newMarker = { ...editingMarker, description };
+        handleMarkerAdd(newMarker);
+        selectMarker(newMarker.id);
+      }
     }
     setEditingMarker(null);
-  }, [editingMarker, handleMarkerUpdate, handleMarkerUpdateFlush]);
+  }, [editingMarker, markers, handleMarkerUpdate, handleMarkerUpdateFlush, handleMarkerAdd, selectMarker]);
 
   const handleMarkerCancel = useCallback(() => {
     setEditingMarker(null);
