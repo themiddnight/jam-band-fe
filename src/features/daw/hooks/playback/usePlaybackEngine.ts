@@ -197,7 +197,7 @@ export const usePlaybackEngine = () => {
           }
         } else if (region.type === 'audio') {
           // Schedule audio regions
-          await scheduleAudioRegionPlayback(region, track, tracks);
+          await scheduleAudioRegionPlayback(region, track);
           if (scheduleVersion !== schedulingVersionRef.current) {
             stopAudioRegionPlayback(region.id);
             return;

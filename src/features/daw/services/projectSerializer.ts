@@ -1,7 +1,6 @@
 import { useProjectStore } from '../stores/projectStore';
 import { useTrackStore } from '../stores/trackStore';
 import { useRegionStore } from '../stores/regionStore';
-import { useArrangeRoomScaleStore } from '../stores/arrangeRoomStore';
 import { useEffectsStore } from '@/features/effects/stores/effectsStore';
 import { useSynthStore } from '../stores/synthStore';
 import { useMarkerStore } from '../stores/markerStore';
@@ -78,7 +77,6 @@ export function serializeProject(projectName: string): SerializedProject {
   const project = useProjectStore.getState();
   const tracks = useTrackStore.getState().tracks;
   const regions = useRegionStore.getState().regions;
-  const scale = useArrangeRoomScaleStore.getState();
   const effectsState = useEffectsStore.getState();
   const synthState = useSynthStore.getState();
   const markerState = useMarkerStore.getState();
@@ -140,8 +138,8 @@ export function serializeProject(projectName: string): SerializedProject {
       snapToGrid: project.snapToGrid,
     },
     scale: {
-      rootNote: scale.rootNote,
-      scale: scale.scale,
+      rootNote: project.projectScale.rootNote,
+      scale: project.projectScale.scale,
     },
     tracks: tracks.map((track: any) => ({
       id: track.id,
@@ -318,12 +316,10 @@ export function deserializeProject(data: SerializedProject): void {
     transportState: 'stopped',
     playhead: 0,
     isRecording: false,
-  });
-
-  // Restore scale settings
-  useArrangeRoomScaleStore.setState({
-    rootNote: data.scale.rootNote,
-    scale: data.scale.scale as any, // Type assertion for scale restoration
+    projectScale: {
+      rootNote: data.scale.rootNote,
+      scale: data.scale.scale as 'major' | 'minor',
+    },
   });
 
   // Clear existing tracks and regions

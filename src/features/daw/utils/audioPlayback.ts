@@ -4,7 +4,7 @@ import type { AudioRegion, Track } from '../types/daw';
 
 const scheduledAudioSources = new Map<string, AudioBufferSourceNode[]>();
 
-export const scheduleAudioRegionPlayback = async (region: AudioRegion, track: Track, tracks: Track[]): Promise<void> => {
+export const scheduleAudioRegionPlayback = async (region: AudioRegion, track: Track): Promise<void> => {
   if (!region.audioBuffer) {
     return;
   }
@@ -23,18 +23,6 @@ export const scheduleAudioRegionPlayback = async (region: AudioRegion, track: Tr
   // Get current playhead position in beats
   const currentPlayheadBeats = Tone.Transport.seconds / secondsPerBeat;
   
-  // Calculate effective volume based on solo/mute
-  const hasSolo = tracks.some((t) => t.solo);
-  let effectiveVolume = track.volume;
-  
-  if (hasSolo && !track.solo) {
-    effectiveVolume = 0;
-  }
-  
-  if (track.mute) {
-    effectiveVolume = 0;
-  }
-  
   const totalLoops = region.loopEnabled ? region.loopIterations : 1;
   const regionDurationSeconds = region.length * secondsPerBeat;
   const sources: AudioBufferSourceNode[] = [];
@@ -52,28 +40,23 @@ export const scheduleAudioRegionPlayback = async (region: AudioRegion, track: Tr
     const source = audioContext.createBufferSource();
     source.buffer = region.audioBuffer;
     
-    // Create gain and pan nodes for volume/pan control
+    // Create gain node for region-level gain and fade envelopes
     const gainNode = audioContext.createGain();
-    const panNode = audioContext.createStereoPanner();
     
-    // Apply track volume (with solo/mute), region gain, and pan
+    // Apply region gain only (track volume/pan controlled by mixer channel)
     const regionGainDb = region.gain || 0;
     const regionGainMultiplier = Math.pow(10, regionGainDb / 20); // Convert dB to linear
-    const baseGain = effectiveVolume * regionGainMultiplier;
+    const baseGain = regionGainMultiplier;
     
-    // Pan node (not automated)
-    panNode.pan.value = track.pan;
-    
-    // Connect: source -> gain -> pan -> mixer channel (or destination fallback)
+    // Connect: source -> gain -> mixer channel (or destination fallback)
     source.connect(gainNode);
-    gainNode.connect(panNode);
     let routedThroughMixer = false;
     try {
       const mixer = await getOrCreateGlobalMixer();
       if (!mixer.getChannel(track.id)) {
         mixer.createUserChannel(track.id, track.name ?? track.id);
       }
-      mixer.routeInstrumentToChannel(panNode, track.id);
+      mixer.routeInstrumentToChannel(gainNode, track.id);
       routedThroughMixer = true;
     } catch (error) {
       console.warn('Failed to route audio track through mixer, using direct output', {
@@ -83,7 +66,7 @@ export const scheduleAudioRegionPlayback = async (region: AudioRegion, track: Tr
     }
 
     if (!routedThroughMixer) {
-      panNode.connect(audioContext.destination);
+      gainNode.connect(audioContext.destination);
     }
     
     let bufferOffset = trimStartSeconds;
