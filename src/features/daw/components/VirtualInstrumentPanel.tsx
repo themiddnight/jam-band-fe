@@ -542,7 +542,7 @@ export const VirtualInstrumentPanel = memo(({ onRecordMidiMessage }: VirtualInst
   };
 
   return (
-    <section className="flex flex-col gap-2 sm:gap-3 rounded-lg border border-base-300 bg-base-100 p-1 sm:p-2 shadow-sm overflow-auto">
+    <section className="flex flex-col gap-2 sm:gap-3 rounded-lg border border-base-300 bg-base-100 p-1 sm:p-2 shadow-sm">
       <div className="flex justify-center w-full">
         {renderInstrument()}
       </div>

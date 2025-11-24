@@ -18,18 +18,14 @@ export const TrackEffects = memo(() => {
   }, [tracks, ensureChain]);
 
   return (
-    <div className="flex flex-col gap-4 p-3 w-full max-h-[70vh] overflow-y-auto">
-      <h3 className="text-sm font-semibold uppercase tracking-wide text-base-content/70">
-        Track Effects
-      </h3>
-
+    <div className="flex flex-col gap-4 p-3 w-full">
       {tracks.length === 0 ? (
         <div className="text-center text-base-content/40 py-8">
           <p className="text-sm">No tracks yet</p>
           <p className="text-xs mt-1">Add a track to configure effects</p>
         </div>
       ) : (
-        <div className="flex flex-col md:flex-row xl:flex-col flex-wrap gap-4 w-full">
+        <div className="flex flex-col md:flex-row xl:flex-col flex-wrap gap-3 w-full">
           {tracks.map((track) => {
             const chainType = `track:${track.id}` as EffectChainType;
             const isSelected = track.id === selectedTrackId;

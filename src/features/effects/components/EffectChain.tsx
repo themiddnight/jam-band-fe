@@ -28,7 +28,7 @@ export default function EffectChain({ chainType, title, mode = 'perform' }: Effe
 
   if (!chain) {
     return (
-      <div className='effect-chain p-3 rounded-lg border border-base-300 bg-base-100'>
+      <div className='effect-chain p-3 rounded-lg'>
         <div className="text-sm text-base-content/60">Initializing effect chain…</div>
       </div>
     );
@@ -90,10 +90,10 @@ export default function EffectChain({ chainType, title, mode = 'perform' }: Effe
   const lockScopeId = chainType;
 
   return (
-    <div className='effect-chain p-3 rounded-lg border border-base-300 bg-base-100'>
+    <div className="effect-chain p-3 rounded-lg border border-base-300 bg-base-300">
       {/* Chain Header */}
-      <div className="flex items-center justify-between mb-4 gap-3">
-        <h3>{title}</h3>
+      <div className="flex items-center justify-between mb-3 gap-3">
+        <p className='text-sm font-bold'>{title}</p>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Centralized Preset Manager */}
           {mode === 'perform' && (
@@ -134,7 +134,7 @@ export default function EffectChain({ chainType, title, mode = 'perform' }: Effe
       </div>
 
       {/* Effects Chain */}
-      <div className="flex flex-wrap gap-x-5 gap-y-2 items-start">
+      <div className="flex flex-wrap gap-x-3 gap-y-1 items-start">
         {sortedEffects.length === 0 ? (
           <div className="flex-1 flex items-center justify-center opacity-50">
             <div className="text-center">

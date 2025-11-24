@@ -65,7 +65,7 @@ export const Collaborators = memo(({
   return (
     <div className="flex flex-col gap-4 p-4">
       
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
         {/* Current user */}
 
         {/* Voice Input - Mic Input */}

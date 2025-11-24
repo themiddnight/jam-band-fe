@@ -145,7 +145,7 @@ export const SynthControlsPanel = memo(() => {
   }
 
   return (
-    <section className="rounded-lg border border-base-300 bg-base-100 shadow-sm overflow-auto">
+    <section className="rounded-lg border border-base-300 bg-base-100 shadow-sm">
       <SynthControls
         currentInstrument={selectedTrack.instrumentId ?? "analog_mono"}
         synthState={synthState}

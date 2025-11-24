@@ -11,6 +11,7 @@ import { useResizeDetector } from 'react-resize-detector';
 import { useTrackStore } from '../../stores/trackStore';
 import type { Track } from '../../types/daw';
 import { useInputMonitoring } from '../../hooks/useInputMonitoring';
+import { useOutputMeter } from '../../hooks/useOutputMeter';
 import { trackInstrumentRegistry } from '../../utils/trackInstrumentRegistry';
 import AnchoredPopup from '@/features/ui/components/shared/AnchoredPopup';
 import InstrumentCategoryTabs from '@/features/instruments/components/InstrumentCategoryTabs';
@@ -229,6 +230,9 @@ export const TrackHeader = ({
     inputFeedback // Only enable audio feedback when 'I' is active
   );
 
+  // Output metering for all tracks (both MIDI and audio)
+  const outputLevel = useOutputMeter(track.id, true);
+
   const startEditingName = () => {
     setPendingName(track.name);
     setIsEditingName(true);
@@ -300,10 +304,10 @@ export const TrackHeader = ({
     <div
       ref={containerRef}
       onClick={() => onSelect(track.id)}
-      className={`flex flex-col gap-2 border-b border-base-200 bg-base-100/80 px-3 py-2 transition-colors cursor-pointer ${isSelected ? 'bg-primary/10' : ''
+      className={`flex flex-col gap-2 border-t border-t-zinc-600 bg-base-100/80 px-3 py-2 transition-colors cursor-pointer ${isSelected ? 'bg-primary/10' : ''
         }`}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 -mt-2">
         <div
           className="h-3 w-3 rounded-full"
           style={{ backgroundColor: track.color }}
@@ -380,6 +384,15 @@ export const TrackHeader = ({
           ×
         </button>
       </div>
+
+      {/* Output Meter */}
+      <div className="relative h-[3px] -mt-1 mb-1 w-full rounded-full bg-base-300 overflow-hidden">
+        <div
+          className="h-full bg-gradient-to-r from-green-500 via-yellow-500 to-red-500 transition-all duration-75"
+          style={{ width: `${outputLevel * 100}%` }}
+        />
+      </div>
+
       <div className="flex items-center gap-2 text-xs">
         <label className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
           <span className="uppercase text-[10px] text-base-content/60">Vol</span>

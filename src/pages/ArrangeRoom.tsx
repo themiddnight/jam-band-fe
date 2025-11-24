@@ -23,7 +23,9 @@ import { useEffectsIntegration } from "@/features/effects/hooks/useEffectsIntegr
 import { initializeStoreObservers } from "@/features/daw/stores/storeObservers";
 import { useMidiStore } from "@/features/daw/stores/midiStore";
 import { useArrangeRoomScaleStore } from "@/features/daw/stores/arrangeRoomStore";
+import { usePerformanceStore } from "@/features/daw/stores/performanceStore";
 import { ProjectMenu } from "@/features/daw/components/ProjectMenu";
+import { PerformanceSettingsModal } from "@/features/daw/components/PerformanceSettingsModal";
 import { useRoom } from "@/features/rooms";
 import { useWebRTCVoice, useCombinedLatency } from "@/features/audio";
 import { DAWCollaborationProvider } from "@/features/daw/contexts/DAWCollaborationContext";
@@ -49,6 +51,7 @@ export default function ArrangeRoom() {
   const [userToKick, setUserToKick] = useState<any | null>(null);
   const [showRoomSettingsModal, setShowRoomSettingsModal] = useState(false);
   const [isUpdatingRoomSettings, setIsUpdatingRoomSettings] = useState(false);
+  const [showPerformanceSettingsModal, setShowPerformanceSettingsModal] = useState(false);
   const [isPendingPopupOpen, setIsPendingPopupOpen] = useState(false);
   const pendingBtnRef = useRef<HTMLButtonElement>(null);
   const recordingHandlerRef = useRef<(message: MidiMessage) => void>(() => {});
@@ -370,6 +373,27 @@ export default function ArrangeRoom() {
 
   useArrangeRoomScaleStore();
 
+  // Performance settings
+  const performanceSettings = usePerformanceStore((state) => state.settings);
+  const updatePerformanceSettings = usePerformanceStore((state) => state.updateSettings);
+
+  const handleOpenPerformanceSettings = useCallback(() => {
+    setShowPerformanceSettingsModal(true);
+  }, []);
+
+  const handleClosePerformanceSettings = useCallback(() => {
+    setShowPerformanceSettingsModal(false);
+  }, []);
+
+  const handleSavePerformanceSettings = useCallback(
+    (settings: typeof performanceSettings) => {
+      updatePerformanceSettings(settings);
+      console.log("⚡ Performance settings updated:", settings);
+      // You can add additional logic here to apply settings immediately
+    },
+    [updatePerformanceSettings]
+  );
+
   // Resizable multitrack - mobile-friendly defaults
   const {
     height: multitrackHeight,
@@ -412,7 +436,7 @@ export default function ArrangeRoom() {
       <KeyboardShortcutsBridge />
       <RecordingEngineBridge onHandlerReady={setRecordingHandlerBase} />
       <div className="min-h-dvh bg-base-200 flex flex-col">
-        <div className="flex-1 p-3">
+        <div className="flex-1 pt-3 px-3">
           <div className="">
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4">
@@ -441,9 +465,17 @@ export default function ArrangeRoom() {
                     ⚙️
                   </button>
                 )}
+                {/* Performance Settings Button */}
+                <button
+                  onClick={handleOpenPerformanceSettings}
+                  className="btn btn-xs btn-ghost"
+                  title={`Performance Settings (Buffer: ${performanceSettings.audioBufferSize}, Quality: ${performanceSettings.waveformQuality})`}
+                >
+                  ⚡
+                </button>
                 <button
                   onClick={() => handleCopyInviteUrl("band_member")}
-                  className={`btn btn-xs sm:btn-sm btn-ghost ${copiedRole === "band_member" ? "btn-success" : ""}`}
+                  className={`btn btn-xs btn-ghost ${copiedRole === "band_member" ? "btn-success" : ""}`}
                   title="Copy invite link"
                 >
                   {copiedRole === "band_member" ? "✓ Copied!" : "📋"}
@@ -455,13 +487,14 @@ export default function ArrangeRoom() {
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <ProjectMenu canLoadProject={isRoomOwner} />
                 {/* Pending notification button for room owner */}
                 {isRoomOwner && (
                   <div className="relative">
                     <button
                       ref={pendingBtnRef}
                       aria-label="Pending member requests"
-                      className="btn btn-ghost btn-xs sm:btn-sm relative"
+                      className="btn btn-ghost btn-xs relative"
                       onClick={() => setIsPendingPopupOpen((v) => !v)}
                       title={
                         pendingCount > 0
@@ -512,13 +545,13 @@ export default function ArrangeRoom() {
                                 </div>
                                 <div className="flex gap-2">
                                   <button
-                                    className="btn btn-xs sm:btn-sm btn-success"
+                                    className="btn btn-xs btn-success"
                                     onClick={() => handleApproveMember(user.id)}
                                   >
                                     ✓
                                   </button>
                                   <button
-                                    className="btn btn-xs sm:btn-sm btn-error"
+                                    className="btn btn-xs btn-error"
                                     onClick={() => handleRejectMember(user.id)}
                                   >
                                     ✕
@@ -532,10 +565,9 @@ export default function ArrangeRoom() {
                     </AnchoredPopup>
                   </div>
                 )}
-                <ProjectMenu canLoadProject={isRoomOwner} />
                 <button
                   onClick={handleLeaveRoomClick}
-                  className="btn btn-outline btn-xs sm:btn-sm"
+                  className="btn btn-outline btn-xs sm:btn-xs"
                 >
                   <span className="hidden sm:inline">Leave Room</span>
                   <span className="sm:hidden">Leave</span>
@@ -544,11 +576,11 @@ export default function ArrangeRoom() {
             </div>
 
             {/* Main Content */}
-            <div>
+            <div className="flex flex-col">
               <TransportToolbar />
-              <div className="flex flex-1 flex-col xl:flex-row overflow-hidden">
+              <div className="flex flex-col xl:flex-row xl:h-[calc(100vh-10rem)]">
                 {/* Main content area */}
-                <main className="flex flex-1 flex-col gap-2 p-1 overflow-hidden min-w-0">
+                <main className="flex flex-1 flex-col gap-2 p-1 overflow-y-auto min-w-0">
                   {/* Resizable Multitrack Section */}
                   <div className="relative">
                     <div 
@@ -706,6 +738,14 @@ export default function ArrangeRoom() {
           room={currentRoom}
           onSave={handleSaveRoomSettings}
           isLoading={isUpdatingRoomSettings}
+        />
+
+        {/* Performance Settings Modal */}
+        <PerformanceSettingsModal
+          open={showPerformanceSettingsModal}
+          onClose={handleClosePerformanceSettings}
+          onSave={handleSavePerformanceSettings}
+          currentSettings={performanceSettings}
         />
       </div>
     </DAWCollaborationProvider>

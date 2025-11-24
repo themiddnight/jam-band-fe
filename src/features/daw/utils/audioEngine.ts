@@ -93,6 +93,11 @@ export const updateTrackAudioParams = (track: Track) => {
   instrument.panNode.pan.value = track.pan;
 };
 
+export const getTrackOutputNode = (trackId: string): AudioNode | null => {
+  const instrument = instruments.get(trackId);
+  return instrument?.panNode ?? null;
+};
+
 export const loadInstrumentForTrack = async (track: Track) => {
   // Audio tracks don't have instruments
   if (track.type === 'audio' || !track.instrumentId) {
