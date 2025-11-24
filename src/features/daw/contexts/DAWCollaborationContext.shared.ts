@@ -76,6 +76,7 @@ export interface DAWCollaborationContextValue {
   handleSynthParamsChange: (trackId: string, params: Partial<SynthState>) => void;
   handleBpmChange: (bpm: number) => void;
   handleTimeSignatureChange: (timeSignature: TimeSignature) => void;
+  handleProjectScaleChange: (rootNote: string, scale: 'major' | 'minor') => void;
 
   // Marker handlers
   handleMarkerAdd: (marker: TimeMarker) => void;
@@ -190,6 +191,9 @@ export const createNoopDAWCollaborationValue = (): DAWCollaborationContextValue 
   },
   handleTimeSignatureChange: (timeSignature: TimeSignature) => {
     useProjectStore.getState().setTimeSignature(timeSignature);
+  },
+  handleProjectScaleChange: (rootNote: string, scale: 'major' | 'minor') => {
+    useProjectStore.getState().setProjectScale(rootNote, scale);
   },
   handleMarkerAdd: (marker: TimeMarker) => {
     useMarkerStore.getState().addMarker(marker);

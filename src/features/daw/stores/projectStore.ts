@@ -22,6 +22,7 @@ export interface ProjectStoreState {
   isMetronomeEnabled: boolean;
   isRecording: boolean;
   snapToGrid: boolean;
+  projectScale: { rootNote: string; scale: 'major' | 'minor' };
   setBpm: (bpm: number) => void;
   setTimeSignature: (timeSignature: TimeSignature) => void;
   setTransportState: (state: TransportState) => void;
@@ -32,12 +33,13 @@ export interface ProjectStoreState {
   toggleMetronome: (enabled?: boolean) => void;
   toggleRecording: (enabled?: boolean) => void;
   toggleSnap: (enabled?: boolean) => void;
+  setProjectScale: (rootNote: string, scale: 'major' | 'minor') => void;
   reset: () => void;
 }
 
 const initialState: Omit<
   ProjectStoreState,
-  'setBpm' | 'setTimeSignature' | 'setTransportState' | 'setPlayhead' | 'setGridDivision' | 'setLoop' | 'toggleLoop' | 'toggleMetronome' | 'toggleRecording' | 'toggleSnap' | 'reset'
+  'setBpm' | 'setTimeSignature' | 'setTransportState' | 'setPlayhead' | 'setGridDivision' | 'setLoop' | 'toggleLoop' | 'toggleMetronome' | 'toggleRecording' | 'toggleSnap' | 'setProjectScale' | 'reset'
 > = {
   bpm: DEFAULT_BPM,
   timeSignature: DEFAULT_TIME_SIGNATURE,
@@ -52,6 +54,7 @@ const initialState: Omit<
   isMetronomeEnabled: false,
   isRecording: false,
   snapToGrid: true,
+  projectScale: { rootNote: 'C', scale: 'major' },
 };
 
 type PersistedState = Pick<ProjectStoreState, 'bpm' | 'timeSignature' | 'gridDivision' | 'loop'>;
@@ -123,6 +126,8 @@ export const useProjectStore = create<ProjectStoreState>()(
         set((state) => ({
           snapToGrid: typeof enabled === 'boolean' ? enabled : !state.snapToGrid,
         })),
+      setProjectScale: (rootNote, scale) =>
+        set({ projectScale: { rootNote, scale } }),
       reset: () => set(() => ({ ...initialState })),
     }),
     {

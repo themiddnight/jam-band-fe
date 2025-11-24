@@ -1094,6 +1094,15 @@ export const useDAWCollaboration = ({
     [setTimeSignature]
   );
 
+  const handleProjectScaleChange = useCallback(
+    (rootNote: string, scale: 'major' | 'minor') => {
+      const setProjectScale = useProjectStore.getState().setProjectScale;
+      setProjectScale(rootNote, scale);
+      dawSyncService.syncProjectScaleChange(rootNote, scale);
+    },
+    []
+  );
+
   // ========== Marker sync handlers ==========
 
   const handleMarkerAdd = useCallback(
@@ -1251,6 +1260,7 @@ export const useDAWCollaboration = ({
     handleSynthParamsChange,
     handleBpmChange,
     handleTimeSignatureChange,
+    handleProjectScaleChange,
 
     // Marker handlers
     handleMarkerAdd,

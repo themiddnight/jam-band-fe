@@ -106,6 +106,7 @@ export class DAWSyncService {
     this.socket.on('arrange:synth_params_updated', this.handleSynthParamsUpdated.bind(this));
     this.socket.on('arrange:bpm_changed', this.handleBpmChanged.bind(this));
     this.socket.on('arrange:time_signature_changed', this.handleTimeSignatureChanged.bind(this));
+    this.socket.on('arrange:project_scale_changed', this.handleProjectScaleChanged.bind(this));
     this.socket.on('arrange:selection_changed', this.handleSelectionChanged.bind(this));
     this.socket.on('arrange:lock_acquired', this.handleLockAcquired.bind(this));
     this.socket.on('arrange:lock_released', this.handleLockReleased.bind(this));
@@ -143,6 +144,7 @@ export class DAWSyncService {
     this.socket.off('arrange:synth_params_updated');
     this.socket.off('arrange:bpm_changed');
     this.socket.off('arrange:time_signature_changed');
+    this.socket.off('arrange:project_scale_changed');
     this.socket.off('arrange:selection_changed');
     this.socket.off('arrange:lock_acquired');
     this.socket.off('arrange:lock_released');
@@ -323,6 +325,18 @@ export class DAWSyncService {
   }
 
   /**
+   * Sync project scale change
+   */
+  syncProjectScaleChange(rootNote: string, scale: 'major' | 'minor'): void {
+    if (!this.socket || !this.roomId || this.isSyncing) return;
+    this.socket.emit('arrange:project_scale_change', {
+      roomId: this.roomId,
+      rootNote,
+      scale,
+    });
+  }
+
+  /**
    * Sync selection change
    * Track selections remain local, so callers should only include region data when needed.
    */
@@ -396,6 +410,7 @@ export class DAWSyncService {
     selectedRegionIds: string[];
     bpm?: number;
     timeSignature?: TimeSignature;
+    projectScale?: { rootNote: string; scale: 'major' | 'minor' };
     synthStates?: Record<string, SynthState>;
     markers?: TimeMarker[];
     voiceStates?: Record<string, { isMuted: boolean }>;
@@ -438,8 +453,12 @@ export class DAWSyncService {
       // Update project settings
       const setBpm = useProjectStore.getState().setBpm;
       const setTimeSignature = useProjectStore.getState().setTimeSignature;
+      const setProjectScale = useProjectStore.getState().setProjectScale;
       setBpm(data.bpm ?? DEFAULT_BPM);
       setTimeSignature(data.timeSignature ?? DEFAULT_TIME_SIGNATURE);
+      if (data.projectScale) {
+        setProjectScale(data.projectScale.rootNote, data.projectScale.scale);
+      }
 
       // Set locks (cast type to ensure it matches LockInfo)
       useLockStore.getState().setLocks(
@@ -785,6 +804,21 @@ export class DAWSyncService {
     this.isSyncing = true;
     try {
       useProjectStore.getState().setTimeSignature(data.timeSignature);
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+
+  private handleProjectScaleChanged(data: {
+    rootNote: string;
+    scale: 'major' | 'minor';
+    userId: string;
+  }): void {
+    if (this.isSyncing) return;
+    if (data.userId === this.userId) return;
+    this.isSyncing = true;
+    try {
+      useProjectStore.getState().setProjectScale(data.rootNote, data.scale);
     } finally {
       this.isSyncing = false;
     }
