@@ -81,6 +81,13 @@ export function serializeProject(projectName: string): SerializedProject {
   const synthState = useSynthStore.getState();
   const markerState = useMarkerStore.getState();
 
+  console.log('🔄 Starting serialization...');
+  console.log(`  Tracks: ${tracks.length}`);
+  console.log(`  Regions: ${regions.length}`);
+  console.log(`  Effect chains: ${Object.keys(effectsState.chains).length}`);
+  console.log(`  Synth states: ${Object.keys(synthState.synthStates).length}`);
+  console.log(`  Markers: ${markerState.markers.length}`);
+
   // Collect all effect chains (including track-specific ones)
   // Sanitize effect chains to ensure they're serializable
   const effectChains: Record<string, EffectChain> = {};
@@ -122,7 +129,22 @@ export function serializeProject(projectName: string): SerializedProject {
   
   console.log(`✅ Effect chains processed: ${Object.keys(effectChains).length}`);
 
-  return {
+  // Sanitize synth states to remove any non-serializable data
+  const sanitizedSynthStates: Record<string, SynthState> = {};
+  console.log('🎹 Sanitizing synth states...');
+  try {
+    Object.entries(synthState.synthStates).forEach(([trackId, state]) => {
+      if (state) {
+        // Create a clean copy
+        sanitizedSynthStates[trackId] = JSON.parse(JSON.stringify(state));
+      }
+    });
+    console.log(`✅ Synth states sanitized: ${Object.keys(sanitizedSynthStates).length}`);
+  } catch (error) {
+    console.error('❌ Error sanitizing synth states:', error);
+  }
+
+  const serializedProject: SerializedProject = {
     version: '1.0.0',
     metadata: {
       name: projectName,
@@ -131,9 +153,16 @@ export function serializeProject(projectName: string): SerializedProject {
     },
     project: {
       bpm: project.bpm,
-      timeSignature: project.timeSignature,
+      timeSignature: {
+        numerator: project.timeSignature.numerator,
+        denominator: project.timeSignature.denominator,
+      },
       gridDivision: project.gridDivision,
-      loop: project.loop,
+      loop: {
+        enabled: project.loop.enabled,
+        start: project.loop.start,
+        end: project.loop.end,
+      },
       isMetronomeEnabled: project.isMetronomeEnabled,
       snapToGrid: project.snapToGrid,
     },
@@ -152,13 +181,31 @@ export function serializeProject(projectName: string): SerializedProject {
       mute: track.mute,
       solo: track.solo,
       color: track.color,
-      regionIds: track.regionIds,
+      regionIds: track.regionIds || [],
     })),
     regions: regions.map((region: any) => serializeRegion(region)),
     effectChains,
-    synthStates: synthState.synthStates,
-    markers: markerState.markers,
+    synthStates: sanitizedSynthStates,
+    markers: markerState.markers.map(marker => ({
+      id: marker.id,
+      position: marker.position,
+      description: marker.description,
+      color: marker.color,
+    })),
   };
+
+  console.log('✅ Serialization complete');
+  
+  // Validate the serialized project can be stringified
+  try {
+    const testJson = JSON.stringify(serializedProject);
+    console.log(`✅ Serialization validation passed (${(testJson.length / 1024).toFixed(2)} KB)`);
+  } catch (error) {
+    console.error('❌ Serialization validation failed:', error);
+    throw new Error(`Project data contains non-serializable values: ${error}`);
+  }
+
+  return serializedProject;
 }
 
 /**
@@ -212,35 +259,68 @@ export async function extractAudioFiles(
       const audioRegion = region as AudioRegion;
       console.log(`  Processing audio region ${region.id}...`);
       
-      // Prioritize audioUrl (much faster - no conversion needed)
-      if (audioRegion.audioUrl) {
-        console.log(`    Fetching from URL: ${audioRegion.audioUrl.substring(0, 50)}...`);
+      // Priority order:
+      // 1. audioBlob (original recorded format - opus/webm, best quality/size)
+      // 2. audioUrl (for server-hosted files)
+      // 3. audioBuffer (fallback - converts to WAV, larger files)
+      
+      if (audioRegion.audioBlob) {
+        console.log(`    Using original blob (${audioRegion.audioBlob.type})...`);
+        if (audioRegion.audioBlob.size > 0) {
+          const extension = audioRegion.audioBlob.type.includes('webm') ? 'webm' : 
+                           audioRegion.audioBlob.type.includes('ogg') ? 'ogg' : 'audio';
+          console.log(`    ✅ Original blob: ${(audioRegion.audioBlob.size / 1024).toFixed(2)} KB`);
+          audioFiles.push({
+            regionId: region.id,
+            fileName: `${region.id}.${extension}`,
+            blob: audioRegion.audioBlob,
+          });
+        } else {
+          console.warn(`    ⚠️ Blob is empty for region ${region.id}, trying fallback...`);
+        }
+      } else if (audioRegion.audioUrl && !audioRegion.audioUrl.startsWith('blob:')) {
+        // Only fetch non-blob URLs (server-hosted files)
+        console.log(`    Fetching from server URL: ${audioRegion.audioUrl.substring(0, 50)}...`);
         try {
           const response = await fetch(audioRegion.audioUrl);
           if (response.ok) {
             const blob = await response.blob();
-            console.log(`    ✅ Fetched: ${(blob.size / 1024).toFixed(2)} KB`);
-            audioFiles.push({
-              regionId: region.id,
-              fileName: `${region.id}.webm`,
-              blob,
-            });
+            if (blob.size > 0) {
+              console.log(`    ✅ Fetched: ${(blob.size / 1024).toFixed(2)} KB`);
+              audioFiles.push({
+                regionId: region.id,
+                fileName: `${region.id}.webm`,
+                blob,
+              });
+            } else {
+              console.warn(`    ⚠️ Fetched blob is empty for region ${region.id}, trying fallback...`);
+            }
           } else {
-            console.warn(`Failed to fetch audio for region ${region.id}: ${response.status}`);
+            console.warn(`    ⚠️ Failed to fetch audio for region ${region.id}: ${response.status}, trying fallback...`);
           }
         } catch (error) {
-          console.error(`Error fetching audio for region ${region.id}:`, error);
+          console.error(`    ❌ Error fetching audio for region ${region.id}:`, error);
         }
-      } else if (audioRegion.audioBuffer) {
-        console.log(`    Converting AudioBuffer to WAV (fast)...`);
-        // Use fast WAV conversion instead of slow WebM encoding
-        const blob = audioBufferToWav(audioRegion.audioBuffer);
-        console.log(`    ✅ Converted: ${(blob.size / 1024).toFixed(2)} KB`);
-        audioFiles.push({
-          regionId: region.id,
-          fileName: `${region.id}.wav`,
-          blob,
-        });
+      }
+      
+      // Fallback to AudioBuffer conversion if no blob was saved
+      if (audioFiles.length === 0 || audioFiles[audioFiles.length - 1].regionId !== region.id) {
+        if (audioRegion.audioBuffer) {
+          console.log(`    Fallback: Converting AudioBuffer to WAV...`);
+          try {
+            const blob = audioBufferToWav(audioRegion.audioBuffer);
+            console.log(`    ✅ Converted: ${(blob.size / 1024).toFixed(2)} KB`);
+            audioFiles.push({
+              regionId: region.id,
+              fileName: `${region.id}.wav`,
+              blob,
+            });
+          } catch (error) {
+            console.error(`    ❌ Failed to convert AudioBuffer:`, error);
+          }
+        } else {
+          console.warn(`    ⚠️ No audio data available for region ${region.id}`);
+        }
       }
     }
   }
@@ -253,9 +333,22 @@ export async function extractAudioFiles(
  * This is much faster than WebM encoding as it doesn't require real-time recording
  */
 function audioBufferToWav(audioBuffer: AudioBuffer): Blob {
+  // Validate audioBuffer
+  if (!audioBuffer || audioBuffer.length === 0 || audioBuffer.numberOfChannels === 0) {
+    console.error('Invalid audioBuffer:', {
+      length: audioBuffer?.length,
+      channels: audioBuffer?.numberOfChannels,
+      sampleRate: audioBuffer?.sampleRate,
+    });
+    throw new Error('Invalid AudioBuffer: empty or no channels');
+  }
+
   const numberOfChannels = audioBuffer.numberOfChannels;
   const length = audioBuffer.length * numberOfChannels * 2; // 16-bit samples
   const sampleRate = audioBuffer.sampleRate;
+  
+  console.log(`    Converting AudioBuffer: ${numberOfChannels} channels, ${audioBuffer.length} samples, ${sampleRate} Hz`);
+  
   const buffer = new ArrayBuffer(44 + length);
   const view = new DataView(buffer);
 
@@ -295,7 +388,14 @@ function audioBufferToWav(audioBuffer: AudioBuffer): Blob {
     }
   }
 
-  return new Blob([buffer], { type: 'audio/wav' });
+  const blob = new Blob([buffer], { type: 'audio/wav' });
+  
+  if (blob.size === 0) {
+    console.error('Generated WAV blob is empty!');
+    throw new Error('Failed to generate WAV blob');
+  }
+
+  return blob;
 }
 
 // Removed audioBufferToWebM - it was too slow (required real-time recording)

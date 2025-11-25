@@ -9,6 +9,8 @@ const HANDLE_SIZE = 8;
 
 interface ExtendedBaseRegionProps extends BaseRegionProps {
   headResizeState?: RegionContentProps['headResizeState'];
+  viewportStartBeat?: number;
+  viewportEndBeat?: number;
   onHeadHandleDown: (event: KonvaEventObject<PointerEvent>) => void;
   onLengthHandleDown: (event: KonvaEventObject<PointerEvent>) => void;
   onLoopHandleDown: (event: KonvaEventObject<PointerEvent>) => void;
@@ -26,6 +28,8 @@ export const BaseRegion = ({
   loops,
   isLockedByRemote,
   headResizeState,
+  viewportStartBeat,
+  viewportEndBeat,
   onPointerDown,
   onHeadHandleDown,
   onLengthHandleDown,
@@ -104,6 +108,8 @@ export const BaseRegion = ({
                 isMainLoop={isMainLoop}
                 length={region.length}
                 headResizeState={headResizeState}
+                viewportStartBeat={viewportStartBeat}
+                viewportEndBeat={viewportEndBeat}
               />
             ) : (
               <AudioRegionContent
@@ -116,6 +122,8 @@ export const BaseRegion = ({
                 isMainLoop={isMainLoop}
                 length={region.length}
                 headResizeState={headResizeState}
+                viewportStartBeat={viewportStartBeat}
+                viewportEndBeat={viewportEndBeat}
               />
             )}
           </Group>

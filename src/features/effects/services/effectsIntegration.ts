@@ -37,11 +37,11 @@ class EffectsIntegrationService {
     if (this.isInitialized && this.currentUserId === userId) return;
 
     this.currentUserId = userId;
-    
+
     try {
       // Ensure mixer is available
       const mixer = await getOrCreateGlobalMixer();
-      
+
       // Create user channel if it doesn't exist
       if (!mixer.getChannel(userId)) {
         mixer.createUserChannel(userId, 'Local User');
@@ -53,7 +53,7 @@ class EffectsIntegrationService {
 
       // Subscribe to effects store changes
       this.subscribeToEffectChanges();
-      
+
       this.isInitialized = true;
       console.log('🎛️ Effects integration initialized for user:', userId);
     } catch (error) {
@@ -67,7 +67,7 @@ class EffectsIntegrationService {
    */
   private subscribeToEffectChanges(): void {
     const store = useEffectsStore.getState();
-    
+
     // Subscribe to store updates
     useEffectsStore.subscribe((state, prevState) => {
       // Check for added effects
@@ -176,7 +176,7 @@ class EffectsIntegrationService {
     try {
       const mixer = await getOrCreateGlobalMixer();
       const audioEffectType = EFFECT_TYPE_MAP[uiEffect.type];
-      
+
       if (!audioEffectType) {
         console.warn(`Unknown effect type: ${uiEffect.type}`);
         return;
@@ -186,7 +186,7 @@ class EffectsIntegrationService {
 
       // Add effect to the channel
       const audioEffect = mixer.addEffectToChannel(channelId, audioEffectType);
-      
+
       if (audioEffect) {
         // Store mapping
         this.effectMappings.set(uiEffect.id, {
@@ -222,10 +222,10 @@ class EffectsIntegrationService {
 
     try {
       const mixer = await getOrCreateGlobalMixer();
-      
+
       // Use the mixer's removeEffectFromChannel method
       const success = mixer.removeEffectFromChannel(mapping.channelId, mapping.audioEffect.id);
-      
+
       if (success) {
         this.effectMappings.delete(uiEffectId);
         console.log(`🎛️ Removed effect from ${mapping.chainType} chain`);
@@ -268,11 +268,11 @@ class EffectsIntegrationService {
       // Convert UI parameter name to normalized format for mapping
       const normalizedParamName = uiParam.name.toLowerCase().replace(/[\s/]+/g, '_');
       const audioParamName = parameterMap[normalizedParamName] || uiParam.name;
-      
+
       try {
         // Convert UI parameter value to audio parameter value
         let audioValue = uiParam.value;
-        
+
         // Special handling for dry/wet parameters (UI uses 0-100, audio uses 0-1)
         if (audioParamName === 'wetLevel' && uiParam.max === 100) {
           audioValue = uiParam.value / 100;
@@ -301,7 +301,7 @@ class EffectsIntegrationService {
   async cleanup(): Promise<void> {
     try {
       const mixer = await getOrCreateGlobalMixer();
-      
+
       // Remove all effects from the user's channel
       // This will also rebuild the chain automatically
       for (const mapping of this.effectMappings.values()) {

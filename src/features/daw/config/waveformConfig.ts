@@ -68,10 +68,39 @@ export const WAVEFORM_DETAIL_PRESET = {
  * 
  * Change this to switch between presets:
  * 'ULTRA_LOW' | 'LOW' | 'MEDIUM' | 'HIGH' | 'ULTRA_HIGH'
+ * 
+ * Note: This is now controlled by the performance settings store.
+ * This default is used as a fallback.
  */
-export const ACTIVE_WAVEFORM_PRESET: keyof typeof WAVEFORM_DETAIL_PRESET = 'LOW'
+export const ACTIVE_WAVEFORM_PRESET: keyof typeof WAVEFORM_DETAIL_PRESET = 'MEDIUM'
 
-// Get active configuration
+/**
+ * Get active configuration based on quality setting
+ * Maps performance store quality to waveform presets
+ */
+export const getActiveConfig = (quality?: "low" | "medium" | "high") => {
+  if (!quality) {
+    return WAVEFORM_DETAIL_PRESET[ACTIVE_WAVEFORM_PRESET];
+  }
+  
+  const qualityMap: Record<"low" | "medium" | "high", keyof typeof WAVEFORM_DETAIL_PRESET> = {
+    low: 'LOW',
+    medium: 'MEDIUM',
+    high: 'HIGH',
+  };
+  
+  return WAVEFORM_DETAIL_PRESET[qualityMap[quality]];
+};
+
+/**
+ * Get max pixel width based on quality setting
+ */
+export const getMaxPixelWidthForQuality = (quality?: "low" | "medium" | "high"): number => {
+  const config = getActiveConfig(quality);
+  return config.maxPixelWidth;
+};
+
+// Get active configuration (default fallback)
 const activeConfig = WAVEFORM_DETAIL_PRESET[ACTIVE_WAVEFORM_PRESET];
 
 /**
@@ -147,13 +176,13 @@ export const VIEWPORT_CULLING = {
    * 
    * Recommended: 0.5-0.8
    */
-  VISIBLE_RATIO_THRESHOLD: 0.7,
+  VISIBLE_RATIO_THRESHOLD: 0.5,
 
   /**
    * Minimum peak count to consider culling
    * Below this, culling overhead isn't worth it
    */
-  MIN_PEAK_COUNT: 1000,
+  MIN_PEAK_COUNT: 500,
 
   /**
    * Buffer percentage for viewport culling (0.0 - 1.0)
@@ -228,10 +257,10 @@ export const estimateWaveformMemoryUsage = (): number => {
   const level3Samples = MAX_WAVEFORM_PIXEL_WIDTH * 2;
 
   const totalSamples = level0Samples + level1Samples + level2Samples + level3Samples;
-  
+
   // Each sample is 2 floats (min/max), each float is 4 bytes
   const bytesPerSample = 2 * 4;
   const totalBytes = totalSamples * bytesPerSample;
-  
+
   return totalBytes / (1024 * 1024); // Convert to MB
 };

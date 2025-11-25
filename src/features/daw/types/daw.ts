@@ -51,6 +51,7 @@ export interface AudioRegion extends BaseRegion {
   type: 'audio';
   audioBuffer?: AudioBuffer;
   audioUrl?: string; // Blob URL for the recorded audio
+  audioBlob?: Blob; // Original recorded blob (preserves opus/webm format)
   trimStart?: number; // Trim offset from start in beats
   originalLength?: number; // Original recording length before any trim
   gain?: number; // Gain in dB (-24 to +24)

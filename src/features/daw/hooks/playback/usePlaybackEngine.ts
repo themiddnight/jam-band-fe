@@ -10,6 +10,7 @@ import { scheduleMidiRegionPlayback, type ScheduledMidiPlayback } from '../../ut
 import { useProjectStore } from '../../stores/projectStore';
 import { useRegionStore } from '../../stores/regionStore';
 import { useTrackStore } from '../../stores/trackStore';
+import { usePerformanceStore } from '../../stores/performanceStore';
 import type { Track } from '../../types/daw';
 
 const buildSchedulingTrackMeta = (sourceTracks: Track[]) =>
@@ -93,7 +94,10 @@ export const usePlaybackEngine = () => {
   const ensureToneReady = useCallback(async () => {
     if (!toneConfiguredRef.current) {
       try {
-        Tone.context.lookAhead = 0.1;
+        // Get lookahead from performance settings
+        const audioLookahead = usePerformanceStore.getState().settings.audioLookahead;
+        Tone.context.lookAhead = audioLookahead;
+        console.log(`🎵 Audio lookahead set to ${audioLookahead}s`);
         toneConfiguredRef.current = true;
       } catch (error) {
         console.warn('Could not configure Tone.js context:', error);
@@ -292,5 +296,30 @@ export const usePlaybackEngine = () => {
       Tone.Transport.off('loop', handleLoop);
     };
   }, [loop.enabled, scheduleParts]);
+
+  // Update audio lookahead when performance settings change
+  useEffect(() => {
+    const audioLookahead = usePerformanceStore.getState().settings.audioLookahead;
+    try {
+      Tone.context.lookAhead = audioLookahead;
+      console.log(`🎵 Audio lookahead updated to ${audioLookahead}s`);
+    } catch (error) {
+      console.warn('Could not update Tone.js lookahead:', error);
+    }
+  }, []);
+
+  // Subscribe to performance settings changes
+  useEffect(() => {
+    const unsubscribe = usePerformanceStore.subscribe((state) => {
+      try {
+        Tone.context.lookAhead = state.settings.audioLookahead;
+        console.log(`🎵 Audio lookahead updated to ${state.settings.audioLookahead}s`);
+      } catch (error) {
+        console.warn('Could not update Tone.js lookahead:', error);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
 };
 

@@ -109,6 +109,25 @@ const EFFECT_PARAMETER_NAME_MAP: Record<string, Record<string, string>> = {
     depth: "depth",
     dry_wet: "wetLevel",
   },
+  graphiceq: {
+    low_cut: "lowCut",
+    p1_freq: "p1Freq",
+    p2_freq: "p2Freq",
+    p3_freq: "p3Freq",
+    p4_freq: "p4Freq",
+    p5_freq: "p5Freq",
+    high_cut: "highCut",
+    p1_q: "p1Q",
+    p2_q: "p2Q",
+    p3_q: "p3Q",
+    p4_q: "p4Q",
+    p5_q: "p5Q",
+    p1_vol: "p1Vol",
+    p2_vol: "p2Vol",
+    p3_vol: "p3Vol",
+    p4_vol: "p4Vol",
+    p5_vol: "p5Vol",
+  },
 };
 
 const normalizeParamName = (name: string): string =>
@@ -131,6 +150,7 @@ export enum EffectType {
   STEREOWIDENER = "stereowidener",
   TREMOLO = "tremolo",
   VIBRATO = "vibrato",
+  GRAPHICEQ = "graphiceq",
 }
 
 // Effect Parameter Interface
@@ -216,10 +236,10 @@ export class EffectsFactory {
     try {
       console.log("[Effects] Setting Tone.js context to match effects context...");
       Tone.setContext(audioContext);
-      
+
       // Wait a bit for context to be set
       await new Promise(resolve => setTimeout(resolve, 100));
-      
+
       // Start Tone.js to enable all Tone effects
       console.log("[Effects] Starting Tone.js...");
       await Tone.start();
@@ -244,7 +264,7 @@ export class EffectsFactory {
       // Connect dry path
       inputGain.connect(dryGain);
       dryGain.connect(outputGain);
-      
+
       // Connect wet path through Tone effect
       // Try different connection methods based on Tone.js version
       if (toneEffect.input?.input) {
@@ -258,7 +278,7 @@ export class EffectsFactory {
       } else {
         throw new Error("Cannot determine Tone.js input/output structure");
       }
-      
+
       wetGain.connect(outputGain);
       console.log("[Effects] Tone effect connected successfully");
     } catch (error) {
@@ -317,6 +337,8 @@ export class EffectsFactory {
         return this.createTremoloEffect(id);
       case EffectType.VIBRATO:
         return this.createVibratoEffect(id);
+      case EffectType.GRAPHICEQ:
+        return this.createGraphicEQEffect(id);
       default:
         console.warn(`Effect type ${type} not implemented yet`);
         return null;
@@ -342,11 +364,11 @@ export class EffectsFactory {
   private static createReverbEffect(id?: string): AudioEffect {
     const context = this.context!;
     // Create Tone Reverb with reasonable defaults
-    const reverb = new Tone.Reverb({ 
+    const reverb = new Tone.Reverb({
       decay: 2,
       wet: 0.3
     });
-    
+
     // Properly connect to Tone.js nodes
     // Tone.js effects have special .input and .output properties
     const inputNode = reverb.input as any;
@@ -458,7 +480,7 @@ export class EffectsFactory {
 
   private static createDelayEffect(id?: string): AudioEffect {
     const context = this.context!;
-    
+
     // Create native Web Audio nodes for delay effect
     const inputGain = context.createGain();
     const delayNode = context.createDelay(1.0);
@@ -466,13 +488,13 @@ export class EffectsFactory {
     const wetGain = context.createGain();
     const dryGain = context.createGain();
     const outputGain = context.createGain();
-    
+
     // Set initial values
     delayNode.delayTime.value = 0.25;
     feedbackGain.gain.value = 0.3;
     wetGain.gain.value = 0.3;
     dryGain.gain.value = 0.7;
-    
+
     // Connect delay network
     inputGain.connect(delayNode);
     inputGain.connect(dryGain);
@@ -481,7 +503,7 @@ export class EffectsFactory {
     delayNode.connect(wetGain);
     wetGain.connect(outputGain);
     dryGain.connect(outputGain);
-    
+
     const inputNode = inputGain;
     const outputNode = outputGain;
 
@@ -555,9 +577,8 @@ export class EffectsFactory {
         this.enabled = true;
         // Restore wet/dry levels from parameters
         const wetLevel = this.parameters.get("wetLevel")?.value || 0.5;
-        const dryLevel = this.parameters.get("dryLevel")?.value || 0.5;
         wetGain.gain.setValueAtTime(wetLevel, context.currentTime);
-        dryGain.gain.setValueAtTime(dryLevel, context.currentTime);
+        dryGain.gain.setValueAtTime(1 - wetLevel, context.currentTime);
       },
 
       disable(): void {
@@ -589,24 +610,24 @@ export class EffectsFactory {
       attack: 0.003,
       release: 0.25,
     });
-    
+
     // Create dry/wet mixing nodes
     const inputGain = context.createGain();
     const wetGain = context.createGain();
     const dryGain = context.createGain();
     const outputGain = context.createGain();
-    
+
     // Set initial dry/wet balance (100% wet for compressor)
     wetGain.gain.value = 1;
     dryGain.gain.value = 0;
-    
+
     // Connect the network
     inputGain.connect(compressor.input as any);
     inputGain.connect(dryGain);
     (compressor.output as any).connect(wetGain);
     wetGain.connect(outputGain);
     dryGain.connect(outputGain);
-    
+
     const inputNode = inputGain;
     const outputNode = outputGain;
 
@@ -696,10 +717,17 @@ export class EffectsFactory {
 
       enable(): void {
         this.enabled = true;
+        // Restore wet/dry balance
+        const wetLevel = this.parameters.get("wetLevel")?.value || 1;
+        wetGain.gain.setValueAtTime(wetLevel, context.currentTime);
+        dryGain.gain.setValueAtTime(1 - wetLevel, context.currentTime);
       },
 
       disable(): void {
         this.enabled = false;
+        // Bypass: full dry, no wet signal
+        wetGain.gain.setValueAtTime(0, context.currentTime);
+        dryGain.gain.setValueAtTime(1, context.currentTime);
       },
 
       cleanup(): void {
@@ -718,23 +746,23 @@ export class EffectsFactory {
 
   private static createFilterEffect(id?: string): AudioEffect {
     const context = this.context!;
-  const filter = new Tone.Filter({ type: "lowpass", frequency: 1000, Q: 1 });
+    const filter = new Tone.Filter({ type: "lowpass", frequency: 1000, Q: 1 });
 
-  // Create dry/wet mixing nodes
-  const inputGain = context.createGain();
-  const wetGain = context.createGain();
-  const dryGain = context.createGain();
-  const outputGain = context.createGain();
+    // Create dry/wet mixing nodes
+    const inputGain = context.createGain();
+    const wetGain = context.createGain();
+    const dryGain = context.createGain();
+    const outputGain = context.createGain();
 
-  // Set initial dry/wet balance (100% wet for filter)
-  wetGain.gain.value = 1;
-  dryGain.gain.value = 0;
+    // Set initial dry/wet balance (100% wet for filter)
+    wetGain.gain.value = 1;
+    dryGain.gain.value = 0;
 
-  // Connect the network using Tone-aware helper to avoid context mismatches
-  this.connectToneEffect(inputGain, filter, wetGain, dryGain, outputGain);
+    // Connect the network using Tone-aware helper to avoid context mismatches
+    this.connectToneEffect(inputGain, filter, wetGain, dryGain, outputGain);
 
-  const inputNode = inputGain;
-  const outputNode = outputGain;
+    const inputNode = inputGain;
+    const outputNode = outputGain;
 
     const parameters = new Map<string, EffectParameter>();
     parameters.set("frequency", {
@@ -746,7 +774,7 @@ export class EffectsFactory {
       curve: "logarithmic",
     });
     parameters.set("Q", {
-      name: "Resonance",  
+      name: "Resonance",
       value: filter.Q.value as number,
       min: 0.1,
       max: 30,
@@ -959,12 +987,19 @@ export class EffectsFactory {
         this.enabled = true;
         console.log("[Effects] Enabling AutoFilter, starting...");
         autoFilter.start();
+        // Also restore wet/dry balance
+        const wetLevel = this.parameters.get("wetLevel")?.value || 0.5;
+        wetGain.gain.setValueAtTime(wetLevel, context.currentTime);
+        dryGain.gain.setValueAtTime(1 - wetLevel, context.currentTime);
         console.log("[Effects] AutoFilter started");
       },
 
       disable(): void {
         this.enabled = false;
         autoFilter.stop();
+        // Also bypass via wet/dry routing
+        wetGain.gain.setValueAtTime(0, context.currentTime);
+        dryGain.gain.setValueAtTime(1, context.currentTime);
       },
 
       cleanup(): void {
@@ -993,7 +1028,7 @@ export class EffectsFactory {
     const wetGain = context.createGain();
     const dryGain = context.createGain();
     const outputGain = context.createGain();
-    
+
     // Set initial dry/wet balance
     wetGain.gain.value = 0.5;
     dryGain.gain.value = 0.5;
@@ -1068,11 +1103,18 @@ export class EffectsFactory {
       enable(): void {
         this.enabled = true;
         autoPanner.start();
+        // Also restore wet/dry balance
+        const wetLevel = this.parameters.get("wetLevel")?.value || 0.5;
+        wetGain.gain.setValueAtTime(wetLevel, context.currentTime);
+        dryGain.gain.setValueAtTime(1 - wetLevel, context.currentTime);
       },
 
       disable(): void {
         this.enabled = false;
         autoPanner.stop();
+        // Also bypass via wet/dry routing
+        wetGain.gain.setValueAtTime(0, context.currentTime);
+        dryGain.gain.setValueAtTime(1, context.currentTime);
       },
 
       cleanup(): void {
@@ -1198,10 +1240,17 @@ export class EffectsFactory {
 
       enable(): void {
         this.enabled = true;
+        // Restore wet/dry balance
+        const wetLevel = this.parameters.get("wetLevel")?.value || 0.5;
+        wetGain.gain.setValueAtTime(wetLevel, context.currentTime);
+        dryGain.gain.setValueAtTime(1 - wetLevel, context.currentTime);
       },
 
       disable(): void {
         this.enabled = false;
+        // Bypass: full dry, no wet signal
+        wetGain.gain.setValueAtTime(0, context.currentTime);
+        dryGain.gain.setValueAtTime(1, context.currentTime);
       },
 
       cleanup(): void {
@@ -1280,10 +1329,10 @@ export class EffectsFactory {
               (bitCrusher.output as any).disconnect();
               inputGain.disconnect(bitCrusher.input as any);
               (bitCrusher as any).dispose?.();
-              
+
               // Create new BitCrusher with new bits value
               bitCrusher = new Tone.BitCrusher(Math.round(v));
-              
+
               // Reconnect using the helper
               EffectsFactory.connectToneEffect(inputGain, bitCrusher, wetGain, dryGain, outputGain);
             } catch (error) {
@@ -1303,10 +1352,17 @@ export class EffectsFactory {
 
       enable(): void {
         this.enabled = true;
+        // Restore wet/dry balance
+        const wetLevel = this.parameters.get("wetLevel")?.value || 0.5;
+        wetGain.gain.setValueAtTime(wetLevel, context.currentTime);
+        dryGain.gain.setValueAtTime(1 - wetLevel, context.currentTime);
       },
 
       disable(): void {
         this.enabled = false;
+        // Bypass: full dry, no wet signal
+        wetGain.gain.setValueAtTime(0, context.currentTime);
+        dryGain.gain.setValueAtTime(1, context.currentTime);
       },
 
       cleanup(): void {
@@ -1339,7 +1395,7 @@ export class EffectsFactory {
     const wetGain = context.createGain();
     const dryGain = context.createGain();
     const outputGain = context.createGain();
-    
+
     // Set initial dry/wet balance
     wetGain.gain.value = 0.5;
     dryGain.gain.value = 0.5;
@@ -1435,12 +1491,19 @@ export class EffectsFactory {
         this.enabled = true;
         console.log("[Effects] Enabling Chorus, starting...");
         chorus.start();
+        // Also restore wet/dry balance
+        const wetLevel = this.parameters.get("wetLevel")?.value || 0.5;
+        wetGain.gain.setValueAtTime(wetLevel, context.currentTime);
+        dryGain.gain.setValueAtTime(1 - wetLevel, context.currentTime);
         console.log("[Effects] Chorus started");
       },
 
       disable(): void {
         this.enabled = false;
         chorus.stop();
+        // Also bypass via wet/dry routing
+        wetGain.gain.setValueAtTime(0, context.currentTime);
+        dryGain.gain.setValueAtTime(1, context.currentTime);
       },
 
       cleanup(): void {
@@ -1547,10 +1610,17 @@ export class EffectsFactory {
 
       enable(): void {
         this.enabled = true;
+        // Restore wet/dry balance
+        const wetLevel = this.parameters.get("wetLevel")?.value || 0.5;
+        wetGain.gain.setValueAtTime(wetLevel, context.currentTime);
+        dryGain.gain.setValueAtTime(1 - wetLevel, context.currentTime);
       },
 
       disable(): void {
         this.enabled = false;
+        // Bypass: full dry, no wet signal
+        wetGain.gain.setValueAtTime(0, context.currentTime);
+        dryGain.gain.setValueAtTime(1, context.currentTime);
       },
 
       cleanup(): void {
@@ -1724,7 +1794,7 @@ export class EffectsFactory {
     const wetGain = context.createGain();
     const dryGain = context.createGain();
     const outputGain = context.createGain();
-    
+
     // Set initial dry/wet balance
     wetGain.gain.value = 0.5;
     dryGain.gain.value = 0.5;
@@ -1798,10 +1868,17 @@ export class EffectsFactory {
 
       enable(): void {
         this.enabled = true;
+        // Restore wet/dry balance
+        const wetLevel = this.parameters.get("wetLevel")?.value || 0.5;
+        wetGain.gain.setValueAtTime(wetLevel, context.currentTime);
+        dryGain.gain.setValueAtTime(1 - wetLevel, context.currentTime);
       },
 
       disable(): void {
         this.enabled = false;
+        // Bypass: full dry, no wet signal
+        wetGain.gain.setValueAtTime(0, context.currentTime);
+        dryGain.gain.setValueAtTime(1, context.currentTime);
       },
 
       cleanup(): void {
@@ -1833,7 +1910,7 @@ export class EffectsFactory {
     const merger = context.createChannelMerger(2);
     const leftDelay = context.createDelay(0.1);
     const rightDelay = context.createDelay(0.1);
-    
+
     // Set initial dry/wet balance
     wetGain.gain.value = 0.5;
     dryGain.gain.value = 0.5;
@@ -1848,22 +1925,22 @@ export class EffectsFactory {
       inputGain.connect(splitter);
       splitter.connect(leftDelay, 0, 0);
       splitter.connect(rightDelay, 0, 0);
-      
+
       // Merge delays back to stereo for widener processing
       leftDelay.connect(merger, 0, 0);
       rightDelay.connect(merger, 0, 1);
-      
+
       // Process through stereo widener
       merger.connect(stereoWidener.input as any);
       (stereoWidener.output as any).connect(wetGain);
-      
+
       // Dry path with stereo split
       inputGain.connect(dryGain);
-      
+
       // Mix dry and wet to output
       dryGain.connect(outputGain);
       wetGain.connect(outputGain);
-      
+
       console.log("[Effects] StereoWidener connected with mono-to-stereo enhancement");
     } catch (error) {
       console.error("[Effects] Failed to connect StereoWidener with enhancement:", error);
@@ -1926,10 +2003,17 @@ export class EffectsFactory {
 
       enable(): void {
         this.enabled = true;
+        // Restore wet/dry balance
+        const wetLevel = this.parameters.get("wetLevel")?.value || 0.5;
+        wetGain.gain.setValueAtTime(wetLevel, context.currentTime);
+        dryGain.gain.setValueAtTime(1 - wetLevel, context.currentTime);
       },
 
       disable(): void {
         this.enabled = false;
+        // Bypass: full dry, no wet signal
+        wetGain.gain.setValueAtTime(0, context.currentTime);
+        dryGain.gain.setValueAtTime(1, context.currentTime);
       },
 
       cleanup(): void {
@@ -2046,11 +2130,18 @@ export class EffectsFactory {
       enable(): void {
         this.enabled = true;
         tremolo.start();
+        // Also restore wet/dry balance
+        const wetLevel = this.parameters.get("wetLevel")?.value || 0.5;
+        wetGain.gain.setValueAtTime(wetLevel, context.currentTime);
+        dryGain.gain.setValueAtTime(1 - wetLevel, context.currentTime);
       },
 
       disable(): void {
         this.enabled = false;
         tremolo.stop();
+        // Also bypass via wet/dry routing
+        wetGain.gain.setValueAtTime(0, context.currentTime);
+        dryGain.gain.setValueAtTime(1, context.currentTime);
       },
 
       cleanup(): void {
@@ -2154,18 +2245,358 @@ export class EffectsFactory {
 
       enable(): void {
         this.enabled = true;
-        // Vibrato doesn't have start/stop methods
+        // Restore wet/dry balance
+        const wetLevel = this.parameters.get("wetLevel")?.value || 0.5;
+        wetGain.gain.setValueAtTime(wetLevel, context.currentTime);
+        dryGain.gain.setValueAtTime(1 - wetLevel, context.currentTime);
       },
 
       disable(): void {
         this.enabled = false;
-        // Vibrato doesn't have start/stop methods
+        // Bypass: full dry, no wet signal
+        wetGain.gain.setValueAtTime(0, context.currentTime);
+        dryGain.gain.setValueAtTime(1, context.currentTime);
       },
 
       cleanup(): void {
         try {
           (vibrato as any).dispose?.();
           inputGain.disconnect();
+          wetGain.disconnect();
+          dryGain.disconnect();
+          outputGain.disconnect();
+        } catch {
+          // ignore
+        }
+      },
+    };
+  }
+
+  private static createGraphicEQEffect(id?: string): AudioEffect {
+    const context = this.context!;
+    
+    // Create 5-band parametric EQ with low/high cut filters
+    const lowCutFilter = context.createBiquadFilter();
+    lowCutFilter.type = "highpass";
+    lowCutFilter.frequency.value = 20;
+    lowCutFilter.Q.value = 0.707; // Butterworth response
+    
+    const band1 = context.createBiquadFilter();
+    band1.type = "peaking";
+    band1.frequency.value = 100;
+    band1.Q.value = 1;
+    band1.gain.value = 0;
+    
+    const band2 = context.createBiquadFilter();
+    band2.type = "peaking";
+    band2.frequency.value = 500;
+    band2.Q.value = 1;
+    band2.gain.value = 0;
+    
+    const band3 = context.createBiquadFilter();
+    band3.type = "peaking";
+    band3.frequency.value = 2000;
+    band3.Q.value = 1;
+    band3.gain.value = 0;
+    
+    const band4 = context.createBiquadFilter();
+    band4.type = "peaking";
+    band4.frequency.value = 5000;
+    band4.Q.value = 1;
+    band4.gain.value = 0;
+    
+    const band5 = context.createBiquadFilter();
+    band5.type = "peaking";
+    band5.frequency.value = 10000;
+    band5.Q.value = 1;
+    band5.gain.value = 0;
+    
+    const highCutFilter = context.createBiquadFilter();
+    highCutFilter.type = "lowpass";
+    highCutFilter.frequency.value = 20000;
+    highCutFilter.Q.value = 0.707; // Butterworth response
+    
+    // Create input/output nodes with dry/wet for bypass
+    const inputGain = context.createGain();
+    const wetGain = context.createGain();
+    const dryGain = context.createGain();
+    const outputGain = context.createGain();
+    
+    // Set initial gains (100% wet, 0% dry for normal operation)
+    wetGain.gain.value = 1;
+    dryGain.gain.value = 0;
+    
+    // Chain all filters together (wet path)
+    inputGain.connect(lowCutFilter);
+    lowCutFilter.connect(band1);
+    band1.connect(band2);
+    band2.connect(band3);
+    band3.connect(band4);
+    band4.connect(band5);
+    band5.connect(highCutFilter);
+    highCutFilter.connect(wetGain);
+    
+    // Dry path (for bypass)
+    inputGain.connect(dryGain);
+    
+    // Mix wet and dry to output
+    wetGain.connect(outputGain);
+    dryGain.connect(outputGain);
+    
+    const parameters = new Map<string, EffectParameter>();
+    parameters.set("lowCut", {
+      name: "Low Cut",
+      value: 20,
+      min: 20,
+      max: 500,
+      unit: "Hz",
+      curve: "logarithmic",
+    });
+    parameters.set("lowCutQ", {
+      name: "Low Cut Q",
+      value: 0.707,
+      min: 0.1,
+      max: 10,
+      unit: "",
+    });
+    parameters.set("p1Freq", {
+      name: "P1 Freq",
+      value: 100,
+      min: 20,
+      max: 20000,
+      unit: "Hz",
+      curve: "logarithmic",
+    });
+    parameters.set("p2Freq", {
+      name: "P2 Freq",
+      value: 500,
+      min: 20,
+      max: 20000,
+      unit: "Hz",
+      curve: "logarithmic",
+    });
+    parameters.set("p3Freq", {
+      name: "P3 Freq",
+      value: 2000,
+      min: 20,
+      max: 20000,
+      unit: "Hz",
+      curve: "logarithmic",
+    });
+    parameters.set("p4Freq", {
+      name: "P4 Freq",
+      value: 5000,
+      min: 20,
+      max: 20000,
+      unit: "Hz",
+      curve: "logarithmic",
+    });
+    parameters.set("p5Freq", {
+      name: "P5 Freq",
+      value: 10000,
+      min: 20,
+      max: 20000,
+      unit: "Hz",
+      curve: "logarithmic",
+    });
+    parameters.set("highCut", {
+      name: "High Cut",
+      value: 20000,
+      min: 1000,
+      max: 20000,
+      unit: "Hz",
+      curve: "logarithmic",
+    });
+    parameters.set("highCutQ", {
+      name: "High Cut Q",
+      value: 0.707,
+      min: 0.1,
+      max: 10,
+      unit: "",
+    });
+    parameters.set("p1Q", {
+      name: "P1 Q",
+      value: 1,
+      min: 0.1,
+      max: 10,
+      unit: "",
+    });
+    parameters.set("p2Q", {
+      name: "P2 Q",
+      value: 1,
+      min: 0.1,
+      max: 10,
+      unit: "",
+    });
+    parameters.set("p3Q", {
+      name: "P3 Q",
+      value: 1,
+      min: 0.1,
+      max: 10,
+      unit: "",
+    });
+    parameters.set("p4Q", {
+      name: "P4 Q",
+      value: 1,
+      min: 0.1,
+      max: 10,
+      unit: "",
+    });
+    parameters.set("p5Q", {
+      name: "P5 Q",
+      value: 1,
+      min: 0.1,
+      max: 10,
+      unit: "",
+    });
+    parameters.set("p1Vol", {
+      name: "P1 Vol",
+      value: 0,
+      min: -24,
+      max: 24,
+      unit: "dB",
+    });
+    parameters.set("p2Vol", {
+      name: "P2 Vol",
+      value: 0,
+      min: -24,
+      max: 24,
+      unit: "dB",
+    });
+    parameters.set("p3Vol", {
+      name: "P3 Vol",
+      value: 0,
+      min: -24,
+      max: 24,
+      unit: "dB",
+    });
+    parameters.set("p4Vol", {
+      name: "P4 Vol",
+      value: 0,
+      min: -24,
+      max: 24,
+      unit: "dB",
+    });
+    parameters.set("p5Vol", {
+      name: "P5 Vol",
+      value: 0,
+      min: -24,
+      max: 24,
+      unit: "dB",
+    });
+    
+    return {
+      id: id || `graphiceq_${Date.now()}`,
+      type: EffectType.GRAPHICEQ,
+      name: "Graphic EQ",
+      enabled: true,
+      parameters,
+      inputNode: inputGain,
+      outputNode: outputGain,
+      wetGainNode: wetGain,
+      dryGainNode: dryGain,
+      bypass: false,
+      
+      process(input: AudioNode): AudioNode {
+        input.connect(this.inputNode);
+        return this.outputNode;
+      },
+      
+      setParameter(name: string, value: number): void {
+        const param = this.parameters.get(name);
+        if (!param) return;
+        const v = Math.max(param.min, Math.min(param.max, value));
+        param.value = v;
+        
+        switch (name) {
+          case "lowCut":
+            lowCutFilter.frequency.setValueAtTime(v, context.currentTime);
+            break;
+          case "lowCutQ":
+            lowCutFilter.Q.setValueAtTime(v, context.currentTime);
+            break;
+          case "p1Freq":
+            band1.frequency.setValueAtTime(v, context.currentTime);
+            break;
+          case "p2Freq":
+            band2.frequency.setValueAtTime(v, context.currentTime);
+            break;
+          case "p3Freq":
+            band3.frequency.setValueAtTime(v, context.currentTime);
+            break;
+          case "p4Freq":
+            band4.frequency.setValueAtTime(v, context.currentTime);
+            break;
+          case "p5Freq":
+            band5.frequency.setValueAtTime(v, context.currentTime);
+            break;
+          case "highCut":
+            highCutFilter.frequency.setValueAtTime(v, context.currentTime);
+            break;
+          case "highCutQ":
+            highCutFilter.Q.setValueAtTime(v, context.currentTime);
+            break;
+          case "p1Q":
+            band1.Q.setValueAtTime(v, context.currentTime);
+            break;
+          case "p2Q":
+            band2.Q.setValueAtTime(v, context.currentTime);
+            break;
+          case "p3Q":
+            band3.Q.setValueAtTime(v, context.currentTime);
+            break;
+          case "p4Q":
+            band4.Q.setValueAtTime(v, context.currentTime);
+            break;
+          case "p5Q":
+            band5.Q.setValueAtTime(v, context.currentTime);
+            break;
+          case "p1Vol":
+            band1.gain.setValueAtTime(v, context.currentTime);
+            break;
+          case "p2Vol":
+            band2.gain.setValueAtTime(v, context.currentTime);
+            break;
+          case "p3Vol":
+            band3.gain.setValueAtTime(v, context.currentTime);
+            break;
+          case "p4Vol":
+            band4.gain.setValueAtTime(v, context.currentTime);
+            break;
+          case "p5Vol":
+            band5.gain.setValueAtTime(v, context.currentTime);
+            break;
+        }
+      },
+      
+      getParameter(name: string): number | undefined {
+        return this.parameters.get(name)?.value;
+      },
+      
+      enable(): void {
+        this.enabled = true;
+        // Enable: 100% wet, 0% dry
+        wetGain.gain.setValueAtTime(1, context.currentTime);
+        dryGain.gain.setValueAtTime(0, context.currentTime);
+      },
+      
+      disable(): void {
+        this.enabled = false;
+        // Disable/Bypass: 0% wet, 100% dry
+        wetGain.gain.setValueAtTime(0, context.currentTime);
+        dryGain.gain.setValueAtTime(1, context.currentTime);
+      },
+      
+      cleanup(): void {
+        try {
+          inputGain.disconnect();
+          lowCutFilter.disconnect();
+          band1.disconnect();
+          band2.disconnect();
+          band3.disconnect();
+          band4.disconnect();
+          band5.disconnect();
+          highCutFilter.disconnect();
           wetGain.disconnect();
           dryGain.disconnect();
           outputGain.disconnect();
@@ -2238,47 +2669,47 @@ export class MixerEngine {
   private createMonoToStereoConverter(): { input: GainNode; output: GainNode } {
     // Input gain node
     const inputGain = this.context.createGain();
-    
+
     // Create stereo splitter and merger
     const splitter = this.context.createChannelSplitter(2);
     const merger = this.context.createChannelMerger(2);
-    
+
     // Create subtle delays for Haas effect (psychoacoustic stereo widening)
     const leftDelay = this.context.createDelay(0.1);
     const rightDelay = this.context.createDelay(0.1);
-    
+
     // Set subtle delays (1-2ms creates stereo width without noticeable delay)
     leftDelay.delayTime.value = 0.0005;  // 0.5ms on left
     rightDelay.delayTime.value = 0.0015; // 1.5ms on right
-    
+
     // Create slight gain differences for additional width
     const leftGain = this.context.createGain();
     const rightGain = this.context.createGain();
     leftGain.gain.value = 1.0;   // Full volume left
     rightGain.gain.value = 0.95; // Slightly quieter right
-    
+
     // Output gain node
     const outputGain = this.context.createGain();
-    
+
     // Connect the chain:
     // Mono input -> split to two identical channels
     inputGain.connect(splitter);
-    
+
     // Left channel path: split[0] -> leftDelay -> leftGain -> merger[0]
     splitter.connect(leftDelay, 0);
     leftDelay.connect(leftGain);
     leftGain.connect(merger, 0, 0);
-    
+
     // Right channel path: split[0] -> rightDelay -> rightGain -> merger[1]
     splitter.connect(rightDelay, 0);
     rightDelay.connect(rightGain);
     rightGain.connect(merger, 0, 1);
-    
+
     // Merge to stereo output
     merger.connect(outputGain);
-    
+
     console.log('[MixerEngine] Created mono-to-stereo converter with Haas effect');
-    
+
     return { input: inputGain, output: outputGain };
   }
 
@@ -2293,7 +2724,7 @@ export class MixerEngine {
     // Create mono-to-stereo converter for proper stereo effect processing
     // This ensures all instruments (which are mono) get converted to true stereo
     const monoToStereo = this.createMonoToStereoConverter();
-    
+
     // Connect input to mono-to-stereo converter
     inputGain.connect(monoToStereo.input);
 
@@ -2485,7 +2916,7 @@ export class MixerEngine {
 
     // Remove effect from chain
     const [removedEffect] = channel.effectChain.splice(effectIndex, 1);
-    
+
     // Clean up the removed effect
     try {
       removedEffect.cleanup();
@@ -2506,7 +2937,7 @@ export class MixerEngine {
     try {
       // Disconnect all current connections
       channel.inputGain.disconnect();
-      
+
       // If no effects, connect directly to toneChannel
       if (channel.effectChain.length === 0) {
         try {
@@ -2520,7 +2951,7 @@ export class MixerEngine {
 
       // Chain nodes: inputGain -> effect1 -> effect2 -> ... -> toneChannel
       let current: any = channel.inputGain;
-      
+
       for (const effect of channel.effectChain) {
         try {
           // Use Tone.connect for Tone.js effects
@@ -2530,7 +2961,7 @@ export class MixerEngine {
           console.warn('Failed to connect effect in chain:', error);
         }
       }
-      
+
       // Connect the final output to the tone channel
       try {
         // Use Tone.connect for better compatibility with Tone.js nodes
@@ -2577,8 +3008,8 @@ export class MixerEngine {
     try {
       channel.toneChannel?.volume.setValueAtTime(db, this.context.currentTime);
     } catch {
-    // Fallback: adjust preGain as last resort
-    channel.inputGain.gain.setValueAtTime(clamped, this.context.currentTime);
+      // Fallback: adjust preGain as last resort
+      channel.inputGain.gain.setValueAtTime(clamped, this.context.currentTime);
     }
   }
 
@@ -2595,8 +3026,8 @@ export class MixerEngine {
       const lin = Math.pow(10, db / 20);
       return lin;
     }
-  // Fallback to preGain (approximate)
-  return channel.inputGain.gain.value;
+    // Fallback to preGain (approximate)
+    return channel.inputGain.gain.value;
   }
 
   /**
@@ -2615,7 +3046,7 @@ export class MixerEngine {
       }
       const rms = Math.sqrt(sum / values.length);
       return Math.max(0, Math.min(1, rms));
-  } catch {
+    } catch {
       return null;
     }
   }
@@ -2629,9 +3060,9 @@ export class MixerEngine {
       channel.effectChain.forEach((effect) =>
         EffectsFactory.releaseEffect(effect),
       );
-  try { channel.inputGain.disconnect(); } catch { /* ignore */ }
-  try { (channel.toneChannel as any)?.dispose?.(); } catch { /* ignore */ }
-  try { (channel.analyser as any)?.dispose?.(); } catch { /* ignore */ }
+      try { channel.inputGain.disconnect(); } catch { /* ignore */ }
+      try { (channel.toneChannel as any)?.dispose?.(); } catch { /* ignore */ }
+      try { (channel.analyser as any)?.dispose?.(); } catch { /* ignore */ }
     });
 
     // Cleanup aux buses
@@ -2648,7 +3079,7 @@ export class MixerEngine {
       );
       this.masterSection.inputGain.disconnect();
       this.masterSection.outputGain.disconnect();
-  this.masterSection.analyser.disconnect();
+      this.masterSection.analyser.disconnect();
     }
 
     this.userChannels.clear();

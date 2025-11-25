@@ -25,7 +25,14 @@ export async function saveProjectAsZip(projectName: string): Promise<void> {
       tracks: projectData.tracks.length,
       regions: projectData.regions.length,
       effectChains: Object.keys(projectData.effectChains).length,
+      synthStates: Object.keys(projectData.synthStates || {}).length,
+      markers: projectData.markers?.length || 0,
     });
+
+    // Validate serialized data
+    if (!projectData.tracks || !projectData.regions) {
+      throw new Error('Invalid project data: missing tracks or regions');
+    }
 
     // 2. Extract audio files from regions
     console.log('🎵 Extracting audio files...');
@@ -36,10 +43,19 @@ export async function saveProjectAsZip(projectName: string): Promise<void> {
     console.log('📦 Creating ZIP file...');
     const zip = new JSZip();
 
-    // Add project.json
+    // Add project.json with validation
     console.log('📄 Adding project.json to ZIP...');
-    const projectJson = JSON.stringify(projectData, null, 2);
-    console.log('✅ Project JSON size:', (projectJson.length / 1024).toFixed(2), 'KB');
+    let projectJson: string;
+    try {
+      projectJson = JSON.stringify(projectData, null, 2);
+      // Validate it can be parsed back
+      JSON.parse(projectJson);
+      console.log('✅ Project JSON validated, size:', (projectJson.length / 1024).toFixed(2), 'KB');
+    } catch (jsonError) {
+      console.error('❌ Failed to serialize project to JSON:', jsonError);
+      throw new Error(`Invalid project data - cannot serialize to JSON: ${jsonError}`);
+    }
+    
     zip.file('project.json', projectJson);
 
     // Add audio files
@@ -48,20 +64,27 @@ export async function saveProjectAsZip(projectName: string): Promise<void> {
       const audioFolder = zip.folder('audio');
       if (audioFolder) {
         for (const audioFile of audioFiles) {
-          console.log(`  Adding ${audioFile.fileName}...`);
+          console.log(`  Adding ${audioFile.fileName} (${(audioFile.blob.size / 1024).toFixed(2)} KB)...`);
           audioFolder.file(audioFile.fileName, audioFile.blob);
         }
       }
     }
 
-    // 4. Generate ZIP blob
+    // 4. Generate ZIP blob with progress tracking
     console.log('🗜️ Compressing ZIP file...');
     const zipBlob = await zip.generateAsync({
       type: 'blob',
       compression: 'DEFLATE',
       compressionOptions: { level: 6 },
+    }, (metadata) => {
+      console.log(`  Compression progress: ${metadata.percent.toFixed(1)}%`);
     });
     console.log('✅ ZIP generated:', (zipBlob.size / 1024).toFixed(2), 'KB');
+
+    // Validate ZIP size
+    if (zipBlob.size === 0) {
+      throw new Error('Generated ZIP file is empty');
+    }
 
     // 5. Download the file
     const fileName = `${sanitizeFileName(projectName)}.collab`;
@@ -70,8 +93,12 @@ export async function saveProjectAsZip(projectName: string): Promise<void> {
 
     console.log(`✅ Project "${projectName}" saved successfully`);
   } catch (error) {
-    console.error('Failed to save project:', error);
-    throw new Error(`Failed to save project: ${error}`);
+    console.error('❌ Failed to save project:', error);
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    throw new Error(`Failed to save project: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -173,39 +200,88 @@ export async function saveProjectWithPicker(projectName: string): Promise<void> 
         ],
       });
 
-      // Serialize and create ZIP
-      const projectData = serializeProject(projectName);
-      const audioFiles = await extractAudioFiles(useRegionStore.getState().regions);
+      console.log('🔄 Starting project save with file picker...');
 
+      // Serialize and create ZIP
+      console.log('📝 Serializing project data...');
+      const projectData = serializeProject(projectName);
+      
+      // Validate serialized data
+      if (!projectData.tracks || !projectData.regions) {
+        throw new Error('Invalid project data: missing tracks or regions');
+      }
+      
+      console.log('✅ Project data serialized:', {
+        tracks: projectData.tracks.length,
+        regions: projectData.regions.length,
+        effectChains: Object.keys(projectData.effectChains).length,
+        synthStates: Object.keys(projectData.synthStates || {}).length,
+        markers: projectData.markers?.length || 0,
+      });
+
+      console.log('🎵 Extracting audio files...');
+      const audioFiles = await extractAudioFiles(useRegionStore.getState().regions);
+      console.log('✅ Audio files extracted:', audioFiles.length);
+
+      console.log('📦 Creating ZIP file...');
       const zip = new JSZip();
-      zip.file('project.json', JSON.stringify(projectData, null, 2));
+      
+      // Validate JSON before adding to ZIP
+      let projectJson: string;
+      try {
+        projectJson = JSON.stringify(projectData, null, 2);
+        JSON.parse(projectJson); // Validate
+        console.log('✅ Project JSON validated, size:', (projectJson.length / 1024).toFixed(2), 'KB');
+      } catch (jsonError) {
+        console.error('❌ Failed to serialize project to JSON:', jsonError);
+        throw new Error(`Invalid project data - cannot serialize to JSON: ${jsonError}`);
+      }
+      
+      zip.file('project.json', projectJson);
 
       if (audioFiles.length > 0) {
+        console.log('🎵 Adding audio files to ZIP...');
         const audioFolder = zip.folder('audio');
         if (audioFolder) {
           for (const audioFile of audioFiles) {
+            console.log(`  Adding ${audioFile.fileName} (${(audioFile.blob.size / 1024).toFixed(2)} KB)...`);
             audioFolder.file(audioFile.fileName, audioFile.blob);
           }
         }
       }
 
+      console.log('🗜️ Compressing ZIP file...');
       const zipBlob = await zip.generateAsync({
         type: 'blob',
         compression: 'DEFLATE',
         compressionOptions: { level: 6 },
+      }, (metadata) => {
+        console.log(`  Compression progress: ${metadata.percent.toFixed(1)}%`);
       });
+      console.log('✅ ZIP generated:', (zipBlob.size / 1024).toFixed(2), 'KB');
+
+      // Validate ZIP size
+      if (zipBlob.size === 0) {
+        throw new Error('Generated ZIP file is empty');
+      }
 
       // Write to file
+      console.log('💾 Writing to file...');
       const writable = await handle.createWritable();
       await writable.write(zipBlob);
       await writable.close();
 
-      console.log(`Project "${projectName}" saved successfully`);
+      console.log(`✅ Project "${projectName}" saved successfully`);
     } catch (error) {
       if ((error as Error).name === 'AbortError') {
         console.log('Save cancelled by user');
         return;
       }
+      console.error('❌ Failed to save project:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       throw error;
     }
   } else {

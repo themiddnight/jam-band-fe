@@ -30,6 +30,8 @@ export interface RegionContentProps {
     previewStarts: Record<RegionId, number>;
     previewLengths: Record<RegionId, number>;
   } | null;
+  viewportStartBeat?: number;
+  viewportEndBeat?: number;
 }
 
 export interface RegionHandlesProps {

@@ -150,6 +150,7 @@ const PianoRollComponent = () => {
   const noteScrollRef = useRef<HTMLDivElement | null>(null);
   const keyScrollRef = useRef<HTMLDivElement | null>(null);
   const laneScrollRef = useRef<HTMLDivElement | null>(null);
+  const zoomRafRef = useRef<number | null>(null);
   
   // Track viewport width for performance culling (horizontal only)
   useEffect(() => {
@@ -491,22 +492,37 @@ const PianoRollComponent = () => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         
-        const delta = -e.deltaY;
-        const zoomSpeed = 0.001;
-        const newZoom = zoom + delta * zoomSpeed;
+        // Cancel any pending zoom update
+        if (zoomRafRef.current !== null) {
+          cancelAnimationFrame(zoomRafRef.current);
+        }
+        
+        // Batch zoom updates using requestAnimationFrame
+        zoomRafRef.current = requestAnimationFrame(() => {
+          const delta = -e.deltaY;
+          const zoomSpeed = 0.001;
+          const newZoom = zoom + delta * zoomSpeed;
 
-        // Get cursor position relative to note canvas
-        const rect = noteScrollRef.current?.getBoundingClientRect();
-        const cursorX = rect ? e.clientX - rect.left : undefined;
+          // Get cursor position relative to note canvas
+          const rect = noteScrollRef.current?.getBoundingClientRect();
+          const cursorX = rect ? e.clientX - rect.left : undefined;
 
-        handleZoomChange(newZoom, cursorX);
+          handleZoomChange(newZoom, cursorX);
+          zoomRafRef.current = null;
+        });
       }
     };
 
     const noteCanvas = noteScrollRef.current;
     if (noteCanvas) {
       noteCanvas.addEventListener('wheel', handleWheel, { passive: false });
-      return () => noteCanvas.removeEventListener('wheel', handleWheel);
+      return () => {
+        noteCanvas.removeEventListener('wheel', handleWheel);
+        // Clean up any pending animation frames
+        if (zoomRafRef.current !== null) {
+          cancelAnimationFrame(zoomRafRef.current);
+        }
+      };
     }
   }, [zoom, handleZoomChange]);
   
@@ -587,6 +603,68 @@ const PianoRollComponent = () => {
     }
   }, []);
 
+  // Auto-scroll to first note or C5 when region is selected
+  const prevActiveRegionIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    // Only trigger when region changes (not on initial mount if already set)
+    if (activeRegionId && activeRegionId !== prevActiveRegionIdRef.current && midiRegion) {
+      const scrollToPosition = () => {
+        if (!noteScrollRef.current || !keyScrollRef.current) {
+          return;
+        }
+
+        // Horizontal scroll: scroll to first note or region start
+        if (midiRegion.notes.length > 0) {
+          // Find the first note (earliest start time)
+          const firstNote = midiRegion.notes.reduce((earliest, note) => 
+            note.start < earliest.start ? note : earliest
+          );
+          
+          // Scroll to show the first note with some padding
+          const noteAbsoluteStart = midiRegion.start + firstNote.start;
+          const padding = 2; // beats of padding
+          const scrollX = Math.max(0, (noteAbsoluteStart - padding) * pixelsPerBeat * zoom);
+          noteScrollRef.current.scrollLeft = scrollX;
+          
+          // Vertical scroll: scroll to show the first note's pitch
+          const midiNumber = firstNote.pitch;
+          const noteIndex = visibleMidiNumbers.indexOf(midiNumber);
+          if (noteIndex !== -1) {
+            // Center the note vertically
+            const noteY = noteIndex * NOTE_HEIGHT;
+            const viewportHeight = noteScrollRef.current.clientHeight;
+            const scrollY = Math.max(0, noteY - viewportHeight / 2 + NOTE_HEIGHT / 2);
+            noteScrollRef.current.scrollTop = scrollY;
+            keyScrollRef.current.scrollTop = scrollY;
+          }
+        } else {
+          // Empty region: scroll to C5 (MIDI 72)
+          const c5MidiNumber = 72;
+          const noteIndex = visibleMidiNumbers.indexOf(c5MidiNumber);
+          
+          if (noteIndex !== -1) {
+            // Center C5 vertically
+            const c5Y = noteIndex * NOTE_HEIGHT;
+            const viewportHeight = noteScrollRef.current.clientHeight;
+            const scrollY = Math.max(0, c5Y - viewportHeight / 2 + NOTE_HEIGHT / 2);
+            noteScrollRef.current.scrollTop = scrollY;
+            keyScrollRef.current.scrollTop = scrollY;
+          }
+          
+          // Scroll horizontally to region start
+          const scrollX = Math.max(0, midiRegion.start * pixelsPerBeat * zoom);
+          noteScrollRef.current.scrollLeft = scrollX;
+        }
+      };
+
+      // Delay to ensure viewport and zoom are ready
+      const timer = setTimeout(scrollToPosition, 50);
+      return () => clearTimeout(timer);
+    }
+    
+    prevActiveRegionIdRef.current = activeRegionId;
+  }, [activeRegionId, midiRegion, visibleMidiNumbers, zoom, pixelsPerBeat]);
+
   if (!midiRegion) {
     return (
       <section className="flex h-full flex-col items-center justify-center rounded-lg border border-dashed border-base-300 bg-base-100 text-sm text-base-content/60">
@@ -627,6 +705,30 @@ const PianoRollComponent = () => {
                 <option value="only-notes">Only Notes</option>
               </select>
             </label>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className="btn btn-xs btn-ghost"
+                onClick={() => {
+                  const centerX = viewportWidth / 2;
+                  handleZoomChange(zoom * 0.8, centerX);
+                }}
+                title="Zoom Out"
+              >
+                −
+              </button>
+              <button
+                type="button"
+                className="btn btn-xs btn-ghost"
+                onClick={() => {
+                  const centerX = viewportWidth / 2;
+                  handleZoomChange(zoom * 1.25, centerX);
+                }}
+                title="Zoom In"
+              >
+                +
+              </button>
+            </div>
             <InfoTooltip className="hidden lg:flex">Ctrl+Scroll to zoom</InfoTooltip>
           </div>
         </div>
@@ -729,7 +831,7 @@ const PianoRollComponent = () => {
           ref={keyScrollRef}
           onScroll={handleKeyScroll}
           className="overflow-y-auto border-r border-base-300 bg-base-100"
-          style={{ width: KEYBOARD_WIDTH, height: '100%' }}
+          style={{ width: KEYBOARD_WIDTH, height: '100%', willChange: 'scroll-position' }}
         >
           <div style={{ height: dynamicHeight }}>
             <PianoKeys />
@@ -739,6 +841,7 @@ const PianoRollComponent = () => {
           ref={noteScrollRef}
           onScroll={handleNoteScroll}
           className="relative flex-1 overflow-auto bg-base-200/40"
+          style={{ willChange: 'scroll-position' }}
         >
           <div
             style={{
@@ -802,7 +905,7 @@ const PianoRollComponent = () => {
           ref={laneScrollRef}
           onScroll={handleLaneScroll}
           className="overflow-x-auto overflow-y-hidden"
-          style={{ height: `${SUSTAIN_LANE_HEIGHT}px` }}
+          style={{ height: `${SUSTAIN_LANE_HEIGHT}px`, willChange: 'scroll-position' }}
         >
           <div style={{ width: totalBeats * pixelsPerBeat * zoom }}>
             {laneMode === 'velocity' ? (

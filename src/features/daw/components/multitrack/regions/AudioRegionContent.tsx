@@ -9,7 +9,7 @@ import {
   calculateOptimalBarWidth,
   shouldApplyViewportCulling,
 } from '@/features/daw/utils/progressiveWaveformRenderer';
-import { VIEWPORT_CULLING } from '@/features/daw/config/waveformConfig';
+import { usePerformanceStore } from '@/features/daw/stores/performanceStore';
 
 const TRACK_WAVEFORM_PADDING = 6;
 
@@ -27,9 +27,15 @@ export const AudioRegionContent = ({
   isMainLoop,
   length,
   headResizeState,
+  viewportStartBeat,
+  viewportEndBeat,
 }: AudioRegionContentProps) => {
   const audioBuffer = region.audioBuffer;
   const originalLength = region.originalLength ?? length;
+  
+  // Get performance settings
+  const viewportCulling = usePerformanceStore((state) => state.settings.viewportCulling);
+  const waveformQuality = usePerformanceStore((state) => state.settings.waveformQuality);
 
   // Use preview trim values during head resize
   const isHeadResizing = headResizeState?.regionIds.includes(region.id);
@@ -50,50 +56,38 @@ export const AudioRegionContent = ({
     }
 
     try {
-      // Generate or retrieve LOD data (uses MAX_WAVEFORM_PIXEL_WIDTH from config)
-      const lodData = getOrGenerateLOD(audioBuffer, region.id);
-      
+      // Generate or retrieve LOD data with quality setting
+      const lodData = getOrGenerateLOD(audioBuffer, region.id, undefined, waveformQuality);
+
       // Validate LOD data
       if (!lodData || !lodData.levels || lodData.levels.length === 0) {
         console.warn('Invalid LOD data for region:', region.id);
         return new Float32Array(0);
       }
-      
+
       // Select appropriate LOD level based on current zoom
       const lodLevel = selectLODLevel(lodData, width, length);
-      
+
       // Validate LOD level
       if (!lodLevel || !lodLevel.peaks || lodLevel.peaks.length === 0) {
         console.warn('Invalid LOD level for region:', region.id);
         return new Float32Array(0);
       }
-      
+
       // Extract visible peaks based on trim and length
       const peaks = extractVisiblePeaks(lodLevel, effectiveTrimStart, length, originalLength);
-      
+
       // Validate extracted peaks
       if (!peaks || peaks.length === 0) {
-        console.warn('No visible peaks extracted for region:', region.id, {
-          width,
-          length,
-          trimStart: effectiveTrimStart,
-          originalLength,
-          lodLevelPeaks: lodLevel.peaks.length,
-        });
         return new Float32Array(0);
       }
-      
+
       return peaks;
     } catch (error) {
-      console.error('Failed to generate waveform LOD:', error, {
-        regionId: region.id,
-        width,
-        length,
-        audioBufferLength: audioBuffer.length,
-      });
+      console.error('Failed to generate waveform LOD:', error);
       return new Float32Array(0);
     }
-  }, [audioBuffer, region.id, width, length, effectiveTrimStart, originalLength]);
+  }, [audioBuffer, region.id, width, length, effectiveTrimStart, originalLength, waveformQuality]);
 
   if (!audioBuffer || visiblePeaks.length === 0) {
     return null;
@@ -144,68 +138,75 @@ export const AudioRegionContent = ({
         sceneFunc={(context, shape) => {
           context.fillStyle = '#1f2937';
           context.globalAlpha = isMainLoop ? 0.7 : 0.4;
-          
+
           const availableHeight = innerAvailableHeight > 0 ? innerAvailableHeight : waveformHeight;
-          
+
           // Calculate optimal bar width to prevent overdraw
           const barWidth = calculateOptimalBarWidth(width, peakCount, 0.5, 2);
-          
+
           // Viewport culling: Only draw bars that are visible on screen
-          const stage = shape.getStage();
-          let viewportStartX = loopX;
-          let viewportEndX = loopX + width;
           let startBarIndex = 0;
           let endBarIndex = peakCount;
-          
-          if (stage) {
-            const container = stage.container();
-            if (container && container.parentElement) {
-              const scrollContainer = container.parentElement;
-              const stageTransform = stage.getAbsoluteTransform();
-              const scale = stageTransform.m[0]; // scaleX
-              const offsetX = stageTransform.m[4]; // translateX
-              
-              // Calculate visible range in stage coordinates
-              const scrollLeft = scrollContainer.scrollLeft;
-              const containerWidth = scrollContainer.clientWidth;
-              
-              viewportStartX = (scrollLeft - offsetX) / scale;
-              viewportEndX = ((scrollLeft + containerWidth) - offsetX) / scale;
-              
-              // Adaptive buffer based on zoom (configurable)
-              const viewportWidth = viewportEndX - viewportStartX;
-              const buffer = viewportWidth * VIEWPORT_CULLING.BUFFER_PERCENTAGE;
-              viewportStartX -= buffer;
-              viewportEndX += buffer;
-              
-              // Calculate visible bar range
-              startBarIndex = Math.max(0, Math.floor(((viewportStartX - loopX) / width) * peakCount));
-              endBarIndex = Math.min(peakCount, Math.ceil(((viewportEndX - loopX) / width) * peakCount));
-              
-              // Only apply culling if beneficial
-              const visibleBarCount = endBarIndex - startBarIndex;
-              if (!shouldApplyViewportCulling(peakCount, visibleBarCount)) {
-                startBarIndex = 0;
-                endBarIndex = peakCount;
-              }
+
+          // Use passed viewport props if available
+          if (typeof viewportStartBeat === 'number' && typeof viewportEndBeat === 'number') {
+            // Calculate region's position in beats relative to viewport
+            // region.start is not available here directly, but we can infer relative position
+            // loopX is the absolute X position of this loop iteration
+
+            // Calculate absolute start and end X of this loop iteration
+            const regionStartX = loopX;
+            const regionEndX = loopX + width;
+
+            // Calculate viewport X range
+            const viewportStartX = viewportStartBeat * beatWidth;
+            const viewportEndX = viewportEndBeat * beatWidth;
+
+            // Check if this loop iteration is visible
+            if (regionEndX < viewportStartX || regionStartX > viewportEndX) {
+              // Completely off-screen
+              return;
+            }
+
+            // Calculate visible intersection
+            const visibleStartX = Math.max(regionStartX, viewportStartX);
+            const visibleEndX = Math.min(regionEndX, viewportEndX);
+
+            // Convert back to local ratio within the region (0 to 1)
+            const startRatio = (visibleStartX - regionStartX) / width;
+            const endRatio = (visibleEndX - regionStartX) / width;
+
+            // Convert to bar indices
+            startBarIndex = Math.floor(startRatio * peakCount);
+            endBarIndex = Math.ceil(endRatio * peakCount);
+
+            // Clamp indices
+            startBarIndex = Math.max(0, startBarIndex);
+            endBarIndex = Math.min(peakCount, endBarIndex);
+
+            // Only apply culling if beneficial
+            const visibleBarCount = endBarIndex - startBarIndex;
+            if (!shouldApplyViewportCulling(peakCount, visibleBarCount, viewportCulling)) {
+              startBarIndex = 0;
+              endBarIndex = peakCount;
             }
           }
-          
+
           // Only draw visible bars
           for (let index = startBarIndex; index < endBarIndex; index++) {
             const minValue = visiblePeaks[index * 2] || 0;
             const maxValue = visiblePeaks[index * 2 + 1] || 0;
-            
+
             const waveX = loopX + (index / peakCount) * width;
-            
+
             // Scale min and max by gain
             const scaledMin = minValue * gainMultiplier;
             const scaledMax = maxValue * gainMultiplier;
-            
+
             // Calculate positions for min and max
             const minHeight = Math.abs(scaledMin) * availableHeight;
             const maxHeight = Math.abs(scaledMax) * availableHeight;
-            
+
             // Draw from center outward
             const topY = Math.max(innerTop, centerY - maxHeight / 2);
             const bottomY = Math.min(innerBottom, centerY + Math.abs(minHeight) / 2);
@@ -216,7 +217,7 @@ export const AudioRegionContent = ({
               context.fillRect(waveX, topY, barWidth, waveHeight);
             }
           }
-          
+
           // Required for Konva
           context.fillStrokeShape(shape);
         }}

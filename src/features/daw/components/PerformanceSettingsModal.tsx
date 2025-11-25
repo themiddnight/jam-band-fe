@@ -2,11 +2,8 @@ import { useState, useEffect } from "react";
 import { Modal } from "@/features/ui";
 
 interface PerformanceSettings {
-  audioBufferSize: number;
   waveformQuality: "low" | "medium" | "high";
-  latencyCompensation: boolean;
   viewportCulling: boolean;
-  maxVisibleTracks: number;
   audioLookahead: number;
 }
 
@@ -18,11 +15,8 @@ interface PerformanceSettingsModalProps {
 }
 
 const DEFAULT_SETTINGS: PerformanceSettings = {
-  audioBufferSize: 256,
   waveformQuality: "medium",
-  latencyCompensation: true,
   viewportCulling: true,
-  maxVisibleTracks: 50,
   audioLookahead: 0.1,
 };
 
@@ -69,35 +63,6 @@ export const PerformanceSettingsModal = ({
       onCancel={onClose}
     >
       <div className="space-y-6">
-        {/* Audio Buffer Size */}
-        <div className="form-control">
-          <label className="label">
-            <span className="label-text font-semibold">Audio Buffer Size</span>
-            <span className="label-text-alt">{settings.audioBufferSize} samples</span>
-          </label>
-          <input
-            type="range"
-            min="128"
-            max="2048"
-            step="128"
-            value={settings.audioBufferSize}
-            onChange={(e) =>
-              setSettings({ ...settings, audioBufferSize: Number(e.target.value) })
-            }
-            className="range range-primary range-sm"
-          />
-          <div className="w-full flex justify-between text-xs px-2 mt-1">
-            <span>128</span>
-            <span>256</span>
-            <span>512</span>
-            <span>1024</span>
-            <span>2048</span>
-          </div>
-          <p className="text-xs text-base-content/70 mt-2">
-            Lower values reduce latency but increase CPU usage. Higher values improve stability.
-          </p>
-        </div>
-
         {/* Waveform Quality */}
         <div className="form-control">
           <label className="label">
@@ -118,28 +83,8 @@ export const PerformanceSettingsModal = ({
             <option value="high">High (Best quality)</option>
           </select>
           <p className="text-xs text-base-content/70 mt-2">
-            Affects waveform rendering detail. Lower quality improves performance with many tracks.
+            Affects waveform rendering detail. Lower quality improves performance with many audio regions.
           </p>
-        </div>
-
-        {/* Latency Compensation */}
-        <div className="form-control">
-          <label className="label cursor-pointer justify-start gap-3">
-            <input
-              type="checkbox"
-              checked={settings.latencyCompensation}
-              onChange={(e) =>
-                setSettings({ ...settings, latencyCompensation: e.target.checked })
-              }
-              className="checkbox checkbox-primary checkbox-sm"
-            />
-            <div className="flex flex-col">
-              <span className="label-text font-semibold">Latency Compensation</span>
-              <span className="text-xs text-base-content/70">
-                Automatically compensate for audio processing delays
-              </span>
-            </div>
-          </label>
         </div>
 
         {/* Viewport Culling */}
@@ -160,33 +105,6 @@ export const PerformanceSettingsModal = ({
               </span>
             </div>
           </label>
-        </div>
-
-        {/* Max Visible Tracks */}
-        <div className="form-control">
-          <label className="label">
-            <span className="label-text font-semibold">Max Visible Tracks</span>
-            <span className="label-text-alt">{settings.maxVisibleTracks} tracks</span>
-          </label>
-          <input
-            type="range"
-            min="10"
-            max="100"
-            step="10"
-            value={settings.maxVisibleTracks}
-            onChange={(e) =>
-              setSettings({ ...settings, maxVisibleTracks: Number(e.target.value) })
-            }
-            className="range range-primary range-sm"
-          />
-          <div className="w-full flex justify-between text-xs px-2 mt-1">
-            <span>10</span>
-            <span>50</span>
-            <span>100</span>
-          </div>
-          <p className="text-xs text-base-content/70 mt-2">
-            Maximum number of tracks to render simultaneously
-          </p>
         </div>
 
         {/* Audio Lookahead */}
@@ -212,8 +130,14 @@ export const PerformanceSettingsModal = ({
             <span>0.5s</span>
           </div>
           <p className="text-xs text-base-content/70 mt-2">
-            Time to schedule audio events in advance. Higher values improve timing accuracy.
+            Time to schedule audio events in advance. Higher values improve timing accuracy but increase latency.
           </p>
+        </div>
+
+        {/* Info about removed settings */}
+        <div className="alert alert-info text-xs">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="stroke-current shrink-0 w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          <span>Audio buffer size and latency compensation cannot be changed at runtime and have been removed.</span>
         </div>
 
         {/* Reset Button */}

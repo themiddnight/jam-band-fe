@@ -16,6 +16,8 @@ export const MidiRegionContent = ({
   length,
   // width,
   headResizeState,
+  viewportStartBeat,
+  viewportEndBeat,
 }: MidiRegionContentProps) => {
 
   // Normalize MIDI notes for preview
@@ -42,9 +44,17 @@ export const MidiRegionContent = ({
         sceneFunc={(context, shape) => {
           context.fillStyle = '#1f2937';
           context.globalAlpha = isMainLoop ? 0.6 : 0.3;
-          
+
+          // Calculate viewport bounds in pixels if available
+          let viewportStartX = -Infinity;
+          let viewportEndX = Infinity;
+
+          if (typeof viewportStartBeat === 'number' && typeof viewportEndBeat === 'number') {
+            viewportStartX = viewportStartBeat * beatWidth;
+            viewportEndX = viewportEndBeat * beatWidth;
+          }
+
           // Draw all notes in a single pass
-          // Note: Viewport culling is already handled below to skip notes outside visible region
           for (const note of region.notes) {
             // Apply offset for head resize preview
             const adjustedNoteStart = note.start + noteOffset;
@@ -56,13 +66,19 @@ export const MidiRegionContent = ({
 
             const noteX = loopX + adjustedNoteStart * beatWidth;
             const noteWidth = Math.max(note.duration * beatWidth, 2);
+
+            // Viewport culling: Check if note is visible on screen
+            if (noteX + noteWidth < viewportStartX || noteX > viewportEndX) {
+              continue;
+            }
+
             const normalizedPitch = (note.pitch - minPitch) / pitchRange;
             const noteY = y + height - normalizedPitch * (height - 16) - 8;
             const noteHeight = 4;
 
             context.fillRect(noteX, noteY, noteWidth, noteHeight);
           }
-          
+
           // Required for Konva
           context.fillStrokeShape(shape);
         }}

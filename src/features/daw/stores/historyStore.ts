@@ -69,13 +69,14 @@ const captureSnapshot = (): HistorySnapshot => {
   const pianoRollState = usePianoRollStore.getState();
   const markerState = useMarkerStore.getState();
 
-  // Clone regions but preserve AudioBuffer references (can't be cloned)
+  // Clone regions but preserve AudioBuffer and Blob references (can't be cloned)
   const clonedRegions = regionState.regions.map((region) => {
     if (region.type === 'audio') {
-      const { audioBuffer, ...rest } = region;
+      const { audioBuffer, audioBlob, ...rest } = region;
       return {
         ...clone(rest),
         audioBuffer, // Keep original reference
+        audioBlob,   // Keep original blob reference
         type: 'audio' as const,
       };
     }
@@ -110,13 +111,14 @@ const applySnapshot = (snapshot: HistorySnapshot) => {
     selectedTrackId: snapshot.track.selectedTrackId,
   });
   
-  // Restore regions but preserve AudioBuffer references
+  // Restore regions but preserve AudioBuffer and Blob references
   const restoredRegions = snapshot.region.regions.map((region) => {
     if (region.type === 'audio') {
-      const { audioBuffer, ...rest } = region;
+      const { audioBuffer, audioBlob, ...rest } = region;
       return {
         ...clone(rest),
         audioBuffer, // Keep original reference
+        audioBlob,   // Keep original blob reference
         type: 'audio' as const,
       };
     }

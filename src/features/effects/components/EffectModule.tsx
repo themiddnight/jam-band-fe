@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, memo } from 'react';
 import type { EffectInstance, EffectChainType } from '@/features/effects/types';
 import { useEffectsStore } from '@/features/effects/stores/effectsStore';
 import { EFFECT_CONFIGS } from '@/features/effects/constants/effectConfigs';
@@ -18,7 +18,7 @@ interface EffectModuleProps {
   canReorder?: boolean;
 }
 
-export default function EffectModule({
+const EffectModule = memo(function EffectModule({
   effect,
   chainType,
   lockScopeId,
@@ -30,7 +30,7 @@ export default function EffectModule({
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const [showSettings, setShowSettings] = useState(false);
   const activeParamLocksRef = useRef(new Set<string>());
-  
+
   const {
     removeEffect,
     toggleEffectBypass,
@@ -105,26 +105,26 @@ export default function EffectModule({
     [getLockMeta, lockScopeId, releaseInteractionLock],
   );
 
-  const handleSettingsClick = () => {
-    setShowSettings(!showSettings);
-  };
+  const handleSettingsClick = useCallback(() => {
+    setShowSettings(prev => !prev);
+  }, []);
 
-  const handleDeleteClick = () => {
+  const handleDeleteClick = useCallback(() => {
     removeEffect(chainType, effect.id);
-  };
+  }, [removeEffect, chainType, effect.id]);
 
-  const handleBypassClick = () => {
+  const handleBypassClick = useCallback(() => {
     toggleEffectBypass(chainType, effect.id);
-  };
+  }, [toggleEffectBypass, chainType, effect.id]);
 
-  const handleParameterChange = (parameterId: string, value: number) => {
+  const handleParameterChange = useCallback((parameterId: string, value: number) => {
     updateEffectParameter(chainType, effect.id, parameterId, value);
-  };
+  }, [updateEffectParameter, chainType, effect.id]);
 
-  const handleResetClick = () => {
+  const handleResetClick = useCallback(() => {
     resetEffect(chainType, effect.id);
     setShowSettings(false);
-  };
+  }, [resetEffect, chainType, effect.id]);
 
   const renderParameterControl = (parameter: typeof effect.parameters[0]) => {
     const lockMeta = getLockMeta(parameter.id);
@@ -134,11 +134,11 @@ export default function EffectModule({
     if (parameter.type === 'knob') {
       const knobLockProps = lockScopeId
         ? {
-            disabled: isLockedByRemote,
-            lockedLabel,
-            onInteractionStart: () => handleParamInteractionStart(parameter.id),
-            onInteractionEnd: () => handleParamInteractionEnd(parameter.id),
-          }
+          disabled: isLockedByRemote,
+          lockedLabel,
+          onInteractionStart: () => handleParamInteractionStart(parameter.id),
+          onInteractionEnd: () => handleParamInteractionEnd(parameter.id),
+        }
         : {};
 
       return (
@@ -195,9 +195,8 @@ export default function EffectModule({
               onPointerLeave={() => handleParamInteractionEnd(parameter.id)}
               disabled={isLockedByRemote}
               title={title}
-              className={`range range-primary range-sm ${
-                isLockedByRemote ? 'cursor-not-allowed opacity-60' : ''
-              }`}
+              className={`range range-primary range-sm ${isLockedByRemote ? 'cursor-not-allowed opacity-60' : ''
+                }`}
             />
             {lockedLabel && (
               <span className="badge badge-outline badge-xs whitespace-nowrap text-[10px]">
@@ -213,9 +212,27 @@ export default function EffectModule({
     }
   };
 
+  const handleDragStart = useCallback((e: React.DragEvent) => {
+    if (!canReorder) {
+      e.preventDefault();
+      return;
+    }
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', effect.id);
+    onDragStart?.(effect.id);
+  }, [canReorder, effect.id, onDragStart]);
+
+  const handleDragEnd = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    onDragEnd?.();
+  }, [onDragEnd]);
+
   return (
     <>
       <div
+        draggable={canReorder}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
         className={`
           effect-module relative flex flex-col items-center p-1 bg-base-200 rounded-lg border
           ${effect.bypassed ? 'border-base-300 opacity-60' : 'border-primary'}
@@ -223,19 +240,16 @@ export default function EffectModule({
           ${canReorder ? 'cursor-move' : ''}
           transition-all duration-150
         `}
-        onMouseDown={canReorder ? () => onDragStart?.(effect.id) : undefined}
-        onMouseUp={onDragEnd}
       >
         {/* Control Buttons */}
         <div className="flex items-center gap-1">
           {/* Bypass Button */}
           <button
             onClick={handleBypassClick}
-            className={`btn btn-xs ${
-              effect.bypassed 
-                ? 'btn-ghost text-base-content/50' 
-                : 'btn-success'
-            }`}
+            className={`btn btn-xs ${effect.bypassed
+              ? 'btn-ghost text-base-content/50'
+              : 'btn-success'
+              }`}
             title={effect.bypassed ? 'Enable effect' : 'Bypass effect'}
           >
             {effect.bypassed ? '⏸️' : '▶️'}
@@ -309,6 +323,6 @@ export default function EffectModule({
       </AnchoredPopup>
     </>
   );
-}
+});
 
-
+export default EffectModule;

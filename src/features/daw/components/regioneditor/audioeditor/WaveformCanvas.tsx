@@ -8,6 +8,7 @@ import {
   calculateOptimalBarWidth,
   shouldApplyViewportCulling,
 } from '@/features/daw/utils/progressiveWaveformRenderer';
+import { usePerformanceStore } from '@/features/daw/stores/performanceStore';
 
 interface WaveformCanvasProps {
   region: AudioRegion;
@@ -47,6 +48,10 @@ const WaveformCanvasComponent = ({
 }: WaveformCanvasProps) => {
   const [dragState, setDragState] = useState<DragState | null>(null);
   const layerRef = useRef<any>(null);
+  
+  // Get performance settings
+  const viewportCulling = usePerformanceStore((state) => state.settings.viewportCulling);
+  const waveformQuality = usePerformanceStore((state) => state.settings.waveformQuality);
   const lastScrollX = useRef<number>(0);
   const scrollThrottleTimer = useRef<number | null>(null);
   const hasWarnedAboutCanvasSize = useRef<boolean>(false);
@@ -110,8 +115,8 @@ const WaveformCanvasComponent = ({
     }
 
     try {
-      // Generate or retrieve LOD data with higher max width for editor
-      const lodData = getOrGenerateLOD(region.audioBuffer, region.id, 20000);
+      // Generate or retrieve LOD data with quality setting (editor uses higher detail)
+      const lodData = getOrGenerateLOD(region.audioBuffer, region.id, 20000, waveformQuality);
       
       if (!lodData || !lodData.levels || lodData.levels.length === 0) {
         console.warn('Invalid LOD data for audio editor:', region.id);
@@ -138,7 +143,7 @@ const WaveformCanvasComponent = ({
       });
       return new Float32Array(0);
     }
-  }, [region.audioBuffer, region.id, fullWidth, originalLength, MAX_CANVAS_WIDTH]);
+  }, [region.audioBuffer, region.id, fullWidth, originalLength, MAX_CANVAS_WIDTH, waveformQuality]);
 
   // Calculate positions (absolute positions in the full waveform)
   const trimStart = region.trimStart || 0;
@@ -358,7 +363,7 @@ const WaveformCanvasComponent = ({
                   
                   // Only apply culling if it provides significant benefit
                   const visiblePeakCount = endPeakIndex - startPeakIndex;
-                  if (!shouldApplyViewportCulling(peakCount, visiblePeakCount)) {
+                  if (!shouldApplyViewportCulling(peakCount, visiblePeakCount, viewportCulling)) {
                     // Not worth culling, render everything
                     startPeakIndex = 0;
                     endPeakIndex = peakCount;

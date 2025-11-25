@@ -114,8 +114,12 @@ export const useAudioRecordingEngine = (options?: UseAudioRecordingEngineOptions
               originalLength: regionLength,
               trimStart: 0,
             });
-            if (result.audioBuffer && region) {
-              updateRegionStore(region.id, { audioBuffer: result.audioBuffer });
+            if (region) {
+              // Store both audioBuffer and audioBlob for better save quality
+              updateRegionStore(region.id, { 
+                audioBuffer: result.audioBuffer,
+                audioBlob: result.audioBlob, // Preserve original opus/webm format
+              });
             }
           };
 
@@ -150,8 +154,12 @@ export const useAudioRecordingEngine = (options?: UseAudioRecordingEngineOptions
               trimStart: 0,
             });
 
-            if (result.audioBuffer && region) {
-              updateRegionStore(region.id, { audioBuffer: result.audioBuffer });
+            if (region) {
+              // Store both audioBuffer and audioBlob for better save quality
+              updateRegionStore(region.id, { 
+                audioBuffer: result.audioBuffer,
+                audioBlob: result.audioBlob, // Preserve original opus/webm format
+              });
             }
           } catch (error) {
             console.error('Failed to upload audio region:', error);

@@ -350,6 +350,30 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
             >
               Fit
             </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className="btn btn-xs btn-ghost"
+                onClick={() => {
+                  const centerX = containerWidth / 2;
+                  handleZoomXChange(zoomX * 0.8, centerX);
+                }}
+                title="Zoom Out"
+              >
+                −
+              </button>
+              <button
+                type="button"
+                className="btn btn-xs btn-ghost"
+                onClick={() => {
+                  const centerX = containerWidth / 2;
+                  handleZoomXChange(zoomX * 1.25, centerX);
+                }}
+                title="Zoom In"
+              >
+                +
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => handleZoomYChange(1)}

@@ -16,6 +16,7 @@ export const EFFECT_TYPE_MAP: Record<string, AudioEffectType> = {
   stereowidener: AudioEffectType.STEREOWIDENER,
   tremolo: AudioEffectType.TREMOLO,
   vibrato: AudioEffectType.VIBRATO,
+  graphiceq: AudioEffectType.GRAPHICEQ,
 };
 
 export const PARAMETER_MAP: Record<string, Record<string, string>> = {
@@ -105,5 +106,26 @@ export const PARAMETER_MAP: Record<string, Record<string, string>> = {
     frequency: 'frequency',
     depth: 'depth',
     dry_wet: 'wetLevel',
+  },
+  graphiceq: {
+    low_cut: 'lowCut',
+    low_cut_q: 'lowCutQ',
+    p1_freq: 'p1Freq',
+    p2_freq: 'p2Freq',
+    p3_freq: 'p3Freq',
+    p4_freq: 'p4Freq',
+    p5_freq: 'p5Freq',
+    high_cut: 'highCut',
+    high_cut_q: 'highCutQ',
+    p1_q: 'p1Q',
+    p2_q: 'p2Q',
+    p3_q: 'p3Q',
+    p4_q: 'p4Q',
+    p5_q: 'p5Q',
+    p1_vol: 'p1Vol',
+    p2_vol: 'p2Vol',
+    p3_vol: 'p3Vol',
+    p4_vol: 'p4Vol',
+    p5_vol: 'p5Vol',
   },
 };

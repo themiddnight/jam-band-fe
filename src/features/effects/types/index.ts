@@ -1,6 +1,6 @@
 // Effects Feature Types
 
-export type EffectType = 
+export type EffectType =
   | 'reverb'
   | 'delay'
   | 'filter'
@@ -15,7 +15,8 @@ export type EffectType =
   | 'pingpongdelay'
   | 'stereowidener'
   | 'tremolo'
-  | 'vibrato';
+  | 'vibrato'
+  | 'graphiceq';
 
 export type EffectChainType =
   | 'virtual_instrument'

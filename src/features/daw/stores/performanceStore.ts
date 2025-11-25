@@ -2,11 +2,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 export interface PerformanceSettings {
-  audioBufferSize: number;
   waveformQuality: "low" | "medium" | "high";
-  latencyCompensation: boolean;
   viewportCulling: boolean;
-  maxVisibleTracks: number;
   audioLookahead: number;
 }
 
@@ -17,11 +14,8 @@ interface PerformanceStore {
 }
 
 const DEFAULT_SETTINGS: PerformanceSettings = {
-  audioBufferSize: 256,
   waveformQuality: "medium",
-  latencyCompensation: true,
   viewportCulling: true,
-  maxVisibleTracks: 50,
   audioLookahead: 0.1,
 };
 

@@ -469,7 +469,7 @@ export default function ArrangeRoom() {
                 <button
                   onClick={handleOpenPerformanceSettings}
                   className="btn btn-xs btn-ghost"
-                  title={`Performance Settings (Buffer: ${performanceSettings.audioBufferSize}, Quality: ${performanceSettings.waveformQuality})`}
+                  title={`Performance Settings (Quality: ${performanceSettings.waveformQuality}, Lookahead: ${performanceSettings.audioLookahead}s)`}
                 >
                   ⚡
                 </button>

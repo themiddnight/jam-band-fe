@@ -14,6 +14,7 @@ import {
   VIEWPORT_CULLING,
   LOD_CACHE,
   WAVEFORM_PERFORMANCE,
+  getMaxPixelWidthForQuality,
 } from '../config/waveformConfig';
 
 export interface WaveformLOD {
@@ -293,12 +294,14 @@ export const calculateAdaptiveBuffer = (
  * Only cull when zoomed in enough that it provides benefit
  * 
  * Uses VIEWPORT_CULLING config to control culling behavior
+ * Can be overridden by passing enableCulling parameter
  */
 export const shouldApplyViewportCulling = (
   peakCount: number,
   visiblePeakCount: number,
+  enableCulling: boolean = WAVEFORM_PERFORMANCE.ENABLE_VIEWPORT_CULLING,
 ): boolean => {
-  if (!WAVEFORM_PERFORMANCE.ENABLE_VIEWPORT_CULLING) {
+  if (!enableCulling) {
     return false;
   }
 
@@ -353,19 +356,29 @@ export const waveformLODCache = new WaveformLODCache();
  * Get or generate LOD data for an audio buffer
  * 
  * Uses MAX_WAVEFORM_PIXEL_WIDTH from config as default
+ * Pass quality parameter to use performance settings
  */
 export const getOrGenerateLOD = (
   audioBuffer: AudioBuffer,
   regionId: string,
   maxPixelWidth: number = MAX_WAVEFORM_PIXEL_WIDTH,
+  quality?: "low" | "medium" | "high",
 ): WaveformLODData => {
-  const cached = waveformLODCache.get(regionId);
+  // If quality is specified, use it to determine max pixel width
+  if (quality) {
+    maxPixelWidth = getMaxPixelWidthForQuality(quality);
+  }
+
+  // Create a cache key that includes quality setting
+  const cacheKey = quality ? `${regionId}_${quality}` : regionId;
+  
+  const cached = waveformLODCache.get(cacheKey);
   if (cached) {
     return cached;
   }
 
   const lodData = generateWaveformLOD(audioBuffer, maxPixelWidth);
-  waveformLODCache.set(regionId, lodData);
+  waveformLODCache.set(cacheKey, lodData);
   return lodData;
 };
 

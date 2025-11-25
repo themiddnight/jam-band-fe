@@ -51,6 +51,9 @@ export const MultitrackView = () => {
   const [zoom, setZoom] = useState(1);
   const [viewportWidth, setViewportWidth] = useState(800);
   const [trackHeights, setTrackHeights] = useState<Record<string, number>>({});
+  const [isInitialZoomSet, setIsInitialZoomSet] = useState(false);
+  const scrollRafRef = useRef<number | null>(null);
+  const zoomRafRef = useRef<number | null>(null);
 
   const totalBeats = useMemo(() => {
     const furthestRegionBeat = regions.reduce((max, region) => {
@@ -133,22 +136,37 @@ export const MultitrackView = () => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
         
-        const delta = -e.deltaY;
-        const zoomSpeed = 0.001;
-        const newZoom = zoom + delta * zoomSpeed;
+        // Cancel any pending zoom update
+        if (zoomRafRef.current !== null) {
+          cancelAnimationFrame(zoomRafRef.current);
+        }
+        
+        // Batch zoom updates using requestAnimationFrame
+        zoomRafRef.current = requestAnimationFrame(() => {
+          const delta = -e.deltaY;
+          const zoomSpeed = 0.001;
+          const newZoom = zoom + delta * zoomSpeed;
 
-        // Get cursor position relative to canvas
-        const rect = canvasScrollRef.current?.getBoundingClientRect();
-        const cursorX = rect ? e.clientX - rect.left : undefined;
+          // Get cursor position relative to canvas
+          const rect = canvasScrollRef.current?.getBoundingClientRect();
+          const cursorX = rect ? e.clientX - rect.left : undefined;
 
-        handleZoomChange(newZoom, cursorX);
+          handleZoomChange(newZoom, cursorX);
+          zoomRafRef.current = null;
+        });
       }
     };
 
     const canvas = canvasScrollRef.current;
     if (canvas) {
       canvas.addEventListener('wheel', handleWheel, { passive: false });
-      return () => canvas.removeEventListener('wheel', handleWheel);
+      return () => {
+        canvas.removeEventListener('wheel', handleWheel);
+        // Clean up any pending animation frames
+        if (zoomRafRef.current !== null) {
+          cancelAnimationFrame(zoomRafRef.current);
+        }
+      };
     }
   }, [zoom, handleZoomChange]);
 
@@ -164,6 +182,68 @@ export const MultitrackView = () => {
     window.addEventListener('resize', updateViewportSize);
     return () => window.removeEventListener('resize', updateViewportSize);
   }, []);
+
+  // Set initial zoom to show 8 bars
+  useEffect(() => {
+    if (!isInitialZoomSet && viewportWidth > 0 && canvasScrollRef.current) {
+      const barsToShow = 8;
+      const beatsToShow = barsToShow * timeSignature.numerator;
+      const requiredWidth = beatsToShow * PIXELS_PER_BEAT;
+      const initialZoom = clampTimelineZoom(viewportWidth / requiredWidth);
+      setZoom(initialZoom);
+      setIsInitialZoomSet(true);
+    }
+  }, [isInitialZoomSet, viewportWidth, timeSignature.numerator, clampTimelineZoom]);
+
+  // Fit to all regions function
+  const handleFitToRegions = useCallback(() => {
+    if (!canvasScrollRef.current || regions.length === 0) {
+      return;
+    }
+
+    // Find the extent of all regions
+    let minBeat = Infinity;
+    let maxBeat = -Infinity;
+
+    regions.forEach((region) => {
+      const loopLength = region.loopEnabled ? region.length * region.loopIterations : region.length;
+      const regionEnd = region.start + loopLength;
+      minBeat = Math.min(minBeat, region.start);
+      maxBeat = Math.max(maxBeat, regionEnd);
+    });
+
+    // Add some padding (1 bar on each side)
+    const padding = timeSignature.numerator;
+    minBeat = Math.max(0, minBeat - padding);
+    maxBeat = maxBeat + padding;
+
+    const totalBeatsToShow = maxBeat - minBeat;
+    const requiredWidth = totalBeatsToShow * PIXELS_PER_BEAT;
+    const fitZoom = clampTimelineZoom(viewportWidth / requiredWidth);
+
+    setZoom(fitZoom);
+
+    // Scroll to show the start of the content
+    requestAnimationFrame(() => {
+      if (canvasScrollRef.current) {
+        canvasScrollRef.current.scrollLeft = minBeat * PIXELS_PER_BEAT * fitZoom;
+      }
+    });
+  }, [regions, viewportWidth, timeSignature.numerator, clampTimelineZoom]);
+
+  // Auto-fit when regions change (e.g., after project load)
+  const prevRegionsLengthRef = useRef(regions.length);
+  useEffect(() => {
+    // Only auto-fit if regions were added (e.g., project loaded)
+    if (regions.length > 0 && prevRegionsLengthRef.current === 0) {
+      // Delay to ensure viewport is ready
+      const timer = setTimeout(() => {
+        handleFitToRegions();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+    prevRegionsLengthRef.current = regions.length;
+  }, [regions.length, handleFitToRegions]);
 
   const handleTrackHeightChange = useCallback((trackId: string, height: number) => {
     setTrackHeights((prev) => ({
@@ -186,11 +266,24 @@ export const MultitrackView = () => {
     if (!canvasScrollRef.current) {
       return;
     }
-    const { scrollLeft: currentScrollLeft, scrollTop: currentScrollTop } = canvasScrollRef.current;
-    setScrollLeft(currentScrollLeft);
-    if (headerRef.current && headerRef.current.scrollTop !== currentScrollTop) {
-      headerRef.current.scrollTop = currentScrollTop;
+    
+    // Cancel any pending scroll update
+    if (scrollRafRef.current !== null) {
+      cancelAnimationFrame(scrollRafRef.current);
     }
+    
+    // Batch scroll updates using requestAnimationFrame
+    scrollRafRef.current = requestAnimationFrame(() => {
+      if (!canvasScrollRef.current) {
+        return;
+      }
+      const { scrollLeft: currentScrollLeft, scrollTop: currentScrollTop } = canvasScrollRef.current;
+      setScrollLeft(currentScrollLeft);
+      if (headerRef.current && headerRef.current.scrollTop !== currentScrollTop) {
+        headerRef.current.scrollTop = currentScrollTop;
+      }
+      scrollRafRef.current = null;
+    });
   }, []);
 
   const handleHeaderScroll = useCallback(() => {
@@ -218,6 +311,39 @@ export const MultitrackView = () => {
             Tracks
           </h2>
           <LoopToggle />
+          <button
+            type="button"
+            className="btn btn-xs btn-ghost"
+            onClick={handleFitToRegions}
+            disabled={regions.length === 0}
+            title="Fit to All Regions"
+          >
+            📐 Fit
+          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              className="btn btn-xs btn-ghost"
+              onClick={() => {
+                const centerX = viewportWidth / 2;
+                handleZoomChange(zoom * 0.8, centerX);
+              }}
+              title="Zoom Out"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              className="btn btn-xs btn-ghost"
+              onClick={() => {
+                const centerX = viewportWidth / 2;
+                handleZoomChange(zoom * 1.25, centerX);
+              }}
+              title="Zoom In"
+            >
+              +
+            </button>
+          </div>
           <InfoTooltip>Ctrl+Scroll to zoom</InfoTooltip>
         </div>
         <div className="flex items-center gap-2">
@@ -318,6 +444,7 @@ export const MultitrackView = () => {
           ref={canvasScrollRef}
           onScroll={handleCanvasScroll}
           className="relative flex-1 overflow-auto bg-base-200/40"
+          style={{ willChange: 'scroll-position' }}
         >
           {tracks.length === 0 ? (
             <div className="flex h-full items-center justify-center">
