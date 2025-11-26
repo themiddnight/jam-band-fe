@@ -47,8 +47,16 @@ import { getSafariUserMessage } from "@/shared/utils/webkitCompat";
 import { useDeepLinkHandler } from "@/shared/hooks/useDeepLinkHandler";
 import { EffectsChainSection } from "@/features/effects";
 import { useEffectsIntegration } from "@/features/effects/hooks/useEffectsIntegration";
+import { usePerformRoomRecording } from "@/features/rooms/hooks/usePerformRoomRecording";
 import { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+
+// Helper function to format recording duration
+function formatDuration(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
 
 /**
  * Room page using the RoomSocketManager for namespace-based connections
@@ -184,6 +192,7 @@ const PerformRoom = memo(() => {
 
   const {
     voiceUsers,
+    localStream,
     addLocalStream,
     removeLocalStream,
     performIntentionalCleanup,
@@ -251,6 +260,17 @@ const PerformRoom = memo(() => {
   // Copy room URL to clipboard with role selection
   const [isInvitePopupOpen, setIsInvitePopupOpen] = useState(false);
   const inviteBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Recording functionality
+  const { isRecording, recordingDuration, toggleRecording } = usePerformRoomRecording({
+    localVoiceStream: localStream,
+    onRecordingComplete: (blob) => {
+      console.log('Recording completed:', blob.size, 'bytes');
+    },
+    onError: (error) => {
+      console.error('Recording error:', error);
+    },
+  });
 
   // Instrument swap state
   const [pendingSwapTarget, setPendingSwapTarget] = useState<RoomUser | null>(
@@ -903,6 +923,17 @@ const PerformRoom = memo(() => {
                     ⚙️
                   </button>
                 )}
+                {/* Recording Button */}
+                <button
+                  onClick={toggleRecording}
+                  className={`btn btn-xs ${isRecording ? 'btn-error' : 'btn-ghost'}`}
+                  title={isRecording ? `Recording... ${formatDuration(recordingDuration)}` : 'Start recording session'}
+                >
+                  {isRecording ? '⏹️' : '⏺️'}
+                  {isRecording && (
+                    <span className="ml-1 text-xs">{formatDuration(recordingDuration)}</span>
+                  )}
+                </button>
                 <div className="relative">
                   <button
                     ref={inviteBtnRef}
