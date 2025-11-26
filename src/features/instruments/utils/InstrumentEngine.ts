@@ -4,6 +4,7 @@ import {
   getSafariLoadTimeout,
   handleSafariAudioError,
   findNextCompatibleInstrument,
+  isSafari,
 } from "../../../shared/utils/webkitCompat";
 import { getOptimalAudioConfig } from "../../audio";
 import { Soundfont, DrumMachine } from "smplr";
@@ -834,7 +835,6 @@ export class InstrumentEngine {
   }
 
   private createSynthesizer(): any {
-    const { isSafari } = require("../../../shared/utils/webkitCompat");
     const isSafariBrowser = isSafari();
     
     // Safari-safe oscillator types (avoid complex waveforms that may cause issues)
@@ -871,7 +871,7 @@ export class InstrumentEngine {
           envelope: commonEnvelope,
         });
 
-      case "analog_poly":
+      case "analog_poly": {
         // Safari: Reduce polyphony for better stability
         const maxPolyphony = isSafariBrowser ? 16 : 32;
         
@@ -881,11 +881,13 @@ export class InstrumentEngine {
           );
         }
         
-        return new Tone.PolySynth(Tone.Synth, {
-          maxPolyphony,
+        const polySynth = new Tone.PolySynth(Tone.Synth, {
           oscillator: commonOscillator,
           envelope: commonEnvelope,
         });
+        polySynth.maxPolyphony = maxPolyphony;
+        return polySynth;
+      }
 
       case "fm_mono":
         return new Tone.FMSynth({
@@ -901,7 +903,7 @@ export class InstrumentEngine {
           },
         });
 
-      case "fm_poly":
+      case "fm_poly": {
         // Safari: Reduce polyphony for FM synths (more CPU intensive)
         const fmMaxPolyphony = isSafariBrowser ? 12 : 32;
         
@@ -911,8 +913,7 @@ export class InstrumentEngine {
           );
         }
         
-        return new Tone.PolySynth(Tone.FMSynth, {
-          maxPolyphony: fmMaxPolyphony,
+        const fmPolySynth = new Tone.PolySynth(Tone.FMSynth, {
           harmonicity: this.synthState.harmonicity,
           modulationIndex: this.synthState.modulationIndex,
           envelope: commonEnvelope,
@@ -924,6 +925,9 @@ export class InstrumentEngine {
             release: this.synthState.modRelease,
           },
         });
+        fmPolySynth.maxPolyphony = fmMaxPolyphony;
+        return fmPolySynth;
+      }
 
       default:
         return new Tone.Synth({
@@ -1189,7 +1193,11 @@ export class InstrumentEngine {
       // Clear pending releases/stops
       this.clearPendingNote(note);
 
-      if (this.synthRef instanceof Tone.PolySynth) {
+      // Check if this is a polyphonic synth by name (more reliable than instanceof)
+      const isPolySynth = this.config.instrumentName === 'analog_poly' || 
+                          this.config.instrumentName === 'fm_poly';
+
+      if (isPolySynth) {
         this.playPolySynthNote(note, velocity, isKeyHeld);
       } else {
         this.playMonoSynthNote(note, velocity, isKeyHeld);

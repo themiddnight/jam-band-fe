@@ -192,6 +192,12 @@ export const useHistoryStore = create<HistoryStoreState>((set, get) => ({
       isUndoAvailable: newPast.length > 0,
       isRedoAvailable: newFuture.length > 0,
     });
+    
+    // Sync the state change to other users
+    // Import dynamically to avoid circular dependencies
+    import('../services/dawSyncService').then(({ dawSyncService }) => {
+      dawSyncService.syncFullStateUpdate();
+    });
   },
   redo: () => {
     const { past, present, future } = get();
@@ -208,6 +214,12 @@ export const useHistoryStore = create<HistoryStoreState>((set, get) => ({
       future: newFuture,
       isUndoAvailable: newPast.length > 0,
       isRedoAvailable: newFuture.length > 0,
+    });
+    
+    // Sync the state change to other users
+    // Import dynamically to avoid circular dependencies
+    import('../services/dawSyncService').then(({ dawSyncService }) => {
+      dawSyncService.syncFullStateUpdate();
     });
   },
   clearHistory: () =>

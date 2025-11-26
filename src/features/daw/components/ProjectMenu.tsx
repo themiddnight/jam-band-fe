@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { useProjectManager } from '../hooks/useProjectManager';
 import { useRoom } from '@/features/rooms';
+import { useMixdown } from '../hooks/useMixdown';
+import { MixdownSettingsModal } from './MixdownSettingsModal';
+import { MixdownProgressModal } from './MixdownProgressModal';
+import type { MixdownSettings } from '../hooks/useMixdown';
 
 type ProjectMenuProps = {
   canLoadProject?: boolean;
@@ -24,6 +28,10 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
   const { currentRoom, currentUser } = useRoom();
   const [showRecoverDialog, setShowRecoverDialog] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  
+  // Mixdown state
+  const { isMixingDown, progress, error: mixdownError, startMixdown, abortMixdown } = useMixdown();
+  const [showMixdownSettings, setShowMixdownSettings] = useState(false);
 
   const handleSave = async () => {
     try {
@@ -62,6 +70,36 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
     }
   };
 
+  const handleMixdownClick = () => {
+    setShowMixdownSettings(true);
+  };
+
+  const handleMixdownExport = async (settings: MixdownSettings) => {
+    setShowMixdownSettings(false);
+    
+    const blob = await startMixdown(settings);
+    
+    if (blob) {
+      // Download the file
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mixdown-${Date.now()}.wav`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      // Show notification that project state was reloaded
+      console.log('✅ Mixdown complete! Project state reloaded from server.');
+      // You could add a toast notification here if you have a toast system
+    }
+  };
+
+  const handleAbortMixdown = () => {
+    abortMixdown();
+  };
+
   // Check for auto-save on mount
   React.useEffect(() => {
     const checkAutoSave = async () => {
@@ -78,7 +116,7 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
         <button 
           className="btn btn-xs btn-secondary" 
           onClick={handleSave} 
-          disabled={isSaving}
+          disabled={isSaving || isMixingDown}
         >
           <span className="hidden sm:inline">{isSaving ? 'Saving...' : 'Save Project'}</span>
           <span className="sm:hidden">{isSaving ? 'Saving...' : 'Save'}</span>
@@ -88,12 +126,22 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
           <button 
             className="btn btn-xs btn-accent" 
             onClick={handleLoad} 
-            disabled={isLoading}
+            disabled={isLoading || isMixingDown}
           >
             <span className="hidden sm:inline">{isLoading ? 'Loading...' : 'Load Project'}</span>
             <span className="sm:hidden">{isLoading ? 'Loading...' : 'Load'}</span>
           </button>
         )}
+
+        <button
+          className="btn btn-xs btn-info"
+          onClick={handleMixdownClick}
+          disabled={isMixingDown}
+          title="Export project as WAV file"
+        >
+          <span className="hidden sm:inline">Mixdown</span>
+          <span className="sm:hidden">🎵</span>
+        </button>
 
         {uploadProgress > 0 && uploadProgress < 100 && (
           <span className="text-xs sm:text-sm text-info ml-1 sm:ml-2">
@@ -113,6 +161,13 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
         </div>
       )}
 
+      {/* Mixdown Error Display */}
+      {mixdownError && (
+        <div className="alert alert-error m-1 sm:m-2 text-xs sm:text-sm">
+          <span>Mixdown error: {mixdownError}</span>
+        </div>
+      )}
+
       {/* Recover Dialog */}
       {showRecoverDialog && (
         <RecoverDialog
@@ -120,6 +175,20 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
           onCancel={() => setShowRecoverDialog(false)}
         />
       )}
+
+      {/* Mixdown Settings Modal */}
+      <MixdownSettingsModal
+        open={showMixdownSettings}
+        onClose={() => setShowMixdownSettings(false)}
+        onExport={handleMixdownExport}
+      />
+
+      {/* Mixdown Progress Modal */}
+      <MixdownProgressModal
+        open={isMixingDown}
+        progress={progress}
+        onAbort={handleAbortMixdown}
+      />
     </div>
   );
 }

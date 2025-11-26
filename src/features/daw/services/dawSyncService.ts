@@ -31,6 +31,7 @@ export class DAWSyncService {
   private userId: string | null = null;
   private username: string | null = null;
   private isSyncing = false; // Flag to prevent circular updates
+  private isPaused = false; // Flag to pause incoming sync updates (e.g., during mixdown)
   private effectChainDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Debounced effect chain update (500ms)
@@ -116,6 +117,7 @@ export class DAWSyncService {
     this.socket.on('arrange:marker_updated', this.handleMarkerUpdated.bind(this));
     this.socket.on('arrange:marker_deleted', this.handleMarkerDeleted.bind(this));
     this.socket.on('arrange:voice_state', this.handleVoiceStateUpdate.bind(this));
+    this.socket.on('arrange:full_state_update', this.handleFullStateUpdate.bind(this));
   }
 
   /**
@@ -154,6 +156,7 @@ export class DAWSyncService {
     this.socket.off('arrange:marker_updated');
     this.socket.off('arrange:marker_deleted');
     this.socket.off('arrange:voice_state');
+    this.socket.off('arrange:full_state_update');
   }
 
   // ========== Outgoing sync methods (called from stores) ==========
@@ -164,6 +167,39 @@ export class DAWSyncService {
   requestState(): void {
     if (!this.socket || !this.roomId) return;
     this.socket.emit('arrange:request_state', { roomId: this.roomId });
+  }
+
+  /**
+   * Pause incoming sync updates (e.g., during mixdown export)
+   * Outgoing updates are still sent so other users can continue working
+   */
+  pauseSync(): void {
+    console.log('🎵 DAW Sync paused (incoming updates blocked)');
+    this.isPaused = true;
+  }
+
+  /**
+   * Resume incoming sync updates and request latest state from server
+   */
+  resumeSync(): void {
+    console.log('🎵 DAW Sync resumed (requesting latest state)');
+    this.isPaused = false;
+    this.requestState();
+  }
+
+  /**
+   * Check if sync is currently paused
+   */
+  isPausedSync(): boolean {
+    return this.isPaused;
+  }
+
+  /**
+   * Check if incoming updates should be blocked
+   * Returns true if syncing or paused
+   */
+  private shouldBlockIncoming(): boolean {
+    return this.isSyncing || this.isPaused;
   }
 
   /**
@@ -417,6 +453,7 @@ export class DAWSyncService {
     voiceStates?: Record<string, { isMuted: boolean }>;
     broadcastStates?: Record<string, { username: string; trackId: string | null }>;
   }): void {
+    // Allow state sync even when paused (this is used to reload state after mixdown)
     this.isSyncing = true;
     try {
       // Clear existing state
@@ -510,7 +547,7 @@ export class DAWSyncService {
   }
 
   private handleTrackAdded(data: { track: Track; userId: string }): void {
-    if (this.isSyncing) return;
+    if (this.shouldBlockIncoming()) return;
     // Filter out self-generated events
     if (data.userId === this.userId) return;
     this.isSyncing = true;
@@ -522,7 +559,7 @@ export class DAWSyncService {
   }
 
   private handleTrackUpdated(data: { trackId: string; updates: Partial<Track>; userId: string }): void {
-    if (this.isSyncing) return;
+    if (this.shouldBlockIncoming()) return;
     // Filter out self-generated events
     if (data.userId === this.userId) return;
     this.isSyncing = true;
@@ -534,7 +571,7 @@ export class DAWSyncService {
   }
 
   private handleTrackDeleted(data: { trackId: string; userId: string }): void {
-    if (this.isSyncing) return;
+    if (this.shouldBlockIncoming()) return;
     // Filter out self-generated events
     if (data.userId === this.userId) return;
     this.isSyncing = true;
@@ -551,7 +588,7 @@ export class DAWSyncService {
     instrumentCategory?: string;
     userId: string;
   }): void {
-    if (this.isSyncing) return;
+    if (this.shouldBlockIncoming()) return;
     // Filter out self-generated events
     if (data.userId === this.userId) return;
     this.isSyncing = true;
@@ -567,7 +604,7 @@ export class DAWSyncService {
   }
 
   private handleTrackReordered(data: { trackIds: string[]; userId: string }): void {
-    if (this.isSyncing) return;
+    if (this.shouldBlockIncoming()) return;
     // Filter out self-generated events
     if (data.userId === this.userId) return;
     this.isSyncing = true;
@@ -579,7 +616,7 @@ export class DAWSyncService {
   }
 
   private handleRegionAdded(data: { region: Region; userId: string }): void {
-    if (this.isSyncing) return;
+    if (this.shouldBlockIncoming()) return;
     // Filter out self-generated events
     if (data.userId === this.userId) return;
     this.isSyncing = true;
@@ -592,7 +629,7 @@ export class DAWSyncService {
   }
 
   private handleRegionUpdated(data: { regionId: string; updates: Partial<Region>; userId: string }): void {
-    if (this.isSyncing) return;
+    if (this.shouldBlockIncoming()) return;
     // Filter out self-generated events
     if (data.userId === this.userId) return;
     this.isSyncing = true;
@@ -604,7 +641,7 @@ export class DAWSyncService {
   }
 
   private handleRegionMoved(data: { regionId: string; newStart: number; userId: string }): void {
-    if (this.isSyncing) return;
+    if (this.shouldBlockIncoming()) return;
     // Filter out self-generated events
     if (data.userId === this.userId) return;
     this.isSyncing = true;
@@ -616,7 +653,7 @@ export class DAWSyncService {
   }
 
   private handleRegionDragBatch(data: { updates: RegionDragUpdatePayload[]; userId: string }): void {
-    if (this.isSyncing || data.userId === this.userId) return;
+    if (this.shouldBlockIncoming() || data.userId === this.userId) return;
     if (!Array.isArray(data.updates) || data.updates.length === 0) {
       return;
     }
@@ -649,7 +686,7 @@ export class DAWSyncService {
   }
 
   private handleRegionDeleted(data: { regionId: string; userId: string }): void {
-    if (this.isSyncing) return;
+    if (this.shouldBlockIncoming()) return;
     // Filter out self-generated events
     if (data.userId === this.userId) return;
     this.isSyncing = true;
@@ -661,7 +698,7 @@ export class DAWSyncService {
   }
 
   private handleNoteAdded(data: { regionId: string; note: MidiNote; userId: string }): void {
-    if (this.isSyncing) return;
+    if (this.shouldBlockIncoming()) return;
     // Filter out self-generated events
     if (data.userId === this.userId) return;
     this.isSyncing = true;
@@ -673,7 +710,7 @@ export class DAWSyncService {
   }
 
   private handleNoteUpdated(data: { regionId: string; noteId: string; updates: Partial<MidiNote>; userId: string }): void {
-    if (this.isSyncing) return;
+    if (this.shouldBlockIncoming()) return;
     // Filter out self-generated events
     if (data.userId === this.userId) return;
     this.isSyncing = true;
@@ -685,7 +722,7 @@ export class DAWSyncService {
   }
 
   private handleNoteDeleted(data: { regionId: string; noteId: string; userId: string }): void {
-    if (this.isSyncing) return;
+    if (this.shouldBlockIncoming()) return;
     // Filter out self-generated events
     if (data.userId === this.userId) return;
     this.isSyncing = true;
@@ -702,7 +739,7 @@ export class DAWSyncService {
     effectChain: EffectChainState;
     userId: string;
   }): void {
-    if (this.isSyncing) return;
+    if (this.shouldBlockIncoming()) return;
     // Filter out self-generated events
     if (data.userId === this.userId) return;
     this.isSyncing = true;
@@ -721,7 +758,7 @@ export class DAWSyncService {
     params: Partial<SynthState>;
     userId: string;
   }): void {
-    if (this.isSyncing) return;
+    if (this.shouldBlockIncoming()) return;
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
@@ -794,7 +831,7 @@ export class DAWSyncService {
   }
 
   private handleBpmChanged(data: { bpm: number; userId: string }): void {
-    if (this.isSyncing) return;
+    if (this.shouldBlockIncoming()) return;
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
@@ -808,7 +845,7 @@ export class DAWSyncService {
     timeSignature: TimeSignature;
     userId: string;
   }): void {
-    if (this.isSyncing) return;
+    if (this.shouldBlockIncoming()) return;
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
@@ -823,7 +860,7 @@ export class DAWSyncService {
     scale: 'major' | 'minor';
     userId: string;
   }): void {
-    if (this.isSyncing) return;
+    if (this.shouldBlockIncoming()) return;
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
@@ -839,7 +876,7 @@ export class DAWSyncService {
     userId: string;
     username: string;
   }): void {
-    if (this.isSyncing || data.userId === this.userId) return;
+    if (this.shouldBlockIncoming() || data.userId === this.userId) return;
     // Track and region selections remain local so other users don't see our highlight state.
   }
 
@@ -938,7 +975,7 @@ export class DAWSyncService {
       durationBeats: number;
     };
   }): void {
-    if (this.isSyncing || data.userId === this.userId) return;
+    if (this.shouldBlockIncoming() || data.userId === this.userId) return;
     const store = useRecordingStore.getState();
     store.setRemoteRecordingPreview({
       userId: data.userId,
@@ -951,7 +988,7 @@ export class DAWSyncService {
   }
 
   private handleRecordingPreviewEnd(data: { userId: string }): void {
-    if (this.isSyncing || data.userId === this.userId) return;
+    if (this.shouldBlockIncoming() || data.userId === this.userId) return;
     useRecordingStore.getState().removeRemoteRecordingPreview(data.userId);
   }
 
@@ -981,8 +1018,42 @@ export class DAWSyncService {
     this.socket.emit('arrange:marker_delete', { roomId: this.roomId, markerId });
   }
 
+  /**
+   * Sync full state update (for undo/redo operations)
+   * This broadcasts the complete current state to other users
+   */
+  syncFullStateUpdate(): void {
+    if (!this.socket || !this.roomId || this.isSyncing) return;
+    
+    const trackStore = useTrackStore.getState();
+    const regionStore = useRegionStore.getState();
+    const markerStore = useMarkerStore.getState();
+    const projectStore = useProjectStore.getState();
+    
+    // Sanitize regions to remove non-serializable data
+    const sanitizedRegions = regionStore.regions.map((region) => {
+      if (region.type === 'audio') {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { audioBuffer, audioBlob, ...rest } = region;
+        return rest;
+      }
+      return region;
+    });
+    
+    this.socket.emit('arrange:full_state_update', {
+      roomId: this.roomId,
+      state: {
+        tracks: trackStore.tracks,
+        regions: sanitizedRegions,
+        markers: markerStore.markers,
+        bpm: projectStore.bpm,
+        timeSignature: projectStore.timeSignature,
+      },
+    });
+  }
+
   private handleMarkerAdded(data: { marker: TimeMarker; userId: string }): void {
-    if (this.isSyncing || data.userId === this.userId) return;
+    if (this.shouldBlockIncoming() || data.userId === this.userId) return;
 
     this.isSyncing = true;
     try {
@@ -993,7 +1064,7 @@ export class DAWSyncService {
   }
 
   private handleMarkerUpdated(data: { markerId: string; updates: Partial<TimeMarker>; userId: string }): void {
-    if (this.isSyncing || data.userId === this.userId) return;
+    if (this.shouldBlockIncoming() || data.userId === this.userId) return;
 
     this.isSyncing = true;
     try {
@@ -1004,7 +1075,7 @@ export class DAWSyncService {
   }
 
   private handleMarkerDeleted(data: { markerId: string; userId: string }): void {
-    if (this.isSyncing) return;
+    if (this.shouldBlockIncoming()) return;
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
@@ -1017,6 +1088,44 @@ export class DAWSyncService {
   private handleVoiceStateUpdate(data: { userId: string; isMuted: boolean }): void {
     if (!data?.userId) return;
     useArrangeUserStateStore.getState().setVoiceState(data.userId, data.isMuted);
+  }
+
+  private handleFullStateUpdate(data: {
+    userId: string;
+    state: {
+      tracks: Track[];
+      regions: Region[];
+      markers: TimeMarker[];
+      bpm: number;
+      timeSignature: TimeSignature;
+    };
+  }): void {
+    if (this.shouldBlockIncoming() || data.userId === this.userId) return;
+    
+    console.log('🔄 Received full state update from undo/redo', {
+      userId: data.userId,
+      tracks: data.state.tracks.length,
+      regions: data.state.regions.length,
+      markers: data.state.markers.length,
+    });
+    
+    this.isSyncing = true;
+    try {
+      // Update tracks
+      useTrackStore.getState().syncSetTracks(data.state.tracks);
+      
+      // Update regions
+      useRegionStore.getState().syncSetRegions(data.state.regions);
+      
+      // Update markers
+      useMarkerStore.getState().syncSetMarkers(data.state.markers);
+      
+      // Update project settings
+      useProjectStore.getState().setBpm(data.state.bpm);
+      useProjectStore.getState().setTimeSignature(data.state.timeSignature);
+    } finally {
+      this.isSyncing = false;
+    }
   }
 }
 
