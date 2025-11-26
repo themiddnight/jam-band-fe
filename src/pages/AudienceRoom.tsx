@@ -438,7 +438,7 @@ const AudienceRoom = memo(() => {
                       </svg>
                       Audience ({currentRoom?.users?.filter(u => u.role === 'audience').length || 0})
                     </h4>
-                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                    <div className="flex gap-2 space-y-1 max-h-40 overflow-y-auto">
                       {currentRoom?.users
                         ?.filter(user => user.role === 'audience')
                         .map(user => (
