@@ -33,7 +33,7 @@ import {
   KickUserModal,
   RoomSettingsModal,
 } from "@/features/rooms";
-import { useRoom } from "@/features/rooms";
+import { useRoom, useBroadcastStream } from "@/features/rooms";
 import { Footer } from "@/features/ui";
 import { ScaleSlots } from "@/features/ui";
 import { AnchoredPopup, Modal } from "@/features/ui";
@@ -175,7 +175,7 @@ const PerformRoom = memo(() => {
   const [isPendingPopupOpen, setIsPendingPopupOpen] = useState(false);
   const pendingBtnRef = useRef<HTMLButtonElement>(null);
 
-  // WebRTC Voice Communication - allow all users (including audience) to participate
+  // WebRTC Voice Communication for room owner and band members
   const isVoiceEnabled = !!currentUser?.role;
   const canTransmitVoice =
     currentUser?.role === "room_owner" || currentUser?.role === "band_member";
@@ -196,9 +196,6 @@ const PerformRoom = memo(() => {
     addLocalStream,
     removeLocalStream,
     performIntentionalCleanup,
-    enableAudioReception,
-    canTransmit,
-    isAudioEnabled,
     peerConnections,
   } = useWebRTCVoice(webRTCParams);
 
@@ -233,29 +230,6 @@ const PerformRoom = memo(() => {
   // Track last seen peer ids to diff additions/removals
   const lastSeenPeerIdsRef = useRef<Set<string>>(new Set());
 
-  // Auto-enable audio reception for audience members when they join the room
-  useEffect(() => {
-    // Only auto-enable for audience members who can't transmit but can receive
-    if (
-      isVoiceEnabled &&
-      !canTransmit &&
-      !isAudioEnabled &&
-      currentUser?.role === "audience" &&
-      currentRoom?.id
-    ) {
-      console.log("🎧 Auto-enabling audio reception for audience member");
-      enableAudioReception().catch((error) => {
-        console.warn("⚠️ Failed to auto-enable audio reception:", error);
-      });
-    }
-  }, [
-    isVoiceEnabled,
-    canTransmit,
-    isAudioEnabled,
-    currentUser?.role,
-    currentRoom?.id,
-    enableAudioReception,
-  ]);
 
   // Copy room URL to clipboard with role selection
   const [isInvitePopupOpen, setIsInvitePopupOpen] = useState(false);
@@ -270,6 +244,17 @@ const PerformRoom = memo(() => {
     onError: (error) => {
       console.error('Recording error:', error);
     },
+  });
+
+  // Broadcast streaming for audience (room owner only)
+  const {
+    isBroadcasting,
+    isStarting: isBroadcastStarting,
+    toggleBroadcast,
+  } = useBroadcastStream({
+    socket: activeSocket,
+    localVoiceStream: localStream,
+    enabled: currentUser?.role === "room_owner",
   });
 
   // Instrument swap state
@@ -515,34 +500,6 @@ const PerformRoom = memo(() => {
     preloadCriticalComponents();
   }, []);
 
-  // Auto-enable audio for audience members when they join (with user gesture fallback)
-  useEffect(() => {
-    if (
-      currentUser?.role === "audience" &&
-      isVoiceEnabled &&
-      !isAudioEnabled &&
-      currentRoom
-    ) {
-      // Try to auto-enable audio after a short delay to ensure room is fully loaded
-      const timer = setTimeout(() => {
-        enableAudioReception().catch((error) => {
-          console.log(
-            "🎧 Auto audio enable failed (user gesture required):",
-            error
-          );
-          // This is expected on mobile - user will need to click the button
-        });
-      }, 1000);
-
-      return () => clearTimeout(timer);
-    }
-  }, [
-    currentUser?.role,
-    isVoiceEnabled,
-    isAudioEnabled,
-    currentRoom,
-    enableAudioReception,
-  ]);
 
   // Sequencer hook for recording integration
   useEffect(() => {
@@ -934,6 +891,26 @@ const PerformRoom = memo(() => {
                     <span className="ml-1 text-xs">{formatDuration(recordingDuration)}</span>
                   )}
                 </button>
+                {/* Broadcast Button - Room Owner Only */}
+                {currentUser?.role === "room_owner" && (
+                  <button
+                    onClick={toggleBroadcast}
+                    className={`btn btn-xs ${isBroadcasting ? 'btn-success' : 'btn-ghost'}`}
+                    title={isBroadcasting ? 'Stop broadcasting to audience' : 'Start broadcasting to audience'}
+                    disabled={isBroadcastStarting}
+                  >
+                    {isBroadcastStarting ? (
+                      <span className="loading loading-spinner loading-xs"></span>
+                    ) : isBroadcasting ? (
+                      <>
+                        <span className="animate-pulse">📡</span>
+                        <span className="ml-1 text-xs">LIVE</span>
+                      </>
+                    ) : (
+                      '📡'
+                    )}
+                  </button>
+                )}
                 <div className="relative">
                   <button
                     ref={inviteBtnRef}
@@ -1125,9 +1102,7 @@ const PerformRoom = memo(() => {
               <span className="text-sm text-base-content/70">
                 {currentUser?.role === "room_owner"
                   ? "Room Owner"
-                  : currentUser?.role === "band_member"
-                    ? "Band Member"
-                    : "Audience"}
+                  : "Band Member"}
               </span>
             </div>
           </div>
@@ -1149,7 +1124,7 @@ const PerformRoom = memo(() => {
             )}
 
             {/* Voice Communication - Only for users who can transmit */}
-            {isVoiceEnabled && canTransmit && (
+            {isVoiceEnabled && canTransmitVoice && (
               <VoiceInput
                 isVisible={isVoiceEnabled}
                 onStreamReady={handleStreamReady}
@@ -1276,88 +1251,6 @@ const PerformRoom = memo(() => {
               </>
             )}
           </div>
-
-          {/* Audience View */}
-          {currentUser?.role === "audience" && (
-            <div className="w-full max-w-6xl mb-3">
-              <div className="card bg-base-100 shadow-xl">
-                <div className="card-body text-center">
-                  <h3 className="card-title justify-center">Audience Mode</h3>
-                  <p className="text-base-content/70">
-                    You are listening to the jam session. Band members can play
-                    instruments while you enjoy the music.
-                  </p>
-                  {isVoiceEnabled && (
-                    <div className="mt-4 space-y-3">
-                      {/* WebRTC Connection Status Indicator */}
-                      <div className="flex items-center justify-center gap-2 text-sm">
-                        <span className="font-medium">Voice Chat Status:</span>
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`w-3 h-3 rounded-full ${
-                              // For audience members (can't transmit), show connected if audio is enabled
-                              !canTransmit && isAudioEnabled
-                                ? "bg-success"
-                                : // For band members, show based on peer connections
-                                  peerConnections.size > 0
-                                  ? "bg-success"
-                                  : isConnecting
-                                    ? "bg-warning"
-                                    : "bg-error"
-                            }`}
-                          ></div>
-                          <span
-                            className={
-                              // For audience members (can't transmit), show connected if audio is enabled
-                              !canTransmit && isAudioEnabled
-                                ? "text-success"
-                                : // For band members, show based on peer connections
-                                  peerConnections.size > 0
-                                  ? "text-success"
-                                  : isConnecting
-                                    ? "text-warning"
-                                    : "text-error"
-                            }
-                          >
-                            {!canTransmit && isAudioEnabled
-                              ? "Connected (Listen-only)"
-                              : !canTransmit && !isAudioEnabled
-                                ? "Audio Not Enabled"
-                                : peerConnections.size > 0
-                                  ? `Connected (${peerConnections.size} peer${
-                                      peerConnections.size === 1 ? "" : "s"
-                                    })`
-                                  : isConnecting
-                                    ? "Connecting..."
-                                    : "Not Connected"}
-                          </span>
-                        </div>
-                      </div>
-
-                      {!isAudioEnabled ? (
-                        <div className="space-y-2">
-                          <p className="text-sm text-base-content/80">
-                            Enable audio to hear voice chat from band members
-                          </p>
-                          <button
-                            onClick={enableAudioReception}
-                            className="btn btn-primary btn-sm"
-                          >
-                            🔊 Enable Audio
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-center gap-2 text-sm text-base-content/60">
-                          <span className="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
-                          Voice chat: Listen-only mode (Audio enabled)
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Room Members and Chat */}
           <div className="flex flex-col-reverse md:flex-row gap-3 w-full max-w-6xl">

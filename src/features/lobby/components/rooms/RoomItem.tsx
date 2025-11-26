@@ -1,4 +1,5 @@
 import { ConnectionState } from "@/features/audio/types/connectionState";
+import { useNavigate } from "react-router-dom";
 
 interface RoomItemProps {
   room: {
@@ -9,6 +10,7 @@ interface RoomItemProps {
     isPrivate: boolean;
     isHidden: boolean;
     userCount: number;
+    isBroadcasting?: boolean;
   };
   onJoinRoom: (roomId: string, role: "band_member" | "audience") => void;
   isConnecting: boolean;
@@ -21,6 +23,18 @@ export function RoomItem({
   isConnecting,
   connectionState,
 }: RoomItemProps) {
+  const navigate = useNavigate();
+
+  const handleAudienceJoin = () => {
+    if (room.isBroadcasting) {
+      // Navigate to dedicated audience room for HLS streaming
+      navigate(`/perform/${room.id}/audience`);
+    } else {
+      // Show tooltip or message that broadcast is not active
+      // For now, just disable the button
+    }
+  };
+
   return (
     <div className="card bg-base-200">
       <div className="card-body p-4">
@@ -38,6 +52,9 @@ export function RoomItem({
               )}
               {room.isHidden && (
                 <span className="badge badge-neutral badge-sm">Hidden</span>
+              )}
+              {room.roomType === "perform" && room.isBroadcasting && (
+                <span className="badge badge-success badge-sm animate-pulse">LIVE</span>
               )}
             </div>
             {room.description && (
@@ -61,15 +78,19 @@ export function RoomItem({
               Band Member
             </button>
             {room.roomType === "perform" && (
-              <button
-                onClick={() => onJoinRoom(room.id, "audience")}
-                className="btn btn-xs btn-outline"
-                disabled={
-                  isConnecting || connectionState === ConnectionState.REQUESTING
-                }
-              >
-                Audience
-              </button>
+              <div className="tooltip" data-tip={room.isBroadcasting ? "Join as audience" : "Broadcast not active"}>
+                <button
+                  onClick={handleAudienceJoin}
+                  className={`btn btn-xs ${room.isBroadcasting ? "btn-success" : "btn-outline btn-disabled"}`}
+                  disabled={
+                    !room.isBroadcasting ||
+                    isConnecting || 
+                    connectionState === ConnectionState.REQUESTING
+                  }
+                >
+                  {room.isBroadcasting ? "Watch Live" : "Audience"}
+                </button>
+              </div>
             )}
           </div>
         </div>

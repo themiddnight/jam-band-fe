@@ -12,6 +12,7 @@ export interface Room {
   isHidden: boolean;
   createdAt: string;
   userCount: number;
+  isBroadcasting?: boolean;
 }
 
 export interface User {

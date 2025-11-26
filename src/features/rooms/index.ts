@@ -23,6 +23,8 @@ export { InviteUrlInput } from "./components/InviteUrlInput";
 export { useRoom } from "./hooks/useRoom";
 export { useLobby } from "./hooks/useLobby";
 export { useInviteUrl } from "./hooks/useInviteUrl";
+export { useAudienceRoom } from "./hooks/useAudienceRoom";
+export { useBroadcastStream } from "./hooks/useBroadcastStream";
 
 // Services exports
 export { useRoomQuery, roomKeys } from "./services/useRooms";
