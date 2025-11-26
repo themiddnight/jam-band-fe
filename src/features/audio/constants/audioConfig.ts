@@ -113,6 +113,8 @@ export const ADAPTIVE_AUDIO_CONFIG = {
 
 // Helper function to get optimal settings based on device capability
 export const getOptimalAudioConfig = () => {
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  
   // Check if device supports low latency
   const supportsLowLatency =
     "AudioContext" in window && typeof AudioContext !== "undefined";
@@ -144,7 +146,35 @@ export const getOptimalAudioConfig = () => {
     };
   }
 
-  // Return optimal configuration for modern devices
+  // Safari-specific optimizations
+  if (isSafari) {
+    return {
+      ...AUDIO_CONFIG,
+      TONE_CONTEXT: {
+        lookAhead: 0.008, // Slightly higher than Chrome for stability (8ms vs 5ms)
+        updateInterval: 0.008, // Slightly higher than Chrome for stability
+      },
+      INSTRUMENT_AUDIO_CONTEXT: {
+        sampleRate: 48000, // Safari works best with 48kHz
+        latencyHint: "playback" as AudioContextLatencyCategory, // More stable than 'interactive' on Safari
+      },
+      WEBRTC_AUDIO_CONTEXT: {
+        sampleRate: 48000,
+        latencyHint: "playback" as AudioContextLatencyCategory, // Safari needs 'playback' for stability
+      },
+      PERFORMANCE: {
+        ...AUDIO_CONFIG.PERFORMANCE,
+        maxPolyphony: 20, // Reduced from 32 for Safari
+        maxPolyphonyWithWebRTC: 8, // Reduced from 10 for Safari
+        webrtcPriorityMode: {
+          ...AUDIO_CONFIG.PERFORMANCE.webrtcPriorityMode,
+          maxPolyphony: 4, // Reduced from 6 for Safari
+        },
+      },
+    };
+  }
+
+  // Return optimal configuration for Chrome/Edge
   return {
     ...AUDIO_CONFIG,
     INSTRUMENT_AUDIO_CONTEXT: {

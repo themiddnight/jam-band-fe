@@ -231,19 +231,29 @@ export const MultitrackView = () => {
     });
   }, [regions, viewportWidth, timeSignature.numerator, clampTimelineZoom]);
 
-  // Auto-fit when regions change (e.g., after project load)
+  // Auto-fit when project is loaded
+  const isLoadingProject = useProjectStore((state) => state.isLoadingProject);
   const prevRegionsLengthRef = useRef(regions.length);
+  const prevIsLoadingProjectRef = useRef(isLoadingProject);
+  
   useEffect(() => {
-    // Only auto-fit if regions were added (e.g., project loaded)
-    if (regions.length > 0 && prevRegionsLengthRef.current === 0) {
+    // Only auto-fit if:
+    // 1. A project is being loaded (isLoadingProject flag is true)
+    // 2. Regions were added (went from 0 to more than 0)
+    const hadNoRegions = prevRegionsLengthRef.current === 0;
+    const hasRegionsNow = regions.length > 0;
+    
+    if (isLoadingProject && hadNoRegions && hasRegionsNow) {
       // Delay to ensure viewport is ready
       const timer = setTimeout(() => {
         handleFitToRegions();
       }, 100);
       return () => clearTimeout(timer);
     }
+    
     prevRegionsLengthRef.current = regions.length;
-  }, [regions.length, handleFitToRegions]);
+    prevIsLoadingProjectRef.current = isLoadingProject;
+  }, [regions.length, isLoadingProject, handleFitToRegions]);
 
   const handleTrackHeightChange = useCallback((trackId: string, height: number) => {
     setTrackHeights((prev) => ({

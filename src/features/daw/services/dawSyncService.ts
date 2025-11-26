@@ -888,6 +888,9 @@ export class DAWSyncService {
     
     console.log(`🎵 Loading project from ${data.uploadedBy}:`, data.projectData.metadata?.name);
     
+    // Set loading flag to trigger auto-fit zoom
+    useProjectStore.getState().setIsLoadingProject(true);
+    
     // Import the deserialize functions
     import('./projectSerializer').then(async ({ deserializeProject }) => {
       this.isSyncing = true;
@@ -911,8 +914,14 @@ export class DAWSyncService {
           regions: data.projectData.regions?.length || 0,
           synthStates: Object.keys(data.projectData.synthStates || {}).length,
         });
+        
+        // Clear loading flag after a short delay to allow auto-fit to trigger
+        setTimeout(() => {
+          useProjectStore.getState().setIsLoadingProject(false);
+        }, 200);
       } catch (error) {
         console.error('Failed to load project from server:', error);
+        useProjectStore.getState().setIsLoadingProject(false);
       } finally {
         this.isSyncing = false;
       }

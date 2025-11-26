@@ -617,6 +617,9 @@ export class InstrumentEngine {
   }
 
   private async loadTraditionalInstrument(): Promise<any> {
+    const { isSafari } = await import("../../../shared/utils/webkitCompat");
+    const isSafariBrowser = isSafari();
+    
     // Use separate audio context for instruments
     const { AudioContextManager } = await import(
       "../../audio/constants/audioConfig"
@@ -660,6 +663,13 @@ export class InstrumentEngine {
     }
 
     const loadTimeout = getSafariLoadTimeout();
+    
+    // Safari-specific: Log extended timeout for user awareness
+    if (isSafariBrowser) {
+      console.log(
+        `🍎 Safari: Loading ${this.config.instrumentName} with extended timeout (${loadTimeout}ms) and format validation`
+      );
+    }
 
     const loadPromise = new Promise<void>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
@@ -671,11 +681,30 @@ export class InstrumentEngine {
       newInstrument.load
         .then(() => {
           clearTimeout(timeoutId);
+          
+          // Safari-specific: Validate that instrument actually loaded samples
+          if (isSafariBrowser) {
+            console.log(
+              `🍎 Safari: Successfully loaded ${this.config.instrumentName}`
+            );
+          }
+          
           resolve();
         })
         .catch((error: any) => {
           clearTimeout(timeoutId);
-          reject(handleSafariAudioError(error, this.config.instrumentName));
+          
+          // Enhanced Safari error handling with format-specific messages
+          const enhancedError = handleSafariAudioError(error, this.config.instrumentName);
+          
+          if (isSafariBrowser) {
+            console.error(
+              `🍎 Safari: Failed to load ${this.config.instrumentName}:`,
+              enhancedError.message
+            );
+          }
+          
+          reject(enhancedError);
         });
     });
 
@@ -805,6 +834,23 @@ export class InstrumentEngine {
   }
 
   private createSynthesizer(): any {
+    const { isSafari } = require("../../../shared/utils/webkitCompat");
+    const isSafariBrowser = isSafari();
+    
+    // Safari-safe oscillator types (avoid complex waveforms that may cause issues)
+    // Safari has known issues with custom PeriodicWave and some complex oscillator types
+    const safeOscillatorTypes = ['sine', 'square', 'sawtooth', 'triangle'];
+    const safeOscillatorType = isSafariBrowser && 
+      !safeOscillatorTypes.includes(this.synthState.oscillatorType)
+      ? 'sawtooth' // Default to sawtooth for Safari if using unsupported type
+      : this.synthState.oscillatorType;
+    
+    if (isSafariBrowser && safeOscillatorType !== this.synthState.oscillatorType) {
+      console.log(
+        `🍎 Safari: Using safe oscillator type '${safeOscillatorType}' instead of '${this.synthState.oscillatorType}'`
+      );
+    }
+    
     const commonEnvelope = {
       attack: this.synthState.ampAttack,
       decay: this.synthState.ampDecay,
@@ -813,7 +859,7 @@ export class InstrumentEngine {
     };
 
     const commonOscillator = {
-      type: this.synthState.oscillatorType as any,
+      type: safeOscillatorType as any,
     };
 
     switch (this.config.instrumentName) {
@@ -826,7 +872,17 @@ export class InstrumentEngine {
         });
 
       case "analog_poly":
+        // Safari: Reduce polyphony for better stability
+        const maxPolyphony = isSafariBrowser ? 16 : 32;
+        
+        if (isSafariBrowser) {
+          console.log(
+            `🍎 Safari: Using reduced polyphony (${maxPolyphony}) for analog_poly synth`
+          );
+        }
+        
         return new Tone.PolySynth(Tone.Synth, {
+          maxPolyphony,
           oscillator: commonOscillator,
           envelope: commonEnvelope,
         });
@@ -846,7 +902,17 @@ export class InstrumentEngine {
         });
 
       case "fm_poly":
+        // Safari: Reduce polyphony for FM synths (more CPU intensive)
+        const fmMaxPolyphony = isSafariBrowser ? 12 : 32;
+        
+        if (isSafariBrowser) {
+          console.log(
+            `🍎 Safari: Using reduced polyphony (${fmMaxPolyphony}) for fm_poly synth`
+          );
+        }
+        
         return new Tone.PolySynth(Tone.FMSynth, {
+          maxPolyphony: fmMaxPolyphony,
           harmonicity: this.synthState.harmonicity,
           modulationIndex: this.synthState.modulationIndex,
           envelope: commonEnvelope,

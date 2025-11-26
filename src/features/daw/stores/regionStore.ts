@@ -97,6 +97,7 @@ const createAudioRegion = (
     loopIterations: 1,
     audioUrl,
     audioBuffer,
+    audioFileId: id, // Use region ID as the original audio file reference
     trimStart: 0,
     originalLength: length,
     color: track?.color ?? '#6b7280',
@@ -308,11 +309,13 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
         })),
       };
     } else {
-      // Audio region
+      // Audio region - preserve audioFileId to reference the same audio file
+      const audioFileId = region.audioFileId || region.id;
       duplicated = {
         ...region,
         id: newId,
         start: newStart,
+        audioFileId, // Keep reference to original audio file
       };
     }
     
@@ -398,12 +401,16 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
         const leftTrimStart = region.trimStart || 0;
         const rightTrimStart = leftTrimStart + leftLength;
         
+        // Preserve audioFileId to reference the same audio file
+        const audioFileId = region.audioFileId || region.id;
+        
         const leftRegion: AudioRegion = {
           ...region,
           id: leftId,
           length: leftLength,
           trimStart: leftTrimStart,
           originalLength: region.originalLength,
+          audioFileId, // Keep reference to original audio file
           loopEnabled: false,
           loopIterations: 1,
         };
@@ -415,6 +422,7 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
           length: rightLength,
           trimStart: rightTrimStart,
           originalLength: region.originalLength,
+          audioFileId, // Keep reference to original audio file
           loopEnabled: false,
           loopIterations: 1,
         };

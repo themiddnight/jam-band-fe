@@ -32,16 +32,51 @@ export const createWebKitCompatibleAudioContext =
       throw new Error("AudioContext not supported in this browser");
     }
 
-    const context = new AudioContextClass();
+    // Safari-specific: Use 'playback' latency hint for better stability
+    // Chrome/Edge can use 'interactive' for lower latency
+    const contextOptions = isSafari()
+      ? {
+          sampleRate: 48000,
+          latencyHint: 'playback' as AudioContextLatencyCategory, // More stable on Safari
+        }
+      : {
+          sampleRate: 48000,
+          latencyHint: 'interactive' as AudioContextLatencyCategory,
+        };
 
-    // Safari requires explicit resume after user gesture and proper initialization
-    if (context.state === "suspended") {
+    const context = new AudioContextClass(contextOptions);
+
+    // Safari requires explicit resume after user gesture - multiple attempts may be needed
+    let attempts = 0;
+    const maxAttempts = 3;
+    let currentState: AudioContextState = context.state;
+    
+    while (currentState === "suspended" && attempts < maxAttempts) {
       try {
         await context.resume();
+        // Wait a bit to ensure state change propagates
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        attempts++;
+        currentState = context.state;
+        
+        if (currentState === "running") {
+          console.log(`🍎 Safari AudioContext resumed after ${attempts} attempt(s)`);
+          break;
+        }
       } catch (error) {
-        console.warn("Failed to resume AudioContext:", error);
-        throw error;
+        console.warn(`Resume attempt ${attempts + 1} failed:`, error);
+        attempts++;
+        currentState = context.state;
+        
+        if (attempts >= maxAttempts) {
+          throw error;
+        }
       }
+    }
+    
+    // Final check after all attempts
+    if (context.state !== "running" && context.state !== "closed") {
+      throw new Error(`Failed to resume AudioContext after multiple attempts. Current state: ${context.state}`);
     }
 
     // Ensure AudioDestinationNode is properly initialized in Safari
@@ -76,7 +111,7 @@ export const createWebKitCompatibleAudioContext =
     return context;
   };
 
-// Safari-specific audio decoding error handling
+// Safari-specific audio decoding error handling with format validation
 export const handleSafariAudioError = (
   error: any,
   instrumentName: string,
@@ -84,14 +119,24 @@ export const handleSafariAudioError = (
   if (isSafari() && error.name === "EncodingError") {
     return new Error(
       `Safari audio decoding failed for ${instrumentName}. ` +
-        `This may be due to Safari's audio format restrictions or codec compatibility issues.`,
+        `This instrument may use an unsupported audio format (Safari only supports MP3, AAC, WAV, and ALAC). ` +
+        `Try switching to a different instrument or use Chrome/Edge for full compatibility.`,
     );
   }
 
   if (isSafari() && error.message?.includes("decoding")) {
     return new Error(
-      `Safari audio decoding error: ${error.message}. ` +
+      `Safari audio decoding error for ${instrumentName}: ${error.message}. ` +
+        `This may be due to Safari's stricter audio format requirements. ` +
         `Try refreshing the page or switching to a different instrument.`,
+    );
+  }
+
+  if (isSafari() && error.message?.includes("format")) {
+    return new Error(
+      `Safari cannot decode audio format for ${instrumentName}. ` +
+        `Safari has limited codec support compared to Chrome/Edge. ` +
+        `Please try a different instrument or switch to Chrome/Edge.`,
     );
   }
 
@@ -117,9 +162,16 @@ export const getWebKitTouchStyles = (): React.CSSProperties => {
   };
 };
 
-// Safari-specific instrument loading timeouts
+// Safari-specific instrument loading timeouts (Safari needs more time for audio decoding)
 export const getSafariLoadTimeout = (baseTimeout: number = 10000): number => {
-  return isSafari() ? baseTimeout * 1.5 : baseTimeout;
+  if (!isSafari()) return baseTimeout;
+  
+  // Safari desktop vs mobile have different performance characteristics
+  if (isSafariMobile()) {
+    return baseTimeout * 2.0; // Mobile Safari needs even more time
+  }
+  
+  return baseTimeout * 1.5; // Desktop Safari
 };
 
 // Check if current Safari version has known audio issues

@@ -57,6 +57,7 @@ export interface SerializedRegion {
   sustainEvents?: any[];
   // Audio specific
   audioFileRef?: string; // Reference to audio file in zip
+  audioFileId?: string; // ID of the original audio file (for deduplication)
   trimStart?: number;
   originalLength?: number;
   gain?: number;
@@ -233,9 +234,12 @@ function serializeRegion(region: Region): SerializedRegion {
     };
   } else {
     const audioRegion = region as AudioRegion;
+    // Use audioFileId for the file reference (falls back to region.id for backward compatibility)
+    const audioFileId = audioRegion.audioFileId || region.id;
     return {
       ...base,
-      audioFileRef: audioRegion.audioUrl ? `audio/${region.id}.webm` : undefined,
+      audioFileRef: audioRegion.audioUrl ? `audio/${audioFileId}.webm` : undefined,
+      audioFileId, // Store audioFileId for proper reference restoration
       trimStart: audioRegion.trimStart,
       originalLength: audioRegion.originalLength,
       gain: audioRegion.gain,
@@ -247,17 +251,29 @@ function serializeRegion(region: Region): SerializedRegion {
 
 /**
  * Extract audio files from audio regions
+ * Uses audioFileId for deduplication - split/duplicated regions share the same audio file
  */
 export async function extractAudioFiles(
   regions: Region[]
 ): Promise<AudioFileData[]> {
   const audioFiles: AudioFileData[] = [];
+  const processedFileIds = new Set<string>(); // Track which audio files we've already processed
   console.log(`🎵 Extracting audio from ${regions.length} regions...`);
 
   for (const region of regions) {
     if (region.type === 'audio') {
       const audioRegion = region as AudioRegion;
-      console.log(`  Processing audio region ${region.id}...`);
+      
+      // Use audioFileId for deduplication (falls back to region.id for backward compatibility)
+      const audioFileId = audioRegion.audioFileId || region.id;
+      
+      // Skip if we've already processed this audio file
+      if (processedFileIds.has(audioFileId)) {
+        console.log(`  Skipping region ${region.id} - audio file ${audioFileId} already processed`);
+        continue;
+      }
+      
+      console.log(`  Processing audio region ${region.id} (file: ${audioFileId})...`);
       
       // Priority order:
       // 1. audioBlob (original recorded format - opus/webm, best quality/size)
@@ -271,10 +287,11 @@ export async function extractAudioFiles(
                            audioRegion.audioBlob.type.includes('ogg') ? 'ogg' : 'audio';
           console.log(`    ✅ Original blob: ${(audioRegion.audioBlob.size / 1024).toFixed(2)} KB`);
           audioFiles.push({
-            regionId: region.id,
-            fileName: `${region.id}.${extension}`,
+            regionId: audioFileId, // Use audioFileId instead of region.id
+            fileName: `${audioFileId}.${extension}`,
             blob: audioRegion.audioBlob,
           });
+          processedFileIds.add(audioFileId);
         } else {
           console.warn(`    ⚠️ Blob is empty for region ${region.id}, trying fallback...`);
         }
@@ -288,10 +305,11 @@ export async function extractAudioFiles(
             if (blob.size > 0) {
               console.log(`    ✅ Fetched: ${(blob.size / 1024).toFixed(2)} KB`);
               audioFiles.push({
-                regionId: region.id,
-                fileName: `${region.id}.webm`,
+                regionId: audioFileId, // Use audioFileId instead of region.id
+                fileName: `${audioFileId}.webm`,
                 blob,
               });
+              processedFileIds.add(audioFileId);
             } else {
               console.warn(`    ⚠️ Fetched blob is empty for region ${region.id}, trying fallback...`);
             }
@@ -304,17 +322,18 @@ export async function extractAudioFiles(
       }
       
       // Fallback to AudioBuffer conversion if no blob was saved
-      if (audioFiles.length === 0 || audioFiles[audioFiles.length - 1].regionId !== region.id) {
+      if (!processedFileIds.has(audioFileId)) {
         if (audioRegion.audioBuffer) {
           console.log(`    Fallback: Converting AudioBuffer to WAV...`);
           try {
             const blob = audioBufferToWav(audioRegion.audioBuffer);
             console.log(`    ✅ Converted: ${(blob.size / 1024).toFixed(2)} KB`);
             audioFiles.push({
-              regionId: region.id,
-              fileName: `${region.id}.wav`,
+              regionId: audioFileId, // Use audioFileId instead of region.id
+              fileName: `${audioFileId}.wav`,
               blob,
             });
+            processedFileIds.add(audioFileId);
           } catch (error) {
             console.error(`    ❌ Failed to convert AudioBuffer:`, error);
           }
@@ -325,6 +344,7 @@ export async function extractAudioFiles(
     }
   }
 
+  console.log(`✅ Extracted ${audioFiles.length} unique audio files from ${regions.filter(r => r.type === 'audio').length} audio regions`);
   return audioFiles;
 }
 
@@ -485,13 +505,17 @@ export function deserializeRegions(
         sustainEvents: region.sustainEvents || [],
       } as MidiRegion;
     } else {
-      const audioBuffer = audioBuffers.get(region.id);
+      // Use audioFileId to look up the audio buffer (falls back to region.id for backward compatibility)
+      const audioFileId = region.audioFileId || region.id;
+      const audioBuffer = audioBuffers.get(audioFileId);
+      
       // Preserve audioUrl from serialized data (server path) if no buffer is provided
       const audioRegion = region as any;
       return {
         ...region,
         audioBuffer,
         audioUrl: audioRegion.audioUrl || (audioBuffer ? URL.createObjectURL(new Blob()) : undefined),
+        audioFileId, // Restore the audioFileId reference
         trimStart: region.trimStart,
         originalLength: region.originalLength,
         gain: region.gain,

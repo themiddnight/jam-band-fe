@@ -106,7 +106,12 @@ export async function saveProjectAsZip(projectName: string): Promise<void> {
  * Load a project from a .collab (zip) file
  */
 export async function loadProjectFromZip(file: File): Promise<void> {
+  const { useProjectStore } = await import('../stores/projectStore');
+  
   try {
+    // Set loading flag to trigger auto-fit zoom
+    useProjectStore.getState().setIsLoadingProject(true);
+    
     // 1. Read ZIP file
     const zip = await JSZip.loadAsync(file);
 
@@ -176,7 +181,14 @@ export async function loadProjectFromZip(file: File): Promise<void> {
     await applySynthStatesToEngines(projectData);
 
     console.log(`Project "${projectData.metadata.name}" loaded successfully`);
+    
+    // Clear loading flag after a short delay to allow auto-fit to trigger
+    setTimeout(() => {
+      useProjectStore.getState().setIsLoadingProject(false);
+    }, 200);
   } catch (error) {
+    // Clear loading flag on error
+    useProjectStore.getState().setIsLoadingProject(false);
     console.error('Failed to load project:', error);
     throw new Error(`Failed to load project: ${error}`);
   }
