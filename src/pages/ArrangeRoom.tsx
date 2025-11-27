@@ -54,10 +54,10 @@ export default function ArrangeRoom() {
   const [showPerformanceSettingsModal, setShowPerformanceSettingsModal] = useState(false);
   const [isPendingPopupOpen, setIsPendingPopupOpen] = useState(false);
   const pendingBtnRef = useRef<HTMLButtonElement>(null);
-  const recordingHandlerRef = useRef<(message: MidiMessage) => void>(() => {});
+  const recordingHandlerRef = useRef<(message: MidiMessage) => void>(() => { });
   const [recordingHandlerBase, setRecordingHandlerBase] = useState<
     (message: MidiMessage) => void
-  >(() => () => {});
+  >(() => () => { });
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -232,7 +232,6 @@ export default function ArrangeRoom() {
   // Wrap recording handler to also broadcast virtual instrument notes
   const recordingHandler = useCallback(
     (message: MidiMessage) => {
-      console.log('[ArrangeRoom] recordingHandler called with message:', message.type, message.note);
       // Use ref to avoid closure issues with late initialization
       recordingHandlerRef.current(message);
       // Broadcast virtual instrument notes if broadcasting is enabled
@@ -279,9 +278,6 @@ export default function ArrangeRoom() {
         "🎛️ Effects integration error (Arrange Room):",
         effectsError
       );
-    }
-    if (isEffectsInitialized) {
-      console.log("🎛️ Arrange Room effects integration active");
     }
   }, [effectsError, isEffectsInitialized]);
 
@@ -388,7 +384,6 @@ export default function ArrangeRoom() {
   const handleSavePerformanceSettings = useCallback(
     (settings: typeof performanceSettings) => {
       updatePerformanceSettings(settings);
-      console.log("⚡ Performance settings updated:", settings);
       // You can add additional logic here to apply settings immediately
     },
     [updatePerformanceSettings]
@@ -442,19 +437,20 @@ export default function ArrangeRoom() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-lg sm:text-xl font-bold text-secondary">
-                  Arrange Room
+                  Arrange
                 </h2>
-                {currentRoom && (
-                  <span className="badge badge-xs sm:badge-sm badge-primary">
-                    {currentRoom.name}
-                  </span>
-                )}
-                {currentUser?.username && (
-                  <span className="text-xs hidden sm:inline">
-                    {" | "}
-                    {currentUser.username}
-                  </span>
-                )}
+                <span className="badge badge-xs sm:badge-sm badge-primary">
+                  {currentRoom?.name}
+                </span>
+                <div className='divider divider-horizontal !m-0' />
+                <span className="text-xs">
+                  {currentUser?.username}
+                </span>
+                <span className="text-xs text-base-content/70">
+                  {currentUser?.role === "room_owner"
+                    ? "Room Owner"
+                    : "Band Member"}
+                </span>
                 {/* Room Settings Button - Only for room owner */}
                 {isRoomOwner && (
                   <button
@@ -583,13 +579,13 @@ export default function ArrangeRoom() {
                 <main className="flex flex-1 flex-col gap-2 p-1 overflow-y-auto min-w-0">
                   {/* Resizable Multitrack Section */}
                   <div className="relative">
-                    <div 
+                    <div
                       style={{ height: `${multitrackHeight}px` }}
                       className="overflow-hidden"
                     >
                       <MultitrackView />
                     </div>
-                    
+
                     {/* Resize Handle */}
                     <div
                       ref={attachMultitrackHandleRef}
@@ -611,13 +607,13 @@ export default function ArrangeRoom() {
 
                   {/* Resizable Region Editor Section */}
                   <div className="relative">
-                    <div 
+                    <div
                       style={{ height: `${regionEditorHeight}px` }}
                       className="overflow-hidden"
                     >
                       <RegionEditor />
                     </div>
-                    
+
                     {/* Resize Handle */}
                     <div
                       ref={attachRegionEditorHandleRef}

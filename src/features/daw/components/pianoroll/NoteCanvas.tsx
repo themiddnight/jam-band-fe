@@ -92,13 +92,13 @@ interface HoldState {
 const HOLD_DURATION = 400; // ms - duration to hold before starting marquee
 const HOLD_MOVE_THRESHOLD = 10; // pixels - max movement during hold
 
-// Memoized playhead component to prevent unnecessary parent re-renders
-const PlayheadIndicator = React.memo<{ x: number; height: number; width: number }>(
-  ({ x, height, width }) => {
+// Memoized playhead component - needs layer offset for virtualized stage
+const PlayheadIndicator = React.memo<{ x: number; height: number; width: number; layerOffset?: number }>(
+  ({ x, height, width, layerOffset = 0 }) => {
     if (x < 0 || x > width) return null;
     
     return (
-      <Layer listening={false}>
+      <Layer listening={false} x={layerOffset}>
         <Line
           points={[x, 0, x, height]}
           stroke="#3b82f6"
@@ -206,11 +206,18 @@ export const NoteCanvas = ({
     return visibleMidiNumbers[rowIndex];
   }, [visibleMidiNumbers]);
   
-  const width = totalBeats * pixelsPerBeat * zoom;
+  // Full content dimensions
+  const fullWidth = totalBeats * pixelsPerBeat * zoom;
   const height = visibleMidiNumbers.length * NOTE_HEIGHT;
   const beatWidth = pixelsPerBeat * zoom;
   // Since notes are now in absolute positions, playhead should also be absolute
   const playheadX = playheadBeats * beatWidth;
+  
+  // Virtualized Stage: only render viewport + buffer, not full width
+  // This prevents massive canvas allocation at high zoom levels
+  const stageBuffer = 200;
+  const stageWidth = Math.min(fullWidth, viewportWidth + stageBuffer * 2);
+  const stageOffsetX = Math.max(0, Math.min(scrollLeft - stageBuffer, fullWidth - stageWidth));
   
   // Dynamic grid division based on zoom level
   const dynamicGridDivision = useMemo(() => getGridDivisionForZoom(zoom), [zoom]);
@@ -267,7 +274,9 @@ export const NoteCanvas = ({
       if (!pointer) {
         return null;
       }
-      const beat = pointer.x / beatWidth;
+      // Add stageOffsetX to convert from stage-relative to absolute coordinates
+      const absoluteX = pointer.x + stageOffsetX;
+      const beat = absoluteX / beatWidth;
       const pitch = getPitchFromY(pointer.y);
       if (pitch === null) {
         return null;
@@ -275,10 +284,10 @@ export const NoteCanvas = ({
       return {
         beat,
         pitch: clampPitch(pitch),
-        pointer,
+        pointer: { x: absoluteX, y: pointer.y },
       };
     },
-    [beatWidth, getPitchFromY]
+    [beatWidth, getPitchFromY, stageOffsetX]
   );
 
   const handleBackgroundDoubleClick = useCallback(
@@ -496,11 +505,12 @@ export const NoteCanvas = ({
         if (!pointer) {
           return;
         }
+        // Use absolute coordinates for virtualized stage
         setMarqueeState((prev) =>
           prev
             ? {
                 ...prev,
-                currentX: pointer.x,
+                currentX: pointer.x + stageOffsetX,
                 currentY: pointer.y,
               }
             : prev
@@ -533,6 +543,7 @@ export const NoteCanvas = ({
       panState,
       resizeState,
       snapBeat,
+      stageOffsetX,
     ]
   );
 
@@ -635,6 +646,9 @@ export const NoteCanvas = ({
         return;
       }
       
+      // Convert to absolute coordinates for virtualized stage
+      const absoluteX = pointer.x + stageOffsetX;
+      
       // Ctrl+drag for panning
       if (event.evt.ctrlKey || event.evt.metaKey) {
         setPanState({
@@ -649,7 +663,13 @@ export const NoteCanvas = ({
                       'touches' in event.evt;
       
       if (isTouch) {
-        // For touch: start hold timer for marquee selection
+        // For touch on empty space: start panning immediately with single finger
+        // Also start hold timer - if user holds without moving, switch to marquee
+        setPanState({
+          startX: pointer.x,
+          startY: pointer.y,
+        });
+        
         setHoldState({
           x: pointer.x,
           y: pointer.y,
@@ -657,11 +677,13 @@ export const NoteCanvas = ({
         });
         
         holdTimerRef.current = window.setTimeout(() => {
-          // After hold duration, start marquee selection
+          // After hold duration without significant movement, start marquee selection
+          // The panState will be cleared when marquee starts
+          setPanState(null);
           setMarqueeState({
-            originX: pointer.x,
+            originX: absoluteX,
             originY: pointer.y,
-            currentX: pointer.x,
+            currentX: absoluteX,
             currentY: pointer.y,
             additive: event.evt.shiftKey,
           });
@@ -669,17 +691,17 @@ export const NoteCanvas = ({
           holdTimerRef.current = null;
         }, HOLD_DURATION);
       } else {
-        // For mouse: immediately start marquee selection
+        // For mouse: immediately start marquee selection (use absolute coords)
         setMarqueeState({
-          originX: pointer.x,
+          originX: absoluteX,
           originY: pointer.y,
-          currentX: pointer.x,
+          currentX: absoluteX,
           currentY: pointer.y,
           additive: event.evt.shiftKey,
         });
       }
     },
-    []
+    [stageOffsetX]
   );
 
   const dragOffsets = useMemo(() => {
@@ -707,147 +729,154 @@ export const NoteCanvas = ({
 
 
   return (
-    <Stage
-      width={width}
-      height={height}
-      onPointerMove={handlePointerMove}
-      onTouchMove={(e) => handlePointerMove(e as unknown as KonvaEventObject<PointerEvent>)}
-      onPointerUp={handlePointerUp}
-      onTouchEnd={handlePointerUp}
-      onMouseDown={handleMarqueeStart}
-      onTouchStart={(e) => handleMarqueeStart(e as unknown as KonvaEventObject<PointerEvent>)}
-      onDblClick={handleBackgroundDoubleClick}
-      perfectDrawEnabled={false}
-    >
-      {/* Static Layer: Background and grid - rarely changes */}
-      <Layer>
-        <NoteGridBackground
-          width={width}
+    <div style={{ position: 'relative', width: fullWidth, height }}>
+      {/* Virtualized Stage - positioned at stageOffsetX within the full-width wrapper */}
+      <div style={{ position: 'absolute', left: stageOffsetX, top: 0 }}>
+        <Stage
+          width={stageWidth}
           height={height}
-          beatWidth={beatWidth}
-          totalBeats={totalBeats}
-          visibleStartBeat={visibleStartBeat}
-          visibleEndBeat={visibleEndBeat}
-          gridInterval={gridInterval}
-          regionHighlightStart={regionHighlightStart}
-          regionHighlightEnd={regionHighlightEnd}
-          visibleMidiNumbers={visibleMidiNumbers}
-          midiToRowIndex={midiToRowIndex}
-          viewMode={viewMode}
-          rootNote={rootNote}
-        />
-      </Layer>
-      
-      {/* Dynamic Layer: Notes and interactive elements */}
-      <Layer
-        onPointerDown={(event) => {
-          // Event delegation: find which element was clicked
-          const target = event.target;
-          const targetName = target.name();
-          
-          if (targetName && targetName.startsWith('note-')) {
-            const noteId = targetName.replace('note-', '');
-            const note = visibleNotes.find((n) => n.id === noteId);
-            if (note) {
-              handleNotePointerDown(note, event);
-            }
-          } else if (targetName && targetName.startsWith('handle-')) {
-            const noteId = targetName.replace('handle-', '');
-            const note = visibleNotes.find((n) => n.id === noteId);
-            if (note) {
-              handleResizeHandleDown(note, event);
-            }
-          } else if (targetName === 'note-background' && !event.evt.shiftKey) {
-            // Clear selection when clicking background without shift
-            onClearSelection();
-          }
-        }}
-      >
-        {/* Regular editable notes - only visible */}
-        {visibleNotes.map((note) => {
-          const isDragging = Boolean(dragState?.noteIds.includes(note.id));
-          const isDuplicating = isDragging && dragState?.isDuplicate;
-          const dragOffset = isDuplicating ? undefined : dragOffsets[note.id];
-          const previewDuration = previewDurations[note.id];
-          const isSelected = selectedNoteIds.includes(note.id);
-          
-          // Check if note is out of scale (considering drag offset)
-          const effectivePitch = dragOffset 
-            ? clampPitch(note.pitch + dragOffset.pitch)
-            : note.pitch;
-          const isOutOfScale = checkIsNoteOutOfScale(effectivePitch);
-          
-          return (
-            <BaseNote
-              key={note.id}
-              note={note}
+          onPointerMove={handlePointerMove}
+          onTouchMove={(e) => handlePointerMove(e as unknown as KonvaEventObject<PointerEvent>)}
+          onPointerUp={handlePointerUp}
+          onTouchEnd={handlePointerUp}
+          onMouseDown={handleMarqueeStart}
+          onTouchStart={(e) => handleMarqueeStart(e as unknown as KonvaEventObject<PointerEvent>)}
+          onDblClick={handleBackgroundDoubleClick}
+          onDblTap={handleBackgroundDoubleClick}
+          perfectDrawEnabled={false}
+        >
+          {/* Static Layer: Background and grid - offset by -stageOffsetX */}
+          <Layer x={-stageOffsetX}>
+            <NoteGridBackground
+              width={fullWidth}
+              height={height}
               beatWidth={beatWidth}
-              isSelected={isSelected}
-              isDragging={isDragging}
-              dragOffset={dragOffset}
-              previewDuration={previewDuration}
-              getNoteY={getNoteY}
-              isOutOfScale={isOutOfScale}
+              totalBeats={totalBeats}
+              visibleStartBeat={visibleStartBeat}
+              visibleEndBeat={visibleEndBeat}
+              gridInterval={gridInterval}
+              regionHighlightStart={regionHighlightStart}
+              regionHighlightEnd={regionHighlightEnd}
+              visibleMidiNumbers={visibleMidiNumbers}
+              midiToRowIndex={midiToRowIndex}
+              viewMode={viewMode}
+              rootNote={rootNote}
             />
-          );
-        })}
-        {/* Resize handles - only for visible selected notes (not when duplicating) */}
-        {!dragState?.isDuplicate && visibleNotes
-          .filter(note => selectedNoteIds.includes(note.id))
-          .map((note) => {
-            const dragOffset = dragOffsets[note.id];
-            const previewDuration = previewDurations[note.id];
-            
-            return (
-              <NoteResizeHandle
-                key={`handle-${note.id}`}
-                note={note}
-                beatWidth={beatWidth}
-                dragOffset={dragOffset}
-                previewDuration={previewDuration}
-                getNoteY={getNoteY}
-              />
-            );
-          })}
-        
-        {/* Duplicate previews when Alt+dragging */}
-        {dragState?.isDuplicate && visibleNotes
-          .filter(note => dragState.noteIds.includes(note.id))
-          .map((note) => {
-            const dragOffset = dragOffsets[note.id];
-            if (!dragOffset) {
-              return null;
-            }
-            
-            // Check if the duplicated note will be out of scale at its new position
-            const newPitch = clampPitch(note.pitch + dragOffset.pitch);
-            const isOutOfScale = checkIsNoteOutOfScale(newPitch);
-            
-            return (
-              <DuplicateNotePreview
-                key={`duplicate-preview-${note.id}`}
-                note={note}
-                beatWidth={beatWidth}
-                dragOffset={dragOffset}
-                getNoteY={getNoteY}
-                isOutOfScale={isOutOfScale}
-              />
-            );
-          })}
-        
-        {marqueeState && (
-          <MarqueeSelection
-            originX={marqueeState.originX}
-            originY={marqueeState.originY}
-            currentX={marqueeState.currentX}
-            currentY={marqueeState.currentY}
-          />
-        )}
-      </Layer>
+          </Layer>
       
-      {/* Playhead Layer: Separate memoized component for independent updates */}
-      <PlayheadIndicator x={playheadX} height={height} width={width} />
-    </Stage>
+          {/* Dynamic Layer: Notes and interactive elements - offset by -stageOffsetX */}
+          <Layer
+            x={-stageOffsetX}
+            onPointerDown={(event) => {
+              // Event delegation: find which element was clicked
+              const target = event.target;
+              const targetName = target.name();
+              
+              if (targetName && targetName.startsWith('note-')) {
+                const noteId = targetName.replace('note-', '');
+                const note = visibleNotes.find((n) => n.id === noteId);
+                if (note) {
+                  handleNotePointerDown(note, event);
+                }
+              } else if (targetName && targetName.startsWith('handle-')) {
+                const noteId = targetName.replace('handle-', '');
+                const note = visibleNotes.find((n) => n.id === noteId);
+                if (note) {
+                  handleResizeHandleDown(note, event);
+                }
+              } else if (targetName === 'note-background' && !event.evt.shiftKey) {
+                // Clear selection when clicking background without shift
+                onClearSelection();
+              }
+            }}
+          >
+            {/* Regular editable notes - only visible */}
+            {visibleNotes.map((note) => {
+              const isDragging = Boolean(dragState?.noteIds.includes(note.id));
+              const isDuplicating = isDragging && dragState?.isDuplicate;
+              const dragOffset = isDuplicating ? undefined : dragOffsets[note.id];
+              const previewDuration = previewDurations[note.id];
+              const isSelected = selectedNoteIds.includes(note.id);
+              
+              // Check if note is out of scale (considering drag offset)
+              const effectivePitch = dragOffset 
+                ? clampPitch(note.pitch + dragOffset.pitch)
+                : note.pitch;
+              const isOutOfScale = checkIsNoteOutOfScale(effectivePitch);
+              
+              return (
+                <BaseNote
+                  key={note.id}
+                  note={note}
+                  beatWidth={beatWidth}
+                  isSelected={isSelected}
+                  isDragging={isDragging}
+                  dragOffset={dragOffset}
+                  previewDuration={previewDuration}
+                  getNoteY={getNoteY}
+                  isOutOfScale={isOutOfScale}
+                />
+              );
+            })}
+            {/* Resize handles - only for visible selected notes (not when duplicating) */}
+            {!dragState?.isDuplicate && visibleNotes
+              .filter(note => selectedNoteIds.includes(note.id))
+              .map((note) => {
+                const dragOffset = dragOffsets[note.id];
+                const previewDuration = previewDurations[note.id];
+                
+                return (
+                  <NoteResizeHandle
+                    key={`handle-${note.id}`}
+                    note={note}
+                    beatWidth={beatWidth}
+                    dragOffset={dragOffset}
+                    previewDuration={previewDuration}
+                    getNoteY={getNoteY}
+                  />
+                );
+              })}
+            
+            {/* Duplicate previews when Alt+dragging */}
+            {dragState?.isDuplicate && visibleNotes
+              .filter(note => dragState.noteIds.includes(note.id))
+              .map((note) => {
+                const dragOffset = dragOffsets[note.id];
+                if (!dragOffset) {
+                  return null;
+                }
+                
+                // Check if the duplicated note will be out of scale at its new position
+                const newPitch = clampPitch(note.pitch + dragOffset.pitch);
+                const isOutOfScale = checkIsNoteOutOfScale(newPitch);
+                
+                return (
+                  <DuplicateNotePreview
+                    key={`duplicate-preview-${note.id}`}
+                    note={note}
+                    beatWidth={beatWidth}
+                    dragOffset={dragOffset}
+                    getNoteY={getNoteY}
+                    isOutOfScale={isOutOfScale}
+                  />
+                );
+              })}
+            
+            {marqueeState && (
+              <MarqueeSelection
+                originX={marqueeState.originX}
+                originY={marqueeState.originY}
+                currentX={marqueeState.currentX}
+                currentY={marqueeState.currentY}
+              />
+            )}
+          </Layer>
+          
+          {/* Playhead Layer: Separate memoized component with layer offset */}
+          <PlayheadIndicator x={playheadX} height={height} width={fullWidth} layerOffset={-stageOffsetX} />
+        </Stage>
+      </div>
+    </div>
   );
 };
 

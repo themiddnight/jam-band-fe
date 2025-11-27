@@ -94,7 +94,7 @@ export default function Lobby() {
       <div className="flex-1 p-3">
         <div className="max-w-6xl mx-auto">
           {/* Header */}
-          <div className="flex justify-between items-center mb-8">
+          <div className="flex justify-between items-center mb-3">
             <h1 className="text-4xl font-bold text-primary">collab</h1>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-3">

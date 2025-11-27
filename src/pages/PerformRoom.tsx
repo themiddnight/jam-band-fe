@@ -48,6 +48,9 @@ import { useDeepLinkHandler } from "@/shared/hooks/useDeepLinkHandler";
 import { EffectsChainSection } from "@/features/effects";
 import { useEffectsIntegration } from "@/features/effects/hooks/useEffectsIntegration";
 import { usePerformRoomRecording } from "@/features/rooms/hooks/usePerformRoomRecording";
+import { useSessionToCollab, saveSessionAsCollab } from "@/features/rooms";
+import type { SessionRecordingSnapshot } from "@/features/rooms";
+import { useMetronome } from "@/features/metronome/hooks/useMetronome";
 import { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -108,7 +111,7 @@ const PerformRoom = memo(() => {
     handleStopNote,
     handleReleaseKeyHeldNote,
     handleSustainChange,
-    handleSustainToggleChange,
+    // handleSustainToggleChange - using handleSustainChangeWithRecording instead
     handleApproveMember,
     handleRejectMember,
     handleLeaveRoom,
@@ -200,20 +203,17 @@ const PerformRoom = memo(() => {
   } = useWebRTCVoice(webRTCParams);
 
   // Effects integration - connect effects UI to audio processing
-  const { isInitialized: isEffectsInitialized, error: effectsError } = useEffectsIntegration({
+  const { error: effectsError } = useEffectsIntegration({
     userId: currentUser?.id || "",
     enabled: !!(currentUser?.role === "room_owner" || currentUser?.role === "band_member") && isConnected,
   });
 
-  // Log effects initialization status
+  // Handle effects initialization status
   useEffect(() => {
-    if (isEffectsInitialized) {
-      console.log('🎛️ Effects integration initialized for user:', currentUser?.username);
-    }
     if (effectsError) {
       console.error('🎛️ Effects integration error:', effectsError);
     }
-  }, [isEffectsInitialized, effectsError, currentUser?.username]);
+  }, [effectsError]);
 
   // RTC latency measurement
   const {
@@ -235,16 +235,68 @@ const PerformRoom = memo(() => {
   const [isInvitePopupOpen, setIsInvitePopupOpen] = useState(false);
   const inviteBtnRef = useRef<HTMLButtonElement>(null);
 
-  // Recording functionality
-  const { isRecording, recordingDuration, toggleRecording } = usePerformRoomRecording({
+  // Metronome for BPM
+  const { bpm } = useMetronome({
+    socket: activeSocket,
+    canEdit: currentUser?.role === "room_owner" || currentUser?.role === "band_member",
+  });
+
+  // Recording dropdown state
+  const [isRecordingMenuOpen, setIsRecordingMenuOpen] = useState(false);
+  const recordingBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Audio recording functionality (existing - records mixed audio to WAV)
+  const {
+    isRecording: isAudioRecording,
+    recordingDuration: audioRecordingDuration,
+    toggleRecording: toggleAudioRecording
+  } = usePerformRoomRecording({
     localVoiceStream: localStream,
-    onRecordingComplete: (blob) => {
-      console.log('Recording completed:', blob.size, 'bytes');
+    onRecordingComplete: () => {
+      // Handle recording completion if needed
     },
     onError: (error) => {
-      console.error('Recording error:', error);
+      console.error('Audio recording error:', error);
     },
   });
+
+  // Session to Collab recording (new - records MIDI + separate audio tracks)
+  const handleSessionRecordingComplete = useCallback(async (snapshot: SessionRecordingSnapshot) => {
+    try {
+      await saveSessionAsCollab(snapshot);
+    } catch (error) {
+      console.error('❌ Failed to save session:', error);
+    }
+  }, []);
+
+  const {
+    isRecording: isSessionRecording,
+    recordingDuration: sessionRecordingDuration,
+    toggleRecording: toggleSessionRecording,
+    recordMidiEvent,
+  } = useSessionToCollab({
+    socket: activeSocket,
+    currentRoom,
+    currentUser,
+    localVoiceStream: localStream,
+    voiceUsers,
+    bpm,
+    ownerScale: currentRoom?.ownerScale,
+    onRecordingComplete: handleSessionRecordingComplete,
+    onError: (error) => {
+      console.error('Session recording error:', error);
+    },
+  });
+
+  // Combined recording state for UI
+  const isRecording = isAudioRecording || isSessionRecording;
+  const recordingDuration = isAudioRecording ? audioRecordingDuration : sessionRecordingDuration;
+
+  // Ref to access recordMidiEvent in callbacks without re-renders
+  const recordMidiEventRef = useRef(recordMidiEvent);
+  useEffect(() => {
+    recordMidiEventRef.current = recordMidiEvent;
+  }, [recordMidiEvent]);
 
   // Broadcast streaming for audience (room owner only)
   const {
@@ -339,8 +391,21 @@ const PerformRoom = memo(() => {
   const handleStopNotesWrapper = useCallback(
     (notes: string[]) => {
       handleStopNote(notes);
+
+      // Record note_off for session recording (for .collab export)
+      if (!isInstrumentMuted && currentUser && currentInstrument && currentCategory) {
+        recordMidiEventRef.current(
+          currentUser.id,
+          currentUser.username,
+          currentInstrument,
+          currentCategory,
+          notes,
+          0,
+          "note_off"
+        );
+      }
     },
-    [handleStopNote]
+    [handleStopNote, isInstrumentMuted, currentUser, currentInstrument, currentCategory]
   );
 
   // Instrument swap handlers
@@ -449,6 +514,22 @@ const PerformRoom = memo(() => {
       const playNoteHandler = createPlayNoteHandler(isInstrumentMuted);
       playNoteHandler(notes, velocity, "note_on", isKeyHeld);
 
+      // Record to session recording if enabled (for .collab export)
+      // Only record if NOT in practice mode (isInstrumentMuted)
+      if (!isInstrumentMuted && currentUser && currentInstrument && currentCategory) {
+        // Convert velocity from 0-1 range to MIDI 0-127 range
+        const midiVelocity = Math.round(velocity * 127);
+        recordMidiEventRef.current(
+          currentUser.id,
+          currentUser.username,
+          currentInstrument,
+          currentCategory,
+          notes,
+          midiVelocity,
+          "note_on"
+        );
+      }
+
       // Also record to sequencer if recording is enabled
       if (sequencer.isRecording) {
         notes.forEach((note) => {
@@ -461,10 +542,57 @@ const PerformRoom = memo(() => {
     [
       createPlayNoteHandler,
       isInstrumentMuted,
+      currentUser,
+      currentInstrument,
+      currentCategory,
       sequencer.isRecording,
       sequencer.handleRecordNote,
       sequencer.isPlaying,
     ]
+  );
+
+  // Wrapper for key release that also records note_off events
+  const handleReleaseKeyHeldNoteWithRecording = useCallback(
+    (note: string) => {
+      // Call original handler
+      handleReleaseKeyHeldNote(note);
+
+      // Record note_off for session recording (for .collab export)
+      if (!isInstrumentMuted && currentUser && currentInstrument && currentCategory) {
+        recordMidiEventRef.current(
+          currentUser.id,
+          currentUser.username,
+          currentInstrument,
+          currentCategory,
+          [note],
+          0,
+          "note_off"
+        );
+      }
+    },
+    [handleReleaseKeyHeldNote, isInstrumentMuted, currentUser, currentInstrument, currentCategory]
+  );
+
+  // Wrapper for sustain change that also records sustain events
+  const handleSustainChangeWithRecording = useCallback(
+    (sustained: boolean) => {
+      // Call original handler
+      handleSustainChange(sustained);
+
+      // Record sustain event for session recording (for .collab export)
+      if (!isInstrumentMuted && currentUser && currentInstrument && currentCategory) {
+        recordMidiEventRef.current(
+          currentUser.id,
+          currentUser.username,
+          currentInstrument,
+          currentCategory,
+          [],
+          sustained ? 127 : 0,
+          sustained ? "sustain_on" : "sustain_off"
+        );
+      }
+    },
+    [handleSustainChange, isInstrumentMuted, currentUser, currentInstrument, currentCategory]
   );
 
   // Memoize commonProps to prevent child component re-renders
@@ -478,9 +606,9 @@ const PerformRoom = memo(() => {
       onPlayNotes: handlePlayNotesWithRecording,
       onStopNotes: handleStopNotesWrapper,
       onStopSustainedNotes: stopSustainedNotes,
-      onReleaseKeyHeldNote: handleReleaseKeyHeldNote,
-      onSustainChange: handleSustainChange,
-      onSustainToggleChange: handleSustainToggleChange,
+      onReleaseKeyHeldNote: handleReleaseKeyHeldNoteWithRecording,
+      onSustainChange: handleSustainChangeWithRecording,
+      onSustainToggleChange: handleSustainChangeWithRecording,
     }),
     [
       scaleState.rootNote,
@@ -489,9 +617,8 @@ const PerformRoom = memo(() => {
       handlePlayNotesWithRecording,
       handleStopNotesWrapper,
       stopSustainedNotes,
-      handleReleaseKeyHeldNote,
-      handleSustainChange,
-      handleSustainToggleChange,
+      handleReleaseKeyHeldNoteWithRecording,
+      handleSustainChangeWithRecording,
     ]
   );
 
@@ -553,12 +680,7 @@ const PerformRoom = memo(() => {
       }
 
       if (myData && otherData) {
-        console.log("🔄 Applying swap data for current user:", {
-          myUserId: myData.userId,
-          newInstrument: myData.instrumentName,
-          newCategory: myData.category,
-          hasSynthParams: !!myData.synthParams,
-        });
+        // Applying swap data for current user
 
         // Change instrument first
         await handleInstrumentChange(myData.instrumentName);
@@ -693,10 +815,7 @@ const PerformRoom = memo(() => {
     ) {
       // Check if room doesn't have owner scale set yet
       if (!currentRoom?.ownerScale) {
-        console.log("🎵 Initializing room owner scale in backend:", {
-          rootNote: scaleState.rootNote,
-          scale: scaleState.scale,
-        });
+        // Initializing room owner scale in backend
         handleRoomOwnerScaleChange(scaleState.rootNote, scaleState.scale);
       }
     }
@@ -867,9 +986,29 @@ const PerformRoom = memo(() => {
           {/* Room Header */}
           <div className="w-full max-w-6xl mb-4">
             {/* Room Name and Copy URL Button */}
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold">{currentRoom?.name}</h1>
+            <div className="flex justify-between items-center flex-wrap">
+              <div className="flex items-center gap-2 flrx-wrap">
+                <h2 className="text-lg sm:text-xl font-bold text-primary">
+                  Perform
+                </h2>
+                <span className="badge badge-xs sm:badge-sm badge-primary">
+                  {currentRoom?.name}
+                </span>
+
+                <div className='divider divider-horizontal !m-0' />
+
+                {/* User Name and Role */}
+                <div className="flex items-center">
+                  <span className="text-sm mr-2">
+                    {currentUser?.username}
+                  </span>
+                  <span className="text-sm text-base-content/50">
+                    {currentUser?.role === "room_owner"
+                      ? "Room Owner"
+                      : "Band Member"}
+                  </span>
+                </div>
+
                 {/* Room Settings Button - Only for room owner */}
                 {currentUser?.role === "room_owner" && (
                   <button
@@ -880,37 +1019,7 @@ const PerformRoom = memo(() => {
                     ⚙️
                   </button>
                 )}
-                {/* Recording Button */}
-                <button
-                  onClick={toggleRecording}
-                  className={`btn btn-xs ${isRecording ? 'btn-error' : 'btn-ghost'}`}
-                  title={isRecording ? `Recording... ${formatDuration(recordingDuration)}` : 'Start recording session'}
-                >
-                  {isRecording ? '⏹️' : '⏺️'}
-                  {isRecording && (
-                    <span className="ml-1 text-xs">{formatDuration(recordingDuration)}</span>
-                  )}
-                </button>
-                {/* Broadcast Button - Room Owner Only */}
-                {currentUser?.role === "room_owner" && (
-                  <button
-                    onClick={toggleBroadcast}
-                    className={`btn btn-xs ${isBroadcasting ? 'btn-success' : 'btn-ghost'}`}
-                    title={isBroadcasting ? 'Stop broadcasting to audience' : 'Start broadcasting to audience'}
-                    disabled={isBroadcastStarting}
-                  >
-                    {isBroadcastStarting ? (
-                      <span className="loading loading-spinner loading-xs"></span>
-                    ) : isBroadcasting ? (
-                      <>
-                        <span className="animate-pulse">📡</span>
-                        <span className="ml-1 text-xs">LIVE</span>
-                      </>
-                    ) : (
-                      '📡'
-                    )}
-                  </button>
-                )}
+
                 <div className="relative">
                   <button
                     ref={inviteBtnRef}
@@ -991,7 +1100,100 @@ const PerformRoom = memo(() => {
                   </AnchoredPopup>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                {/* Recording Button with Dropdown */}
+                <div className="relative">
+                  <button
+                    ref={recordingBtnRef}
+                    onClick={() => {
+                      if (isRecording) {
+                        // If recording, stop whatever is recording
+                        if (isAudioRecording) {
+                          toggleAudioRecording();
+                        } else if (isSessionRecording) {
+                          toggleSessionRecording();
+                        }
+                      } else {
+                        // If not recording, show dropdown
+                        setIsRecordingMenuOpen((v) => !v);
+                      }
+                    }}
+                    className={`btn btn-xs ${isRecording ? 'btn-error' : 'btn-soft btn-error'}`}
+                    title={isRecording ? `Recording... ${formatDuration(recordingDuration)}` : 'Start recording'}
+                  >
+                    {isRecording ? 'Stop' : 'Record'}
+                    {isRecording && (
+                      <span className="ml-1 text-xs">{formatDuration(recordingDuration)}</span>
+                    )}
+                    {!isRecording && <span className="ml-1">▼</span>}
+                  </button>
+                  <AnchoredPopup
+                    open={isRecordingMenuOpen}
+                    onClose={() => setIsRecordingMenuOpen(false)}
+                    anchorRef={recordingBtnRef}
+                    placement="bottom"
+                    className="w-56"
+                  >
+                    <div className="p-2">
+                      <h4 className="font-semibold text-sm mb-2 px-2">Record Session</h4>
+                      <ul className="menu bg-base-100 w-full p-0">
+                        <li>
+                          <button
+                            onClick={() => {
+                              setIsRecordingMenuOpen(false);
+                              toggleAudioRecording();
+                            }}
+                            className="flex items-center gap-2"
+                          >
+                            <span>🎵</span>
+                            <div className="flex flex-col items-start">
+                              <span className="font-medium">Record Audio</span>
+                              <span className="text-xs text-base-content/60">Mixed WAV file</span>
+                            </div>
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            onClick={() => {
+                              setIsRecordingMenuOpen(false);
+                              toggleSessionRecording();
+                            }}
+                            className="flex items-center gap-2"
+                          >
+                            <span>🎹</span>
+                            <div className="flex flex-col items-start">
+                              <span className="font-medium">Record Project</span>
+                              <span className="text-xs text-base-content/60">Multitrack .collab file</span>
+                            </div>
+                          </button>
+                        </li>
+                      </ul>
+                    </div>
+                  </AnchoredPopup>
+                </div>
+                {/* Broadcast Button - Room Owner Only */}
+                {currentUser?.role === "room_owner" && (
+                  <button
+                    onClick={toggleBroadcast}
+                    className={`btn btn-xs ${isBroadcasting ? 'btn-success' : 'btn-soft btn-success'}`}
+                    title={isBroadcasting ? 'Stop broadcasting to audience' : 'Start broadcasting to audience'}
+                    disabled={isBroadcastStarting}
+                  >
+                    {isBroadcastStarting ? (
+                      <span className="loading loading-spinner loading-xs"></span>
+                    ) : isBroadcasting ? (
+                      <>
+                        <span className="animate-pulse">📡</span>
+                        <span className="ml-1 text-xs">LIVE</span>
+                      </>
+                    ) : (
+                      '📡 Broadcast'
+                    )}
+                  </button>
+                )}
+
+                <div className='divider divider-horizontal !m-0' />
+
                 {/* Pending notification button for room owner */}
                 {currentUser?.role === "room_owner" && (
                   <div className="relative">
@@ -1070,15 +1272,14 @@ const PerformRoom = memo(() => {
                   </div>
                 )}
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-16">
                   <div
-                    className={`w-3 h-3 rounded-full ${
-                      isConnected
-                        ? "bg-success"
-                        : isConnecting
-                          ? "bg-warning"
-                          : "bg-error"
-                    }`}
+                    className={`w-3 h-3 rounded-full ${isConnected
+                      ? "bg-success"
+                      : isConnecting
+                        ? "bg-warning"
+                        : "bg-error"
+                      }`}
                   ></div>
                   <PingDisplay
                     ping={currentPing}
@@ -1089,21 +1290,11 @@ const PerformRoom = memo(() => {
                 </div>
                 <button
                   onClick={handleLeaveRoomClick}
-                  className="btn btn-outline btn-sm"
+                  className="btn btn-outline btn-xs"
                 >
                   Leave Room
                 </button>
               </div>
-            </div>
-
-            {/* User Name and Role */}
-            <div>
-              <span className="mr-2">{currentUser?.username}</span>
-              <span className="text-sm text-base-content/70">
-                {currentUser?.role === "room_owner"
-                  ? "Room Owner"
-                  : "Band Member"}
-              </span>
             </div>
           </div>
 
@@ -1111,7 +1302,6 @@ const PerformRoom = memo(() => {
             {/* Instrument Controls */}
             {(currentUser?.role === "room_owner" ||
               currentUser?.role === "band_member") && (
-              <>
                 <MidiStatus
                   isConnected={midiController.isConnected}
                   getMidiInputs={midiController.getMidiInputs}
@@ -1120,8 +1310,7 @@ const PerformRoom = memo(() => {
                   isRequesting={midiController.isRequesting}
                   refreshMidiDevices={midiController.refreshMidiDevices}
                 />
-              </>
-            )}
+              )}
 
             {/* Voice Communication - Only for users who can transmit */}
             {isVoiceEnabled && canTransmitVoice && (
@@ -1143,113 +1332,113 @@ const PerformRoom = memo(() => {
             {/* Instrument Controls */}
             {(currentUser?.role === "room_owner" ||
               currentUser?.role === "band_member") && (
-              <>
-                {/* Virtual Instrument Mute Control */}
-                <InstrumentMute
-                  isMuted={isInstrumentMuted}
-                  onMuteChange={setInstrumentMuted}
-                />
-
-                {/* Metronome Controls */}
-                <MetronomeControls
-                  socket={activeSocket}
-                  canEdit={
-                    currentUser?.role === "room_owner" ||
-                    currentUser?.role === "band_member"
-                  }
-                />
-
-                <ScaleSlots
-                  onSlotSelect={(rootNote, scale) => {
-                    scaleState.setRootNote(rootNote);
-                    scaleState.setScale(scale);
-
-                    // If user is room owner, broadcast the scale change
-                    if (currentUser?.role === "room_owner") {
-                      handleRoomOwnerScaleChange(rootNote, scale);
-                    }
-                  }}
-                  currentUser={currentUser}
-                  isRoomOwner={currentUser?.role === "room_owner"}
-                  followRoomOwner={currentUser?.followRoomOwner || false}
-                  onToggleFollowRoomOwner={handleToggleFollowRoomOwner}
-                  disabled={currentUser?.followRoomOwner || false}
-                  ownerScale={currentRoom?.ownerScale}
-                />
-
-                <InstrumentCategorySelector
-                  currentCategory={currentCategory}
-                  currentInstrument={currentInstrument}
-                  onCategoryChange={handleCategoryChange}
-                  onInstrumentChange={handleInstrumentChange}
-                  isLoading={isLoadingInstrument}
-                  dynamicDrumMachines={dynamicDrumMachines}
-                />
-
-                {/* Synthesizer Controls */}
-                {currentCategory === InstrumentCategory.Synthesizer &&
-                  synthState && (
-                    <div className="w-full max-w-6xl">
-                      <SynthControls
-                        currentInstrument={currentInstrument}
-                        synthState={synthState}
-                        onParamChange={updateSynthParams}
-                        onLoadPreset={loadPresetParams}
-                      />
-                    </div>
-                  )}
-
-                {/* Step Sequencer */}
-                <div className="w-full max-w-6xl">
-                  <StepSequencer
-                    socket={activeSocket}
-                    currentCategory={currentCategory}
-                    availableSamples={availableSamples}
-                    scaleNotes={[
-                      ...scaleState.getScaleNotes(
-                        scaleState.rootNote,
-                        scaleState.scale,
-                        2
-                      ),
-                      ...scaleState.getScaleNotes(
-                        scaleState.rootNote,
-                        scaleState.scale,
-                        3
-                      ),
-                      ...scaleState.getScaleNotes(
-                        scaleState.rootNote,
-                        scaleState.scale,
-                        4
-                      ),
-                      ...scaleState.getScaleNotes(
-                        scaleState.rootNote,
-                        scaleState.scale,
-                        5
-                      ),
-                      ...scaleState.getScaleNotes(
-                        scaleState.rootNote,
-                        scaleState.scale,
-                        6
-                      ),
-                    ]}
-                    rootNote={scaleState.rootNote}
-                    onPlayNotes={handlePlayNotesWrapper}
-                    onStopNotes={handleStopNotesWrapper}
-                    editMode={settings.editMode}
-                    onSelectedBeatChange={setSelectedBeat}
-                    onEditModeChange={setEditMode}
+                <>
+                  {/* Virtual Instrument Mute Control */}
+                  <InstrumentMute
+                    isMuted={isInstrumentMuted}
+                    onMuteChange={setInstrumentMuted}
                   />
-                </div>
 
-                {/* Instrument Interface */}
-                {renderInstrumentControl()}
+                  {/* Metronome Controls */}
+                  <MetronomeControls
+                    socket={activeSocket}
+                    canEdit={
+                      currentUser?.role === "room_owner" ||
+                      currentUser?.role === "band_member"
+                    }
+                  />
 
-                {/* Effects Chain Section */}
-                <div className="w-full max-w-6xl">
-                  <EffectsChainSection />
-                </div>
-              </>
-            )}
+                  <ScaleSlots
+                    onSlotSelect={(rootNote, scale) => {
+                      scaleState.setRootNote(rootNote);
+                      scaleState.setScale(scale);
+
+                      // If user is room owner, broadcast the scale change
+                      if (currentUser?.role === "room_owner") {
+                        handleRoomOwnerScaleChange(rootNote, scale);
+                      }
+                    }}
+                    currentUser={currentUser}
+                    isRoomOwner={currentUser?.role === "room_owner"}
+                    followRoomOwner={currentUser?.followRoomOwner || false}
+                    onToggleFollowRoomOwner={handleToggleFollowRoomOwner}
+                    disabled={currentUser?.followRoomOwner || false}
+                    ownerScale={currentRoom?.ownerScale}
+                  />
+
+                  <InstrumentCategorySelector
+                    currentCategory={currentCategory}
+                    currentInstrument={currentInstrument}
+                    onCategoryChange={handleCategoryChange}
+                    onInstrumentChange={handleInstrumentChange}
+                    isLoading={isLoadingInstrument}
+                    dynamicDrumMachines={dynamicDrumMachines}
+                  />
+
+                  {/* Synthesizer Controls */}
+                  {currentCategory === InstrumentCategory.Synthesizer &&
+                    synthState && (
+                      <div className="w-full max-w-6xl">
+                        <SynthControls
+                          currentInstrument={currentInstrument}
+                          synthState={synthState}
+                          onParamChange={updateSynthParams}
+                          onLoadPreset={loadPresetParams}
+                        />
+                      </div>
+                    )}
+
+                  {/* Step Sequencer */}
+                  <div className="w-full max-w-6xl">
+                    <StepSequencer
+                      socket={activeSocket}
+                      currentCategory={currentCategory}
+                      availableSamples={availableSamples}
+                      scaleNotes={[
+                        ...scaleState.getScaleNotes(
+                          scaleState.rootNote,
+                          scaleState.scale,
+                          2
+                        ),
+                        ...scaleState.getScaleNotes(
+                          scaleState.rootNote,
+                          scaleState.scale,
+                          3
+                        ),
+                        ...scaleState.getScaleNotes(
+                          scaleState.rootNote,
+                          scaleState.scale,
+                          4
+                        ),
+                        ...scaleState.getScaleNotes(
+                          scaleState.rootNote,
+                          scaleState.scale,
+                          5
+                        ),
+                        ...scaleState.getScaleNotes(
+                          scaleState.rootNote,
+                          scaleState.scale,
+                          6
+                        ),
+                      ]}
+                      rootNote={scaleState.rootNote}
+                      onPlayNotes={handlePlayNotesWrapper}
+                      onStopNotes={handleStopNotesWrapper}
+                      editMode={settings.editMode}
+                      onSelectedBeatChange={setSelectedBeat}
+                      onEditModeChange={setEditMode}
+                    />
+                  </div>
+
+                  {/* Instrument Interface */}
+                  {renderInstrumentControl()}
+
+                  {/* Effects Chain Section */}
+                  <div className="w-full max-w-6xl">
+                    <EffectsChainSection />
+                  </div>
+                </>
+              )}
           </div>
 
           {/* Room Members and Chat */}

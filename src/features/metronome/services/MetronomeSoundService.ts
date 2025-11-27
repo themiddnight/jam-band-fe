@@ -14,9 +14,6 @@ export class MetronomeSoundService {
       // Ensure the shared instrument AudioContext is available
       await AudioContextManager.getInstrumentContext();
       this.isInitialized = true;
-      console.log(
-        "🎼 MetronomeSoundService: Initialized with shared AudioContext (oscillator mode)",
-      );
     } catch (error) {
       console.warn("Failed to initialize metronome audio resources:", error);
     }

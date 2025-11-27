@@ -16,6 +16,8 @@ interface WaveformCanvasProps {
   zoomY: number;
   pixelsPerBeat: number;
   containerHeight: number;
+  scrollLeft?: number;
+  viewportWidth?: number;
   playheadBeats?: number;
   onTrimStartChange: (trimStart: number) => void;
   onTrimEndChange: (trimEnd: number) => void;
@@ -40,6 +42,8 @@ const WaveformCanvasComponent = ({
   zoomY,
   pixelsPerBeat,
   containerHeight,
+  scrollLeft = 0,
+  viewportWidth = 1200,
   playheadBeats = 0,
   onTrimStartChange,
   onTrimEndChange,
@@ -54,7 +58,6 @@ const WaveformCanvasComponent = ({
   const waveformQuality = usePerformanceStore((state) => state.settings.waveformQuality);
   const lastScrollX = useRef<number>(0);
   const scrollThrottleTimer = useRef<number | null>(null);
-  const hasWarnedAboutCanvasSize = useRef<boolean>(false);
   
   const stageRef = useCallback((node: any) => {
     if (node) {
@@ -115,18 +118,23 @@ const WaveformCanvasComponent = ({
     }
 
     try {
-      // Generate or retrieve LOD data with quality setting (editor uses higher detail)
-      const lodData = getOrGenerateLOD(region.audioBuffer, region.id, 20000, waveformQuality);
+      // Scale maxPeaks based on audio length for long files
+      // This ensures enough detail when zoomed in on 5-10 minute audio
+      // Base: 20000 peaks for short audio, up to 80000 for very long audio
+      const audioLengthFactor = Math.max(1, originalLength / 100); // 100 beats = ~50 seconds at 120 BPM
+      const scaledMaxPeaks = Math.min(Math.ceil(20000 * Math.sqrt(audioLengthFactor)), 80000);
+      
+      // Generate or retrieve LOD data with scaled peaks for long audio
+      const lodData = getOrGenerateLOD(region.audioBuffer, region.id, scaledMaxPeaks, waveformQuality);
       
       if (!lodData || !lodData.levels || lodData.levels.length === 0) {
         console.warn('Invalid LOD data for audio editor:', region.id);
         return new Float32Array(0);
       }
       
-      // Select appropriate LOD level based on ACTUAL canvas width (not virtual width)
-      // This prevents selecting too high detail when canvas is capped
-      const effectiveWidth = Math.min(fullWidth, MAX_CANVAS_WIDTH);
-      const lodLevel = selectLODLevel(lodData, effectiveWidth, originalLength);
+      // Select LOD level based on actual zoom level (fullWidth), not capped canvas width
+      // When zoomed in on long audio, we need high detail even though canvas is virtualized
+      const lodLevel = selectLODLevel(lodData, fullWidth, originalLength);
       
       if (!lodLevel || !lodLevel.peaks || lodLevel.peaks.length === 0) {
         console.warn('Invalid LOD level for audio editor:', region.id);
@@ -143,7 +151,7 @@ const WaveformCanvasComponent = ({
       });
       return new Float32Array(0);
     }
-  }, [region.audioBuffer, region.id, fullWidth, originalLength, MAX_CANVAS_WIDTH, waveformQuality]);
+  }, [region.audioBuffer, region.id, fullWidth, originalLength, waveformQuality]);
 
   // Calculate positions (absolute positions in the full waveform)
   const trimStart = region.trimStart || 0;
@@ -234,6 +242,7 @@ const WaveformCanvasComponent = ({
     const pointer = stage.getPointerPosition();
     if (!pointer) return;
 
+    // Delta calculation is the same in stage-relative coordinates
     const deltaX = pointer.x - dragState.initialX;
     const deltaBeats = deltaX / beatWidth;
 
@@ -264,49 +273,37 @@ const WaveformCanvasComponent = ({
   // Width for rendering (full original length)
   const fullWaveformWidth = originalLength * beatWidth;
   
-  // CRITICAL: Limit canvas width to prevent browser canvas size limits
-  // MAX_CANVAS_WIDTH is defined earlier before useMemo
-  const stageWidth = Math.min(fullWaveformWidth, MAX_CANVAS_WIDTH);
+  // Virtualized Stage: only render viewport + buffer, not full width
+  // This prevents massive canvas allocation at high zoom levels
+  const stageBuffer = 200;
+  const virtualizedStageWidth = Math.min(fullWaveformWidth, viewportWidth + stageBuffer * 2);
+  const stageOffsetX = Math.max(0, Math.min(scrollLeft - stageBuffer, fullWaveformWidth - virtualizedStageWidth));
   
-  // Warn if canvas would exceed limits (only once)
-  const isCanvasTooLarge = fullWaveformWidth > MAX_CANVAS_WIDTH;
-  
-  // Calculate zoom limit to prevent canvas overflow
-  const maxSafeZoom = MAX_CANVAS_WIDTH / (originalLength * pixelsPerBeat);
-  
-  if (isCanvasTooLarge && process.env.NODE_ENV === 'development' && !hasWarnedAboutCanvasSize.current) {
-    console.warn(
-      `Canvas width (${fullWaveformWidth}px) exceeds safe limit (${MAX_CANVAS_WIDTH}px). ` +
-      `Current zoom: ${zoomX.toFixed(1)}×, Max safe zoom: ${maxSafeZoom.toFixed(1)}×. ` +
-      `Capping canvas width to prevent white canvas error.`
-    );
-    hasWarnedAboutCanvasSize.current = true;
-  }
-  
-  // Reset warning flag when zoom goes back below limit
-  if (!isCanvasTooLarge && hasWarnedAboutCanvasSize.current) {
-    hasWarnedAboutCanvasSize.current = false;
-  }
+  // Final stage width (also respect browser limits)
+  const stageWidth = Math.min(virtualizedStageWidth, MAX_CANVAS_WIDTH);
 
   return (
-    <Stage
-      ref={stageRef}
-      width={stageWidth}
-      height={canvasHeight}
-      onPointerMove={handlePointerMove}
-      onTouchMove={(e) => handlePointerMove(e as unknown as KonvaEventObject<PointerEvent>)}
-      onPointerUp={handlePointerUp}
-      onTouchEnd={handlePointerUp}
-    >
-      <Layer ref={layerRef}>
-        {/* Background */}
-        <Rect
-          x={0}
-          y={0}
+    <div style={{ position: 'relative', width: fullWaveformWidth, height: canvasHeight }}>
+      {/* Virtualized Stage - positioned at stageOffsetX */}
+      <div style={{ position: 'absolute', left: stageOffsetX, top: 0 }}>
+        <Stage
+          ref={stageRef}
           width={stageWidth}
           height={canvasHeight}
-          fill="#1f2937"
-        />
+          onPointerMove={handlePointerMove}
+          onTouchMove={(e) => handlePointerMove(e as unknown as KonvaEventObject<PointerEvent>)}
+          onPointerUp={handlePointerUp}
+          onTouchEnd={handlePointerUp}
+        >
+          <Layer ref={layerRef} x={-stageOffsetX}>
+            {/* Background */}
+            <Rect
+              x={0}
+              y={0}
+              width={fullWaveformWidth}
+              height={canvasHeight}
+              fill="#1f2937"
+            />
 
         {/* Waveform - full recording - optimized rendering with smart viewport culling */}
         {visiblePeaks.length > 0 && (
@@ -323,52 +320,31 @@ const WaveformCanvasComponent = ({
               // Each peak is a min/max pair
               const peakCount = Math.floor(visiblePeaks.length / 2);
               
-              // Use stageWidth (capped) instead of fullWaveformWidth for rendering
-              const renderWidth = stageWidth;
+              // IMPORTANT: Use fullWaveformWidth for positioning - Layer offset handles virtualization
+              const renderWidth = fullWaveformWidth;
               
               // Calculate optimal bar width to prevent overdraw
               const barWidth = calculateOptimalBarWidth(renderWidth, peakCount, 0.5, 3);
               
-              // Viewport culling: Get the visible range from the stage
-              const stage = shape.getStage();
-              let viewportStartX = 0;
-              let viewportEndX = renderWidth;
-              let startPeakIndex = 0;
-              let endPeakIndex = peakCount;
+              // Viewport culling based on stageOffsetX and stageWidth (virtualized viewport)
+              // Only render peaks that are visible in the virtualized stage
+              const visibleStartX = stageOffsetX;
+              const visibleEndX = stageOffsetX + stageWidth;
+              const buffer = stageWidth * 0.15;
               
-              if (stage) {
-                const container = stage.container();
-                if (container && container.parentElement) {
-                  const scrollContainer = container.parentElement;
-                  const containerWidth = scrollContainer.clientWidth;
-                  viewportStartX = scrollContainer.scrollLeft;
-                  viewportEndX = viewportStartX + containerWidth;
-                  
-                  // Adaptive buffer based on zoom level
-                  const currentPixelsPerBeat = renderWidth / originalLength;
-                  let buffer = containerWidth * 0.15; // Default 15%
-                  
-                  if (currentPixelsPerBeat > 300) {
-                    buffer = containerWidth * 0.1; // High zoom: smaller buffer
-                  } else if (currentPixelsPerBeat < 100) {
-                    buffer = containerWidth * 0.2; // Low zoom: larger buffer
-                  }
-                  
-                  viewportStartX = Math.max(0, viewportStartX - buffer);
-                  viewportEndX = Math.min(renderWidth, viewportEndX + buffer);
-                  
-                  // Calculate visible peak range
-                  startPeakIndex = Math.floor((viewportStartX / renderWidth) * peakCount);
-                  endPeakIndex = Math.ceil((viewportEndX / renderWidth) * peakCount);
-                  
-                  // Only apply culling if it provides significant benefit
-                  const visiblePeakCount = endPeakIndex - startPeakIndex;
-                  if (!shouldApplyViewportCulling(peakCount, visiblePeakCount, viewportCulling)) {
-                    // Not worth culling, render everything
-                    startPeakIndex = 0;
-                    endPeakIndex = peakCount;
-                  }
-                }
+              const cullStartX = Math.max(0, visibleStartX - buffer);
+              const cullEndX = Math.min(renderWidth, visibleEndX + buffer);
+              
+              // Calculate visible peak range
+              let startPeakIndex = Math.floor((cullStartX / renderWidth) * peakCount);
+              let endPeakIndex = Math.ceil((cullEndX / renderWidth) * peakCount);
+              
+              // Only apply culling if it provides significant benefit
+              const visiblePeakCount = endPeakIndex - startPeakIndex;
+              if (!shouldApplyViewportCulling(peakCount, visiblePeakCount, viewportCulling)) {
+                // Not worth culling, render everything
+                startPeakIndex = 0;
+                endPeakIndex = peakCount;
               }
               
               // Batch rendering for better performance
@@ -379,6 +355,7 @@ const WaveformCanvasComponent = ({
                 const minValue = visiblePeaks[index * 2] || 0;
                 const maxValue = visiblePeaks[index * 2 + 1] || 0;
                 
+                // Position peaks at absolute X coordinates (Layer offset handles virtualization)
                 const x = (index / peakCount) * renderWidth;
                 
                 // Use max value for height (representing peak amplitude)
@@ -406,7 +383,7 @@ const WaveformCanvasComponent = ({
 
         {/* Center line */}
         <Line
-          points={[0, canvasHeight / 2, stageWidth, canvasHeight / 2]}
+          points={[0, canvasHeight / 2, fullWaveformWidth, canvasHeight / 2]}
           stroke="#4b5563"
           strokeWidth={1}
           dash={[4, 4]}
@@ -426,7 +403,7 @@ const WaveformCanvasComponent = ({
         <Rect
           x={trimEndX}
           y={0}
-          width={Math.max(0, stageWidth - trimEndX)}
+          width={Math.max(0, fullWaveformWidth - trimEndX)}
           height={canvasHeight}
           fill="#000000"
           opacity={0.6}
@@ -592,7 +569,7 @@ const WaveformCanvasComponent = ({
         )}
         
         {/* Playhead indicator */}
-        {playheadX >= 0 && playheadX <= stageWidth && (
+        {playheadX >= 0 && playheadX <= fullWaveformWidth && (
           <Line
             points={[playheadX, 0, playheadX, canvasHeight]}
             stroke="#3b82f6"
@@ -601,37 +578,10 @@ const WaveformCanvasComponent = ({
           />
         )}
         
-        {/* Canvas Size Limit Warning */}
-        {isCanvasTooLarge && (
-          <>
-            <Rect
-              x={stageWidth - 300}
-              y={10}
-              width={290}
-              height={60}
-              fill="#ff6b6b"
-              opacity={0.9}
-              cornerRadius={4}
-            />
-            <Text
-              x={stageWidth - 290}
-              y={20}
-              text="⚠️ Maximum Zoom Reached"
-              fontSize={14}
-              fontStyle="bold"
-              fill="#ffffff"
-            />
-            <Text
-              x={stageWidth - 290}
-              y={40}
-              text={`Max safe zoom: ${maxSafeZoom.toFixed(1)}× (current: ${zoomX.toFixed(1)}×)`}
-              fontSize={11}
-              fill="#ffffff"
-            />
-          </>
-        )}
-      </Layer>
-    </Stage>
+          </Layer>
+        </Stage>
+      </div>
+    </div>
   );
 };
 

@@ -13,6 +13,8 @@ interface TimeRulerProps {
   regionStart: number; // Region's position on main timeline
   trimStart: number;
   trimEnd: number;
+  scrollLeft?: number;
+  viewportWidth?: number;
   playheadBeats?: number;
 }
 
@@ -25,6 +27,8 @@ const TimeRulerComponent = ({
   regionStart,
   trimStart,
   trimEnd,
+  scrollLeft = 0,
+  viewportWidth = 1200,
   playheadBeats = 0,
 }: TimeRulerProps) => {
   const setPlayhead = useProjectStore((state) => state.setPlayhead);
@@ -32,15 +36,20 @@ const TimeRulerComponent = ({
   const [isDragging, setIsDragging] = useState(false);
   
   const beatWidth = pixelsPerBeat * zoomX;
-  const width = totalBeats * beatWidth;
+  const fullWidth = totalBeats * beatWidth;
+  
+  // Virtualized Stage: only render viewport + buffer
+  const stageBuffer = 100;
+  const stageWidth = Math.min(fullWidth, viewportWidth + stageBuffer * 2);
+  const stageOffsetX = Math.max(0, Math.min(scrollLeft - stageBuffer, fullWidth - stageWidth));
 
   // Calculate absolute start position (where the full waveform starts on main timeline)
   // If region starts at beat 1 and trimStart is 0.5, the waveform starts at 0.5 on main timeline
   const absoluteStartBeat = regionStart - trimStart;
 
-  const updatePlayheadFromPointer = useCallback((pointer: { x: number; y: number }) => {
-    // Convert pointer position to absolute beat on main timeline
-    let absoluteBeat = absoluteStartBeat + (pointer.x / beatWidth);
+  const updatePlayheadFromPointer = useCallback((pointer: { x: number; y: number }, currentStageOffsetX: number) => {
+    // Convert pointer position to absolute beat on main timeline (add stageOffsetX for virtualized stage)
+    let absoluteBeat = absoluteStartBeat + ((pointer.x + currentStageOffsetX) / beatWidth);
     absoluteBeat = Math.max(0, absoluteBeat);
 
     if (snapToGridEnabled) {
@@ -67,8 +76,8 @@ const TimeRulerComponent = ({
       return;
     }
     setIsDragging(true);
-    updatePlayheadFromPointer(pointer);
-  }, [updatePlayheadFromPointer]);
+    updatePlayheadFromPointer(pointer, stageOffsetX);
+  }, [updatePlayheadFromPointer, stageOffsetX]);
   
   const handlePointerMove = useCallback((event: KonvaEventObject<PointerEvent>) => {
     if (!isDragging) {
@@ -82,8 +91,8 @@ const TimeRulerComponent = ({
     if (!pointer) {
       return;
     }
-    updatePlayheadFromPointer(pointer);
-  }, [isDragging, updatePlayheadFromPointer]);
+    updatePlayheadFromPointer(pointer, stageOffsetX);
+  }, [isDragging, updatePlayheadFromPointer, stageOffsetX]);
   
   const handlePointerUp = useCallback(() => {
     setIsDragging(false);
@@ -123,21 +132,24 @@ const TimeRulerComponent = ({
   const trimEndX = trimEnd * beatWidth;
 
   return (
-    <Stage 
-      width={width} 
-      height={RULER_HEIGHT} 
-      perfectDrawEnabled={false} 
-      style={{ scrollbarWidth: 'none' }}
-      onPointerDown={handlePointerDown}
-      onTouchStart={(e) => handlePointerDown(e as unknown as KonvaEventObject<PointerEvent>)}
-      onPointerMove={handlePointerMove}
-      onTouchMove={(e) => handlePointerMove(e as unknown as KonvaEventObject<PointerEvent>)}
-      onPointerUp={handlePointerUp}
-      onTouchEnd={handlePointerUp}
-    >
-      <Layer>
-        {/* Background */}
-        <Rect x={0} y={0} width={width} height={RULER_HEIGHT} fill="#18181b" />
+    <div style={{ position: 'relative', width: fullWidth, height: RULER_HEIGHT }}>
+      {/* Virtualized Stage - positioned at stageOffsetX */}
+      <div style={{ position: 'absolute', left: stageOffsetX, top: 0 }}>
+        <Stage 
+          width={stageWidth} 
+          height={RULER_HEIGHT} 
+          perfectDrawEnabled={false} 
+          style={{ scrollbarWidth: 'none' }}
+          onPointerDown={handlePointerDown}
+          onTouchStart={(e) => handlePointerDown(e as unknown as KonvaEventObject<PointerEvent>)}
+          onPointerMove={handlePointerMove}
+          onTouchMove={(e) => handlePointerMove(e as unknown as KonvaEventObject<PointerEvent>)}
+          onPointerUp={handlePointerUp}
+          onTouchEnd={handlePointerUp}
+        >
+          <Layer x={-stageOffsetX}>
+            {/* Background */}
+            <Rect x={0} y={0} width={fullWidth} height={RULER_HEIGHT} fill="#18181b" />
 
         {/* Trimmed region highlight */}
         <Rect
@@ -149,12 +161,12 @@ const TimeRulerComponent = ({
           opacity={0.15}
         />
 
-        {/* Bottom border */}
-        <Line
-          points={[0, RULER_HEIGHT - 1, width, RULER_HEIGHT - 1]}
-          stroke="#a1a1aa"
-          strokeWidth={1}
-        />
+            {/* Bottom border */}
+            <Line
+              points={[0, RULER_HEIGHT - 1, fullWidth, RULER_HEIGHT - 1]}
+              stroke="#a1a1aa"
+              strokeWidth={1}
+            />
 
         {/* Beat/bar markers */}
         {markers.map((marker) => {
@@ -192,37 +204,33 @@ const TimeRulerComponent = ({
           );
         })}
 
-        {/* Beat labels - show actual beat positions from main timeline */}
+        {/* Bar labels - show bar numbers matching main timeline */}
         {markers
-          .filter((marker) => marker.isBeat)
-          .map((marker) => {
-            // Show the actual beat number from main timeline (rounded for display)
-            const beatLabel = Math.round(marker.beat);
-            const isBar = marker.isBar;
-            return (
-              <Text
-                key={`label-${marker.x}`}
-                text={`${beatLabel}`}
-                x={marker.x + 4}
-                y={4}
-                fontSize={11}
-                fill={isBar ? "#a1a1aa" : "#71717a"}
-                opacity={isBar ? 1 : 0.7}
-              />
-            );
-          })}
+          .filter((marker) => marker.isBar && marker.label)
+          .map((marker) => (
+            <Text
+              key={`label-${marker.x}`}
+              text={`${marker.label}`}
+              x={marker.x + 4}
+              y={4}
+              fontSize={11}
+              fill="#a1a1aa"
+            />
+          ))}
 
-        {/* Playhead indicator */}
-        {playheadX >= 0 && playheadX <= width && (
-          <Line
-            points={[playheadX, 0, playheadX, RULER_HEIGHT]}
-            stroke="#3b82f6"
-            strokeWidth={2}
-            listening={false}
-          />
-        )}
-      </Layer>
-    </Stage>
+            {/* Playhead indicator */}
+            {playheadX >= 0 && playheadX <= fullWidth && (
+              <Line
+                points={[playheadX, 0, playheadX, RULER_HEIGHT]}
+                stroke="#3b82f6"
+                strokeWidth={2}
+                listening={false}
+              />
+            )}
+          </Layer>
+        </Stage>
+      </div>
+    </div>
   );
 };
 

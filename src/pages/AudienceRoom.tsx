@@ -13,7 +13,7 @@ import Hls from "hls.js";
 const AudienceRoom = memo(() => {
   const navigate = useNavigate();
   const { roomId } = useParams<{ roomId: string }>();
-  
+
   const {
     currentRoom,
     currentUser,
@@ -30,7 +30,7 @@ const AudienceRoom = memo(() => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [streamStatus, setStreamStatus] = useState<'connecting' | 'buffering' | 'playing' | 'error'>('connecting');
   const [streamError, setStreamError] = useState<string | null>(null);
-  
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const hlsRef = useRef<Hls | null>(null);
 
@@ -43,12 +43,11 @@ const AudienceRoom = memo(() => {
 
     // Build full URL with API base
     const apiBaseUrl = import.meta.env.VITE_API_URL || '';
-    const fullPlaylistUrl = playlistUrl.startsWith('http') 
-      ? playlistUrl 
+    const fullPlaylistUrl = playlistUrl.startsWith('http')
+      ? playlistUrl
       : `${apiBaseUrl}${playlistUrl}`;
 
-    console.log("🎵 Loading HLS playlist from:", fullPlaylistUrl);
-
+ 
     // Create audio element
     if (!audioRef.current) {
       audioRef.current = new Audio();
@@ -81,10 +80,9 @@ const AudienceRoom = memo(() => {
       hls.attachMedia(audio);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        console.log("🎵 HLS manifest parsed, ready to play");
         setStreamStatus('buffering');
         setStreamError(null);
-        
+
         // Auto-play
         audio.play()
           .then(() => {
@@ -101,12 +99,10 @@ const AudienceRoom = memo(() => {
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
-              console.log("🔄 HLS network error, trying to recover...");
               // Don't change status to avoid re-triggering effect
               setTimeout(() => hls.startLoad(), 2000); // Retry after 2 seconds
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
-              console.log("🔄 HLS media error, trying to recover...");
               hls.recoverMediaError();
               break;
             default:
@@ -146,7 +142,7 @@ const AudienceRoom = memo(() => {
       setStreamStatus('error');
       setStreamError('HLS not supported in this browser');
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playlistUrl, isBroadcasting]); // Removed volume and streamStatus to prevent re-fetching
 
   // Update volume
@@ -265,30 +261,33 @@ const AudienceRoom = memo(() => {
         <div className="flex flex-col items-center">
           {/* Room Header */}
           <div className="w-full max-w-6xl mb-4">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center gap-2">
               <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold">{currentRoom?.name}</h1>
-                <span className="badge badge-success animate-pulse">LIVE</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-3 h-3 rounded-full ${
-                    isConnected ? "bg-success" : "bg-error"
-                  }`}
-                ></div>
-                <button
-                  onClick={handleLeave}
-                  className="btn btn-outline btn-sm"
-                >
-                  Leave Room
-                </button>
-              </div>
-            </div>
+                <h2 className="text-lg sm:text-xl font-bold text-success">
+                  Audience
+                </h2>
+                <span className="badge badge-xs sm:badge-sm badge-primary">
+                  {currentRoom?.name}
+                </span>
 
-            {/* User Info */}
-            <div className="mt-2">
-              <span className="mr-2">{currentUser?.username}</span>
-              <span className="text-sm text-base-content/70">Audience</span>
+                <div className='divider divider-horizontal !m-0' />
+
+                {/* User Name and Role */}
+                <div className="flex items-center">
+                  <span className="text-sm mr-2">
+                    {currentUser?.username}
+                  </span>
+                  <span className="text-sm text-base-content/50">
+                    Audience
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={handleLeave}
+                className="btn btn-outline btn-xs"
+              >
+                Leave Room
+              </button>
             </div>
           </div>
 
@@ -306,15 +305,20 @@ const AudienceRoom = memo(() => {
                     </div>
                   </div>
                 </div>
+                <div className="flex items-center mt-4">
+                  <h3 className="text-xl font-semibold">{currentRoom?.name}</h3>
 
-                <h3 className="text-xl font-semibold mt-4">
-                  {streamStatus === 'playing' ? 'Now Playing' : 
-                   streamStatus === 'buffering' ? 'Buffering...' :
-                   streamStatus === 'connecting' ? 'Connecting...' : 'Stream Error'}
-                </h3>
-                <p className="text-base-content/70">
+                  <div className="divider divider-horizontal !m-0" />
+
+                  <h3 className="text-xl font-semibold">
+                    {streamStatus === 'playing' ? 'Now Playing' :
+                      streamStatus === 'buffering' ? 'Buffering...' :
+                        streamStatus === 'connecting' ? 'Connecting...' : 'Stream Error'}
+                  </h3>
+                </div>
+                {/* <p className="text-base-content/70">
                   Live performance from {currentRoom?.name}
-                </p>
+                </p> */}
 
                 {/* Error message */}
                 {streamError && (
@@ -325,7 +329,7 @@ const AudienceRoom = memo(() => {
 
                 {/* Play button for autoplay-blocked browsers */}
                 {streamStatus === 'buffering' && !isPlaying && (
-                  <button 
+                  <button
                     onClick={handlePlay}
                     className="btn btn-primary btn-lg mt-4"
                   >
@@ -356,17 +360,15 @@ const AudienceRoom = memo(() => {
                 </div>
 
                 {/* Status */}
-                <div className={`flex items-center gap-2 text-sm mt-2 ${
-                  streamStatus === 'playing' ? 'text-success' : 
+                <div className={`flex items-center gap-2 text-sm mt-2 ${streamStatus === 'playing' ? 'text-success' :
                   streamStatus === 'error' ? 'text-error' : 'text-warning'
-                }`}>
-                  <span className={`w-2 h-2 rounded-full ${
-                    streamStatus === 'playing' ? 'bg-success animate-pulse' : 
+                  }`}>
+                  <span className={`w-2 h-2 rounded-full ${streamStatus === 'playing' ? 'bg-success animate-pulse' :
                     streamStatus === 'error' ? 'bg-error' : 'bg-warning animate-pulse'
-                  }`}></span>
+                    }`}></span>
                   {streamStatus === 'playing' ? 'Listening live' :
-                   streamStatus === 'buffering' ? 'Buffering stream...' :
-                   streamStatus === 'connecting' ? 'Connecting to stream...' : 'Stream unavailable'}
+                    streamStatus === 'buffering' ? 'Buffering stream...' :
+                      streamStatus === 'connecting' ? 'Connecting to stream...' : 'Stream unavailable'}
                 </div>
               </div>
             </div>
@@ -397,8 +399,8 @@ const AudienceRoom = memo(() => {
                       {currentRoom?.users
                         ?.filter(user => user.role === 'room_owner' || user.role === 'band_member')
                         .map(user => (
-                          <div 
-                            key={user.id} 
+                          <div
+                            key={user.id}
                             className="flex items-center gap-2 p-2 rounded-lg bg-base-200/50"
                           >
                             {/* Role Icon */}
@@ -442,11 +444,10 @@ const AudienceRoom = memo(() => {
                       {currentRoom?.users
                         ?.filter(user => user.role === 'audience')
                         .map(user => (
-                          <div 
-                            key={user.id} 
-                            className={`w-fit flex items-center gap-2 p-2 rounded-lg ${
-                              user.id === currentUser?.id ? 'bg-primary/10 border border-primary/30' : 'bg-base-200/50'
-                            }`}
+                          <div
+                            key={user.id}
+                            className={`w-fit flex items-center gap-2 p-2 rounded-lg ${user.id === currentUser?.id ? 'bg-primary/10 border border-primary/30' : 'bg-base-200/50'
+                              }`}
                           >
                             <span className="text-base-content/50">
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

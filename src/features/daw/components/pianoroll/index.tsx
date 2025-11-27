@@ -19,11 +19,12 @@ import { useTrackStore } from '../../stores/trackStore';
 import type { MidiNote, SustainEvent } from '../../types/daw';
 import { useProjectStore } from '../../stores/projectStore';
 import { useDAWCollaborationContext } from '../../contexts/useDAWCollaborationContext';
-import { MAX_CANVAS_WIDTH, MAX_TIMELINE_ZOOM, MIN_TIMELINE_ZOOM } from '../../constants/canvas';
+import { MAX_TIMELINE_ZOOM, MIN_TIMELINE_ZOOM } from '../../constants/canvas';
 import { usePianoRollRecording } from '../../hooks/usePianoRollRecording';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { getVisibleMidiNumbers } from '../../utils/pianoRollViewUtils';
 import { useArrangeRoomScaleStore } from '../../stores/arrangeRoomStore';
+import { useTouchGestures } from '../../hooks/useTouchGestures';
 
 type LaneMode = 'velocity' | 'sustain';
 
@@ -151,6 +152,18 @@ const PianoRollComponent = () => {
   const keyScrollRef = useRef<HTMLDivElement | null>(null);
   const laneScrollRef = useRef<HTMLDivElement | null>(null);
   const zoomRafRef = useRef<number | null>(null);
+  // Refs for stable wheel handler
+  const zoomRef = useRef(zoom);
+  const scrollLeftRef = useRef(scrollLeft);
+  
+  // Keep refs in sync with state
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
+  
+  useEffect(() => {
+    scrollLeftRef.current = scrollLeft;
+  }, [scrollLeft]);
   
   // Track viewport width for performance culling (horizontal only)
   useEffect(() => {
@@ -417,48 +430,43 @@ const PianoRollComponent = () => {
 
   const pixelsPerBeat = 64;
 
-  const baseTimelineWidth = totalBeats * pixelsPerBeat;
-
-  const maxZoom = useMemo(() => {
-    if (baseTimelineWidth <= 0) {
-      return MAX_TIMELINE_ZOOM;
-    }
-    const widthLimitedZoom = MAX_CANVAS_WIDTH / baseTimelineWidth;
-    if (!Number.isFinite(widthLimitedZoom) || widthLimitedZoom <= 0) {
-      return MAX_TIMELINE_ZOOM;
-    }
-    return Math.min(MAX_TIMELINE_ZOOM, widthLimitedZoom);
-  }, [baseTimelineWidth]);
-
+  // Dynamic zoom limits based on content length
+  // Max zoom is fixed, min zoom allows fitting entire content in viewport
+  const maxZoom = MAX_TIMELINE_ZOOM;
   const minZoom = useMemo(() => {
-    return Math.min(MIN_TIMELINE_ZOOM, maxZoom);
-  }, [maxZoom]);
+    if (viewportWidth <= 0 || totalBeats <= 0) return MIN_TIMELINE_ZOOM;
+    // Calculate zoom level that would fit all content in viewport
+    const fitZoom = viewportWidth / (totalBeats * pixelsPerBeat);
+    // Use the smaller of fixed minimum or fit-to-content zoom
+    return Math.min(MIN_TIMELINE_ZOOM, fitZoom);
+  }, [viewportWidth, totalBeats]);
 
   const clampZoom = useCallback((value: number) => {
-    const upperBound = maxZoom > 0 ? maxZoom : MIN_TIMELINE_ZOOM;
-    const lowerBound = Math.min(minZoom, upperBound);
-    const withinUpper = Math.min(upperBound, value);
-    return Math.max(lowerBound, withinUpper);
+    return Math.max(minZoom, Math.min(maxZoom, value));
   }, [maxZoom, minZoom]);
 
   // Handle zoom changes centered on cursor or playhead
+  // Uses refs to avoid recreating on every zoom/scroll change
   const handleZoomChange = useCallback((newZoom: number, cursorX?: number) => {
+    const clampedZoom = clampZoom(newZoom);
+    const currentZoom = zoomRef.current;
+    const currentScrollLeft = scrollLeftRef.current;
+
     if (!noteScrollRef.current) {
-      setZoom(clampZoom(newZoom));
+      setZoom(clampedZoom);
       return;
     }
-    const clampedZoom = clampZoom(newZoom);
 
     // Use cursor position if provided, otherwise use playhead
     const focusPoint = cursorX !== undefined 
-      ? (scrollLeft + cursorX) / (pixelsPerBeat * zoom)
+      ? (currentScrollLeft + cursorX) / (pixelsPerBeat * currentZoom)
       : playhead;
     
     // Calculate focus point position in pixels before zoom change
-    const oldFocusPixels = focusPoint * pixelsPerBeat * zoom;
+    const oldFocusPixels = focusPoint * pixelsPerBeat * currentZoom;
     
     // Calculate how far focus point is from left edge of viewport
-    const focusOffsetInViewport = cursorX !== undefined ? cursorX : oldFocusPixels - scrollLeft;
+    const focusOffsetInViewport = cursorX !== undefined ? cursorX : oldFocusPixels - currentScrollLeft;
     
     // Calculate focus point position in pixels after zoom change
     const newFocusPixels = focusPoint * pixelsPerBeat * clampedZoom;
@@ -477,7 +485,7 @@ const PianoRollComponent = () => {
         laneScrollRef.current.scrollLeft = Math.max(0, newScrollLeft);
       }
     });
-  }, [playhead, zoom, scrollLeft, pixelsPerBeat, clampZoom]);
+  }, [playhead, pixelsPerBeat, clampZoom]);
 
   useEffect(() => {
     setZoom((prev) => {
@@ -486,45 +494,110 @@ const PianoRollComponent = () => {
     });
   }, [clampZoom]);
 
-  // Handle wheel zoom with Ctrl key
+  // Handle wheel zoom with Ctrl key - stable effect using refs
   useEffect(() => {
+    const noteCanvas = noteScrollRef.current;
+    if (!noteCanvas) return;
+    
     const handleWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        
-        // Cancel any pending zoom update
-        if (zoomRafRef.current !== null) {
-          cancelAnimationFrame(zoomRafRef.current);
-        }
-        
-        // Batch zoom updates using requestAnimationFrame
-        zoomRafRef.current = requestAnimationFrame(() => {
-          const delta = -e.deltaY;
-          const zoomSpeed = 0.001;
-          const newZoom = zoom + delta * zoomSpeed;
-
-          // Get cursor position relative to note canvas
-          const rect = noteScrollRef.current?.getBoundingClientRect();
-          const cursorX = rect ? e.clientX - rect.left : undefined;
-
-          handleZoomChange(newZoom, cursorX);
-          zoomRafRef.current = null;
-        });
+      // Only handle zoom when Ctrl/Meta is pressed
+      if (!(e.ctrlKey || e.metaKey)) {
+        return; // Let native scroll happen
       }
+      
+      e.preventDefault();
+      
+      // Cancel any pending zoom update
+      if (zoomRafRef.current !== null) {
+        cancelAnimationFrame(zoomRafRef.current);
+      }
+      
+      // Batch zoom updates using requestAnimationFrame
+      zoomRafRef.current = requestAnimationFrame(() => {
+        const scrollContainer = noteScrollRef.current;
+        if (!scrollContainer) return;
+        
+        const delta = -e.deltaY;
+        const zoomSpeed = 0.001;
+        const currentZoom = zoomRef.current;
+        const newZoom = currentZoom + delta * zoomSpeed;
+        // Clamp directly here to avoid stale callback issues
+        const clampedZoom = Math.max(minZoom, Math.min(maxZoom, newZoom));
+        
+        // Get current playhead position for centering
+        const currentPlayhead = playhead;
+        const viewportWidthPx = scrollContainer.clientWidth;
+        
+        // Calculate new scroll position to keep playhead centered in viewport
+        const playheadPixels = currentPlayhead * pixelsPerBeat * clampedZoom;
+        const newScrollLeft = playheadPixels - viewportWidthPx / 2;
+        
+        setZoom(clampedZoom);
+        
+        requestAnimationFrame(() => {
+          if (noteScrollRef.current) {
+            noteScrollRef.current.scrollLeft = Math.max(0, newScrollLeft);
+          }
+          if (laneScrollRef.current) {
+            laneScrollRef.current.scrollLeft = Math.max(0, newScrollLeft);
+          }
+        });
+        zoomRafRef.current = null;
+      });
     };
 
-    const noteCanvas = noteScrollRef.current;
-    if (noteCanvas) {
-      noteCanvas.addEventListener('wheel', handleWheel, { passive: false });
-      return () => {
-        noteCanvas.removeEventListener('wheel', handleWheel);
-        // Clean up any pending animation frames
-        if (zoomRafRef.current !== null) {
-          cancelAnimationFrame(zoomRafRef.current);
-        }
-      };
+    noteCanvas.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      noteCanvas.removeEventListener('wheel', handleWheel);
+      // Clean up any pending animation frames
+      if (zoomRafRef.current !== null) {
+        cancelAnimationFrame(zoomRafRef.current);
+      }
+    };
+  }, [playhead, minZoom, maxZoom, pixelsPerBeat]);
+
+  // Touch gesture handling for mobile (pinch-to-zoom and two-finger pan)
+  const handleTouchZoomChange = useCallback((newZoom: number, centerX: number) => {
+    const clampedZoom = clampZoom(newZoom);
+    const currentScrollLeft = noteScrollRef.current?.scrollLeft ?? 0;
+    
+    // Calculate focus point in beats
+    const focusPoint = (currentScrollLeft + centerX) / (pixelsPerBeat * zoom);
+    
+    // Calculate new scroll position to keep focus point at same position
+    const newFocusPixels = focusPoint * pixelsPerBeat * clampedZoom;
+    const newScrollLeft = newFocusPixels - centerX;
+    
+    setZoom(clampedZoom);
+    
+    requestAnimationFrame(() => {
+      if (noteScrollRef.current) {
+        noteScrollRef.current.scrollLeft = Math.max(0, newScrollLeft);
+      }
+      if (laneScrollRef.current) {
+        laneScrollRef.current.scrollLeft = Math.max(0, newScrollLeft);
+      }
+    });
+  }, [zoom, pixelsPerBeat, clampZoom]);
+
+  const handleTouchPan = useCallback((deltaX: number, deltaY: number) => {
+    if (noteScrollRef.current) {
+      noteScrollRef.current.scrollLeft += deltaX;
+      noteScrollRef.current.scrollTop += deltaY;
     }
-  }, [zoom, handleZoomChange]);
+    if (keyScrollRef.current) {
+      keyScrollRef.current.scrollTop += deltaY;
+    }
+  }, []);
+
+  const { containerRef: touchContainerRef } = useTouchGestures({
+    zoom,
+    onZoomChange: handleTouchZoomChange,
+    onPan: handleTouchPan,
+    minZoom,
+    maxZoom,
+    enabled: true,
+  });
   
   // Convert notes to absolute positions for display
   const absoluteNotes = useMemo(() => {
@@ -553,34 +626,23 @@ const PianoRollComponent = () => {
     }));
   }, [midiRegion, regionPreviewStarts]);
 
-  const scrollRafRef = useRef<number | null>(null);
-  
   const handleNoteScroll = useCallback(() => {
     if (!noteScrollRef.current || !keyScrollRef.current || !laneScrollRef.current) {
       return;
     }
     
-    // Throttle scroll updates using requestAnimationFrame
-    if (scrollRafRef.current !== null) {
-      return; // Already scheduled
+    // Sync other scroll containers immediately for visual consistency
+    const { scrollLeft: currentScrollLeft, scrollTop: currentScrollTop } = noteScrollRef.current;
+    if (keyScrollRef.current.scrollTop !== currentScrollTop) {
+      keyScrollRef.current.scrollTop = currentScrollTop;
+    }
+    if (laneScrollRef.current.scrollLeft !== currentScrollLeft) {
+      laneScrollRef.current.scrollLeft = currentScrollLeft;
     }
     
-    scrollRafRef.current = requestAnimationFrame(() => {
-      scrollRafRef.current = null;
-      
-      if (!noteScrollRef.current || !keyScrollRef.current || !laneScrollRef.current) {
-        return;
-      }
-      
-      const { scrollLeft: currentScrollLeft, scrollTop: currentScrollTop } = noteScrollRef.current;
-      setScrollLeft(currentScrollLeft);
-      if (keyScrollRef.current.scrollTop !== currentScrollTop) {
-        keyScrollRef.current.scrollTop = currentScrollTop;
-      }
-      if (laneScrollRef.current.scrollLeft !== currentScrollLeft) {
-        laneScrollRef.current.scrollLeft = currentScrollLeft;
-      }
-    });
+    // Update scrollLeft immediately for ruler alignment
+    // The ruler uses this state for positioning since it's in overflow:hidden
+    setScrollLeft(currentScrollLeft);
   }, []);
 
   const handleKeyScroll = useCallback(() => {
@@ -690,7 +752,7 @@ const PianoRollComponent = () => {
               onClick={() => setPianoRollRecording(!isPianoRollRecording)}
               title="Record MIDI input to piano roll"
             >
-              <span className={isPianoRollRecording ? 'animate-pulse' : ''}>●</span>
+              <span className={`text-red-500 ${isPianoRollRecording ? 'animate-pulse' : ''}`}>●</span>
               <span className="hidden sm:inline">Capture</span>
             </button>
             <label className="flex items-center gap-1 text-xs text-base-content/70">
@@ -819,6 +881,7 @@ const PianoRollComponent = () => {
             pixelsPerBeat={pixelsPerBeat}
             zoom={zoom}
             scrollLeft={scrollLeft}
+            viewportWidth={viewportWidth}
             highlightStart={regionHighlight.start}
             highlightEnd={regionHighlight.end}
             timeSignature={timeSignature}
@@ -838,10 +901,17 @@ const PianoRollComponent = () => {
           </div>
         </div>
         <div
-          ref={noteScrollRef}
+          ref={(node) => {
+            noteScrollRef.current = node;
+            touchContainerRef(node);
+          }}
           onScroll={handleNoteScroll}
-          className="relative flex-1 overflow-auto bg-base-200/40"
-          style={{ willChange: 'scroll-position' }}
+          className="relative flex-1 overflow-auto bg-base-200/40 touch-pan-y"
+          style={{ 
+            willChange: 'scroll-position',
+            contain: 'strict',
+            overscrollBehavior: 'contain',
+          }}
         >
           <div
             style={{

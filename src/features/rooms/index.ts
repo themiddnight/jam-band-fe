@@ -25,6 +25,11 @@ export { useLobby } from "./hooks/useLobby";
 export { useInviteUrl } from "./hooks/useInviteUrl";
 export { useAudienceRoom } from "./hooks/useAudienceRoom";
 export { useBroadcastStream } from "./hooks/useBroadcastStream";
+export { useSessionToCollab } from "./hooks/useSessionToCollab";
+export type { SessionRecordingSnapshot, RecordedMidiEvent, UserMetadata } from "./hooks/useSessionToCollab";
+
+// Utils exports
+export { saveSessionAsCollab, convertSessionToProject } from "./utils/sessionToCollabConverter";
 
 // Services exports
 export { useRoomQuery, roomKeys } from "./services/useRooms";

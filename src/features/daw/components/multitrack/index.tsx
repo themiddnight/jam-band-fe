@@ -8,7 +8,7 @@ import { AddTrackMenu } from './AddTrackMenu';
 import { AddAudioClipButton } from './AddAudioClipButton';
 import { MarkerEditToggle } from './MarkerEditToggle';
 import { PIXELS_PER_BEAT, TRACK_HEADER_WIDTH, TRACK_HEIGHT } from './constants';
-import { MAX_CANVAS_WIDTH, MAX_TIMELINE_ZOOM, MIN_TIMELINE_ZOOM } from '../../constants/canvas';
+import { MAX_TIMELINE_ZOOM, MIN_TIMELINE_ZOOM } from '../../constants/canvas';
 import { usePianoRollStore } from '../../stores/pianoRollStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useRegionStore } from '../../stores/regionStore';
@@ -16,6 +16,7 @@ import { useTrackStore } from '../../stores/trackStore';
 import { LoopToggle } from '../transport/LoopToggle';
 import { useDAWCollaborationContext } from '../../contexts/useDAWCollaborationContext';
 import { InfoTooltip } from '../common/InfoTooltip';
+import { useTouchGestures } from '../../hooks/useTouchGestures';
 
 export const MultitrackView = () => {
   const tracks = useTrackStore((state) => state.tracks);
@@ -52,8 +53,21 @@ export const MultitrackView = () => {
   const [viewportWidth, setViewportWidth] = useState(800);
   const [trackHeights, setTrackHeights] = useState<Record<string, number>>({});
   const [isInitialZoomSet, setIsInitialZoomSet] = useState(false);
+  const [isHeaderCollapsed, setIsHeaderCollapsed] = useState(false);
   const scrollRafRef = useRef<number | null>(null);
   const zoomRafRef = useRef<number | null>(null);
+  // Refs for stable wheel handler
+  const zoomRef = useRef(zoom);
+  const scrollLeftRef = useRef(scrollLeft);
+  
+  // Keep refs in sync with state
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
+  
+  useEffect(() => {
+    scrollLeftRef.current = scrollLeft;
+  }, [scrollLeft]);
 
   const totalBeats = useMemo(() => {
     const furthestRegionBeat = regions.reduce((max, region) => {
@@ -63,33 +77,27 @@ export const MultitrackView = () => {
     return Math.max(32, Math.ceil(furthestRegionBeat + 8));
   }, [regions]);
 
-  const baseTimelineWidth = totalBeats * PIXELS_PER_BEAT;
-
-  const maxTimelineZoom = useMemo(() => {
-    if (baseTimelineWidth <= 0) {
-      return MAX_TIMELINE_ZOOM;
-    }
-    const widthLimitedZoom = MAX_CANVAS_WIDTH / baseTimelineWidth;
-    if (!Number.isFinite(widthLimitedZoom) || widthLimitedZoom <= 0) {
-      return MAX_TIMELINE_ZOOM;
-    }
-    return Math.min(MAX_TIMELINE_ZOOM, widthLimitedZoom);
-  }, [baseTimelineWidth]);
-
+  // Dynamic zoom limits based on content length
+  // Max zoom is fixed, min zoom allows fitting entire content in viewport
+  const maxTimelineZoom = MAX_TIMELINE_ZOOM;
   const minTimelineZoom = useMemo(() => {
-    return Math.min(MIN_TIMELINE_ZOOM, maxTimelineZoom);
-  }, [maxTimelineZoom]);
+    if (viewportWidth <= 0 || totalBeats <= 0) return MIN_TIMELINE_ZOOM;
+    // Calculate zoom level that would fit all content in viewport
+    const fitZoom = viewportWidth / (totalBeats * PIXELS_PER_BEAT);
+    // Use the smaller of fixed minimum or fit-to-content zoom
+    return Math.min(MIN_TIMELINE_ZOOM, fitZoom);
+  }, [viewportWidth, totalBeats]);
 
   const clampTimelineZoom = useCallback((value: number) => {
-    const upperBound = maxTimelineZoom > 0 ? maxTimelineZoom : MIN_TIMELINE_ZOOM;
-    const lowerBound = Math.min(minTimelineZoom, upperBound);
-    const withinUpper = Math.min(upperBound, value);
-    return Math.max(lowerBound, withinUpper);
+    return Math.max(minTimelineZoom, Math.min(maxTimelineZoom, value));
   }, [maxTimelineZoom, minTimelineZoom]);
 
   // Handle zoom changes centered on cursor or playhead
+  // Uses refs to avoid recreating on every zoom/scroll change
   const handleZoomChange = useCallback((newZoom: number, cursorX?: number) => {
     const clampedZoom = clampTimelineZoom(newZoom);
+    const currentZoom = zoomRef.current;
+    const currentScrollLeft = scrollLeftRef.current;
 
     if (!canvasScrollRef.current) {
       setZoom(clampedZoom);
@@ -98,14 +106,14 @@ export const MultitrackView = () => {
 
     // Use cursor position if provided, otherwise use playhead
     const focusPoint = cursorX !== undefined 
-      ? (scrollLeft + cursorX) / (PIXELS_PER_BEAT * zoom)
+      ? (currentScrollLeft + cursorX) / (PIXELS_PER_BEAT * currentZoom)
       : playhead;
 
     // Calculate focus point position in pixels before zoom change
-    const oldFocusPixels = focusPoint * PIXELS_PER_BEAT * zoom;
+    const oldFocusPixels = focusPoint * PIXELS_PER_BEAT * currentZoom;
 
     // Calculate how far focus point is from left edge of viewport
-    const focusOffsetInViewport = cursorX !== undefined ? cursorX : oldFocusPixels - scrollLeft;
+    const focusOffsetInViewport = cursorX !== undefined ? cursorX : oldFocusPixels - currentScrollLeft;
 
     // Calculate focus point position in pixels after zoom change
     const newFocusPixels = focusPoint * PIXELS_PER_BEAT * clampedZoom;
@@ -121,7 +129,7 @@ export const MultitrackView = () => {
         canvasScrollRef.current.scrollLeft = Math.max(0, newScrollLeft);
       }
     });
-  }, [playhead, zoom, scrollLeft, clampTimelineZoom]);
+  }, [playhead, clampTimelineZoom]);
 
   useEffect(() => {
     setZoom((prev) => {
@@ -130,45 +138,101 @@ export const MultitrackView = () => {
     });
   }, [clampTimelineZoom]);
 
-  // Handle wheel zoom with Ctrl key
+  // Handle wheel zoom with Ctrl key - stable effect using refs
   useEffect(() => {
+    const canvas = canvasScrollRef.current;
+    if (!canvas) return;
+    
     const handleWheel = (e: WheelEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        e.preventDefault();
-        
-        // Cancel any pending zoom update
-        if (zoomRafRef.current !== null) {
-          cancelAnimationFrame(zoomRafRef.current);
-        }
-        
-        // Batch zoom updates using requestAnimationFrame
-        zoomRafRef.current = requestAnimationFrame(() => {
-          const delta = -e.deltaY;
-          const zoomSpeed = 0.001;
-          const newZoom = zoom + delta * zoomSpeed;
-
-          // Get cursor position relative to canvas
-          const rect = canvasScrollRef.current?.getBoundingClientRect();
-          const cursorX = rect ? e.clientX - rect.left : undefined;
-
-          handleZoomChange(newZoom, cursorX);
-          zoomRafRef.current = null;
-        });
+      // Only handle zoom when Ctrl/Meta is pressed
+      if (!(e.ctrlKey || e.metaKey)) {
+        return; // Let native scroll happen
       }
+      
+      e.preventDefault();
+      
+      // Cancel any pending zoom update
+      if (zoomRafRef.current !== null) {
+        cancelAnimationFrame(zoomRafRef.current);
+      }
+      
+      // Batch zoom updates using requestAnimationFrame
+      zoomRafRef.current = requestAnimationFrame(() => {
+        const scrollContainer = canvasScrollRef.current;
+        if (!scrollContainer) return;
+        
+        const delta = -e.deltaY;
+        const zoomSpeed = 0.001;
+        const currentZoom = zoomRef.current;
+        const newZoom = currentZoom + delta * zoomSpeed;
+        // Clamp directly here to avoid stale callback issues
+        const clampedZoom = Math.max(minTimelineZoom, Math.min(maxTimelineZoom, newZoom));
+        
+        // Get current playhead position for centering
+        const currentPlayhead = playhead;
+        const viewportWidth = scrollContainer.clientWidth;
+        
+        // Calculate new scroll position to keep playhead centered in viewport
+        const playheadPixels = currentPlayhead * PIXELS_PER_BEAT * clampedZoom;
+        const newScrollLeft = playheadPixels - viewportWidth / 2;
+        
+        setZoom(clampedZoom);
+        
+        requestAnimationFrame(() => {
+          if (canvasScrollRef.current) {
+            canvasScrollRef.current.scrollLeft = Math.max(0, newScrollLeft);
+          }
+        });
+        zoomRafRef.current = null;
+      });
     };
 
-    const canvas = canvasScrollRef.current;
-    if (canvas) {
-      canvas.addEventListener('wheel', handleWheel, { passive: false });
-      return () => {
-        canvas.removeEventListener('wheel', handleWheel);
-        // Clean up any pending animation frames
-        if (zoomRafRef.current !== null) {
-          cancelAnimationFrame(zoomRafRef.current);
-        }
-      };
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    return () => {
+      canvas.removeEventListener('wheel', handleWheel);
+      // Clean up any pending animation frames
+      if (zoomRafRef.current !== null) {
+        cancelAnimationFrame(zoomRafRef.current);
+      }
+    };
+  }, [playhead, minTimelineZoom, maxTimelineZoom]);
+
+  // Touch gesture handling for mobile (pinch-to-zoom and two-finger pan)
+  const handleTouchZoomChange = useCallback((newZoom: number, centerX: number) => {
+    const clampedZoom = clampTimelineZoom(newZoom);
+    const currentScrollLeft = canvasScrollRef.current?.scrollLeft ?? 0;
+    
+    // Calculate focus point in beats
+    const focusPoint = (currentScrollLeft + centerX) / (PIXELS_PER_BEAT * zoom);
+    
+    // Calculate new scroll position to keep focus point at same position
+    const newFocusPixels = focusPoint * PIXELS_PER_BEAT * clampedZoom;
+    const newScrollLeft = newFocusPixels - centerX;
+    
+    setZoom(clampedZoom);
+    
+    requestAnimationFrame(() => {
+      if (canvasScrollRef.current) {
+        canvasScrollRef.current.scrollLeft = Math.max(0, newScrollLeft);
+      }
+    });
+  }, [zoom, clampTimelineZoom]);
+
+  const handleTouchPan = useCallback((deltaX: number, deltaY: number) => {
+    if (canvasScrollRef.current) {
+      canvasScrollRef.current.scrollLeft += deltaX;
+      canvasScrollRef.current.scrollTop += deltaY;
     }
-  }, [zoom, handleZoomChange]);
+  }, []);
+
+  const { containerRef: touchContainerRef } = useTouchGestures({
+    zoom,
+    onZoomChange: handleTouchZoomChange,
+    onPan: handleTouchPan,
+    minZoom: minTimelineZoom,
+    maxZoom: maxTimelineZoom,
+    enabled: true,
+  });
 
   // Track viewport width for performance culling
   useEffect(() => {
@@ -277,21 +341,24 @@ export const MultitrackView = () => {
       return;
     }
     
-    // Cancel any pending scroll update
-    if (scrollRafRef.current !== null) {
-      cancelAnimationFrame(scrollRafRef.current);
+    // Sync header scroll immediately for visual consistency
+    const { scrollTop: currentScrollTop } = canvasScrollRef.current;
+    if (headerRef.current && headerRef.current.scrollTop !== currentScrollTop) {
+      headerRef.current.scrollTop = currentScrollTop;
     }
     
-    // Batch scroll updates using requestAnimationFrame
+    // Throttle scrollLeft state updates using RAF
+    if (scrollRafRef.current !== null) {
+      return; // Already scheduled, skip
+    }
+    
     scrollRafRef.current = requestAnimationFrame(() => {
       if (!canvasScrollRef.current) {
+        scrollRafRef.current = null;
         return;
       }
-      const { scrollLeft: currentScrollLeft, scrollTop: currentScrollTop } = canvasScrollRef.current;
+      const { scrollLeft: currentScrollLeft } = canvasScrollRef.current;
       setScrollLeft(currentScrollLeft);
-      if (headerRef.current && headerRef.current.scrollTop !== currentScrollTop) {
-        headerRef.current.scrollTop = currentScrollTop;
-      }
       scrollRafRef.current = null;
     });
   }, []);
@@ -316,7 +383,7 @@ export const MultitrackView = () => {
   return (
     <section className="flex h-full flex-col overflow-hidden rounded-lg border border-base-300 bg-base-100 shadow-sm">
       <div className="flex items-center justify-between border-b border-base-300 px-2 sm:px-4 py-1.5 sm:py-2">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-wide text-base-content/70">
             Tracks
           </h2>
@@ -358,6 +425,8 @@ export const MultitrackView = () => {
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1">
+            <AddAudioClipButton />
+            <div className='divider divider-horizontal !m-0' />
             <button
               type="button"
               className="btn btn-xs btn-ghost"
@@ -369,7 +438,6 @@ export const MultitrackView = () => {
             >
               ✂️
             </button>
-            <AddAudioClipButton />
             <button
               type="button"
               className="btn btn-xs btn-primary"
@@ -412,30 +480,68 @@ export const MultitrackView = () => {
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-[auto_1fr] items-stretch border-b border-base-300">
+      <div className="flex items-stretch border-b border-base-300">
+        {/* Mobile spacer to align with collapse button below */}
+        {!isHeaderCollapsed && (
+          <div className="sm:hidden w-6 border-r border-base-300 bg-base-200" />
+        )}
+        {/* Mobile expand button when collapsed */}
+        {isHeaderCollapsed && (
+          <button
+            type="button"
+            className="sm:hidden flex items-center justify-center w-6 h-full border-r border-base-300 bg-base-100 hover:bg-base-200"
+            onClick={() => setIsHeaderCollapsed(false)}
+            title="Expand Track Headers"
+          >
+            ▶
+          </button>
+        )}
         <div
-          className="h-full border-r border-base-300 bg-base-100 p-2 flex justify-between items-center gap-2"
+          className={`h-full border-r border-base-300 bg-base-100 p-2 flex justify-between items-center gap-2 transition-all duration-200 ${isHeaderCollapsed ? 'hidden sm:flex' : ''}`}
           style={{ width: `${TRACK_HEADER_WIDTH}px` }}
         >
           <AddTrackMenu />
           <MarkerEditToggle />
         </div>
-        <div className="relative h-[36px] overflow-hidden">
+        <div className="relative flex-1 h-[36px] overflow-hidden">
           <TimeRuler
             totalBeats={totalBeats}
             pixelsPerBeat={PIXELS_PER_BEAT}
             zoom={zoom}
             scrollLeft={scrollLeft}
+            viewportWidth={viewportWidth}
             timeSignature={timeSignature}
             playheadBeats={playhead}
           />
         </div>
       </div>
       <div className="flex flex-1 overflow-hidden">
+        {/* Mobile toggle button when expanded */}
+        {!isHeaderCollapsed && (
+          <button
+            type="button"
+            className="sm:hidden flex items-center justify-center w-6 bg-base-200 hover:bg-base-300 border-r border-base-300 transition-colors"
+            onClick={() => setIsHeaderCollapsed(true)}
+            title="Collapse Track Headers"
+          >
+            ◀
+          </button>
+        )}
+        {/* Mobile collapse toggle when collapsed */}
+        {isHeaderCollapsed && (
+          <button
+            type="button"
+            className="sm:hidden flex items-center justify-center w-6 bg-base-100 hover:bg-base-200 border-r border-base-300"
+            onClick={() => setIsHeaderCollapsed(false)}
+            title="Expand Track Headers"
+          >
+            ▶
+          </button>
+        )}
         <div
           ref={headerRef}
           onScroll={handleHeaderScroll}
-          className="flex flex-col overflow-y-auto border-r border-base-300 bg-base-100 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+          className={`flex flex-col overflow-y-auto border-r border-base-300 bg-base-100 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] transition-all duration-200 ${isHeaderCollapsed ? 'hidden sm:flex' : ''}`}
           style={{ width: `${TRACK_HEADER_WIDTH}px` }}
         >
           {tracks.map((track, index) => (
@@ -451,10 +557,17 @@ export const MultitrackView = () => {
           ))}
         </div>
         <div
-          ref={canvasScrollRef}
+          ref={(node) => {
+            canvasScrollRef.current = node;
+            touchContainerRef(node);
+          }}
           onScroll={handleCanvasScroll}
-          className="relative flex-1 overflow-auto bg-base-200/40"
-          style={{ willChange: 'scroll-position' }}
+          className="relative flex-1 overflow-auto bg-base-200/40 touch-pan-y"
+          style={{ 
+            willChange: 'scroll-position',
+            contain: 'strict',
+            overscrollBehavior: 'contain',
+          }}
         >
           {tracks.length === 0 ? (
             <div className="flex h-full items-center justify-center">

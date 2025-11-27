@@ -72,7 +72,6 @@ export function PresetManager<T extends BasePreset>({
     version,
     validator,
     onImportSuccess: (presets) => {
-      console.log(`✅ Successfully imported ${presets.length} preset(s)`);
       onImportSuccess?.(presets);
     },
     onImportError: (error) => {

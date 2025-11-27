@@ -53,9 +53,9 @@ export function RoomItem({
               {room.isHidden && (
                 <span className="badge badge-neutral badge-sm">Hidden</span>
               )}
-              {room.roomType === "perform" && room.isBroadcasting && (
+              {/* {room.roomType === "perform" && room.isBroadcasting && (
                 <span className="badge badge-success badge-sm animate-pulse">LIVE</span>
-              )}
+              )} */}
             </div>
             {room.description && (
               <p className="text-sm text-base-content/80 mt-1">
@@ -88,7 +88,7 @@ export function RoomItem({
                     connectionState === ConnectionState.REQUESTING
                   }
                 >
-                  {room.isBroadcasting ? "Watch Live" : "Audience"}
+                  Audience
                 </button>
               </div>
             )}

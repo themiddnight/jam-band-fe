@@ -6,8 +6,9 @@ import { useProjectStore } from '@/features/daw/stores/projectStore';
 import { WaveformCanvas } from './WaveformCanvas';
 import { TimeRuler } from './TimeRuler';
 import { useDAWCollaborationContext } from '@/features/daw/contexts/useDAWCollaborationContext';
-import { MAX_CANVAS_WIDTH, MAX_AUDIO_ZOOM, MIN_AUDIO_ZOOM } from '@/features/daw/constants/canvas';
+import { MAX_AUDIO_ZOOM, MIN_AUDIO_ZOOM } from '@/features/daw/constants/canvas';
 import { InfoTooltip } from '../../common/InfoTooltip';
+import { useTouchGestures } from '@/features/daw/hooks/useTouchGestures';
 
 interface AudioEditorProps {
   region: AudioRegion;
@@ -85,26 +86,19 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
   const originalLength = region.originalLength || region.length;
   const baseWaveformWidth = originalLength * PIXELS_PER_BEAT;
 
-  const maxZoomX = useMemo(() => {
-    if (baseWaveformWidth <= 0) {
-      return MAX_AUDIO_ZOOM;
-    }
-    const widthLimitedZoom = MAX_CANVAS_WIDTH / baseWaveformWidth;
-    if (!Number.isFinite(widthLimitedZoom) || widthLimitedZoom <= 0) {
-      return MAX_AUDIO_ZOOM;
-    }
-    return Math.min(MAX_AUDIO_ZOOM, widthLimitedZoom);
-  }, [baseWaveformWidth]);
-
+  // Dynamic zoom limits based on content length
+  // Max zoom is fixed, min zoom allows fitting entire content in viewport
+  const maxZoomX = MAX_AUDIO_ZOOM;
   const minZoomX = useMemo(() => {
-    return Math.min(MIN_AUDIO_ZOOM, maxZoomX);
-  }, [maxZoomX]);
+    if (containerWidth <= 0 || originalLength <= 0) return MIN_AUDIO_ZOOM;
+    // Calculate zoom level that would fit all content in viewport
+    const fitZoom = containerWidth / (originalLength * PIXELS_PER_BEAT);
+    // Use the smaller of fixed minimum or fit-to-content zoom
+    return Math.min(MIN_AUDIO_ZOOM, fitZoom);
+  }, [containerWidth, originalLength]);
 
   const clampZoomX = useCallback((value: number) => {
-    const upperBound = maxZoomX > 0 ? maxZoomX : MIN_AUDIO_ZOOM;
-    const lowerBound = Math.min(minZoomX, upperBound);
-    const withinUpper = Math.min(upperBound, value);
-    return Math.max(lowerBound, withinUpper);
+    return Math.max(minZoomX, Math.min(maxZoomX, value));
   }, [maxZoomX, minZoomX]);
 
   // Calculate default zoom to fit full waveform in container
@@ -310,13 +304,28 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
           const newZoomY = Math.max(1, Math.min(20, zoomY + delta * zoomSpeed));
           handleZoomYChange(newZoomY);
         } else {
-          const newZoomX = clampZoomX(zoomX + delta * zoomSpeed);
+          const scrollContainer = waveformRef.current;
+          if (!scrollContainer) return;
           
-          // Get cursor position relative to waveform
-          const rect = waveformRef.current?.getBoundingClientRect();
-          const cursorX = rect ? e.clientX - rect.left : undefined;
+          const currentZoom = zoomX;
+          // Clamp directly here to avoid stale callback issues
+          const newZoom = Math.max(minZoomX, Math.min(maxZoomX, currentZoom + delta * zoomSpeed));
           
-          handleZoomXChange(newZoomX, cursorX);
+          // Convert global playhead to position relative to region start
+          const relativePlayhead = playhead - region.start;
+          const viewportWidthPx = scrollContainer.clientWidth;
+          
+          // Calculate new scroll position to keep playhead centered in viewport
+          const playheadPixels = relativePlayhead * PIXELS_PER_BEAT * newZoom;
+          const newScrollLeft = playheadPixels - viewportWidthPx / 2;
+          
+          setZoomX(newZoom);
+          
+          requestAnimationFrame(() => {
+            if (waveformRef.current) {
+              waveformRef.current.scrollLeft = Math.max(0, newScrollLeft);
+            }
+          });
         }
       }
     };
@@ -326,12 +335,54 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
       waveform.addEventListener('wheel', handleWheel, { passive: false });
       return () => waveform.removeEventListener('wheel', handleWheel);
     }
-  }, [zoomX, zoomY, handleZoomXChange, handleZoomYChange, clampZoomX]);
+  }, [zoomX, zoomY, handleZoomYChange, playhead, region.start, minZoomX, maxZoomX]);
+
+  // Touch gesture handling for mobile (pinch-to-zoom and pan)
+  const handleTouchZoomChange = useCallback((newZoom: number, centerX: number) => {
+    const clampedZoom = clampZoomX(newZoom);
+    const currentScrollLeft = waveformRef.current?.scrollLeft ?? 0;
+    
+    // Calculate focus point in beats
+    const focusPoint = (currentScrollLeft + centerX) / (PIXELS_PER_BEAT * zoomX);
+    
+    // Calculate new scroll position to keep focus point at same position
+    const newFocusPixels = focusPoint * PIXELS_PER_BEAT * clampedZoom;
+    const newScrollLeft = newFocusPixels - centerX;
+    
+    setZoomX(clampedZoom);
+    
+    requestAnimationFrame(() => {
+      if (waveformRef.current) {
+        waveformRef.current.scrollLeft = Math.max(0, newScrollLeft);
+      }
+      if (rulerRef.current) {
+        rulerRef.current.scrollLeft = Math.max(0, newScrollLeft);
+      }
+    });
+  }, [zoomX, clampZoomX]);
+
+  const handleTouchPan = useCallback((deltaX: number) => {
+    if (waveformRef.current) {
+      waveformRef.current.scrollLeft += deltaX;
+    }
+    if (rulerRef.current) {
+      rulerRef.current.scrollLeft += deltaX;
+    }
+  }, []);
+
+  const { containerRef: touchContainerRef } = useTouchGestures({
+    zoom: zoomX,
+    onZoomChange: handleTouchZoomChange,
+    onPan: handleTouchPan,
+    minZoom: minZoomX,
+    maxZoom: maxZoomX,
+    enabled: true,
+  });
 
   return (
     <div className="flex flex-col h-full bg-base-100">
       {/* Header with controls */}
-      <div className="flex items-center justify-between gap-4 px-4 py-3 border-b border-base-300">
+      <div className="flex items-center flex-wrap justify-between gap-4 px-4 py-3 border-b border-base-300">
         <div className="flex items-center gap-4">
           <h3 className="text-sm font-semibold">{region.name}</h3>
           <div className="flex items-center gap-2">
@@ -385,7 +436,7 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center flex-wrap gap-4">
           {/* Gain Control */}
           <label className="flex items-center gap-2">
             <span className="text-xs text-base-content/70">Gain</span>
@@ -458,6 +509,8 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
           regionStart={region.start}
           trimStart={region.trimStart || 0}
           trimEnd={(region.trimStart || 0) + region.length}
+          scrollLeft={scrollLeft}
+          viewportWidth={containerWidth}
           playheadBeats={playhead}
         />
       </div>
@@ -465,13 +518,14 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
       {/* Waveform Canvas */}
       <div
         ref={(node) => {
-          // Combine refs for both scroll tracking and resize detection
+          // Combine refs for scroll tracking, resize detection, and touch gestures
           if (node) {
             waveformRef.current = node;
             resizeRef(node);
+            touchContainerRef(node);
           }
         }}
-        className="flex-1 overflow-x-auto overflow-y-hidden"
+        className="flex-1 overflow-x-auto overflow-y-hidden touch-pan-y"
         onScroll={handleWaveformScroll}
       >
         <WaveformCanvas
@@ -480,6 +534,8 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
           zoomY={zoomY}
           pixelsPerBeat={PIXELS_PER_BEAT}
           containerHeight={containerHeight}
+          scrollLeft={scrollLeft}
+          viewportWidth={containerWidth}
           playheadBeats={playhead}
           onTrimStartChange={handleTrimStartChange}
           onTrimEndChange={handleTrimEndChange}

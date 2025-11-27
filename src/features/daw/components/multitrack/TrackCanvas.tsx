@@ -28,6 +28,7 @@ interface TrackCanvasProps {
   zoom: number;
   scrollLeft: number;
   viewportWidth: number;
+  viewportHeight?: number;
   timeSignature: TimeSignature;
   trackHeights?: Record<string, number>;
   onSelectTrack: (trackId: string) => void;
@@ -143,8 +144,17 @@ const TrackCanvasComponent = ({
   const clearRegionPreview = usePianoRollStore((state) => state.clearRegionPreview);
   const lockMap = useLockStore((state) => state.locks);
   const currentUserId = useUserStore((state) => state.userId);
+  
+  // Full content width (for wrapper div and positioning calculations)
   const width = totalBeats * pixelsPerBeat * zoom;
   const beatWidth = pixelsPerBeat * zoom;
+  
+  // Virtualized Stage: only render viewport + buffer, not full width
+  // This prevents massive canvas allocation at high zoom levels
+  const stageBuffer = 200; // Extra pixels on each side for smooth scrolling
+  const stageWidth = Math.min(width, viewportWidth + stageBuffer * 2);
+  // Calculate offset: where in the full content does the stage start?
+  const stageOffsetX = Math.max(0, Math.min(scrollLeft - stageBuffer, width - stageWidth));
 
   // Snap to grid state
   const snapToGrid = useProjectStore((state) => state.snapToGrid);
@@ -242,7 +252,10 @@ const TrackCanvasComponent = ({
       if (!pointer) {
         return null;
       }
-      const beatPosition = pointer.x / beatWidth;
+      // Account for stage offset in virtualized rendering
+      // pointer.x is relative to Stage, add stageOffsetX to get absolute position
+      const absoluteX = pointer.x + stageOffsetX;
+      const beatPosition = absoluteX / beatWidth;
 
       // Find track based on cumulative heights
       let trackIndex = -1;
@@ -260,10 +273,10 @@ const TrackCanvasComponent = ({
         beat: beatPosition,
         trackIndex,
         track,
-        pointer,
+        pointer: { ...pointer, x: absoluteX, y: pointer.y },
       };
     },
-    [beatWidth, tracks, trackYPositions]
+    [beatWidth, tracks, trackYPositions, stageOffsetX]
   );
 
   const handleStageDoubleClick = useCallback(
@@ -660,11 +673,12 @@ const TrackCanvasComponent = ({
         if (!pointer) {
           return;
         }
+        // Use absolute coordinates for virtualized stage
         setMarqueeState((prev) =>
           prev
             ? {
               ...prev,
-              currentX: pointer.x,
+              currentX: pointer.x + stageOffsetX,
               currentY: pointer.y,
             }
             : prev
@@ -701,6 +715,7 @@ const TrackCanvasComponent = ({
       regions,
       resizeState,
       snapToGrid,
+      stageOffsetX,
       onRegionDragRealtime,
       onRegionRealtimeUpdates,
       activePianoRegionId,
@@ -1000,6 +1015,9 @@ const TrackCanvasComponent = ({
         return;
       }
 
+      // Convert to absolute coordinates for virtualized stage
+      const absoluteX = pointer.x + stageOffsetX;
+
       // Ctrl+drag for panning
       if (event.evt.ctrlKey || event.evt.metaKey) {
         setPanState({
@@ -1014,7 +1032,13 @@ const TrackCanvasComponent = ({
         'touches' in event.evt;
 
       if (isTouch) {
-        // For touch: start hold timer for marquee selection
+        // For touch on empty space: start panning immediately with single finger
+        // Also start hold timer - if user holds without moving, switch to marquee
+        setPanState({
+          startX: pointer.x,
+          startY: pointer.y,
+        });
+        
         setHoldState({
           x: pointer.x,
           y: pointer.y,
@@ -1022,11 +1046,13 @@ const TrackCanvasComponent = ({
         });
 
         holdTimerRef.current = window.setTimeout(() => {
-          // After hold duration, start marquee selection
+          // After hold duration without significant movement, start marquee selection
+          // The panState will be cleared when marquee starts
+          setPanState(null);
           setMarqueeState({
-            originX: pointer.x,
+            originX: absoluteX,
             originY: pointer.y,
-            currentX: pointer.x,
+            currentX: absoluteX,
             currentY: pointer.y,
             additive: event.evt.shiftKey,
           });
@@ -1034,17 +1060,17 @@ const TrackCanvasComponent = ({
           holdTimerRef.current = null;
         }, HOLD_DURATION);
       } else {
-        // For mouse: immediately start marquee selection
+        // For mouse: immediately start marquee selection (use absolute coords)
         setMarqueeState({
-          originX: pointer.x,
+          originX: absoluteX,
           originY: pointer.y,
-          currentX: pointer.x,
+          currentX: absoluteX,
           currentY: pointer.y,
           additive: event.evt.shiftKey,
         });
       }
     },
-    []
+    [stageOffsetX]
   );
 
   // Dynamic grid lines based on zoom level - only render visible beats
@@ -1074,10 +1100,11 @@ const TrackCanvasComponent = ({
 
   const stageContent = (
     <Stage
-      width={width}
+      width={stageWidth}
       height={height}
       perfectDrawEnabled={false}
       onDblClick={handleStageDoubleClick}
+      onDblTap={handleStageDoubleClick}
       onMouseDown={handleMarqueeStart}
       onTouchStart={(e) => handleMarqueeStart(e as unknown as KonvaEventObject<PointerEvent>)}
       onPointerMove={handlePointerMove}
@@ -1085,13 +1112,13 @@ const TrackCanvasComponent = ({
       onPointerUp={handlePointerUp}
       onTouchEnd={handlePointerUp}
     >
-      {/* Static Layer: Grid and track backgrounds */}
-      <Layer listening={false}>
+      {/* Static Layer: Grid and track backgrounds - offset by stageOffsetX */}
+      <Layer listening={false} x={-stageOffsetX}>
         {beatLines}
       </Layer>
 
-      {/* Interactive Layer: Tracks and regions */}
-      <Layer>
+      {/* Interactive Layer: Tracks and regions - offset by stageOffsetX */}
+      <Layer x={-stageOffsetX}>
         {tracks.map((track) => {
           const pos = trackYPositions[track.id];
           if (!pos) {
@@ -1113,6 +1140,7 @@ const TrackCanvasComponent = ({
                     : 'transparent'
                 }
                 onMouseDown={handleBackgroundClick}
+                onTouchStart={(e) => handleBackgroundClick(e as unknown as KonvaEventObject<MouseEvent>)}
               />
               <Rect
                 x={0}
@@ -1351,8 +1379,19 @@ const TrackCanvasComponent = ({
   );
 
   return (
-    <div className="relative" style={{ width, height }}>
-      {stageContent}
+    <div 
+      className="relative" 
+      style={{ 
+        width, 
+        height,
+        // Allow browser to handle scroll gestures for better performance
+        touchAction: 'pan-x pan-y',
+      }}
+    >
+      {/* Position the virtualized Stage at the correct scroll offset */}
+      <div style={{ position: 'absolute', left: stageOffsetX, top: 0 }}>
+        {stageContent}
+      </div>
       <div className="pointer-events-none absolute left-0 top-0" style={{ width, height }}>
         {regionBadgePositions.map(({ regionId, x, y, width: regionWidth }) => {
           const lock = lockMap.get(getRegionLockId(regionId));

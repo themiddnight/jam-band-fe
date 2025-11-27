@@ -114,7 +114,7 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
       {/* Menu Bar */}
       <div className="menu-bar flex flex-wrap items-center gap-1 sm:gap-2 p-1 sm:p-2 bg-base-200 rounded-lg">
         <button 
-          className="btn btn-xs btn-secondary" 
+          className="btn btn-xs btn-soft btn-secondary" 
           onClick={handleSave} 
           disabled={isSaving || isMixingDown}
         >
@@ -124,7 +124,7 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
         
         {canLoadProject && (
           <button 
-            className="btn btn-xs btn-accent" 
+            className="btn btn-xs btn-soft btn-accent" 
             onClick={handleLoad} 
             disabled={isLoading || isMixingDown}
           >
@@ -133,14 +133,15 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
           </button>
         )}
 
+        <div className='divider divider-horizontal !m-0' />
+
         <button
-          className="btn btn-xs btn-info"
+          className="btn btn-xs btn-soft btn-info"
           onClick={handleMixdownClick}
           disabled={isMixingDown}
           title="Export project as WAV file"
         >
-          <span className="hidden sm:inline">Mixdown</span>
-          <span className="sm:hidden">🎵</span>
+          Mixdown
         </button>
 
         {uploadProgress > 0 && uploadProgress < 100 && (
@@ -209,10 +210,10 @@ function RecoverDialog({
           An auto-saved version of your project was found. Would you like to recover it?
         </p>
         <div className="modal-action">
-          <button className="btn btn-xs btn-primary" onClick={onRecover}>
+          <button className="btn btn-xs btn-soft btn-primary" onClick={onRecover}>
             Recover
           </button>
-          <button className="btn btn-xs" onClick={onCancel}>
+          <button className="btn btn-xs btn-soft" onClick={onCancel}>
             Cancel
           </button>
         </div>

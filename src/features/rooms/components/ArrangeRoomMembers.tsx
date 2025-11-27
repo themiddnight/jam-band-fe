@@ -58,7 +58,7 @@ const ArrangeRoomMembers = memo(
       return (
         <div
           key={user.id}
-          className={`flex items-center gap-2 p-2 rounded-lg border-2 transition-colors ${
+          className={`flex items-center gap-2 px-2 py-1 rounded-lg border-2 transition-colors ${
             isCurrentUser ? "bg-primary/10" : "bg-base-200"
           }`}
           style={{
@@ -77,7 +77,7 @@ const ArrangeRoomMembers = memo(
           )}
 
           {/* Username + broadcast */}
-          <span className="font-medium text-sm flex-1 flex items-center gap-1">
+          <span className="font-medium text-xs flex-1 flex items-center gap-1">
             {user.username}
             {broadcastUser && (
               <span className="text-sm" title="Broadcasting instrument">

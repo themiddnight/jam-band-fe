@@ -6,7 +6,6 @@ import { useUserStore } from "@/shared/stores/userStore";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { debounce } from "lodash";
-import type { Socket } from "socket.io-client";
 import type { RoomType } from "@/shared/types";
 
 /**
@@ -36,27 +35,9 @@ export const useLobby = () => {
   // Room store
   const { clearRoom } = useRoomStore();
 
-  // Active socket state to trigger re-renders when it changes
-  const [activeSocket, setActiveSocket] = useState<Socket | null>(
-    getActiveSocket(),
-  );
-
-  // Keep active socket updated with the latest from the manager
-  useEffect(() => {
-    const next = getActiveSocket();
-    // Only update when identity changes to avoid unnecessary renders
-    if (next !== activeSocket) {
-      // Socket changed, update reference
-      setActiveSocket(next);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [getActiveSocket, connectionState]);
-
-  // Temporarily disabled socket health check for debugging
-  useEffect(() => {
-    // Disabled to test if this is causing ping measurement issues
-    
-  }, [connectionState, activeSocket, getActiveSocket]);
+  // Get the current active socket directly instead of using a ref/state
+  // This ensures the socket is always fresh and avoids timing issues with ping measurement
+  const activeSocket = getActiveSocket();
 
   // Room query for HTTP-based room list
   const { roomsQuery } = useRoomQuery();

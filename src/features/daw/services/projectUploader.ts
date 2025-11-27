@@ -64,11 +64,7 @@ export async function uploadProjectToRoom(
     const result = await response.json();
 
     if (result.success) {
-      console.log('Project uploaded successfully', {
-        roomId,
-        projectName: result.projectName,
-        audioFilesCount: result.audioFilesCount,
-      });
+      // Project upload was successful
     }
 
     return result;

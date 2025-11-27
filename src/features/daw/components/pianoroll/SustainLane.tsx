@@ -34,13 +34,13 @@ interface DragState {
   initialEnd: number;
 }
 
-// Memoized playhead component
-const PlayheadIndicator = React.memo<{ x: number; height: number; width: number }>(
-  ({ x, height, width }) => {
+// Memoized playhead component - needs layer offset for virtualized stage
+const PlayheadIndicator = React.memo<{ x: number; height: number; width: number; layerOffset?: number }>(
+  ({ x, height, width, layerOffset = 0 }) => {
     if (x < 0 || x > width) return null;
     
     return (
-      <Layer listening={false}>
+      <Layer listening={false} x={layerOffset}>
         <Line
           points={[x, 0, x, height]}
           stroke="#3b82f6"
@@ -70,10 +70,16 @@ export const SustainLane = ({
   onRealtimeEventUpdate,
   onRealtimeFlush,
 }: SustainLaneProps) => {
-  const width = totalBeats * pixelsPerBeat * zoom;
+  // Full content width
+  const fullWidth = totalBeats * pixelsPerBeat * zoom;
   const beatWidth = pixelsPerBeat * zoom;
   // Since events are now in absolute positions, playhead should also be absolute
   const playheadX = playheadBeats * beatWidth;
+  
+  // Virtualized Stage: only render viewport + buffer
+  const stageBuffer = 100;
+  const stageWidth = Math.min(fullWidth, viewportWidth + stageBuffer * 2);
+  const stageOffsetX = Math.max(0, Math.min(scrollLeft - stageBuffer, fullWidth - stageWidth));
 
   const [dragState, setDragState] = useState<DragState | null>(null);
   
@@ -239,42 +245,52 @@ export const SustainLane = ({
     [dragState]
   );
 
-  const verticalLines = [];
-  for (let beat = 0; beat <= totalBeats; beat++) {
-    const x = beat * beatWidth;
-    verticalLines.push(
-      <Rect
-        key={`sustain-beat-${beat}`}
-        x={x}
-        y={0}
-        width={1}
-        height={SUSTAIN_LANE_HEIGHT}
-        fill={beat % 4 === 0 ? '#d1d5db' : '#e5e7eb'}
-      />
-    );
-  }
+  // Only render visible beat lines
+  const verticalLines = useMemo(() => {
+    const lines = [];
+    const startBeat = Math.floor(visibleStartBeat);
+    const endBeat = Math.min(Math.ceil(visibleEndBeat), totalBeats);
+    
+    for (let beat = startBeat; beat <= endBeat; beat++) {
+      const x = beat * beatWidth;
+      lines.push(
+        <Rect
+          key={`sustain-beat-${beat}`}
+          x={x}
+          y={0}
+          width={1}
+          height={SUSTAIN_LANE_HEIGHT}
+          fill={beat % 4 === 0 ? '#d1d5db' : '#e5e7eb'}
+        />
+      );
+    }
+    return lines;
+  }, [visibleStartBeat, visibleEndBeat, totalBeats, beatWidth]);
 
   return (
-    <Stage
-      width={width}
-      height={SUSTAIN_LANE_HEIGHT}
-      perfectDrawEnabled={false}
-      onPointerMove={handlePointerMove}
-      onTouchMove={(e) => handlePointerMove(e as unknown as KonvaEventObject<PointerEvent>)}
-      onPointerUp={handlePointerUp}
-      onTouchEnd={handlePointerUp}
-      onDblClick={handleBackgroundDoubleClick}
-    >
-      <Layer>
-        <Rect
-          x={0}
-          y={0}
-          width={width}
+    <div style={{ position: 'relative', width: fullWidth, height: SUSTAIN_LANE_HEIGHT }}>
+      {/* Virtualized Stage - positioned at stageOffsetX */}
+      <div style={{ position: 'absolute', left: stageOffsetX, top: 0 }}>
+        <Stage
+          width={stageWidth}
           height={SUSTAIN_LANE_HEIGHT}
-          fill="#f3f4f6"
-          onMouseDown={handleBackgroundClick}
-        />
-        {verticalLines}
+          perfectDrawEnabled={false}
+          onPointerMove={handlePointerMove}
+          onTouchMove={(e) => handlePointerMove(e as unknown as KonvaEventObject<PointerEvent>)}
+          onPointerUp={handlePointerUp}
+          onTouchEnd={handlePointerUp}
+          onDblClick={handleBackgroundDoubleClick}
+        >
+          <Layer x={-stageOffsetX}>
+            <Rect
+              x={0}
+              y={0}
+              width={fullWidth}
+              height={SUSTAIN_LANE_HEIGHT}
+              fill="#f3f4f6"
+              onMouseDown={handleBackgroundClick}
+            />
+            {verticalLines}
         
         {/* Regular sustain events - only visible */}
         {visibleEvents.map((event) => {
@@ -337,11 +353,13 @@ export const SustainLane = ({
             />
           );
         })}
-      </Layer>
-      
-      {/* Playhead: Separate memoized component */}
-      <PlayheadIndicator x={playheadX} height={SUSTAIN_LANE_HEIGHT} width={width} />
-    </Stage>
+          </Layer>
+          
+          {/* Playhead: Separate memoized component with layer offset */}
+          <PlayheadIndicator x={playheadX} height={SUSTAIN_LANE_HEIGHT} width={fullWidth} layerOffset={-stageOffsetX} />
+        </Stage>
+      </div>
+    </div>
   );
 };
 

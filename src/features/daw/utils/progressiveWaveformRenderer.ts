@@ -364,13 +364,16 @@ export const getOrGenerateLOD = (
   maxPixelWidth: number = MAX_WAVEFORM_PIXEL_WIDTH,
   quality?: "low" | "medium" | "high",
 ): WaveformLODData => {
-  // If quality is specified, use it to determine max pixel width
+  // Use the LARGER of: explicitly passed maxPixelWidth OR quality-based width
+  // This ensures long audio gets enough peaks even with quality settings
   if (quality) {
-    maxPixelWidth = getMaxPixelWidthForQuality(quality);
+    const qualityWidth = getMaxPixelWidthForQuality(quality);
+    maxPixelWidth = Math.max(maxPixelWidth, qualityWidth);
   }
 
-  // Create a cache key that includes quality setting
-  const cacheKey = quality ? `${regionId}_${quality}` : regionId;
+  // Create a cache key that includes quality and maxPixelWidth
+  // This ensures we regenerate LOD when peak count requirements change (e.g., for long audio)
+  const cacheKey = `${regionId}_${quality || 'default'}_${maxPixelWidth}`;
   
   const cached = waveformLODCache.get(cacheKey);
   if (cached) {

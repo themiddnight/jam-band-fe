@@ -60,7 +60,6 @@ export const createWebKitCompatibleAudioContext =
         currentState = context.state;
         
         if (currentState === "running") {
-          console.log(`🍎 Safari AudioContext resumed after ${attempts} attempt(s)`);
           break;
         }
       } catch (error) {
@@ -96,9 +95,7 @@ export const createWebKitCompatibleAudioContext =
         // Extra wait for Safari to properly initialize
         await new Promise((resolve) => setTimeout(resolve, 150));
 
-        console.log(
-          "🍎 Safari AudioContext initialized with destination node verification",
-        );
+        // AudioContext initialized with destination node verification
       } catch (error) {
         console.warn(
           "Safari AudioDestinationNode initialization failed:",

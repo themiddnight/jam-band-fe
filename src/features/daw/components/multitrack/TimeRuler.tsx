@@ -19,6 +19,7 @@ interface TimeRulerProps {
   pixelsPerBeat: number;
   zoom: number;
   scrollLeft: number;
+  viewportWidth?: number;
   height?: number;
   timeSignature: TimeSignature;
   playheadBeats?: number;
@@ -29,6 +30,7 @@ const TimeRulerComponent = ({
   pixelsPerBeat,
   zoom,
   scrollLeft,
+  viewportWidth = 1200,
   height = RULER_HEIGHT,
   timeSignature,
   playheadBeats = 0,
@@ -53,17 +55,25 @@ const TimeRulerComponent = ({
   
   const { handleMarkerAdd, handleMarkerUpdate, handleMarkerUpdateFlush, handleMarkerDelete } = useDAWCollaborationContext();
   
-  const width = totalBeats * pixelsPerBeat * zoom;
+  // Full content width
+  const fullWidth = totalBeats * pixelsPerBeat * zoom;
   const beatWidth = pixelsPerBeat * zoom;
   const beatsInBar = beatsPerBar(timeSignature);
+  
+  // Virtualized Stage: only render viewport + buffer, not full width
+  // This prevents massive canvas allocation at high zoom levels
+  const stageBuffer = 100;
+  const stageWidth = Math.min(fullWidth, viewportWidth + stageBuffer * 2);
+  const stageOffsetX = Math.max(0, Math.min(scrollLeft - stageBuffer, fullWidth - stageWidth));
   
   // Dynamic grid division based on zoom level
   const dynamicGridDivision = useMemo(() => getGridDivisionForZoom(zoom), [zoom]);
   const gridInterval = useMemo(() => getGridInterval(dynamicGridDivision), [dynamicGridDivision]);
   
   const updatePlayheadFromPointer = useCallback((pointer: { x: number; y: number }) => {
-    // pointer.x is relative to the Stage which now starts at 0
-    let clickedBeat = Math.max(0, Math.min(pointer.x / beatWidth, totalBeats));
+    // pointer.x is relative to the Stage, add offset for virtualized stage
+    const absoluteX = pointer.x + stageOffsetX;
+    let clickedBeat = Math.max(0, Math.min(absoluteX / beatWidth, totalBeats));
     
     // Snap to global grid if enabled - use same function as region dragging
     if (snapToGrid) {
@@ -78,10 +88,12 @@ const TimeRulerComponent = ({
     const beats = clickedBeat % beatsInBar;
     
     Tone.Transport.position = `${bars}:${beats}:0`;
-  }, [beatWidth, beatsInBar, setPlayhead, totalBeats, snapToGrid, dynamicGridDivision]);
+  }, [beatWidth, beatsInBar, setPlayhead, totalBeats, snapToGrid, dynamicGridDivision, stageOffsetX]);
   
   const updateLoopHandleFromPointer = useCallback((pointer: { x: number; y: number }, handle: 'start' | 'end') => {
-    let clickedBeat = Math.max(0, Math.min(pointer.x / beatWidth, totalBeats));
+    // Add offset for virtualized stage
+    const absoluteX = pointer.x + stageOffsetX;
+    let clickedBeat = Math.max(0, Math.min(absoluteX / beatWidth, totalBeats));
     
     // Snap to global grid if enabled
     if (snapToGrid) {
@@ -100,7 +112,7 @@ const TimeRulerComponent = ({
       clickedBeat = Math.max(clickedBeat, minEnd);
       setLoop({ end: clickedBeat });
     }
-  }, [beatWidth, totalBeats, snapToGrid, dynamicGridDivision, loop.start, loop.end, setLoop]);
+  }, [beatWidth, totalBeats, snapToGrid, dynamicGridDivision, loop.start, loop.end, setLoop, stageOffsetX]);
   
   const handlePointerDown = (event: KonvaEventObject<PointerEvent>) => {
     const target = event.target;
@@ -206,7 +218,8 @@ const TimeRulerComponent = ({
     
     if (draggingMarkerId) {
       // Dragging a marker
-      let newPosition = Math.max(0, Math.min(pointer.x / beatWidth, totalBeats));
+      const absoluteX = pointer.x + stageOffsetX;
+      let newPosition = Math.max(0, Math.min(absoluteX / beatWidth, totalBeats));
       if (snapToGrid) {
         newPosition = snapValueToGrid(newPosition, dynamicGridDivision);
       }
@@ -272,10 +285,22 @@ const TimeRulerComponent = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isEditMode, selectedMarkerId, handleMarkerDelete, selectMarker]);
 
-  // Generate grid markers based on dynamic grid subdivision
+  // Calculate visible beat range for viewport culling
+  const { visibleStartBeat, visibleEndBeat } = useMemo(() => {
+    const buffer = 4; // Extra beats to render for smooth scrolling
+    const startBeat = Math.max(0, Math.floor(scrollLeft / beatWidth) - buffer);
+    const endBeat = Math.min(totalBeats, Math.ceil((scrollLeft + viewportWidth) / beatWidth) + buffer);
+    return { visibleStartBeat: startBeat, visibleEndBeat: endBeat };
+  }, [scrollLeft, beatWidth, viewportWidth, totalBeats]);
+
+  // Generate grid markers based on dynamic grid subdivision - only visible ones
   const gridMarkers = useMemo(() => {
     const markerList = [];
-    for (let beat = 0; beat <= totalBeats; beat += gridInterval) {
+    // Start from the nearest grid interval before visible range
+    const startBeat = Math.floor(visibleStartBeat / gridInterval) * gridInterval;
+    const endBeat = Math.min(visibleEndBeat, totalBeats);
+    
+    for (let beat = startBeat; beat <= endBeat; beat += gridInterval) {
       const x = beat * beatWidth;
       const isBar = isBarLine(beat, beatsInBar);
       const isBeat = isBeatLine(beat);
@@ -288,7 +313,7 @@ const TimeRulerComponent = ({
       });
     }
     return markerList;
-  }, [totalBeats, beatWidth, gridInterval, beatsInBar]);
+  }, [visibleStartBeat, visibleEndBeat, totalBeats, beatWidth, gridInterval, beatsInBar]);
 
   const playheadX = playheadBeats * beatWidth;
 
@@ -300,30 +325,32 @@ const TimeRulerComponent = ({
         onCancel={handleMarkerCancel}
       />
       <div className="relative overflow-hidden border-b border-base-300 bg-base-200">
-        <div style={{ position: 'relative', left: -scrollLeft, width: width }}>
-        <Stage
-          width={width}
-          height={height}
-          perfectDrawEnabled={false}
-          onPointerDown={handlePointerDown}
-          onTouchStart={(e) => handlePointerDown(e as unknown as KonvaEventObject<PointerEvent>)}
-          onPointerMove={handlePointerMove}
-          onTouchMove={(e) => handlePointerMove(e as unknown as KonvaEventObject<PointerEvent>)}
-          onPointerUp={handlePointerUp}
-          onTouchEnd={handlePointerUp}
-        >
-        <Layer>
+        {/* Virtualized Stage: offset by -scrollLeft to follow canvas, positioned at stageOffsetX */}
+        <div style={{ position: 'relative', left: -scrollLeft, width: fullWidth, height }}>
+        <div style={{ position: 'absolute', left: stageOffsetX, top: 0 }}>
+          <Stage
+            width={stageWidth}
+            height={height}
+            perfectDrawEnabled={false}
+            onPointerDown={handlePointerDown}
+            onTouchStart={(e) => handlePointerDown(e as unknown as KonvaEventObject<PointerEvent>)}
+            onPointerMove={handlePointerMove}
+            onTouchMove={(e) => handlePointerMove(e as unknown as KonvaEventObject<PointerEvent>)}
+            onPointerUp={handlePointerUp}
+            onTouchEnd={handlePointerUp}
+          >
+          <Layer x={-stageOffsetX}>
           {/* Clickable background */}
           <Rect
             x={0}
             y={0}
-            width={width}
+            width={fullWidth}
             height={height}
             fill="transparent"
           />
           {/* Bottom border */}
           <Line
-            points={[0, height - 1, width, height - 1]}
+            points={[0, height - 1, fullWidth, height - 1]}
             stroke="#a1a1aa"
             strokeWidth={1}
             listening={false}
@@ -386,8 +413,10 @@ const TimeRulerComponent = ({
               />
             ))}
           
-          {/* Time markers */}
-          {markers.map((marker) => (
+          {/* Time markers - only render visible ones */}
+          {markers
+            .filter((marker) => marker.position >= visibleStartBeat && marker.position <= visibleEndBeat)
+            .map((marker) => (
             <TimeRulerMarker
               key={marker.id}
               marker={marker}
@@ -447,8 +476,9 @@ const TimeRulerComponent = ({
             strokeWidth={2}
             listening={false}
           />
-        </Layer>
-        </Stage>
+          </Layer>
+          </Stage>
+        </div>
         </div>
       </div>
     </>
@@ -462,6 +492,7 @@ export const TimeRuler = memo(TimeRulerComponent, (prevProps, nextProps) => {
     prevProps.pixelsPerBeat === nextProps.pixelsPerBeat &&
     prevProps.zoom === nextProps.zoom &&
     prevProps.scrollLeft === nextProps.scrollLeft &&
+    prevProps.viewportWidth === nextProps.viewportWidth &&
     prevProps.height === nextProps.height &&
     prevProps.timeSignature.numerator === nextProps.timeSignature.numerator &&
     prevProps.timeSignature.denominator === nextProps.timeSignature.denominator &&

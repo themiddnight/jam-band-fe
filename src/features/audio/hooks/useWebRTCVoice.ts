@@ -2015,9 +2015,7 @@ export const useWebRTCVoice = ({
     if (!socket || !isEnabled) return;
 
     const handleSocketReconnection = () => {
-      console.log(
-        "🔄 WebRTC: Socket reconnected, attempting to restore voice connections",
-      );
+      // Socket reconnected, attempting to restore voice connections
 
       // Clear any grace period timeout since we're back online
       if (gracePeriodTimeoutRef.current) {
@@ -2032,9 +2030,7 @@ export const useWebRTCVoice = ({
         currentUsername &&
         roomId
       ) {
-        console.log(
-          "📢 WebRTC: Re-announcing voice presence after socket reconnection",
-        );
+        // Re-announcing voice presence after socket reconnection
         socket.emit("join_voice", {
           roomId,
           userId: currentUserId,
@@ -2080,10 +2076,7 @@ export const useWebRTCVoice = ({
     );
 
     if (missingConnections.length > 0) {
-      console.log(
-        "🔄 WebRTC: Capability restored, attempting to reconnect to users:",
-        missingConnections.map((u) => u.userId),
-      );
+      // Capability restored, attempting to reconnect to users
 
       // Attempt to reconnect with a delay spread to avoid overwhelming
       missingConnections.forEach((user, index) => {
@@ -2406,7 +2399,6 @@ export const useWebRTCVoice = ({
               username: currentUsername,
             });
 
-            // Also broadcast current mute state
             const hasActiveTrack = localStreamRef.current
               ?.getAudioTracks()
               .some((t) => t.enabled);
@@ -2415,6 +2407,17 @@ export const useWebRTCVoice = ({
               userId: currentUserId,
               isMuted: !hasActiveTrack,
             });
+
+            // Request mesh network coordination for new user
+            setTimeout(() => {
+              if (socket && socket.connected && currentUserId && roomId) {
+                // Requesting mesh network coordination after reconnection
+                socket.emit("request_mesh_connections", {
+                  roomId,
+                  userId: currentUserId,
+                });
+              }
+            }, 1200); // Delay to ensure join_voice is processed first
           }
         }, 50); // Reduced delay from 200ms to 50ms for faster reconnection
 
@@ -2540,10 +2543,8 @@ export const useWebRTCVoice = ({
 
             // Request mesh network coordination for new user
             setTimeout(() => {
-              if (socket && socket.connected) {
-                console.log(
-                  "🕸️ MESH: Requesting mesh network coordination for new voice join",
-                );
+              if (socket && socket.connected && currentUserId && roomId) {
+                // Requesting mesh network coordination for new voice join
                 socket.emit("request_mesh_connections", {
                   roomId,
                   userId: currentUserId,

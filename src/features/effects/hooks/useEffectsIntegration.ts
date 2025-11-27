@@ -44,7 +44,6 @@ export function useEffectsIntegration({
       await initializationRef.current;
       
       setIsInitialized(true);
-      console.log('🎛️ Effects integration initialized via hook');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       setError(`Failed to initialize effects integration: ${errorMessage}`);
@@ -59,7 +58,6 @@ export function useEffectsIntegration({
       await effectsIntegration.cleanup();
       setIsInitialized(false);
       setError(null);
-      console.log('🎛️ Effects integration cleaned up via hook');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       setError(`Failed to cleanup effects integration: ${errorMessage}`);

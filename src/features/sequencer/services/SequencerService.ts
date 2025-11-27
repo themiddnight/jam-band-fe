@@ -78,11 +78,6 @@ export class SequencerService {
    * Set the steps data for the sequencer
    */
   setSteps(steps: SequencerStep[]): void {
-    console.log("🎵 Setting steps:", {
-      count: steps.length,
-      enabled: steps.filter(s => s.enabled).length,
-      beats: [...new Set(steps.map(s => s.beat))].sort((a, b) => a - b)
-    });
     
     this.stepsData = steps;
     
@@ -224,9 +219,6 @@ export class SequencerService {
                 
                 // Play steps for this beat after bank switch
                 const stepsForBeat = this.getStepsForBeatSync(beat);
-                console.log(`🎵 Found ${stepsForBeat.length} steps for beat ${beat} (after bank switch)`, {
-                  steps: stepsForBeat.map(s => ({ note: s.note, beat: s.beat, gate: s.gate }))
-                });
                 if (stepsForBeat.length > 0) {
                   this.events.onPlayStep(stepsForBeat);
                 }

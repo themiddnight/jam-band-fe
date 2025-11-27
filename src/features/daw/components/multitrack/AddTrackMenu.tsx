@@ -39,9 +39,9 @@ export const AddTrackMenu = () => {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="btn btn-xs btn-outline w-full"
+        className="btn btn-xs btn-outline mx-2"
       >
-        + Add Track
+        <p className='px-2'>+ Add Track</p>
       </button>
 
       {isOpen && (

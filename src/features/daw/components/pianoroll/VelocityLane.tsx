@@ -33,9 +33,15 @@ export const VelocityLane = ({
   playheadBeats = 0,
   onSetNotesVelocity,
 }: VelocityLaneProps) => {
-  const width = totalBeats * pixelsPerBeat * zoom;
+  // Full content width
+  const fullWidth = totalBeats * pixelsPerBeat * zoom;
   const beatWidth = pixelsPerBeat * zoom;
   const playheadX = playheadBeats * beatWidth;
+  
+  // Virtualized Stage: only render viewport + buffer
+  const stageBuffer = 100;
+  const stageWidth = Math.min(fullWidth, viewportWidth + stageBuffer * 2);
+  const stageOffsetX = Math.max(0, Math.min(scrollLeft - stageBuffer, fullWidth - stageWidth));
   
   const [dragState, setDragState] = useState<DragState | null>(null);
   
@@ -129,85 +135,90 @@ export const VelocityLane = ({
   }, [dragState]);
 
   return (
-    <Stage
-      width={width}
-      height={SUSTAIN_LANE_HEIGHT}
-      perfectDrawEnabled={false}
-      onPointerMove={handlePointerMove}
-      onTouchMove={(e) => handlePointerMove(e as unknown as KonvaEventObject<PointerEvent>)}
-      onPointerUp={handlePointerUp}
-      onTouchEnd={handlePointerUp}
-    >
-      <Layer
-        onPointerDown={(event) => {
-          // Event delegation: find which velocity line was clicked
-          const target = event.target;
-          const targetName = target.name();
-          if (targetName && targetName.startsWith('vel-line-')) {
-            const noteId = targetName.replace('vel-line-', '');
-            const note = sortedNotes.find((n) => n.id === noteId);
-            if (note) {
-              handleBarPointerDown(note, event);
-            }
-          }
-        }}
-      >
-        {/* Background */}
-        <Rect
-          x={0}
-          y={0}
-          width={width}
+    <div style={{ position: 'relative', width: fullWidth, height: SUSTAIN_LANE_HEIGHT }}>
+      {/* Virtualized Stage - positioned at stageOffsetX */}
+      <div style={{ position: 'absolute', left: stageOffsetX, top: 0 }}>
+        <Stage
+          width={stageWidth}
           height={SUSTAIN_LANE_HEIGHT}
-          fill="#f9fafb"
-        />
-        
-        {/* Grid lines */}
-        {[0, 32, 64, 96, 127].map((vel) => {
-          const y = SUSTAIN_LANE_HEIGHT - (vel / 127) * SUSTAIN_LANE_HEIGHT;
-          return (
-            <Line
-              key={`vel-${vel}`}
-              points={[0, y, width, y]}
-              stroke="#e5e7eb"
-              strokeWidth={1}
-              dash={vel === 0 || vel === 127 ? undefined : [4, 4]}
+          perfectDrawEnabled={false}
+          onPointerMove={handlePointerMove}
+          onTouchMove={(e) => handlePointerMove(e as unknown as KonvaEventObject<PointerEvent>)}
+          onPointerUp={handlePointerUp}
+          onTouchEnd={handlePointerUp}
+        >
+          <Layer
+            x={-stageOffsetX}
+            onPointerDown={(event) => {
+              // Event delegation: find which velocity line was clicked
+              const target = event.target;
+              const targetName = target.name();
+              if (targetName && targetName.startsWith('vel-line-')) {
+                const noteId = targetName.replace('vel-line-', '');
+                const note = sortedNotes.find((n) => n.id === noteId);
+                if (note) {
+                  handleBarPointerDown(note, event);
+                }
+              }
+            }}
+          >
+            {/* Background */}
+            <Rect
+              x={0}
+              y={0}
+              width={fullWidth}
+              height={SUSTAIN_LANE_HEIGHT}
+              fill="#f9fafb"
             />
-          );
-        })}
+            
+            {/* Grid lines */}
+            {[0, 32, 64, 96, 127].map((vel) => {
+              const y = SUSTAIN_LANE_HEIGHT - (vel / 127) * SUSTAIN_LANE_HEIGHT;
+              return (
+                <Line
+                  key={`vel-${vel}`}
+                  points={[0, y, fullWidth, y]}
+                  stroke="#e5e7eb"
+                  strokeWidth={1}
+                  dash={vel === 0 || vel === 127 ? undefined : [4, 4]}
+                />
+              );
+            })}
 
-        {/* Velocity lines at note start position */}
-        {sortedNotes.map((note) => {
-          const x = note.start * beatWidth;
-          const velocity = previewVelocities[note.id] ?? note.velocity;
-          const velocityHeight = (velocity / 127) * SUSTAIN_LANE_HEIGHT;
-          const y = SUSTAIN_LANE_HEIGHT - velocityHeight;
-          const isSelected = selectedNoteIds.includes(note.id);
-          const isDragging = dragState?.noteIds.includes(note.id);
+            {/* Velocity lines at note start position - only visible ones */}
+            {sortedNotes.map((note) => {
+              const x = note.start * beatWidth;
+              const velocity = previewVelocities[note.id] ?? note.velocity;
+              const velocityHeight = (velocity / 127) * SUSTAIN_LANE_HEIGHT;
+              const y = SUSTAIN_LANE_HEIGHT - velocityHeight;
+              const isSelected = selectedNoteIds.includes(note.id);
+              const isDragging = dragState?.noteIds.includes(note.id);
 
-          return (
-            <Line
-              key={note.id}
-              name={`vel-line-${note.id}`}
-              points={[x, SUSTAIN_LANE_HEIGHT, x, y]}
-              stroke={isSelected ? '#3b82f6' : '#10b981'}
-              strokeWidth={3}
-              opacity={isDragging ? 0.9 : 0.7}
-              perfectDrawEnabled={false}
-            />
-          );
-        })}
+              return (
+                <Line
+                  key={note.id}
+                  name={`vel-line-${note.id}`}
+                  points={[x, SUSTAIN_LANE_HEIGHT, x, y]}
+                  stroke={isSelected ? '#3b82f6' : '#10b981'}
+                  strokeWidth={3}
+                  opacity={isDragging ? 0.9 : 0.7}
+                  perfectDrawEnabled={false}
+                />
+              );
+            })}
 
-        {/* Playhead indicator */}
-        {playheadX >= 0 && playheadX <= width && (
-          <Line
-            points={[playheadX, 0, playheadX, SUSTAIN_LANE_HEIGHT]}
-            stroke="#3b82f6"
-            strokeWidth={2}
-            listening={false}
-          />
-        )}
-      </Layer>
-    </Stage>
+            {/* Playhead indicator */}
+            {playheadX >= 0 && playheadX <= fullWidth && (
+              <Line
+                points={[playheadX, 0, playheadX, SUSTAIN_LANE_HEIGHT]}
+                stroke="#3b82f6"
+                strokeWidth={2}
+                listening={false}
+              />
+            )}
+          </Layer>
+        </Stage>
+      </div>
+    </div>
   );
 };
-

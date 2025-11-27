@@ -64,33 +64,34 @@ export const Collaborators = memo(({
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      
-      <div className="flex flex-col gap-1">
+
+      <div className="flex flex-col gap-2">
         {/* Current user */}
+        <div className="flex flex-col md:flex-row xl:flex-col gap-2 w-full">
+          {/* Voice Input - Mic Input */}
+          {isVoiceEnabled && canTransmitVoice && (
+            <div className="border border-base-300 flex-1">
+              <VoiceInput
+                isVisible={true}
+                onStreamReady={onStreamReady}
+                onStreamRemoved={onStreamRemoved}
+                onMuteStateChange={onMuteStateChange}
+                rtcLatency={rtcLatency}
+                rtcLatencyActive={rtcLatencyActive}
+                userCount={userCount}
+                browserAudioLatency={browserAudioLatency}
+                meshLatency={meshLatency}
+                isConnecting={isConnecting}
+                connectionError={connectionError}
+                onConnectionRetry={onConnectionRetry}
+              />
+            </div>
+          )}
 
-        {/* Voice Input - Mic Input */}
-        {isVoiceEnabled && canTransmitVoice && (
-          <div className="border border-base-300">
-            <VoiceInput
-              isVisible={true}
-              onStreamReady={onStreamReady}
-              onStreamRemoved={onStreamRemoved}
-              onMuteStateChange={onMuteStateChange}
-              rtcLatency={rtcLatency}
-              rtcLatencyActive={rtcLatencyActive}
-              userCount={userCount}
-              browserAudioLatency={browserAudioLatency}
-              meshLatency={meshLatency}
-              isConnecting={isConnecting}
-              connectionError={connectionError}
-              onConnectionRetry={onConnectionRetry}
-            />
+          {/* Broadcast Toggle - Instrument Broadcasting */}
+          <div className="border border-base-300 flex-1">
+            <BroadcastToggle onBroadcastChange={onBroadcastChange} />
           </div>
-        )}
-
-        {/* Broadcast Toggle - Instrument Broadcasting */}
-        <div className="border border-base-300">
-          <BroadcastToggle onBroadcastChange={onBroadcastChange} />
         </div>
 
         {/* Room Members */}

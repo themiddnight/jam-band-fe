@@ -1,6 +1,7 @@
 /**
  * Calculate appropriate grid division based on zoom level
  * Returns the grid division as a fraction (e.g., 4 = quarter notes, 8 = eighth notes)
+ * For extreme zoom out, returns fractional values to show every N bars
  */
 export const getGridDivisionForZoom = (zoom: number): number => {
   // At extreme zoom (>= 16x), show 64th notes
@@ -27,8 +28,20 @@ export const getGridDivisionForZoom = (zoom: number): number => {
   if (zoom >= 0.5) {
     return 4;
   }
-  // At very low zoom, show whole notes (bars)
-  return 1;
+  // At very low zoom (>= 0.2x), show whole notes (1 bar)
+  if (zoom >= 0.2) {
+    return 1;
+  }
+  // At extremely low zoom (>= 0.1x), show every 4 bars
+  if (zoom >= 0.1) {
+    return 0.25; // 4/0.25 = 16 beats = 4 bars
+  }
+  // At ultra low zoom (>= 0.05x), show every 8 bars  
+  if (zoom >= 0.05) {
+    return 0.125; // 4/0.125 = 32 beats = 8 bars
+  }
+  // At minimum zoom, show every 16 bars
+  return 0.0625; // 4/0.0625 = 64 beats = 16 bars
 };
 
 /**

@@ -56,8 +56,13 @@ export const AudioRegionContent = ({
     }
 
     try {
-      // Generate or retrieve LOD data with quality setting
-      const lodData = getOrGenerateLOD(audioBuffer, region.id, undefined, waveformQuality);
+      // Scale maxPeaks based on audio length for long files
+      // This ensures enough detail when zoomed in on 5-10 minute audio
+      const audioLengthFactor = Math.max(1, originalLength / 100);
+      const scaledMaxPeaks = Math.min(Math.ceil(20000 * Math.sqrt(audioLengthFactor)), 80000);
+      
+      // Generate or retrieve LOD data with scaled peaks for long audio
+      const lodData = getOrGenerateLOD(audioBuffer, region.id, scaledMaxPeaks, waveformQuality);
 
       // Validate LOD data
       if (!lodData || !lodData.levels || lodData.levels.length === 0) {
@@ -65,8 +70,10 @@ export const AudioRegionContent = ({
         return new Float32Array(0);
       }
 
-      // Select appropriate LOD level based on current zoom
-      const lodLevel = selectLODLevel(lodData, width, length);
+      // Select appropriate LOD level based on actual zoom (width * zoom factor)
+      // Use a larger effective width to get more detail when zoomed in
+      const effectiveWidth = width * Math.max(1, beatWidth / 20);
+      const lodLevel = selectLODLevel(lodData, effectiveWidth, length);
 
       // Validate LOD level
       if (!lodLevel || !lodLevel.peaks || lodLevel.peaks.length === 0) {
@@ -87,7 +94,7 @@ export const AudioRegionContent = ({
       console.error('Failed to generate waveform LOD:', error);
       return new Float32Array(0);
     }
-  }, [audioBuffer, region.id, width, length, effectiveTrimStart, originalLength, waveformQuality]);
+  }, [audioBuffer, region.id, width, length, effectiveTrimStart, originalLength, waveformQuality, beatWidth]);
 
   if (!audioBuffer || visiblePeaks.length === 0) {
     return null;
