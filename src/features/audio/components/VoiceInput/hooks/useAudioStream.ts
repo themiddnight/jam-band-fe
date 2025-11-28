@@ -40,13 +40,21 @@ export const useAudioStream = ({
   const browserCapabilitiesRef = useRef(getBrowserAudioCapabilities());
 
   const buildAudioConstraints = useCallback((): MediaTrackConstraints => {
+    // Safety check for SSR and missing mediaDevices API
     if (typeof navigator === "undefined" || !navigator.mediaDevices) {
       return { channelCount: 1 };
     }
 
-    const supported = navigator.mediaDevices.getSupportedConstraints
-      ? navigator.mediaDevices.getSupportedConstraints()
-      : {};
+    // WebKit compatibility: getSupportedConstraints may not exist in older Safari
+    let supported: MediaTrackSupportedConstraints = {};
+    try {
+      if (typeof navigator.mediaDevices.getSupportedConstraints === 'function') {
+        supported = navigator.mediaDevices.getSupportedConstraints();
+      }
+    } catch {
+      console.warn('🎤 getSupportedConstraints not available, using fallback constraints');
+    }
+    
     const supports = (constraint: string) =>
       Boolean((supported as Record<string, unknown>)[constraint]);
     const capabilities = browserCapabilitiesRef.current;
@@ -66,7 +74,10 @@ export const useAudioStream = ({
       audioConstraints.autoGainControl = autoGain;
     }
 
-    if (supports("sampleRate") && capabilities.browserType !== "safari") {
+    // WebKit/Safari: Don't set sampleRate as it may cause issues
+    // Also check if we're on iOS which has additional constraints
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    if (supports("sampleRate") && capabilities.browserType !== "safari" && !isIOS) {
       audioConstraints.sampleRate = 48000;
     }
 

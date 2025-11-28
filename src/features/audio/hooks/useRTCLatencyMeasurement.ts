@@ -143,40 +143,58 @@ export function useRTCLatencyMeasurement({
 
     for (const [userId, peerConnection] of peersRef.current.entries()) {
       try {
-        // Accept RTCPeerConnection as connected when either connectionState is 'connected'
-        // or ICE connection state is 'completed' (some browsers report completed via iceConnectionState)
-        if (
-          peerConnection.connectionState !== "connected" &&
-          peerConnection.iceConnectionState !== "completed"
-        ) {
+        // WebKit compatibility: Accept connection if:
+        // - connectionState is 'connected' (standard)
+        // - iceConnectionState is 'completed' or 'connected' (WebKit/Safari)
+        // - signalingState is 'stable' with any ice connection (fallback for older WebKit)
+        const connectionState = peerConnection.connectionState;
+        const iceState = peerConnection.iceConnectionState as string; // Cast for WebKit compatibility
+        const signalingState = peerConnection.signalingState;
+        
+        const isConnected = 
+          connectionState === "connected" ||
+          iceState === "completed" ||
+          iceState === "connected" ||
+          (signalingState === "stable" && ["checking", "connected", "completed"].includes(iceState));
+        
+        if (!isConnected) {
           continue;
         }
 
         const stats = await peerConnection.getStats();
+        let foundRtt = false;
 
         for (const report of stats.values()) {
           // Look for candidate-pair stats that indicate round-trip time
           if (report.type === "candidate-pair") {
-            // Some browsers use 'state' === 'succeeded', others mark 'selected' === true
+            // WebKit compatibility: Check multiple selection criteria
+            // Safari may use different fields than Chrome/Firefox
+            const reportAny = report as any;
             const isSelected =
-              (report as any).state === "succeeded" ||
-              (report as any).selected === true ||
-              (report as any).nominated === true;
+              reportAny.state === "succeeded" ||
+              reportAny.state === "in-progress" || // WebKit may report in-progress for active pairs
+              reportAny.selected === true ||
+              reportAny.nominated === true ||
+              reportAny.writable === true; // WebKit uses writable for active pairs
 
             if (!isSelected) continue;
 
-            // Try a few possible RTT field names for compatibility
-            const rtt =
-              (report as any).currentRoundTripTime ??
-              (report as any).roundTripTime ??
-              (report as any).rtt;
+            // WebKit compatibility: Try multiple RTT field names
+            // Safari may report RTT in different fields or formats
+            let rtt = reportAny.currentRoundTripTime;
+            if (rtt === undefined) rtt = reportAny.roundTripTime;
+            if (rtt === undefined) rtt = reportAny.rtt;
+            if (rtt === undefined) rtt = reportAny.totalRoundTripTime; // Some WebKit versions
+            
             if (typeof rtt === "number" && rtt > 0) {
-              const latencyMs = Math.round(rtt * 1000); // Convert to milliseconds and round
+              // RTT may be in seconds (standard) or milliseconds (some browsers)
+              const latencyMs = rtt < 1 ? Math.round(rtt * 1000) : Math.round(rtt);
 
               // Only accept reasonable latency values (1ms to 1000ms)
               if (latencyMs >= 1 && latencyMs <= 1000) {
                 totalLatency += latencyMs;
                 validMeasurements++;
+                foundRtt = true;
 
                 // Store individual measurement
                 const measurement: RTCLatencyMeasurement = {
@@ -186,6 +204,27 @@ export function useRTCLatencyMeasurement({
                 };
                 measurements.push(measurement);
                 break; // Only take one measurement per peer
+              }
+            }
+          }
+          
+          // WebKit fallback: Try remote-inbound-rtp stats for RTT
+          if (!foundRtt && report.type === "remote-inbound-rtp") {
+            const reportAny = report as any;
+            const rtt = reportAny.roundTripTime;
+            if (typeof rtt === "number" && rtt > 0) {
+              const latencyMs = rtt < 1 ? Math.round(rtt * 1000) : Math.round(rtt);
+              if (latencyMs >= 1 && latencyMs <= 1000) {
+                totalLatency += latencyMs;
+                validMeasurements++;
+                foundRtt = true;
+                
+                const measurement: RTCLatencyMeasurement = {
+                  latency: latencyMs,
+                  timestamp: now,
+                  userId,
+                };
+                measurements.push(measurement);
               }
             }
           }

@@ -292,6 +292,95 @@ const VoiceInputComponent: React.FC<VoiceInputProps> = ({
     return "bg-red-500";
   };
 
+  /**
+   * Connection status indicator logic:
+   * - Red: Disconnected (no mic) or connection error
+   * - Orange/Yellow: Connecting - mic is on but mesh not ready
+   * - Green: Fully connected to mesh and ready to communicate
+   * 
+   * WebKit compatibility: Safari may not report latency stats accurately,
+   * so we use userCount as a fallback indicator for mesh connectivity.
+   */
+  const getConnectionStatus = () => {
+    // Error state - red
+    if (connectionError) {
+      return {
+        color: "bg-red-500",
+        pulse: false,
+        tooltip: "Connection error - click retry or check your network",
+      };
+    }
+
+    // Not connected at all - red
+    if (!voiceState.isConnected) {
+      return {
+        color: "bg-red-500",
+        pulse: false,
+        tooltip: "Microphone not connected",
+      };
+    }
+
+    // Mic connected but mesh is connecting - orange with pulse
+    if (isConnecting) {
+      return {
+        color: "bg-orange-500",
+        pulse: true,
+        tooltip: "Connecting to voice mesh...",
+      };
+    }
+
+    // WebKit fallback: If we have other users in the room and mic is connected,
+    // assume we're connected even if latency measurement isn't working
+    // (Safari often can't measure RTT but connection works fine)
+    const hasOtherUsers = userCount > 1;
+    
+    // If RTC is active with measured latency - fully connected (green)
+    if (rtcLatencyActive && meshLatency !== null && meshLatency !== undefined) {
+      return {
+        color: "bg-green-500",
+        pulse: false,
+        tooltip: `Connected to mesh (${meshLatency}ms latency) - ready to communicate`,
+      };
+    }
+
+    // WebKit fallback: If we have other users and mic is on, show green
+    // because communication is likely working even without latency stats
+    if (hasOtherUsers && voiceState.isConnected && !voiceState.isMuted) {
+      return {
+        color: "bg-green-500",
+        pulse: false,
+        tooltip: `Connected to ${userCount - 1} user${userCount > 2 ? 's' : ''} - ready to communicate`,
+      };
+    }
+
+    // Mic connected but no other users yet - yellow (waiting)
+    if (!hasOtherUsers) {
+      return {
+        color: "bg-yellow-500",
+        pulse: true,
+        tooltip: "Waiting for other users to join...",
+      };
+    }
+
+    // Mic connected and muted with other users - green but muted
+    if (hasOtherUsers && voiceState.isMuted) {
+      return {
+        color: "bg-green-500",
+        pulse: false,
+        tooltip: `Connected (muted) - ${userCount - 1} user${userCount > 2 ? 's' : ''} in room`,
+      };
+    }
+
+    // Fallback: Still connecting/measuring
+    return {
+      color: "bg-orange-500",
+      pulse: true,
+      tooltip: "Establishing connection...",
+    };
+  };
+
+  const connectionStatus = getConnectionStatus();
+
   return (
     <>
       <div className="card bg-base-100 shadow-lg grow">
@@ -301,9 +390,10 @@ const VoiceInputComponent: React.FC<VoiceInputProps> = ({
               <label className="label">
                 <span className="text-xs">Input</span>
               </label>
-              {/* Connection Status */}
+              {/* Connection Status Indicator */}
               <div
-                className={`w-2 h-2 rounded-full ${voiceState.isConnected ? "bg-green-500" : "bg-red-500"}`}
+                className={`w-2 h-2 rounded-full ${connectionStatus.color} ${connectionStatus.pulse ? "animate-pulse" : ""}`}
+                title={connectionStatus.tooltip}
               />
               {/* Clean Mode Status Icon */}
               {voiceState.cleanMode && (

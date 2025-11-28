@@ -138,12 +138,17 @@ const RTCLatencyDisplay: React.FC<RTCLatencyDisplayProps> = ({
   }
 
   if (!isActive) {
+    // Check if we're likely on WebKit/Safari where latency measurement may not work
+    const isWebKit = typeof navigator !== 'undefined' && 
+      /safari/i.test(navigator.userAgent) && 
+      !/chrome/i.test(navigator.userAgent);
+    
     return (
       <span
         className={`text-base-content/50 ${sizeClass} font-mono`}
-        title="No voice connections"
+        title={isWebKit ? "Latency measurement not available on Safari" : "No voice connections"}
       >
-        ---
+        {isWebKit ? "N/A" : "---"}
       </span>
     );
   }

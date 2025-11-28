@@ -185,25 +185,70 @@ export class UltraLowLatencyOptimizer {
 
 /**
  * Utility function to get browser-specific audio latency capabilities
+ * WebKit-compatible with proper Safari/iOS detection
  */
 export const getBrowserAudioCapabilities = () => {
+  // SSR safety check
+  if (typeof navigator === 'undefined' || typeof window === 'undefined') {
+    return {
+      supportsLowLatency: false,
+      supportsAudioWorklet: false,
+      supportsOpusSettings: false,
+      optimalSampleRate: 48000,
+      minBufferSize: 256,
+      recommendedLatencyHint: "interactive" as const,
+      browserType: "other" as const,
+      isIOS: false,
+      isWebKit: false,
+    };
+  }
+
   const userAgent = navigator.userAgent.toLowerCase();
+  
+  // Detect iOS (iPhone, iPad, iPod)
+  const isIOS = /iphone|ipad|ipod/.test(userAgent);
+  
+  // Detect WebKit-based browsers (Safari, iOS browsers, some older Chrome on iOS)
+  // Note: Chrome on iOS uses WebKit due to Apple's requirements
+  const isWebKit = /webkit/.test(userAgent) && !/chrome/.test(userAgent) && !/chromium/.test(userAgent);
+  const isSafari = isWebKit || (/safari/.test(userAgent) && !/chrome/.test(userAgent));
+  
+  // Check AudioContext support with WebKit prefix fallback
+  const hasAudioContext = "AudioContext" in window || "webkitAudioContext" in window;
+  
+  // Check AudioWorklet support (not available in older Safari/WebKit)
+  let supportsAudioWorklet = false;
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (AudioContextClass && AudioContextClass.prototype) {
+      supportsAudioWorklet = "audioWorklet" in AudioContextClass.prototype;
+    }
+  } catch {
+    supportsAudioWorklet = false;
+  }
+
+  // Determine browser type with better Safari/WebKit detection
+  let browserType: "chrome" | "firefox" | "safari" | "other" = "other";
+  if (userAgent.includes("chrome") && !isIOS) {
+    browserType = "chrome";
+  } else if (userAgent.includes("firefox")) {
+    browserType = "firefox";
+  } else if (isSafari || isIOS) {
+    browserType = "safari"; // Treat all iOS browsers as Safari due to WebKit requirement
+  }
 
   return {
-    supportsLowLatency: "AudioContext" in window,
-    supportsAudioWorklet: "audioWorklet" in AudioContext.prototype,
-    supportsOpusSettings:
-      userAgent.includes("chrome") || userAgent.includes("firefox"),
-    optimalSampleRate: 48000,
-    minBufferSize: userAgent.includes("chrome") ? 128 : 256,
-    recommendedLatencyHint: "interactive",
-    browserType: userAgent.includes("chrome")
-      ? "chrome"
-      : userAgent.includes("firefox")
-        ? "firefox"
-        : userAgent.includes("safari")
-          ? "safari"
-          : "other",
+    supportsLowLatency: hasAudioContext,
+    supportsAudioWorklet,
+    supportsOpusSettings: browserType === "chrome" || browserType === "firefox",
+    // Safari/iOS works better with 44100, but 48000 is standard for WebRTC
+    optimalSampleRate: (isSafari || isIOS) ? 44100 : 48000,
+    // Safari/iOS needs larger buffer sizes for stability
+    minBufferSize: browserType === "chrome" ? 128 : (isSafari || isIOS) ? 512 : 256,
+    recommendedLatencyHint: "interactive" as const,
+    browserType,
+    isIOS,
+    isWebKit: isWebKit || isIOS,
   };
 };
 

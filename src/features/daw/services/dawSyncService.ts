@@ -17,6 +17,7 @@ import type { SynthState } from '@/features/instruments';
 import type { EffectChainState } from '@/shared/types';
 import { DEFAULT_BPM, DEFAULT_TIME_SIGNATURE } from '../types/daw';
 import { InstrumentCategory } from '@/shared/constants/instruments';
+import { isSafari, isWebKit } from '@/shared/utils/webkitCompat';
 import { debounce } from 'lodash';
 
 export type RegionDragUpdatePayload = {
@@ -33,6 +34,8 @@ export class DAWSyncService {
   private isSyncing = false; // Flag to prevent circular updates
   private isPaused = false; // Flag to pause incoming sync updates (e.g., during mixdown)
   private effectChainDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingInstrumentLoads: { tracks: Track[]; synthStates: Record<string, SynthState> } | null = null;
+  private userInteractionListener: (() => void) | null = null;
 
   // Debounced effect chain update (500ms)
   private debouncedEffectChainUpdate = debounce(
@@ -75,10 +78,104 @@ export class DAWSyncService {
     }
     this.debouncedEffectChainUpdate.cancel();
     this.removeEventListeners();
+    this.cleanupUserInteractionListener();
+    this.pendingInstrumentLoads = null;
     this.socket = null;
     this.roomId = null;
     this.userId = null;
     this.username = null;
+  }
+
+  /**
+   * Clean up user interaction listener
+   */
+  private cleanupUserInteractionListener(): void {
+    if (this.userInteractionListener) {
+      ['click', 'touchstart', 'keydown'].forEach(event => {
+        document.removeEventListener(event, this.userInteractionListener!);
+      });
+      this.userInteractionListener = null;
+    }
+  }
+
+  /**
+   * Deferred instrument loading for WebKit compatibility
+   * WebKit/Safari requires user interaction before AudioContext can be resumed
+   * This method handles loading instruments after the first user interaction
+   */
+  private deferredInstrumentLoads(tracks: Track[], synthStates: Record<string, SynthState>): void {
+    const isWebKitBrowser = isSafari() || isWebKit();
+    
+    // Store pending loads
+    this.pendingInstrumentLoads = { tracks, synthStates };
+    
+    // Define the actual loading function
+    const loadInstruments = async () => {
+      const pending = this.pendingInstrumentLoads;
+      if (!pending) return;
+      
+      this.pendingInstrumentLoads = null;
+      this.cleanupUserInteractionListener();
+      
+      console.log(`🎵 Loading instruments for ${Object.keys(pending.synthStates).length} tracks`);
+      
+      for (const [trackId, synthState] of Object.entries(pending.synthStates)) {
+        const track = pending.tracks.find((t) => t.id === trackId);
+        if (!track || track.type !== 'midi') {
+          continue;
+        }
+        
+        try {
+          const { engine } = await trackInstrumentRegistry.ensureEngine(track, {
+            instrumentId: track.instrumentId,
+            instrumentCategory: track.instrumentCategory,
+          });
+          await engine.updateSynthParams(synthState);
+          console.log(`✅ Loaded instrument for track ${track.name}`);
+        } catch (error) {
+          console.warn('Failed to apply synced synth parameters', {
+            trackId,
+            error,
+          });
+        }
+      }
+    };
+    
+    // For WebKit browsers, wait for user interaction
+    if (isWebKitBrowser) {
+      console.log('🍎 WebKit detected: Deferring instrument loading until user interaction');
+      
+      this.userInteractionListener = () => {
+        console.log('🍎 User interaction detected, loading deferred instruments...');
+        void loadInstruments();
+      };
+      
+      // Add event listeners for user interaction (only once)
+      ['click', 'touchstart', 'keydown'].forEach(event => {
+        document.addEventListener(event, this.userInteractionListener!, { once: true });
+      });
+      
+      // Also try loading immediately in case AudioContext is already running
+      // (e.g., user had previous interaction before joining room)
+      setTimeout(async () => {
+        if (!this.pendingInstrumentLoads) return;
+        
+        try {
+          const { AudioContextManager } = await import('@/features/audio/constants/audioConfig');
+          const ctx = await AudioContextManager.getInstrumentContext();
+          
+          if (ctx.state === 'running') {
+            console.log('🍎 AudioContext already running, loading instruments immediately');
+            void loadInstruments();
+          }
+        } catch {
+          // Context not ready, will load on user interaction
+        }
+      }, 100);
+    } else {
+      // For non-WebKit browsers, load immediately
+      void loadInstruments();
+    }
   }
 
   /**
@@ -517,29 +614,10 @@ export class DAWSyncService {
       // Track selection stays local per collaborator, so we intentionally do not
       // apply remote selection state here.
 
-      // Apply synth params to engines
+      // Apply synth params to engines - defer loading on WebKit to avoid AudioContext issues
       if (data.synthStates) {
         const tracks = data.tracks;
-        Object.entries(data.synthStates).forEach(([trackId, synthState]) => {
-          const track = tracks.find((t) => t.id === trackId);
-          if (!track || track.type !== 'midi') {
-            return;
-          }
-          void (async () => {
-            try {
-              const { engine } = await trackInstrumentRegistry.ensureEngine(track, {
-                instrumentId: track.instrumentId,
-                instrumentCategory: track.instrumentCategory,
-              });
-              await engine.updateSynthParams(synthState);
-            } catch (error) {
-              console.warn('Failed to apply synced synth parameters', {
-                trackId,
-                error,
-              });
-            }
-          })();
-        });
+        this.deferredInstrumentLoads(tracks, data.synthStates);
       }
     } finally {
       this.isSyncing = false;

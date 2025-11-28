@@ -143,13 +143,20 @@ const instantiateEngine = async (
 
   const context = await AudioContextManager.getInstrumentContext();
   
-  // Try to resume context if suspended
+  // Try to resume context if suspended (required for Safari/WebKit)
   if (context.state === 'suspended') {
     try {
       await context.resume();
+      // Wait a bit for state to propagate on WebKit
+      await new Promise(resolve => setTimeout(resolve, 50));
     } catch (err) {
       console.warn('Failed to resume AudioContext (may require user interaction):', err);
     }
+  }
+  
+  // Check if context is ready - Safari/WebKit may still not be ready without user interaction
+  if (context.state !== 'running') {
+    throw new Error(`AudioContext not ready (state: ${context.state}). User interaction may be required.`);
   }
   
   // Initialize engine - this may fail if AudioContext isn't running
@@ -219,11 +226,17 @@ export const trackInstrumentRegistry = {
       };
     }
 
-    const loadPromise = instantiateEngine(track, options).then((entry) => {
-      registry.set(track.id, entry);
-      pendingLoads.delete(track.id);
-      return entry;
-    });
+    const loadPromise = instantiateEngine(track, options)
+      .then((entry) => {
+        registry.set(track.id, entry);
+        pendingLoads.delete(track.id);
+        return entry;
+      })
+      .catch((error) => {
+        // Clean up pending load on failure to allow retry
+        pendingLoads.delete(track.id);
+        throw error;
+      });
 
     pendingLoads.set(track.id, loadPromise);
 
