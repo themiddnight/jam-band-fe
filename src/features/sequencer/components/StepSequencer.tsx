@@ -1,4 +1,4 @@
-import { memo, useMemo, useCallback } from "react";
+import { memo, useMemo, useCallback, useState, useEffect } from "react";
 import { Socket } from "socket.io-client";
 import { useSequencer } from "../hooks/useSequencer";
 import { useSequencerStore } from "../stores/sequencerStore";
@@ -8,7 +8,7 @@ import {
   useSequencerRows,
   useDisplayModeOptions,
 } from "../hooks/useSequencerRows";
-import { VirtualizedStepGrid } from "./VirtualizedStepGrid";
+import { KonvaStepGrid } from "./konva";
 import {
   PlaybackControls,
   SpeedControl,
@@ -18,9 +18,10 @@ import {
   BankActions,
   LengthControl,
   DisplayModeControl,
+  SelectModeControls,
 } from "./controls";
 import { PresetManager } from "@/shared/components";
-import type { EditMode } from "../types";
+import type { EditMode, SequencerStep } from "../types";
 import type { CSSProperties } from "react";
 
 interface StepSequencerProps {
@@ -113,6 +114,26 @@ export const StepSequencer = memo(
     // Get display mode options for this instrument type
     const displayModeOptions = useDisplayModeOptions(currentCategory);
 
+    // Selection state for select mode
+    const [selectMode, setSelectMode] = useState(false);
+    const [selectedSteps, setSelectedSteps] = useState<Set<string>>(new Set());
+    
+    // Handle updating selected steps (gate/velocity)
+    const handleUpdateSelectedSteps = useCallback((updates: Partial<SequencerStep>) => {
+      selectedSteps.forEach((stepKey) => {
+        const [beat, note] = stepKey.split('-');
+        sequencer.updateStep(parseInt(beat), note, updates);
+      });
+    }, [selectedSteps, sequencer]);
+    
+    // Clear selection when switching modes
+    const handleSelectModeChange = useCallback((enabled: boolean) => {
+      setSelectMode(enabled);
+      if (!enabled) {
+        setSelectedSteps(new Set());
+      }
+    }, []);
+
     const handlePlayPause = () => {
       if (isPlaying) {
         if (softStopRequested) {
@@ -124,6 +145,29 @@ export const StepSequencer = memo(
         sequencer.handlePlay();
       }
     };
+
+    // Handle arrow key navigation in recording mode
+    useEffect(() => {
+      if (!isRecording) return;
+
+      const handleKeyDown = (e: KeyboardEvent) => {
+        // Only handle arrow keys when in recording mode
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          // Prevent default scrolling behavior
+          e.preventDefault();
+          
+          const newBeat = e.key === 'ArrowLeft' 
+            ? Math.max(0, currentBeat - 1)
+            : Math.min(settings.length - 1, currentBeat + 1);
+          
+          sequencer.setCurrentBeat(newBeat);
+          onSelectedBeatChange(newBeat);
+        }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isRecording, currentBeat, settings.length, sequencer, onSelectedBeatChange]);
 
     // Common button styles for mobile optimization
     const mobileButtonStyle: CSSProperties = {
@@ -223,7 +267,16 @@ export const StepSequencer = memo(
           </div>
 
           {/* Preset Controls */}
-          <div className="flex items-center justify-end">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            {/* Select Mode Toggle and Sliders */}
+            <SelectModeControls
+              selectMode={selectMode}
+              onSelectModeChange={handleSelectModeChange}
+              selectedSteps={selectedSteps}
+              onUpdateSelectedSteps={handleUpdateSelectedSteps}
+              getStepData={getStepDataMemo}
+            />
+            
             <PresetManager
               storageKey="sequencer-presets"
               version="1.0.0"
@@ -268,14 +321,17 @@ export const StepSequencer = memo(
           </div>
 
           {/* Third Section: Sequencer */}
-          <div className="bg-neutral p-4 rounded-lg overflow-x-auto overflow-y-hidden ">
-            <VirtualizedStepGrid
+          <div className="bg-neutral py-4 pr-4 rounded-lg overflow-y-hidden">
+            <KonvaStepGrid
               rows={rows}
               currentBeat={currentBeat}
               sequenceLength={settings.length}
               isRecording={isRecording}
               editMode={editMode}
               rootNote={rootNote}
+              selectMode={selectMode}
+              selectedSteps={selectedSteps}
+              onSelectionChange={setSelectedSteps}
               onStepToggle={sequencer.handleStepToggle}
               onBeatSelect={onSelectedBeatChange}
               onCurrentBeatChange={sequencer.setCurrentBeat}

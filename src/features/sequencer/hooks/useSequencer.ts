@@ -37,6 +37,7 @@ export const useSequencer = ({
   const currentBPMRef = useRef(currentBPM);
   const hasStartedPlayingRef = useRef(false);
   const currentlyPlayingNotesRef = useRef<Set<string>>(new Set()); // Track playing notes for hard-stop
+  const bankGenerationRef = useRef(0); // Incremented on bank switch to invalidate pending timeouts
   useLayoutEffect(() => {
     setActiveCategory(currentCategory);
   }, [currentCategory, setActiveCategory]);
@@ -146,6 +147,9 @@ export const useSequencer = ({
                   currentlyPlayingNotesRef.current.clear();
                 }
                 
+                // Increment generation to invalidate pending timeouts from previous bank
+                bankGenerationRef.current++
+                
                 // Clear the waiting state and switch to the queued bank
                 sequencerStoreRef.current.setWaitingBankChange(null);
                 sequencerStoreRef.current.switchBank(waitingBank);
@@ -169,6 +173,9 @@ export const useSequencer = ({
                     onStopNotesRef.current(playingNotes);
                     currentlyPlayingNotesRef.current.clear();
                   }
+                  
+                  // Increment generation to invalidate pending timeouts from previous bank
+                  bankGenerationRef.current++
                   
                   sequencerStoreRef.current.switchBank(nextBank);
                   
@@ -312,7 +319,7 @@ export const useSequencer = ({
               // Process stopping logic for all notes in this beat (both new and legato continuations)
               processedNotes.forEach(noteData => {
                 const legatoGroup = legatoAnalysis.get(noteData.note)!;
-                const isFullGate = noteData.gate >= 1.0;
+                const isFullGate = noteData.gate >= 0.99; // Use 0.99 tolerance for float precision
                 const isNewNote = newNotes.includes(noteData.note);
                 const isLegatoContinuation = !isNewNote;
                 
@@ -339,7 +346,7 @@ export const useSequencer = ({
                   
                   // Add minimum and maximum gate times to prevent issues
                   const minGateTime = 50; // Minimum 50ms to ensure notes are heard
-                  const maxGateTime = 2000; // Maximum 2s to prevent stuck notes
+                  const maxGateTime = 60000; // Maximum 60s (was 2s) to support long drones/slow tempos
                   const safeGateTime = Math.max(minGateTime, Math.min(maxGateTime, gateTime));
                   
                   // Track the longest gate time for soft-stop completion
@@ -347,8 +354,15 @@ export const useSequencer = ({
                     maxGateTimeForSoftStop = Math.max(maxGateTimeForSoftStop, safeGateTime);
                   }
                   
+                  // Capture current generation to detect bank switches
+                  const triggerGeneration = bankGenerationRef.current;
+                  
                   // Schedule note stop after gate time
                   setTimeout(() => {
+                    // Skip if bank has switched (generation changed)
+                    if (bankGenerationRef.current !== triggerGeneration) {
+                      return;
+                    }
                     
                     onStopNotesRef.current([noteData.note]);
                     // Remove from tracking when notes stop
@@ -358,6 +372,10 @@ export const useSequencer = ({
                   // Shorter emergency cleanup: force stop this note if still playing
                   const emergencyTimeout = safeGateTime + 500; // Reduced from 1000ms to 500ms
                   setTimeout(() => {
+                    // Skip if bank has switched (generation changed)
+                    if (bankGenerationRef.current !== triggerGeneration) {
+                      return;
+                    }
                     if (currentlyPlayingNotesRef.current.has(noteData.note)) {
                       console.warn(`🎵 Emergency cleanup: force stopping stuck note ${noteData.note} from beat ${beat} (isNew: ${isNewNote}, isLegatoEnd: ${legatoGroup.isGroupEnd})`);
                       onStopNotesRef.current([noteData.note]);
@@ -475,7 +493,7 @@ export const useSequencer = ({
                   i === 0 || 
                   !prevStep || 
                   step.beat !== prevStep.beat + 1 ||
-                  prevStep.gate < 1.0;
+                  prevStep.gate < 0.99; // Use 0.99 tolerance
                 
                 if (shouldStartNewGroup && currentGroupSteps.length > 0) {
                   // Finish the previous group
@@ -494,7 +512,7 @@ export const useSequencer = ({
                   for (let j = i; j < noteSteps.length; j++) {
                     const futureStep = noteSteps[j];
                     if (futureStep.beat !== step.beat + (j - i)) break; // No longer adjacent
-                    if (futureStep.gate >= 1.0) {
+                    if (futureStep.gate >= 0.99) { // Use 0.99 tolerance
                       groupStartVelocity = futureStep.velocity;
                       break;
                     }
@@ -511,7 +529,7 @@ export const useSequencer = ({
                   i === noteSteps.length - 1 ||
                   !nextStep ||
                   nextStep.beat !== step.beat + 1 ||
-                  (step.gate < 1.0);
+                  (step.gate < 0.99); // Use 0.99 tolerance
                 
                 if (shouldEndGroup && currentGroupSteps.length > 0) {
                   groups.push({

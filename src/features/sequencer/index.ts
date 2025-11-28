@@ -1,9 +1,6 @@
 // Main component
 export { StepSequencer } from "./components/StepSequencer";
 
-// Sub-components (for advanced usage)
-export { VirtualizedStepGrid } from "./components/VirtualizedStepGrid";
-
 // Hooks
 export { useSequencer } from "./hooks/useSequencer";
 export { useSequencerRows, useDisplayModeOptions } from "./hooks/useSequencerRows";
