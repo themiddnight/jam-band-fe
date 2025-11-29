@@ -8,4 +8,4 @@ cmds = ["bun install --frozen-lockfile"]
 cmds = ["bun run build"]
 
 [start]
-cmd = "bun run preview"
+cmd = "bunx vite preview --host 0.0.0.0 --port ${PORT:-3000}"
