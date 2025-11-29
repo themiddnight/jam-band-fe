@@ -6,11 +6,12 @@ import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(() => ({
   plugins: [
     react(), 
     tailwindcss(), 
-    mkcert(),
+    // ใช้ HTTPS เฉพาะ local development, Railway จัดการ HTTPS เอง
+    ...(process.env.RAILWAY_ENVIRONMENT ? [] : [mkcert()]),
     VitePWA({
       registerType: 'autoUpdate',
       workbox: {
@@ -73,5 +74,10 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src')
     }
+  },
+  preview: {
+    port: parseInt(process.env.PORT || '3000'),
+    host: '0.0.0.0',
+    strictPort: true
   }
-})
+}))
