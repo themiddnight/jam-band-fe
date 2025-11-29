@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["bun"]
+nixPkgs = ["bun", "nodejs-22_x"]
 
 [phases.install]
 cmds = ["bun install --frozen-lockfile"]
