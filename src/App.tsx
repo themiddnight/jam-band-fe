@@ -2,8 +2,9 @@ import { routes, type AppRoute } from "./app-config";
 import { useUserStore, PWAUpdatePrompt, ErrorBoundary } from "@/shared";
 import { useDeepLinkHandler } from "./shared/hooks/useDeepLinkHandler";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useLayoutEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import { Routes, Route } from "react-router-dom";
+import { trackSessionStart } from "@/shared/analytics/events";
 
 const queryClient = new QueryClient();
 
@@ -17,6 +18,13 @@ export default function App() {
   useLayoutEffect(() => {
     ensureUserId();
   }, [ensureUserId]);
+
+  useEffect(() => {
+    trackSessionStart();
+    
+    // Clear error recovery flag on successful app load
+    sessionStorage.removeItem('error-recovery-attempted');
+  }, []);
 
   return (
     <ErrorBoundary>

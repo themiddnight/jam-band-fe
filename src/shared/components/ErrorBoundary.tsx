@@ -34,11 +34,31 @@ export class ErrorBoundary extends Component<Props, State> {
     // Store error info for display in development
     this.setState({ errorInfo });
 
+    // Auto-recovery: Clear localStorage and reload once
+    const hasTriedRecovery = sessionStorage.getItem('error-recovery-attempted');
+    
+    if (!hasTriedRecovery) {
+      console.warn('🔄 Auto-recovery: Clearing localStorage and reloading...');
+      sessionStorage.setItem('error-recovery-attempted', 'true');
+      localStorage.clear();
+      window.location.reload();
+      return;
+    }
+
+    // If recovery was already attempted, show error UI
+    console.error('❌ Recovery failed, showing error UI');
+    
     // In a real app, you might want to send this to an error reporting service
     // Example: sendErrorToService(error, errorInfo);
   }
 
   private handleReload = () => {
+    window.location.reload();
+  };
+
+  private handleClearAndReload = () => {
+    localStorage.clear();
+    sessionStorage.clear();
     window.location.reload();
   };
 
@@ -66,6 +86,12 @@ export class ErrorBoundary extends Component<Props, State> {
                 className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors"
               >
                 Try Again
+              </button>
+              <button
+                onClick={this.handleClearAndReload}
+                className="w-full px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded-lg font-medium transition-colors"
+              >
+                Clear Storage & Reload
               </button>
               <button
                 onClick={this.handleReload}
