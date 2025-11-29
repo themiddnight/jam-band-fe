@@ -1,8 +1,10 @@
 // import { Modal } from "./shared/Modal";
 import React from "react";
+import { useFeedbackPrompt } from "../../feedback/context/FeedbackPromptContext";
 
 export const Footer: React.FC = () => {
   const currentYear = new Date().getFullYear();
+  const { openFeedbackModal } = useFeedbackPrompt();
   // const [showAboutModal, setShowAboutModal] = useState(false);
 
   return (
@@ -27,14 +29,13 @@ export const Footer: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-4 text-sm text-base-content/70">
-              <a
-                href="https://jam-band-landing-page.vercel.app/feedback"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-primary transition-colors"
+              <button
+                type="button"
+                className="btn btn-sm btn-outline"
+                onClick={openFeedbackModal}
               >
                 Give us feedback
-              </a>
+              </button>
               <span>•</span>
               <a
                 href="https://jam-band-landing-page.vercel.app"

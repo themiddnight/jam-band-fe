@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
-interface UserState {
+export interface UserState {
   username: string | null;
   userId: string | null;
   setUsername: (username: string) => void;
