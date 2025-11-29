@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useProjectManager } from '../hooks/useProjectManager';
 import { useRoom } from '@/features/rooms';
 import { useMixdown } from '../hooks/useMixdown';
 import { MixdownSettingsModal } from './MixdownSettingsModal';
 import { MixdownProgressModal } from './MixdownProgressModal';
 import type { MixdownSettings } from '../hooks/useMixdown';
+import { getRoomContext } from '@/shared/analytics/context';
+import { trackProjectExport, trackProjectSave } from '@/shared/analytics/events';
+import { trackEvent } from '@/shared/analytics/client';
 
 type ProjectMenuProps = {
   canLoadProject?: boolean;
@@ -28,6 +31,7 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
   const { currentRoom, currentUser } = useRoom();
   const [showRecoverDialog, setShowRecoverDialog] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const analyticsContext = useMemo(() => getRoomContext(currentRoom), [currentRoom]);
   
   // Mixdown state
   const { isMixingDown, progress, error: mixdownError, startMixdown, abortMixdown } = useMixdown();
@@ -36,6 +40,10 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
   const handleSave = async () => {
     try {
       await saveProjectAs('project');
+      trackProjectSave(analyticsContext, {
+        hasUnsavedChanges,
+        source: 'project_menu',
+      });
     } catch (err) {
       console.error('Save failed:', err);
     }
@@ -76,10 +84,27 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
 
   const handleMixdownExport = async (settings: MixdownSettings) => {
     setShowMixdownSettings(false);
+    trackEvent('mixdown_start', {
+      roomId: analyticsContext.roomId,
+      roomType: analyticsContext.roomType,
+      projectId: analyticsContext.projectId,
+      payload: {
+        sampleRate: settings.sampleRate,
+        bitDepth: settings.bitDepth,
+      },
+    });
+    const startedAt = performance.now();
     
     const blob = await startMixdown(settings);
     
     if (blob) {
+      const durationMs = performance.now() - startedAt;
+      trackProjectExport(analyticsContext, {
+        format: 'wav',
+        sampleRate: settings.sampleRate,
+        bitDepth: settings.bitDepth,
+        durationMs,
+      });
       // Download the file
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -93,11 +118,27 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
       // Show notification that project state was reloaded
       console.log('✅ Mixdown complete! Project state reloaded from server.');
       // You could add a toast notification here if you have a toast system
+      return;
     }
+
+    trackEvent('mixdown_failed', {
+      roomId: analyticsContext.roomId,
+      roomType: analyticsContext.roomType,
+      projectId: analyticsContext.projectId,
+      payload: {
+        sampleRate: settings.sampleRate,
+        bitDepth: settings.bitDepth,
+      },
+    });
   };
 
   const handleAbortMixdown = () => {
     abortMixdown();
+    trackEvent('mixdown_aborted', {
+      roomId: analyticsContext.roomId,
+      roomType: analyticsContext.roomType,
+      projectId: analyticsContext.projectId,
+    });
   };
 
   // Check for auto-save on mount

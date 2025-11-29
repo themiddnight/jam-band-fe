@@ -5,6 +5,9 @@ import { useResizable } from "@/shared/hooks/useResizable";
 import { useUserStore } from "@/shared/stores/userStore";
 import { Footer, AnchoredPopup } from "@/features/ui";
 import { useDeepLinkHandler } from "@/shared/hooks/useDeepLinkHandler";
+import { getRoomContext } from "@/shared/analytics/context";
+import { trackInviteSent } from "@/shared/analytics/events";
+import { useNetworkAnalytics } from "@/shared/analytics/useNetworkAnalytics";
 import MultitrackView from "@/features/daw/components/multitrack";
 import RegionEditor from "@/features/daw/components/regioneditor";
 import Sidebar from "@/features/daw/components/sidebar";
@@ -83,6 +86,7 @@ export default function ArrangeRoom() {
 
   // Get active socket for collaboration
   const activeSocket = getActiveSocket();
+  const roomAnalyticsContext = useMemo(() => getRoomContext(currentRoom), [currentRoom]);
   const socketRef = useRef<Socket | null>(null);
   socketRef.current = activeSocket;
 
@@ -130,6 +134,16 @@ export default function ArrangeRoom() {
     removePeerConnection,
   } = useCombinedLatency({
     enabled: isVoiceEnabled,
+  });
+
+  useNetworkAnalytics({
+    roomId: currentRoom?.id ?? null,
+    roomType: currentRoom?.roomType ?? null,
+    ping: null,
+    totalLatency: currentLatency ?? null,
+    browserLatency: browserAudioLatency ?? null,
+    meshLatency: meshLatency ?? null,
+    isConnected,
   });
 
   // Sync peer connections with RTC latency measurement
@@ -325,16 +339,22 @@ export default function ArrangeRoom() {
       if (!roomId) return;
 
       const inviteUrl = generateInviteUrl(roomId, role, "arrange");
+      let didCopy = false;
 
       try {
         await navigator.clipboard.writeText(inviteUrl);
-        setCopiedRole(role);
-        setTimeout(() => setCopiedRole(null), 2000);
+        didCopy = true;
       } catch (error) {
         console.error("Failed to copy invite URL:", error);
       }
+
+      if (didCopy) {
+        setCopiedRole(role);
+        setTimeout(() => setCopiedRole(null), 2000);
+        trackInviteSent(roomAnalyticsContext, role, "copy");
+      }
     },
-    [roomId, generateInviteUrl]
+    [roomId, generateInviteUrl, roomAnalyticsContext]
   );
 
   // Room settings handlers

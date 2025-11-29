@@ -45,6 +45,9 @@ import type { RoomUser } from "@/shared/types";
 import { preloadCriticalComponents } from "@/shared/utils/componentPreloader";
 import { getSafariUserMessage } from "@/shared/utils/webkitCompat";
 import { useDeepLinkHandler } from "@/shared/hooks/useDeepLinkHandler";
+import { getRoomContext } from "@/shared/analytics/context";
+import { trackInviteSent } from "@/shared/analytics/events";
+import { useNetworkAnalytics } from "@/shared/analytics/useNetworkAnalytics";
 import { EffectsChainSection } from "@/features/effects";
 import { useEffectsIntegration } from "@/features/effects/hooks/useEffectsIntegration";
 import { usePerformRoomRecording } from "@/features/rooms/hooks/usePerformRoomRecording";
@@ -165,6 +168,7 @@ const PerformRoom = memo(() => {
   // All hooks must be called before any early returns
   // Get the current active socket directly instead of using a ref
   const activeSocket = getActiveSocket();
+  const roomAnalyticsContext = useMemo(() => getRoomContext(currentRoom), [currentRoom]);
 
   const { currentPing } = usePingMeasurement({
     socket: activeSocket,
@@ -225,6 +229,16 @@ const PerformRoom = memo(() => {
     removePeerConnection,
   } = useCombinedLatency({
     enabled: isVoiceEnabled,
+  });
+
+  useNetworkAnalytics({
+    roomId: currentRoom?.id ?? null,
+    roomType: currentRoom?.roomType ?? null,
+    ping: currentPing ?? null,
+    totalLatency: currentLatency ?? null,
+    browserLatency: browserAudioLatency ?? null,
+    meshLatency: meshLatency ?? null,
+    isConnected,
   });
 
   // Track last seen peer ids to diff additions/removals
@@ -858,20 +872,31 @@ const PerformRoom = memo(() => {
     if (!currentRoom?.id) return;
 
     const inviteUrl = generateInviteUrl(currentRoom.id, role, "perform");
+    let didCopy = false;
 
     try {
       await navigator.clipboard.writeText(inviteUrl);
+      didCopy = true;
       showSuccessMessage(`copy-invite-${role}`, "Copied!");
     } catch (error: unknown) {
       console.error("Failed to copy invite URL:", error);
       // Fallback for older browsers
-      const textArea = document.createElement("textarea");
-      textArea.value = inviteUrl;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textArea);
-      showSuccessMessage(`copy-invite-${role}`, "Copied!");
+      try {
+        const textArea = document.createElement("textarea");
+        textArea.value = inviteUrl;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+        didCopy = true;
+        showSuccessMessage(`copy-invite-${role}`, "Copied!");
+      } catch (fallbackError) {
+        console.error("Fallback copy failed:", fallbackError);
+      }
+    }
+
+    if (didCopy) {
+      trackInviteSent(roomAnalyticsContext, role, "copy");
     }
   };
 
@@ -888,12 +913,14 @@ const PerformRoom = memo(() => {
           text: `You're invited to join "${currentRoom?.name}" as ${roleText} on COLLAB!`,
           url: inviteUrl,
         });
+        trackInviteSent(roomAnalyticsContext, role, "share");
       } catch (error: unknown) {
-        if (error instanceof Error && error.name !== "AbortError") {
-          console.error("Failed to share invite URL:", error);
-          // Fallback to copy
-          handleCopyInviteUrl(role);
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
         }
+        console.error("Failed to share invite URL:", error);
+        // Fallback to copy
+        handleCopyInviteUrl(role);
       }
     } else {
       // Fallback to copy if share API not available

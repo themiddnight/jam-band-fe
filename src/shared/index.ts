@@ -21,6 +21,9 @@ export {
   preloadCriticalComponents,
   preloadInstrumentComponents,
 } from "./utils/componentPreloader";
+export * from "./analytics/events";
+export { useNetworkAnalytics } from "./analytics/useNetworkAnalytics";
+export { getDeviceInfo } from "./analytics/device";
 
 // Constants exports
 export * from "./constants";

@@ -10,10 +10,17 @@ import { useScaleState } from "@/features/ui";
 import { InstrumentCategory } from "@/shared/constants/instruments";
 import { useUserStore } from "@/shared/stores/userStore";
 import { useScaleSlotsStore } from "@/shared/stores/scaleSlotsStore";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import type { Socket } from "socket.io-client";
 import { useSequencerStore } from "@/features/sequencer";
+import {
+  trackRoomSessionStart,
+  trackRoomSessionEnd,
+  trackInstrumentSelected,
+} from "@/shared/analytics/events";
+import { getRoomContext } from "@/shared/analytics/context";
+import type { RoomContext } from "@/shared/analytics/events";
 
 /**
  * Room hook using the RoomSocketManager for namespace-based connections
@@ -130,6 +137,49 @@ export const useRoom = (options?: { isInstrumentMuted?: boolean }) => {
     updateOwnerScale,
     updateUserFollowMode,
   } = useRoomStore();
+
+  const roomContext = useMemo(() => getRoomContext(currentRoom), [currentRoom]);
+  const analyticsRoomContextRef = useRef<RoomContext>({});
+  const roomSessionStartRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    analyticsRoomContextRef.current = roomContext;
+  }, [roomContext]);
+
+  useEffect(() => {
+    const activeContext = roomContext.roomId
+      ? roomContext
+      : analyticsRoomContextRef.current;
+
+    if (
+      connectionState === ConnectionState.IN_ROOM &&
+      roomContext.roomId &&
+      !roomSessionStartRef.current
+    ) {
+      roomSessionStartRef.current = Date.now();
+      trackRoomSessionStart(roomContext);
+    }
+
+    if (
+      connectionState !== ConnectionState.IN_ROOM &&
+      roomSessionStartRef.current &&
+      activeContext.roomId
+    ) {
+      const duration = Date.now() - roomSessionStartRef.current;
+      trackRoomSessionEnd(activeContext, duration);
+      roomSessionStartRef.current = null;
+    }
+  }, [connectionState, roomContext]);
+
+  useEffect(() => {
+    return () => {
+      if (roomSessionStartRef.current && analyticsRoomContextRef.current.roomId) {
+        const duration = Date.now() - roomSessionStartRef.current;
+        trackRoomSessionEnd(analyticsRoomContextRef.current, duration);
+      }
+      roomSessionStartRef.current = null;
+    };
+  }, []);
 
   // Sequencer store
   const sequencerStore = useSequencerStore();
@@ -939,6 +989,11 @@ export const useRoom = (options?: { isInstrumentMuted?: boolean }) => {
         if (synthState && Object.keys(synthState).length > 0) {
           updateSynthParams(synthState);
         }
+      }
+
+      const ctx = analyticsRoomContextRef.current;
+      if (ctx.roomId) {
+        trackInstrumentSelected(ctx, instrument, currentCategory ?? "unknown");
       }
     },
     [
