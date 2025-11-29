@@ -291,7 +291,7 @@ export const NoteCanvas = ({
   );
 
   const handleBackgroundDoubleClick = useCallback(
-    (event: KonvaEventObject<MouseEvent>) => {
+    (event: KonvaEventObject<MouseEvent | TouchEvent>) => {
       const data = getPointerData(event as unknown as KonvaEventObject<PointerEvent>);
       if (!data) {
         return;

@@ -280,7 +280,7 @@ const TrackCanvasComponent = ({
   );
 
   const handleStageDoubleClick = useCallback(
-    (event: KonvaEventObject<MouseEvent>) => {
+    (event: KonvaEventObject<MouseEvent | TouchEvent>) => {
       const stage = event.target.getStage();
       const target = event.target;
       const isBackground =
