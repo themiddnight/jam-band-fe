@@ -1,10 +1,11 @@
 import { routes, type AppRoute } from "./app-config";
-import { useUserStore, PWAUpdatePrompt, ErrorBoundary } from "@/shared";
+import { useUserStore, PWAUpdatePrompt, ErrorBoundary } from "./shared";
 import { useDeepLinkHandler } from "./shared/hooks/useDeepLinkHandler";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useLayoutEffect } from "react";
 import { Routes, Route } from "react-router-dom";
-import { trackSessionStart } from "@/shared/analytics/events";
+import { trackSessionStart } from "./shared/analytics/events";
+import { FeedbackPromptProvider } from "./features/feedback/context/FeedbackPromptProvider";
 
 const queryClient = new QueryClient();
 
@@ -29,12 +30,14 @@ export default function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <Routes>
-          {routes.map(({ path, component: Component }: AppRoute) => (
-            <Route key={path} path={path} element={<Component />} />
-          ))}
-        </Routes>
-        <PWAUpdatePrompt />
+        <FeedbackPromptProvider>
+          <Routes>
+            {routes.map(({ path, component: Component }: AppRoute) => (
+              <Route key={path} path={path} element={<Component />} />
+            ))}
+          </Routes>
+          <PWAUpdatePrompt />
+        </FeedbackPromptProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );
