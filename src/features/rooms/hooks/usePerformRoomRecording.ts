@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import * as Tone from 'tone';
 
 interface UsePerformRoomRecordingOptions {
@@ -19,6 +19,8 @@ export function usePerformRoomRecording(options: UsePerformRoomRecordingOptions 
   const remoteVoiceSourcesRef = useRef<MediaStreamAudioSourceNode[]>([]);
   const startTimeRef = useRef<number>(0);
   const durationIntervalRef = useRef<number | null>(null);
+  const isRecordingRef = useRef<boolean>(false); // Track recording state for stream change handler
+  const currentLocalStreamRef = useRef<MediaStream | null>(null); // Track current stream for comparison
 
   const startRecording = useCallback(async () => {
     try {
@@ -67,6 +69,7 @@ export function usePerformRoomRecording(options: UsePerformRoomRecordingOptions 
           const localVoiceSource = audioContext.createMediaStreamSource(options.localVoiceStream);
           localVoiceSourceRef.current = localVoiceSource;
           localVoiceSource.connect(gainNode);
+          currentLocalStreamRef.current = options.localVoiceStream;
           console.log('✅ Recording connected to local voice stream');
         } catch (error) {
           console.warn('⚠️ Could not connect local voice stream:', error);
@@ -204,6 +207,7 @@ export function usePerformRoomRecording(options: UsePerformRoomRecordingOptions 
       
       startTimeRef.current = Date.now();
       setIsRecording(true);
+      isRecordingRef.current = true;
       setRecordingDuration(0);
 
       // Update duration every second
@@ -230,7 +234,52 @@ export function usePerformRoomRecording(options: UsePerformRoomRecordingOptions 
     }
 
     setIsRecording(false);
+    isRecordingRef.current = false;
+    currentLocalStreamRef.current = null;
   }, []);
+
+  // ============================================================================
+  // Handle local voice stream changes during recording (e.g., clean mode toggle)
+  // ============================================================================
+  useEffect(() => {
+    // Only handle stream changes while recording
+    if (!isRecordingRef.current || !gainNodeRef.current) return;
+    
+    const newStream = options.localVoiceStream;
+    const currentStream = currentLocalStreamRef.current;
+    
+    // Check if stream actually changed (different object reference)
+    if (newStream === currentStream) return;
+    
+    console.log('🔄 Local voice stream changed during recording, reconnecting...');
+    
+    // Disconnect old source if exists
+    if (localVoiceSourceRef.current) {
+      try {
+        localVoiceSourceRef.current.disconnect();
+        console.log('✅ Disconnected old local voice source');
+      } catch (e) {
+        console.warn('⚠️ Failed to disconnect old local voice source:', e);
+      }
+      localVoiceSourceRef.current = null;
+    }
+    
+    // Connect new stream if available
+    if (newStream && gainNodeRef.current) {
+      try {
+        const audioContext = Tone.getContext().rawContext as AudioContext;
+        const newSource = audioContext.createMediaStreamSource(newStream);
+        newSource.connect(gainNodeRef.current);
+        localVoiceSourceRef.current = newSource;
+        currentLocalStreamRef.current = newStream;
+        console.log('✅ Connected new local voice stream to recording');
+      } catch (error) {
+        console.warn('⚠️ Could not connect new local voice stream:', error);
+      }
+    } else {
+      currentLocalStreamRef.current = null;
+    }
+  }, [options.localVoiceStream]);
 
   const toggleRecording = useCallback(() => {
     if (isRecording) {

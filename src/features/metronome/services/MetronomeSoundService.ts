@@ -56,7 +56,8 @@ export class MetronomeSoundService {
 
     oscillator.connect(gainNode);
     if (masterBus) {
-      masterBus.routeToMaster(gainNode);
+      // Route through metronome bus (bypasses master gain, so NOT captured by recording/broadcast)
+      masterBus.routeToMetronome(gainNode);
     } else {
       gainNode.connect(audioContext.destination);
     }
