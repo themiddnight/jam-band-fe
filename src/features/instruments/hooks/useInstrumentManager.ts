@@ -28,6 +28,16 @@ export interface UseInstrumentManagerReturn {
     instrumentName: string,
     category: InstrumentCategory,
   ) => InstrumentEngine | null;
+  isRemoteEngineLoading: (
+    userId: string,
+    instrumentName: string,
+    category: InstrumentCategory,
+  ) => boolean;
+  isRemoteEngineReady: (
+    userId: string,
+    instrumentName: string,
+    category: InstrumentCategory,
+  ) => boolean;
   updateRemoteInstrument: (
     userId: string,
     username: string,
@@ -69,7 +79,7 @@ export interface UseInstrumentManagerReturn {
     category: InstrumentCategory,
     isKeyHeld?: boolean,
     sampleNotes?: string[],
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   stopRemoteNotes: (
     userId: string,
     notes: string[],
@@ -325,6 +335,25 @@ export const useInstrumentManager = (): UseInstrumentManagerReturn => {
     [getEngineKey],
   );
 
+  // Check if a remote engine is currently being loaded
+  const isRemoteEngineLoading = useCallback(
+    (userId: string, instrumentName: string, category: InstrumentCategory) => {
+      const key = getEngineKey(userId, instrumentName, category);
+      return loadingEngines.current.has(key);
+    },
+    [getEngineKey],
+  );
+
+  // Check if a remote engine is ready to play notes
+  const isRemoteEngineReady = useCallback(
+    (userId: string, instrumentName: string, category: InstrumentCategory) => {
+      const key = getEngineKey(userId, instrumentName, category);
+      const engine = remoteEngines.current.get(key);
+      return engine ? engine.isReady() : false;
+    },
+    [getEngineKey],
+  );
+
   const updateRemoteInstrument = useCallback(
     async (
       userId: string,
@@ -415,6 +444,7 @@ export const useInstrumentManager = (): UseInstrumentManagerReturn => {
   }, []);
 
   // Remote playback methods
+  // Returns true if note was played, false if dropped (engine not ready)
   const playRemoteNotes = useCallback(
     async (
       userId: string,
@@ -425,24 +455,54 @@ export const useInstrumentManager = (): UseInstrumentManagerReturn => {
       category: InstrumentCategory,
       isKeyHeld: boolean = false,
       sampleNotes?: string[],
-    ) => {
-      let engine = getRemoteEngine(userId, instrumentName, category);
+    ): Promise<boolean> => {
+      const key = getEngineKey(userId, instrumentName, category);
+      
+      // If engine is currently loading, drop the note event to prevent queueing
+      if (loadingEngines.current.has(key)) {
+        console.log(
+          `🎵 Dropping note event for ${username} - instrument still loading`,
+        );
+        return false;
+      }
 
-      // Create engine if it doesn't exist
+      const engine = remoteEngines.current.get(key);
+
+      // If engine doesn't exist and isn't loading, start loading it
+      // but don't wait for it - drop this note event
       if (!engine) {
-        engine = await addRemoteEngine({
+        console.log(
+          `🎵 Starting instrument load for ${username}, dropping current note event`,
+        );
+        // Start loading in background (don't await)
+        addRemoteEngine({
           userId,
           username,
           instrumentName,
           category,
+        }).catch((error) => {
+          console.error(
+            `❌ Failed to load remote instrument for ${username}:`,
+            error,
+          );
         });
+        return false;
+      }
+
+      // Engine exists, check if it's ready
+      if (!engine.isReady()) {
+        console.log(
+          `🎵 Dropping note event for ${username} - engine not ready`,
+        );
+        return false;
       }
 
       await engine.playNotes(notes, velocity, isKeyHeld, {
         sampleNotes,
       });
+      return true;
     },
-    [getRemoteEngine, addRemoteEngine],
+    [getEngineKey, addRemoteEngine],
   );
 
   const stopRemoteNotes = useCallback(
@@ -658,6 +718,8 @@ export const useInstrumentManager = (): UseInstrumentManagerReturn => {
     // Remote instrument management
     addRemoteEngine,
     getRemoteEngine,
+    isRemoteEngineLoading,
+    isRemoteEngineReady,
     updateRemoteInstrument,
     removeRemoteEngine,
 
