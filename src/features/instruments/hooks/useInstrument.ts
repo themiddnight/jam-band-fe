@@ -141,8 +141,9 @@ export const useInstrument = (
   usePerformanceOptimization();
 
   // Local state
+  // Start with loading=true on Safari/WebKit to ensure UI shows loading until instrument is ready
   const [isLoadingInstrument, setIsLoadingInstrument] =
-    useState<boolean>(false);
+    useState<boolean>(() => isSafari());
   const [isAudioContextReady, setIsAudioContextReady] =
     useState<boolean>(false);
   const [audioContextError, setAudioContextError] = useState<string | null>(
@@ -165,6 +166,8 @@ export const useInstrument = (
 
   // Track loading state to prevent concurrent requests
   const isCurrentlyLoading = useRef<boolean>(false);
+  // Ensure we auto-load the first instrument once audio context is usable
+  const hasAutoLoadedInitialInstrument = useRef<boolean>(false);
 
   // Initialize instrument values
   const getInitialInstrument = (): string => {
@@ -905,7 +908,6 @@ export const useInstrument = (
         !needsUserGesture &&
         !audioContextError
       ) {
-        
         try {
           await initializeAudioContext();
         } catch {
@@ -921,6 +923,47 @@ export const useInstrument = (
     isAudioContextReady,
     needsUserGesture,
     audioContextError,
+  ]);
+
+  // Once the audio context is ready, make sure the initial instrument actually loads
+  useEffect(() => {
+    if (!isAudioContextReady || hasAutoLoadedInitialInstrument.current) {
+      return;
+    }
+
+    const localEngine = instrumentManager.getLocalEngine();
+    if (localEngine?.isReady()) {
+      hasAutoLoadedInitialInstrument.current = true;
+      return;
+    }
+
+    let isCancelled = false;
+
+    const loadInitialInstrument = async () => {
+      try {
+        await loadInstrument(currentInstrument, currentCategory);
+        if (!isCancelled) {
+          hasAutoLoadedInitialInstrument.current = true;
+        }
+      } catch (error) {
+        console.error("Failed to auto-load initial instrument:", error);
+        if (!isCancelled) {
+          hasAutoLoadedInitialInstrument.current = false;
+        }
+      }
+    };
+
+    void loadInitialInstrument();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    isAudioContextReady,
+    instrumentManager,
+    loadInstrument,
+    currentInstrument,
+    currentCategory,
   ]);
 
   // WebRTC performance optimization effect

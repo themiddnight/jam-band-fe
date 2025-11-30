@@ -192,6 +192,8 @@ export interface UserChannel {
   username: string;
   // Bridge node for native AudioNode sources (smplr, Tone native nodes)
   inputGain: GainNode;
+  // Monitoring tap (post-effect) for self-monitoring scenarios
+  monitorTap: GainNode;
   // Tone-based per-user channel (pan/volume)
   toneChannel?: Tone.Channel;
   effectChain: AudioEffect[];
@@ -2619,6 +2621,7 @@ export class MixerEngine {
 
   constructor(audioContext: AudioContext) {
     this.context = audioContext;
+    this.ensureToneContext();
     this.initializeMasterSection();
     this.initializeAsync(audioContext);
   }
@@ -2626,12 +2629,51 @@ export class MixerEngine {
   private async initializeAsync(audioContext: AudioContext): Promise<void> {
     await EffectsFactory.initialize(audioContext);
     // Ensure Tone uses the same context
-    try {
-      if (Tone.getContext().rawContext !== audioContext) {
-        Tone.setContext(audioContext);
+    this.ensureToneContext();
+  }
+
+  private isNativeAudioNode(node: unknown): node is AudioNode {
+    return typeof AudioNode !== "undefined" && node instanceof AudioNode;
+  }
+
+  private connectNodes(source: any, destination: any): void {
+    if (!source || !destination) return;
+
+    // Prefer native connect when both nodes are from the Web Audio API.
+    if (this.isNativeAudioNode(source) && this.isNativeAudioNode(destination)) {
+      try {
+        source.connect(destination);
+        return;
+      } catch (error) {
+        console.warn("[MixerEngine] Native connect failed", error);
       }
-    } catch {
-      // ignore
+    }
+
+    // Fallback to Tone.connect for ToneAudioNode bridging (handles Tone <-> native)
+    try {
+      (Tone as any).connect?.(source, destination);
+      return;
+    } catch (toneError) {
+      // Last resort: call connect on source if available
+      try {
+        source.connect?.(destination);
+      } catch (nativeError) {
+        console.warn("[MixerEngine] Failed to connect nodes", {
+          toneError,
+          nativeError,
+        });
+      }
+    }
+  }
+
+  private ensureToneContext(): void {
+    try {
+      const toneCtx = (Tone as any).getContext?.();
+      if (!toneCtx || toneCtx.rawContext !== this.context) {
+        (Tone as any).setContext?.(this.context);
+      }
+    } catch (error) {
+      console.warn("[MixerEngine] Failed to align Tone.js context", error);
     }
   }
 
@@ -2720,6 +2762,8 @@ export class MixerEngine {
     const nodePool = AudioContextManager.getNodePool();
     // Native preGain bridge for incoming sources
     const inputGain = nodePool?.getGainNode() || this.context.createGain();
+    const monitorTap = nodePool?.getGainNode() || this.context.createGain();
+    monitorTap.gain.value = 1;
 
     // Create mono-to-stereo converter for proper stereo effect processing
     // This ensures all instruments (which are mono) get converted to true stereo
@@ -2728,13 +2772,14 @@ export class MixerEngine {
     // Connect input to mono-to-stereo converter
     inputGain.connect(monoToStereo.input);
 
+    this.ensureToneContext();
     // Create Tone channel with pan/volume
     const toneChannel = new Tone.Channel({ volume: 0, pan: 0 });
     // Route Tone channel to master bus destination
     const masterBus = AudioContextManager.getMasterBus();
     if (masterBus) {
       // Connect Tone node to native master gain
-      toneChannel.connect(masterBus.getMasterGain());
+      this.connectNodes(toneChannel, masterBus.getMasterGain());
     } else {
       toneChannel.toDestination();
     }
@@ -2742,28 +2787,30 @@ export class MixerEngine {
     // Connect mono-to-stereo output into Tone channel using Tone.connect for cross-type safety
     try {
       // Prefer Tone.connect to bridge AudioNode <-> ToneAudioNode
-      (Tone as any).connect?.(monoToStereo.output as any, toneChannel as any);
+      this.connectNodes(monoToStereo.output as any, toneChannel as any);
     } catch {
       // Fallback: bridge via a Tone.Gain in correct direction
+      this.ensureToneContext();
       const bridge = new Tone.Gain(1);
       try {
         // monoToStereo.output -> bridge.input -> bridge -> toneChannel
-        monoToStereo.output.connect((bridge as any).input ?? (bridge as any));
+        this.connectNodes(monoToStereo.output, (bridge as any).input ?? (bridge as any));
       } catch {
         // Last resort: connect native to native if available
         try { monoToStereo.output.connect((toneChannel as any).input); } catch { /* ignore */ }
       }
-      bridge.connect(toneChannel);
+      this.connectNodes(bridge, toneChannel);
     }
 
     // Tone analyser for metering (post-channel)
     const analyser = new Tone.Analyser({ type: "waveform", size: 256, smoothing: 0.85 });
-    toneChannel.connect(analyser);
+    this.connectNodes(toneChannel, analyser);
 
     const channel: UserChannel = {
       userId,
       username,
       inputGain,
+      monitorTap,
       toneChannel,
       effectChain: [],
       soloMute: { solo: false, mute: false },
@@ -2950,12 +2997,12 @@ export class MixerEngine {
       }
 
       // Chain nodes: inputGain -> effect1 -> effect2 -> ... -> toneChannel
+      // Also provide a monitor tap after the final effect
       let current: any = channel.inputGain;
 
       for (const effect of channel.effectChain) {
         try {
-          // Use Tone.connect for Tone.js effects
-          (Tone as any).connect(current, effect.inputNode);
+          this.connectNodes(current, effect.inputNode);
           current = effect.outputNode;
         } catch (error) {
           console.warn('Failed to connect effect in chain:', error);
@@ -2964,10 +3011,16 @@ export class MixerEngine {
 
       // Connect the final output to the tone channel
       try {
-        // Use Tone.connect for better compatibility with Tone.js nodes
-        (Tone as any).connect(current, channel.toneChannel);
+        // Use helper to bridge native <-> Tone nodes safely
+        this.connectNodes(current, channel.toneChannel);
       } catch (error) {
         console.warn('Failed to connect final effect to toneChannel:', error);
+      }
+
+      try {
+        current.connect(channel.monitorTap);
+      } catch (error) {
+        console.warn('Failed to connect monitor tap:', error);
       }
     } catch (error) {
       console.error('Error rebuilding channel chain:', error);
@@ -2982,8 +3035,8 @@ export class MixerEngine {
     if (!channel) return;
     // Route instrument output into preGain bridge
     try {
-      // Use Tone.connect to handle ToneAudioNode -> AudioNode or vice versa
-      (Tone as any).connect?.(instrumentOutput as any, channel.inputGain as any);
+      // Use helper to handle ToneAudioNode <-> AudioNode or native pairs
+      this.connectNodes(instrumentOutput as any, channel.inputGain as any);
     } catch {
       try { (instrumentOutput as any).connect?.(channel.inputGain as any); } catch { /* ignore */ }
     }
@@ -2994,6 +3047,10 @@ export class MixerEngine {
    */
   getChannel(userId: string): UserChannel | undefined {
     return this.userChannels.get(userId);
+  }
+
+  getChannelMonitorTap(userId: string): GainNode | null {
+    return this.userChannels.get(userId)?.monitorTap ?? null;
   }
 
   /**
