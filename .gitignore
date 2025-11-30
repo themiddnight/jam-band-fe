@@ -8,9 +8,22 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+
+# Build artifacts
 dist
 dist-ssr
+coverage/
+.vite/
+.vitest/
+
+# TypeScript incremental cache
+*.tsbuildinfo
+
+# Local environment overrides
 *.local
+.env
+.env.*
+!.env.example
 
 # Editor directories and files
 .vscode/*
