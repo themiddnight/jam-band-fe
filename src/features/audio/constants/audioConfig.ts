@@ -331,6 +331,7 @@ class AudioNodePool {
 // Master Audio Bus for routing and future effects
 class MasterAudioBus {
   private masterGain: GainNode;
+  private metronomeBus: GainNode; // Separate bus for metronome (bypasses master for recording)
   private context: AudioContext;
   private effectsChain: GainNode[] = [];
 
@@ -339,7 +340,15 @@ class MasterAudioBus {
     this.masterGain = context.createGain();
     this.masterGain.gain.value = AUDIO_CONFIG.MASTER_BUS.masterGainLevel;
     this.masterGain.connect(context.destination);
+
+    // Create separate metronome bus that goes directly to destination
+    // This ensures metronome is audible to the user but NOT captured by
+    // recording/broadcast hooks that tap into masterGain
+    this.metronomeBus = context.createGain();
+    this.metronomeBus.gain.value = 1.0;
+    this.metronomeBus.connect(context.destination);
     
+    console.log('🎛️ MasterAudioBus: Separate metronome bus created (bypasses master for recording)');
   }
 
   // Get the master gain node for routing
@@ -350,6 +359,21 @@ class MasterAudioBus {
   // Route an audio node through the master bus
   routeToMaster(sourceNode: AudioNode): void {
     sourceNode.connect(this.masterGain);
+  }
+
+  // Route an audio node through the metronome bus (bypasses recording/broadcast)
+  routeToMetronome(sourceNode: AudioNode): void {
+    sourceNode.connect(this.metronomeBus);
+  }
+
+  // Get the metronome bus gain node
+  getMetronomeBus(): GainNode {
+    return this.metronomeBus;
+  }
+
+  // Set metronome volume (separate from master)
+  setMetronomeVolume(volume: number): void {
+    this.metronomeBus.gain.setValueAtTime(volume, this.context.currentTime);
   }
 
   // Set master volume
@@ -365,6 +389,7 @@ class MasterAudioBus {
 
   cleanup(): void {
     this.masterGain.disconnect();
+    this.metronomeBus.disconnect();
     this.effectsChain.forEach((effect) => effect.disconnect());
   }
 }

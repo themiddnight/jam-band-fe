@@ -88,6 +88,8 @@ export function useSessionToCollab(options: UseSessionToCollabOptions) {
   const userMetadataRef = useRef<Map<string, UserMetadata>>(new Map());
   const audioRecordersRef = useRef<Map<string, AudioRecorderState>>(new Map());
   const durationIntervalRef = useRef<number | null>(null);
+  const isRecordingRef = useRef<boolean>(false); // Track recording state for stream change handler
+  const currentLocalStreamRef = useRef<MediaStream | null>(null); // Track current stream for comparison
 
   // ============================================================================
   // Utility Functions
@@ -303,6 +305,7 @@ export function useSessionToCollab(options: UseSessionToCollabOptions) {
     // Start audio recording for local voice if available
     if (localVoiceStream && currentUser) {
       startAudioRecording(currentUser.id, currentUser.username, localVoiceStream);
+      currentLocalStreamRef.current = localVoiceStream;
     }
 
     // Start audio recording for remote voices via DOM audio elements
@@ -327,6 +330,7 @@ export function useSessionToCollab(options: UseSessionToCollabOptions) {
     }, 500); // Small delay to ensure audio elements are ready
 
     setIsRecording(true);
+    isRecordingRef.current = true;
     setRecordingDuration(0);
 
     // Update duration every second
@@ -357,6 +361,8 @@ export function useSessionToCollab(options: UseSessionToCollabOptions) {
     }
 
     setIsRecording(false);
+    isRecordingRef.current = false;
+    currentLocalStreamRef.current = null;
 
     try {
       // Stop all audio recorders and collect blobs
@@ -475,6 +481,69 @@ export function useSessionToCollab(options: UseSessionToCollabOptions) {
     
     return () => clearInterval(interval);
   }, [isRecording, voiceUsers, startAudioRecording]);
+
+  // ============================================================================
+  // Handle local voice stream changes during recording (e.g., clean mode toggle)
+  // ============================================================================
+  useEffect(() => {
+    // Only handle stream changes while recording
+    if (!isRecordingRef.current || !currentUser) return;
+    
+    const newStream = localVoiceStream;
+    const currentStream = currentLocalStreamRef.current;
+    
+    // Check if stream actually changed (different object reference)
+    if (newStream === currentStream) return;
+    
+    console.log('🔄 Local voice stream changed during session recording, restarting audio recorder...');
+    
+    // Stop old recorder for current user if exists
+    const existingRecorder = audioRecordersRef.current.get(currentUser.id);
+    if (existingRecorder) {
+      try {
+        if (existingRecorder.recorder.state !== 'inactive') {
+          existingRecorder.recorder.stop();
+        }
+        // Keep the chunks collected so far - they will be merged with new chunks
+        console.log(`✅ Stopped old audio recorder for ${currentUser.username} (kept ${existingRecorder.chunks.length} chunks)`);
+      } catch (e) {
+        console.warn('⚠️ Failed to stop old audio recorder:', e);
+      }
+    }
+    
+    // Start new recorder with new stream
+    if (newStream) {
+      try {
+        // Create new recorder but append to existing chunks if any
+        const existingChunks = existingRecorder?.chunks || [];
+        
+        const recorder = new MediaRecorder(newStream, {
+          mimeType: 'audio/webm;codecs=opus',
+          audioBitsPerSecond: 256000,
+        });
+        
+        recorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            existingChunks.push(event.data);
+          }
+        };
+        
+        recorder.onerror = (event) => {
+          console.error(`🎤 Audio recording error for ${currentUser.username}:`, event);
+        };
+        
+        audioRecordersRef.current.set(currentUser.id, { recorder, chunks: existingChunks });
+        recorder.start(100);
+        currentLocalStreamRef.current = newStream;
+        
+        console.log(`✅ Started new audio recorder for ${currentUser.username} with new stream`);
+      } catch (error) {
+        console.warn('⚠️ Could not start new audio recorder:', error);
+      }
+    } else {
+      currentLocalStreamRef.current = null;
+    }
+  }, [localVoiceStream, currentUser]);
 
   // ============================================================================
   // Cleanup on unmount
