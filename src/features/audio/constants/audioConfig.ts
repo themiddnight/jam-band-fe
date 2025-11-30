@@ -377,58 +377,88 @@ export class AudioContextManager {
   private static webrtcPriorityMode: boolean = false; // Ultra-low latency mode for voice priority
   private static instrumentNodePool: AudioNodePool | null = null;
   private static masterBus: MasterAudioBus | null = null;
+  // Lock to prevent concurrent AudioContext creation (Safari race condition fix)
+  private static instrumentContextCreationPromise: Promise<AudioContext> | null = null;
 
   // Get or create instrument audio context
   static async getInstrumentContext(): Promise<AudioContext> {
-    if (!this.instrumentContext || this.instrumentContext.state === "closed") {
-      const config = getOptimalAudioConfig();
+    // Return existing context if valid
+    if (this.instrumentContext && this.instrumentContext.state !== "closed") {
+      if (this.instrumentContext.state === "suspended") {
+        this.instrumentContext.resume().catch(console.warn);
+      }
+      return this.instrumentContext;
+    }
 
-      // Use Safari-compatible audio context creation for Safari browsers
-      const isSafari = /^((?!chrome|android).)*safari/i.test(
-        navigator.userAgent,
+    // If creation is already in progress, wait for it (prevents race condition)
+    if (this.instrumentContextCreationPromise) {
+      return this.instrumentContextCreationPromise;
+    }
+
+    // Start creation with lock
+    this.instrumentContextCreationPromise = this.createInstrumentContext();
+    try {
+      const context = await this.instrumentContextCreationPromise;
+      return context;
+    } finally {
+      this.instrumentContextCreationPromise = null;
+    }
+  }
+
+  // Internal method to actually create the context
+  private static async createInstrumentContext(): Promise<AudioContext> {
+    // Double-check in case another call completed while we were waiting
+    if (this.instrumentContext && this.instrumentContext.state !== "closed") {
+      return this.instrumentContext;
+    }
+
+    const config = getOptimalAudioConfig();
+
+    // Use Safari-compatible audio context creation for Safari browsers
+    const isSafari = /^((?!chrome|android).)*safari/i.test(
+      navigator.userAgent,
+    );
+
+    if (isSafari) {
+      // Import Safari compatibility utility
+      const { createWebKitCompatibleAudioContext } = await import(
+        "../../../shared/utils/webkitCompat"
       );
-
-  if (isSafari) {
-        // Import Safari compatibility utility
-        const { createWebKitCompatibleAudioContext } = await import(
-          "../../../shared/utils/webkitCompat"
-        );
-        this.instrumentContext = await createWebKitCompatibleAudioContext();
-      } else {
-        this.instrumentContext = new AudioContext(
-          config.INSTRUMENT_AUDIO_CONTEXT,
-        );
-      }
-
-      // Initialize node pool and master bus
-      this.instrumentNodePool = new AudioNodePool(this.instrumentContext);
-      if (config.MASTER_BUS.enabled) {
-        this.masterBus = new MasterAudioBus(this.instrumentContext);
-      }
-
-      console.log(
-        `🎵 Instrument AudioContext created: ${this.instrumentContext.sampleRate}Hz`,
+      this.instrumentContext = await createWebKitCompatibleAudioContext();
+    } else {
+      this.instrumentContext = new AudioContext(
+        config.INSTRUMENT_AUDIO_CONTEXT,
       );
+    }
 
-      // Add performance monitoring
-      this.setupPerformanceMonitoring();
+    // Initialize node pool and master bus
+    this.instrumentNodePool = new AudioNodePool(this.instrumentContext);
+    if (config.MASTER_BUS.enabled) {
+      this.masterBus = new MasterAudioBus(this.instrumentContext);
+    }
 
-      // Ensure Tone.js uses this context for all Tone nodes
-      try {
-        const Tone = await import("tone");
-        const toneCtx = (Tone as any).getContext?.();
-        if (!toneCtx || toneCtx.rawContext !== this.instrumentContext) {
-          (Tone as any).setContext?.(this.instrumentContext);
-        }
-        // Apply Tone timing preferences
-        if ((Tone as any).getContext) {
-          const ctx = (Tone as any).getContext();
-          ctx.lookAhead = config.TONE_CONTEXT.lookAhead;
-          ctx.updateInterval = config.TONE_CONTEXT.updateInterval;
-        }
-      } catch {
-        // Tone not available or failed to set context; ignore
+    console.log(
+      `🎵 Instrument AudioContext created: ${this.instrumentContext.sampleRate}Hz`,
+    );
+
+    // Add performance monitoring
+    this.setupPerformanceMonitoring();
+
+    // Ensure Tone.js uses this context for all Tone nodes
+    try {
+      const Tone = await import("tone");
+      const toneCtx = (Tone as any).getContext?.();
+      if (!toneCtx || toneCtx.rawContext !== this.instrumentContext) {
+        (Tone as any).setContext?.(this.instrumentContext);
       }
+      // Apply Tone timing preferences
+      if ((Tone as any).getContext) {
+        const ctx = (Tone as any).getContext();
+        ctx.lookAhead = config.TONE_CONTEXT.lookAhead;
+        ctx.updateInterval = config.TONE_CONTEXT.updateInterval;
+      }
+    } catch {
+      // Tone not available or failed to set context; ignore
     }
 
     if (this.instrumentContext.state === "suspended") {
@@ -458,7 +488,7 @@ export class AudioContextManager {
         navigator.userAgent,
       );
 
-  if (isSafari) {
+      if (isSafari) {
         // Import Safari compatibility utility
         const { createWebKitCompatibleAudioContext } = await import(
           "../../../shared/utils/webkitCompat"
