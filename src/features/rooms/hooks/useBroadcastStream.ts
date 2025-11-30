@@ -26,6 +26,8 @@ export function useBroadcastStream({
   const localVoiceSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const sequenceNumberRef = useRef(0);
   const chunkIntervalRef = useRef<number | null>(null);
+  const isBroadcastingRef = useRef<boolean>(false); // Track broadcasting state for stream change handler
+  const currentLocalStreamRef = useRef<MediaStream | null>(null); // Track current stream for comparison
 
   // Start broadcasting
   const startBroadcast = useCallback(async () => {
@@ -76,6 +78,7 @@ export function useBroadcastStream({
           const localVoiceSource = audioContext.createMediaStreamSource(localVoiceStream);
           localVoiceSourceRef.current = localVoiceSource;
           localVoiceSource.connect(gainNode);
+          currentLocalStreamRef.current = localVoiceStream;
           console.log('📡 Broadcast: Connected local voice stream');
         } catch (err) {
           console.warn('⚠️ Could not connect local voice stream:', err);
@@ -117,6 +120,7 @@ export function useBroadcastStream({
       socket.emit('perform:toggle_broadcast', { isBroadcasting: true });
 
       setIsBroadcasting(true);
+      isBroadcastingRef.current = true;
       setIsStarting(false);
 
       console.log('📡 Broadcast started');
@@ -187,6 +191,8 @@ export function useBroadcastStream({
       }
 
       setIsBroadcasting(false);
+      isBroadcastingRef.current = false;
+      currentLocalStreamRef.current = null;
       sequenceNumberRef.current = 0;
 
       console.log('📡 Broadcast stopped');
@@ -220,6 +226,7 @@ export function useBroadcastStream({
 
     const handleBroadcastStateChanged = (data: { isBroadcasting: boolean }) => {
       setIsBroadcasting(data.isBroadcasting);
+      isBroadcastingRef.current = data.isBroadcasting;
     };
 
     socket.on('broadcast_state_changed', handleBroadcastStateChanged);
@@ -228,6 +235,49 @@ export function useBroadcastStream({
       socket.off('broadcast_state_changed', handleBroadcastStateChanged);
     };
   }, [socket]);
+
+  // ============================================================================
+  // Handle local voice stream changes during broadcasting (e.g., clean mode toggle)
+  // ============================================================================
+  useEffect(() => {
+    // Only handle stream changes while broadcasting
+    if (!isBroadcastingRef.current || !gainNodeRef.current) return;
+    
+    const newStream = localVoiceStream;
+    const currentStream = currentLocalStreamRef.current;
+    
+    // Check if stream actually changed (different object reference)
+    if (newStream === currentStream) return;
+    
+    console.log('🔄 Local voice stream changed during broadcast, reconnecting...');
+    
+    // Disconnect old source if exists
+    if (localVoiceSourceRef.current) {
+      try {
+        localVoiceSourceRef.current.disconnect();
+        console.log('✅ Disconnected old local voice source from broadcast');
+      } catch (e) {
+        console.warn('⚠️ Failed to disconnect old local voice source:', e);
+      }
+      localVoiceSourceRef.current = null;
+    }
+    
+    // Connect new stream if available
+    if (newStream && gainNodeRef.current) {
+      try {
+        const audioContext = Tone.getContext().rawContext as AudioContext;
+        const newSource = audioContext.createMediaStreamSource(newStream);
+        newSource.connect(gainNodeRef.current);
+        localVoiceSourceRef.current = newSource;
+        currentLocalStreamRef.current = newStream;
+        console.log('✅ Connected new local voice stream to broadcast');
+      } catch (error) {
+        console.warn('⚠️ Could not connect new local voice stream to broadcast:', error);
+      }
+    } else {
+      currentLocalStreamRef.current = null;
+    }
+  }, [localVoiceStream]);
 
   return {
     isBroadcasting,
