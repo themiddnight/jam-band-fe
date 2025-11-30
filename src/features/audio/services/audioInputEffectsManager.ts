@@ -166,18 +166,26 @@ class AudioInputEffectsManager {
     this.effectChain = [];
     this.pendingEffects = [];
 
-    if (this.inputNode && this.outputNode) {
+    if (this.inputNode) {
       try {
         this.inputNode.disconnect();
       } catch {
         /* noop */
       }
+    }
+
+    if (this.outputNode) {
       try {
-        (Tone as any).connect?.(this.inputNode, this.outputNode);
+        this.outputNode.disconnect();
       } catch {
-        this.inputNode.connect(this.outputNode);
+        /* noop */
       }
     }
+
+    this.inputNode = null;
+    this.outputNode = null;
+    this.currentSource = null;
+    this.context = null;
   }
 
   private resolveEffectType(effectType: string): EffectType | null {

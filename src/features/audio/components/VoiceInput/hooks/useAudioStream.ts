@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect } from "react";
 import { audioInputEffectsManager } from "@/features/audio/services/audioInputEffectsManager";
+import { getOrCreateGlobalMixer } from "@/features/audio/utils/effectsArchitecture";
 import { getBrowserAudioCapabilities } from "@/features/audio/utils/ultraLowLatencyOptimizer";
 
 interface UseAudioStreamProps {
@@ -15,6 +16,7 @@ interface UseAudioStreamReturn {
   audioContext: AudioContext | null;
   gainNode: GainNode | null;
   processedOutputNode: AudioNode | null;
+  monitorTapNode: AudioNode | null;
   analyser: AnalyserNode | null;
   micPermission: boolean;
   initializeAudioStream: () => Promise<void>;
@@ -33,6 +35,7 @@ export const useAudioStream = ({
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const processedOutputNodeRef = useRef<AudioNode | null>(null);
+  const monitorTapNodeRef = useRef<AudioNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
   const micPermissionRef = useRef<boolean>(false);
   const isReinitializingRef = useRef<boolean>(false);
@@ -245,6 +248,16 @@ export const useAudioStream = ({
 
       processedOutputNodeRef.current = effectsOutputNode;
 
+      // Attempt to fetch monitor tap from global mixer so local monitoring hears effect chain
+      try {
+        const mixer = await getOrCreateGlobalMixer();
+        const monitorTap = mixer.getChannelMonitorTap?.("local-user") ?? null;
+        monitorTapNodeRef.current = monitorTap;
+      } catch (error) {
+        console.warn("Failed to acquire mixer monitor tap", error);
+        monitorTapNodeRef.current = null;
+      }
+
       // Use the processed stream for WebRTC (includes local effects)
       const processedStream = destination.stream;
 
@@ -370,6 +383,7 @@ export const useAudioStream = ({
     audioContext: audioContextRef.current,
     gainNode: gainNodeRef.current,
     processedOutputNode: processedOutputNodeRef.current,
+    monitorTapNode: monitorTapNodeRef.current,
     analyser: analyserRef.current,
     micPermission: micPermissionRef.current,
     initializeAudioStream,

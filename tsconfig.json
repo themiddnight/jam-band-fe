@@ -11,7 +11,7 @@
     "paths": {
       "@/*": ["./src/*"]
     },
-    "disableReferencedProjectLoad": true
+    // "disableReferencedProjectLoad": true
   },
   "exclude": ["node_modules"]
 }
