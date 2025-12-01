@@ -6,6 +6,8 @@ import { v4 as uuidv4 } from "uuid";
 import { SEQUENCER_CONSTANTS } from "@/shared/constants";
 import { InstrumentCategory } from "@/shared/constants/instruments";
 import { DEFAULT_MELODIC_PRESETS } from "../constants/defaultPresets";
+import { useUserStore } from "@/shared/stores/userStore";
+import * as presetSync from "../utils/presetSync";
 import type {
   SequencerState,
   SequencerStep,
@@ -103,11 +105,14 @@ interface SequencerStore extends SequencerState {
   setWaitingBankChange: (bankId: string | null) => void;
 
   // Preset management
-  savePreset: (name: string, instrumentCategory: string) => void;
+  savePreset: (name: string, instrumentCategory: string) => Promise<void>;
   loadPreset: (presetId: string) => void;
-  deletePreset: (presetId: string) => void;
+  deletePreset: (presetId: string) => Promise<void>;
   exportPreset: (presetId: string) => string;
-  importPreset: (presetData: string) => void;
+  importPreset: (presetData: string) => Promise<void>;
+  // API sync methods
+  loadPresetsFromAPI: () => Promise<void>;
+  syncPresetsToAPI: () => Promise<void>;
 
   // Utility functions
   getStepsForBeat: (bankId: string, beat: number) => SequencerStep[];
@@ -928,8 +933,11 @@ export const useSequencerStore = create<SequencerStore>()(
         },
 
         // Preset management
-        savePreset: (name, instrumentCategory) => {
+        savePreset: async (name, instrumentCategory) => {
           const state = get();
+          const { isAuthenticated, userType } = useUserStore.getState();
+          const isGuest = userType === "GUEST" || !isAuthenticated;
+          
           // Exclude displayMode and editMode from saved settings (UI state only)
           const { speed, length, bankMode } = state.settings;
           const preset: SequencerPreset = {
@@ -940,6 +948,17 @@ export const useSequencerStore = create<SequencerStore>()(
             instrumentCategory,
             createdAt: Date.now(),
           };
+
+          if (!isGuest) {
+            // Authenticated: save to API
+            try {
+              const serverPreset = await presetSync.saveSequencerPresetToAPI(preset);
+              preset.id = serverPreset.id; // Use server ID
+            } catch (error) {
+              console.error("Error saving preset to API:", error);
+              // Continue with local save even if API fails
+            }
+          }
 
           set((state) => {
             const updatedPresets = [...state.presets, preset];
@@ -985,7 +1004,20 @@ export const useSequencerStore = create<SequencerStore>()(
           });
         },
 
-        deletePreset: (presetId) => {
+        deletePreset: async (presetId) => {
+          const { isAuthenticated, userType } = useUserStore.getState();
+          const isGuest = userType === "GUEST" || !isAuthenticated;
+          
+          if (!isGuest) {
+            // Authenticated: delete from API
+            try {
+              await presetSync.deleteSequencerPresetFromAPI(presetId);
+            } catch (error) {
+              console.error("Error deleting preset from API:", error);
+              // Continue with local delete even if API fails
+            }
+          }
+
           set((state) => {
             const updatedPresets = state.presets.filter(p => p.id !== presetId);
             const { nextCategoryStates } = buildCategoryUpdate(state, {
@@ -1003,12 +1035,26 @@ export const useSequencerStore = create<SequencerStore>()(
           const state = get();
           const preset = state.presets.find(p => p.id === presetId);
           return preset ? JSON.stringify(preset, null, 2) : "";
-        },        importPreset: (presetData) => {
+        },        importPreset: async (presetData) => {
           try {
+            const { isAuthenticated, userType } = useUserStore.getState();
+            const isGuest = userType === "GUEST" || !isAuthenticated;
+            
             const preset: SequencerPreset = JSON.parse(presetData);
             // Regenerate ID to avoid conflicts
             preset.id = uuidv4();
             preset.createdAt = Date.now();
+
+            if (!isGuest) {
+              // Authenticated: save to API
+              try {
+                const serverPreset = await presetSync.saveSequencerPresetToAPI(preset);
+                preset.id = serverPreset.id; // Use server ID
+              } catch (error) {
+                console.error("Error saving imported preset to API:", error);
+                // Continue with local import even if API fails
+              }
+            }
 
             set((state) => {
               const updatedPresets = [...state.presets, preset];
@@ -1024,6 +1070,30 @@ export const useSequencerStore = create<SequencerStore>()(
           } catch (error) {
             console.error("Failed to import preset:", error);
           }
+        },
+
+        // Load presets from API
+        loadPresetsFromAPI: async () => {
+          try {
+            const apiPresets = await presetSync.loadSequencerPresetsFromAPI();
+            set((state) => {
+              const { nextCategoryStates } = buildCategoryUpdate(state, {
+                presets: apiPresets,
+              });
+              return {
+                presets: apiPresets,
+                categoryStates: nextCategoryStates,
+              };
+            });
+          } catch (error) {
+            console.error("Error loading presets from API:", error);
+          }
+        },
+
+        // Sync local presets to API (for migration)
+        syncPresetsToAPI: async () => {
+          const state = get();
+          await presetSync.syncPresetsToAPI(state.presets);
         },
 
         // Utility functions

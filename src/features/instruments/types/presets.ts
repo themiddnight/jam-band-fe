@@ -28,11 +28,11 @@ export interface PresetManagerActions {
     synthType: "analog" | "fm",
     polyphony: "mono" | "poly",
     parameters: SynthState,
-  ) => void;
+  ) => Promise<void>;
   loadPreset: (preset: SynthPreset) => void;
-  deletePreset: (presetId: string) => void;
+  deletePreset: (presetId: string) => Promise<void>;
   exportPresets: () => string;
-  importPresets: (data: string, mode?: 'replace' | 'merge') => void;
+  importPresets: (data: string, mode?: 'replace' | 'merge') => Promise<void>;
   getPresetsForSynth: (
     synthType: "analog" | "fm",
     polyphony: "mono" | "poly",

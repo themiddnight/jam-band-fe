@@ -104,6 +104,9 @@ export interface UseInstrumentManagerReturn {
   ) => Promise<void>;
   getLocalSynthState: () => SynthState | null;
 
+  // BPM management for LFO sync
+  updateBPM: (bpm: number) => void;
+
   // Drum machine sample management
   getLocalAvailableSamples: () => string[];
 
@@ -736,6 +739,17 @@ export const useInstrumentManager = (): UseInstrumentManagerReturn => {
     updateLocalSynthParams,
     updateRemoteSynthParams,
     getLocalSynthState,
+
+    // BPM management for LFO sync
+    updateBPM: useCallback((bpm: number) => {
+      if (localEngine.current) {
+        localEngine.current.updateBPM(bpm);
+      }
+      // Also update remote engines for consistency
+      remoteEngines.current.forEach((engine) => {
+        engine.updateBPM(bpm);
+      });
+    }, []),
 
     // Drum machine sample management
     getLocalAvailableSamples,

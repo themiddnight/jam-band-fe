@@ -33,6 +33,28 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
 
   const isAnalog = currentSynthData.type === "analog";
   const isFM = currentSynthData.type === "fm";
+  const isMono = currentSynthData.polyphony === "mono";
+
+  const LFO_WAVEFORMS = ["sine", "triangle", "square", "sawtooth"];
+  // Tone.js note subdivision format: "1n" = whole note, "2n" = half note, "4n" = quarter note, etc.
+  // "t" suffix = triplet, "." suffix = dotted
+  const LFO_SYNC_OPTIONS = [
+    { value: "1m", label: "1 Bar" },
+    { value: "2m", label: "2 Bars" },
+    { value: "1n", label: "1/1" },
+    { value: "2n", label: "1/2" },
+    { value: "2n.", label: "1/2 Dotted" },
+    { value: "2t", label: "1/2 Triplet" },
+    { value: "4n", label: "1/4" },
+    { value: "4n.", label: "1/4 Dotted" },
+    { value: "4t", label: "1/4 Triplet" },
+    { value: "8n", label: "1/8" },
+    { value: "8n.", label: "1/8 Dotted" },
+    { value: "8t", label: "1/8 Triplet" },
+    { value: "16n", label: "1/16" },
+    { value: "16t", label: "1/16 Triplet" },
+    { value: "32n", label: "1/32" },
+  ];
 
   const resolveLockProps = (param: keyof SynthState) =>
     getParamLockProps?.(param) ?? {};
@@ -121,6 +143,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         <option value="sine">Sine</option>
                         <option value="square">Square</option>
                         <option value="sawtooth">Sawtooth</option>
+                        <option value="fatSawtooth">Fat Sawtooth</option>
                         <option value="triangle">Triangle</option>
                       </select>
                     </div>
@@ -142,6 +165,26 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                         </span>
                       </label>
                     </div>
+
+                    {isMono && <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.portamento}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        onChange={(value) =>
+                          onParamChange({ portamento: value })
+                        }
+                        size={50}
+                        color="primary"
+                        {...resolveLockProps("portamento")}
+                      />
+                      <label className="label">
+                        <span className="label-text text-base-content text-xs">
+                          Portamento
+                        </span>
+                      </label>
+                    </div>}
                   </div>
                 </div>
               </div>
@@ -610,6 +653,124 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
             </div>
           </div>
         )}
+
+        {/* LFO Controls */}
+        <div className="card bg-base-200">
+          <div className="card-body">
+            <h4 className="card-title text-sm">LFO</h4>
+            <div className="flex flex-wrap gap-6 items-center">
+              <div className="flex flex-col items-center gap-2">
+                <Knob
+                  value={synthState.lfoAmount}
+                  min={0}
+                  max={synthState.lfoTarget === "pitch" ? 2400 : 20000}
+                  step={synthState.lfoTarget === "pitch" ? 10 : 100}
+                  onChange={(value) =>
+                    onParamChange({ lfoAmount: value })
+                  }
+                  size={50}
+                  color="accent"
+                  {...resolveLockProps("lfoAmount")}
+                />
+                <label className="label">
+                  <span className="label-text text-base-content text-xs">
+                    {synthState.lfoTarget === "pitch" ? "Cents" : "Hz"}
+                  </span>
+                </label>
+              </div>
+
+              {!synthState.lfoSync && (
+                <div className="flex flex-col items-center gap-2">
+                  <Knob
+                    value={synthState.lfoFrequency}
+                    min={0.1}
+                    max={20}
+                    step={0.1}
+                    onChange={(value) =>
+                      onParamChange({ lfoFrequency: value })
+                    }
+                    size={50}
+                    color="accent"
+                    {...resolveLockProps("lfoFrequency")}
+                  />
+                  <label className="label">
+                    <span className="label-text text-base-content text-xs">
+                      Rate (Hz)
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              <div className="form-control w-32">
+                <label className="label">
+                  <span className="label-text text-xs">Target</span>
+                </label>
+                <select
+                  className="select select-bordered select-sm"
+                  value={synthState.lfoTarget}
+                  onChange={(e) =>
+                    onParamChange({ lfoTarget: e.target.value as SynthState["lfoTarget"] })
+                  }
+                >
+                  <option value="pitch">Pitch</option>
+                  <option value="filter">Filter</option>
+                </select>
+              </div>
+
+              <div className="form-control w-32">
+                <label className="label">
+                  <span className="label-text text-xs">Waveform</span>
+                </label>
+                <select
+                  className="select select-bordered select-sm"
+                  value={synthState.lfoWaveform}
+                  onChange={(e) =>
+                    onParamChange({ lfoWaveform: e.target.value })
+                  }
+                >
+                  {LFO_WAVEFORMS.map((wave) => (
+                    <option key={wave} value={wave}>
+                      {wave.charAt(0).toUpperCase() + wave.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <label className="label cursor-pointer flex flex-col gap-1 w-20">
+                <span className="label-text text-xs">Sync</span>
+                <input
+                  type="checkbox"
+                  className="toggle toggle-sm"
+                  checked={synthState.lfoSync}
+                  onChange={(e) =>
+                    onParamChange({ lfoSync: e.target.checked })
+                  }
+                />
+              </label>
+
+              {synthState.lfoSync && (
+                <div className="form-control w-32">
+                  <label className="label">
+                    <span className="label-text text-xs">Division</span>
+                  </label>
+                  <select
+                    className="select select-bordered select-sm"
+                    value={synthState.lfoSyncSubdivision}
+                    onChange={(e) =>
+                      onParamChange({ lfoSyncSubdivision: e.target.value })
+                    }
+                  >
+                    {LFO_SYNC_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

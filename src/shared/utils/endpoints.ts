@@ -9,4 +9,24 @@ export const endpoints = {
   roomAudioRegions: (roomId: string) => `${apiURL}/rooms/${roomId}/audio/regions`,
   roomAudioRegionFile: (roomId: string, regionId: string) =>
     `${apiURL}/rooms/${roomId}/audio/regions/${regionId}`,
+  // Auth endpoints
+  register: `${apiURL}/auth/register`,
+  login: `${apiURL}/auth/login`,
+  verifyEmail: (token: string) => `${apiURL}/auth/verify-email/${token}`,
+  resendVerification: `${apiURL}/auth/resend-verification`,
+  forgotPassword: `${apiURL}/auth/forgot-password`,
+  resetPassword: `${apiURL}/auth/reset-password`,
+  googleAuth: `${apiURL}/auth/google`,
+  googleCallback: `${apiURL}/auth/google/callback`,
+  getCurrentUser: `${apiURL}/auth/me`,
+  logout: `${apiURL}/auth/logout`,
+  // User presets and settings
+  getUserPresets: (type?: string) => 
+    type ? `${apiURL}/user/presets?type=${type}` : `${apiURL}/user/presets`,
+  savePreset: `${apiURL}/user/presets`,
+  updatePreset: (id: string) => `${apiURL}/user/presets/${id}`,
+  deletePreset: (id: string) => `${apiURL}/user/presets/${id}`,
+  getUserSettings: (type?: string) =>
+    type ? `${apiURL}/user/settings?type=${type}` : `${apiURL}/user/settings`,
+  updateUserSettings: `${apiURL}/user/settings`,
 };

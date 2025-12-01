@@ -4,6 +4,8 @@
 import { METRONOME_CONFIG } from "../constants";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import { useUserStore } from "@/shared/stores/userStore";
+import * as userPresetsAPI from "@/shared/api/userPresets";
 
 interface MetronomeState {
   // Personal settings (persisted locally)
@@ -22,32 +24,85 @@ interface MetronomeState {
 
 export const useMetronomeStore = create<MetronomeState>()(
   persist(
-    (set) => ({
-      // Initial state
-      volume: METRONOME_CONFIG.DEFAULT_VOLUME,
-      isMuted: true, // Default to muted
+    (set, get) => {
+      // Helper to save to API if authenticated
+      const saveToAPI = async (settings: { volume: number; isMuted: boolean }) => {
+        const { isAuthenticated, userType } = useUserStore.getState();
+        const isGuest = userType === "GUEST" || !isAuthenticated;
+        
+        if (!isGuest) {
+          try {
+            await userPresetsAPI.updateSettings({
+              settingsType: "metronome",
+              data: settings,
+            });
+          } catch (error) {
+            console.error("Error saving metronome settings to API:", error);
+          }
+        }
+      };
 
-      // Basic setters with validation
-      setVolume: (volume) => set({ volume: Math.max(0, Math.min(1, volume)) }),
+      return {
+        // Initial state
+        volume: METRONOME_CONFIG.DEFAULT_VOLUME,
+        isMuted: true, // Default to muted
 
-      setIsMuted: (isMuted) => set({ isMuted }),
+        // Basic setters with validation
+        setVolume: (volume) => {
+          const newVolume = Math.max(0, Math.min(1, volume));
+          set({ volume: newVolume });
+          // Save to API only for authenticated users
+          const { isAuthenticated, userType } = useUserStore.getState();
+          const isGuest = userType === "GUEST" || !isAuthenticated;
+          if (!isGuest) {
+            saveToAPI({ volume: newVolume, isMuted: get().isMuted });
+          }
+        },
 
-      // Toggle actions
-      toggleMute: () => set((state) => ({ isMuted: !state.isMuted })),
+        setIsMuted: (isMuted) => {
+          set({ isMuted });
+          const { isAuthenticated, userType } = useUserStore.getState();
+          const isGuest = userType === "GUEST" || !isAuthenticated;
+          if (!isGuest) {
+            saveToAPI({ volume: get().volume, isMuted });
+          }
+        },
 
-      // Utility actions
-      incrementVolume: () =>
-        set((state) => ({
-          volume: Math.min(1, state.volume + 0.1),
-        })),
+        // Toggle actions
+        toggleMute: () => {
+          const newMuted = !get().isMuted;
+          set({ isMuted: newMuted });
+          const { isAuthenticated, userType } = useUserStore.getState();
+          const isGuest = userType === "GUEST" || !isAuthenticated;
+          if (!isGuest) {
+            saveToAPI({ volume: get().volume, isMuted: newMuted });
+          }
+        },
 
-      decrementVolume: () =>
-        set((state) => ({
-          volume: Math.max(0, state.volume - 0.1),
-        })),
-    }),
+        // Utility actions
+        incrementVolume: () => {
+          const newVolume = Math.min(1, get().volume + 0.1);
+          set({ volume: newVolume });
+          const { isAuthenticated, userType } = useUserStore.getState();
+          const isGuest = userType === "GUEST" || !isAuthenticated;
+          if (!isGuest) {
+            saveToAPI({ volume: newVolume, isMuted: get().isMuted });
+          }
+        },
+
+        decrementVolume: () => {
+          const newVolume = Math.max(0, get().volume - 0.1);
+          set({ volume: newVolume });
+          const { isAuthenticated, userType } = useUserStore.getState();
+          const isGuest = userType === "GUEST" || !isAuthenticated;
+          if (!isGuest) {
+            saveToAPI({ volume: newVolume, isMuted: get().isMuted });
+          }
+        },
+      };
+    },
     {
-      name: "metronome-settings", // localStorage key
+      name: "metronome-settings", // localStorage key (still used for guests)
       storage: createJSONStorage(() => localStorage),
     },
   ),

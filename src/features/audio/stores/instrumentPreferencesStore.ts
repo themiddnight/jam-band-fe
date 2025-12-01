@@ -1,6 +1,9 @@
 import { InstrumentCategory } from "../../../shared/constants/instruments";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import { useUserStore } from "@/shared/stores/userStore";
+import * as userPresetsAPI from "@/shared/api/userPresets";
+import { debounce } from "lodash";
 
 interface InstrumentPreferences {
   instrument: string;
@@ -23,6 +26,26 @@ const defaultPreferences: InstrumentPreferences = {
   category: InstrumentCategory.Melodic,
 };
 
+// Debounced save to API (only for authenticated users)
+const debouncedSavePreferences = debounce(async (preferences: Record<string, InstrumentPreferences>) => {
+  const { isAuthenticated, userType } = useUserStore.getState();
+  const isGuest = userType === "GUEST" || !isAuthenticated;
+  
+  // Guest users cannot save settings
+  if (isGuest) {
+    return;
+  }
+  
+  try {
+    await userPresetsAPI.updateSettings({
+      settingsType: "instrument_preferences",
+      data: preferences,
+    });
+  } catch (error) {
+    console.error("Error saving instrument preferences to API:", error);
+  }
+}, 1000);
+
 export const useInstrumentPreferencesStore =
   create<InstrumentPreferencesState>()(
     persist(
@@ -34,12 +57,15 @@ export const useInstrumentPreferencesStore =
           instrument: string,
           category: InstrumentCategory,
         ) => {
-          set((state) => ({
-            preferences: {
+          set((state) => {
+            const newPreferences = {
               ...state.preferences,
               [instrumentId]: { instrument, category },
-            },
-          }));
+            };
+            // Save to API (debounced)
+            debouncedSavePreferences(newPreferences);
+            return { preferences: newPreferences };
+          });
         },
 
         getPreferences: (instrumentId: string) => {

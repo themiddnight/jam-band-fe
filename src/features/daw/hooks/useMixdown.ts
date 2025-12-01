@@ -4,6 +4,7 @@ import { useProjectStore } from '../stores/projectStore';
 import { useRegionStore } from '../stores/regionStore';
 import { AudioContextManager } from '@/features/audio/constants/audioConfig';
 import { dawSyncService } from '../services/dawSyncService';
+import { useUserStore } from '@/shared/stores/userStore';
 
 export interface MixdownSettings {
   bitDepth: 16 | 24 | 32;
@@ -52,6 +53,15 @@ export const useMixdown = () => {
 
   const startMixdown = useCallback(
     async (settings: MixdownSettings): Promise<Blob | null> => {
+      // Guest users cannot mixdown
+      const { isAuthenticated, userType } = useUserStore.getState();
+      const isGuest = userType === "GUEST" || !isAuthenticated;
+      if (isGuest) {
+        const errorMessage = "Guest users cannot export mixdown. Please sign up to access this feature.";
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+
       setIsMixingDown(true);
       setError(null);
       abortControllerRef.current = new AbortController();

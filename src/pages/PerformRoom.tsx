@@ -56,6 +56,8 @@ import type { SessionRecordingSnapshot } from "@/features/rooms";
 import { useMetronome } from "@/features/metronome/hooks/useMetronome";
 import { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import * as Tone from "tone";
+import { useUserStore } from "@/shared/stores/userStore";
 
 // Helper function to format recording duration
 function formatDuration(seconds: number): string {
@@ -69,6 +71,8 @@ function formatDuration(seconds: number): string {
  */
 const PerformRoom = memo(() => {
   const navigate = useNavigate();
+  const { isAuthenticated, userType } = useUserStore();
+  const isGuest = userType === "GUEST" || !isAuthenticated;
   // Instrument mute state (defined before useRoom)
   const { isMuted: isInstrumentMuted, setMuted: setInstrumentMuted } =
     useInstrumentMute(false);
@@ -163,6 +167,9 @@ const PerformRoom = memo(() => {
 
     // Socket connection
     getActiveSocket,
+
+    // Instrument manager
+    instrumentManager,
   } = useRoom({ isInstrumentMuted });
 
   // All hooks must be called before any early returns
@@ -254,6 +261,15 @@ const PerformRoom = memo(() => {
     socket: activeSocket,
     canEdit: currentUser?.role === "room_owner" || currentUser?.role === "band_member",
   });
+
+  // Sync BPM with Tone.js Transport and InstrumentEngine for LFO sync mode
+  useEffect(() => {
+    if (bpm > 0) {
+      Tone.getTransport().bpm.value = bpm;
+      // Update InstrumentEngine's LFO frequency when BPM changes
+      instrumentManager.updateBPM(bpm);
+    }
+  }, [bpm, instrumentManager]);
 
   // Recording dropdown state
   const [isRecordingMenuOpen, setIsRecordingMenuOpen] = useState(false);
@@ -992,11 +1008,11 @@ const PerformRoom = memo(() => {
   // Render room interface
   return (
     <div className="min-h-dvh bg-base-200 flex flex-col">
-      <div className="flex-1 p-3">
-        <div className="flex flex-col items-center">
+      <div className="flex-1 pt-3 px-3">
+        <div className="">
           {/* Fallback Notification */}
           {fallbackNotification && (
-            <div className="alert alert-info mb-4 w-full max-w-6xl">
+            <div className="alert alert-info mb-4 w-full">
               <div>
                 <h4 className="font-bold">Safari Compatibility</h4>
                 <p className="text-sm">{fallbackNotification.message}</p>
@@ -1011,7 +1027,7 @@ const PerformRoom = memo(() => {
           )}
 
           {/* Room Header */}
-          <div className="w-full max-w-6xl mb-4">
+          <div className="w-full mb-4">
             {/* Room Name and Copy URL Button */}
             <div className="flex justify-between items-center flex-wrap">
               <div className="flex items-center gap-2 flrx-wrap">
@@ -1146,7 +1162,8 @@ const PerformRoom = memo(() => {
                       }
                     }}
                     className={`btn btn-xs ${isRecording ? 'btn-error' : 'btn-soft btn-error'}`}
-                    title={isRecording ? `Recording... ${formatDuration(recordingDuration)}` : 'Start recording'}
+                    title={isRecording ? `Recording... ${formatDuration(recordingDuration)}` : (isGuest ? 'Guest users cannot record. Please sign up to access this feature.' : 'Start recording')}
+                    disabled={isGuest}
                   >
                     {isRecording ? 'Stop' : 'Record'}
                     {isRecording && (
@@ -1325,7 +1342,11 @@ const PerformRoom = memo(() => {
             </div>
           </div>
 
-          <div className="flex gap-2 flex-wrap w-full max-w-6xl mb-3">
+          {/* Main Content */}
+          <div className="flex flex-col xl:flex-row xl:h-[calc(100vh-8rem)]">
+            {/* Main content area */}
+            <main className="flex flex-1 flex-col gap-2 p-1 overflow-y-auto min-w-0">
+              <div className="flex gap-2 flex-wrap w-full mb-3">
             {/* Instrument Controls */}
             {(currentUser?.role === "room_owner" ||
               currentUser?.role === "band_member") && (
@@ -1405,7 +1426,7 @@ const PerformRoom = memo(() => {
                   {/* Synthesizer Controls */}
                   {currentCategory === InstrumentCategory.Synthesizer &&
                     synthState && (
-                      <div className="w-full max-w-6xl">
+                      <div className="w-full">
                         <SynthControls
                           currentInstrument={currentInstrument}
                           synthState={synthState}
@@ -1416,7 +1437,7 @@ const PerformRoom = memo(() => {
                     )}
 
                   {/* Step Sequencer */}
-                  <div className="w-full max-w-6xl">
+                  <div className="w-full">
                     <StepSequencer
                       socket={activeSocket}
                       currentCategory={currentCategory}
@@ -1461,33 +1482,38 @@ const PerformRoom = memo(() => {
                   {renderInstrumentControl()}
 
                   {/* Effects Chain Section */}
-                  <div className="w-full max-w-6xl">
+                  <div className="w-full">
                     <EffectsChainSection />
                   </div>
                 </>
               )}
-          </div>
+              </div>
+            </main>
 
-          {/* Room Members and Chat */}
-          <div className="flex flex-col-reverse md:flex-row gap-3 w-full max-w-6xl">
-            <RoomMembers
-              users={currentRoom?.users ?? []}
-              pendingMembers={currentRoom?.pendingMembers ?? []}
-              playingIndicators={playingIndicators}
-              voiceUsers={voiceUsers}
-              onApproveMember={handleApproveMember}
-              onRejectMember={handleRejectMember}
-              onSwapInstrument={handleSwapInstrument}
-              onKickUser={handleKickUser}
-              pendingSwapTarget={pendingSwapTarget}
-              onCancelSwap={handleCancelSwap}
-            />
-
-            {/* Chat Box */}
-            <ChatBox
-              currentUserId={currentUser?.id || ""}
-              onSendMessage={sendChatMessage}
-            />
+            {/* Sidebar: Right on desktop, bottom on mobile */}
+            <aside className="w-full xl:w-96 xl:border-l border-t xl:border-t-0 border-base-300 bg-base-100 flex flex-col xl:h-full overflow-hidden">
+              <div className="flex-1 overflow-y-auto min-h-0 p-3">
+                <RoomMembers
+                  users={currentRoom?.users ?? []}
+                  pendingMembers={currentRoom?.pendingMembers ?? []}
+                  playingIndicators={playingIndicators}
+                  voiceUsers={voiceUsers}
+                  onApproveMember={handleApproveMember}
+                  onRejectMember={handleRejectMember}
+                  onSwapInstrument={handleSwapInstrument}
+                  onKickUser={handleKickUser}
+                  pendingSwapTarget={pendingSwapTarget}
+                  onCancelSwap={handleCancelSwap}
+                />
+              </div>
+              <div className="border-t border-base-300 flex-shrink-0">
+                {/* Chat Box */}
+                <ChatBox
+                  currentUserId={currentUser?.id || ""}
+                  onSendMessage={sendChatMessage}
+                />
+              </div>
+            </aside>
           </div>
         </div>
       </div>
@@ -1546,7 +1572,7 @@ const PerformRoom = memo(() => {
       // If user gesture is needed, show initialization button
       if (needsUserGesture) {
         return (
-          <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
+          <div className="card bg-base-100 shadow-xl w-full">
             <div className="card-body text-center">
               <h3 className="card-title justify-center text-xl">
                 Audio Setup Required
@@ -1570,7 +1596,7 @@ const PerformRoom = memo(() => {
 
       // Otherwise show loading spinner
       return (
-        <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
+        <div className="card bg-base-100 shadow-xl w-full">
           <div className="card-body text-center">
             <h3 className="card-title justify-center text-xl">
               Initializing Audio...
@@ -1591,7 +1617,7 @@ const PerformRoom = memo(() => {
         !isSynthesizerLoaded)
     ) {
       return (
-        <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
+        <div className="card bg-base-100 shadow-xl w-full">
           <div className="card-body text-center">
             <h3 className="card-title justify-center text-xl">
               Loading Instrument...
@@ -1608,7 +1634,7 @@ const PerformRoom = memo(() => {
     // Show error state
     if (audioContextError && !isLoadingInstrument) {
       return (
-        <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
+        <div className="card bg-base-100 shadow-xl w-full">
           <div className="card-body text-center">
             <h3 className="card-title justify-center text-xl text-error">
               Audio Error

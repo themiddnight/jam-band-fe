@@ -8,6 +8,7 @@ import type { MixdownSettings } from '../hooks/useMixdown';
 import { getRoomContext } from '@/shared/analytics/context';
 import { trackProjectExport, trackProjectSave } from '@/shared/analytics/events';
 import { trackEvent } from '@/shared/analytics/client';
+import { useUserStore } from '@/shared/stores/userStore';
 
 type ProjectMenuProps = {
   canLoadProject?: boolean;
@@ -29,6 +30,8 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
   });
 
   const { currentRoom, currentUser } = useRoom();
+  const { isAuthenticated, userType } = useUserStore();
+  const isGuest = userType === "GUEST" || !isAuthenticated;
   const [showRecoverDialog, setShowRecoverDialog] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const analyticsContext = useMemo(() => getRoomContext(currentRoom), [currentRoom]);
@@ -157,7 +160,8 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
         <button 
           className="btn btn-xs btn-soft btn-secondary" 
           onClick={handleSave} 
-          disabled={isSaving || isMixingDown}
+          disabled={isSaving || isMixingDown || isGuest}
+          title={isGuest ? "Guest users cannot save projects. Please sign up to access this feature." : undefined}
         >
           <span className="hidden sm:inline">{isSaving ? 'Saving...' : 'Save Project'}</span>
           <span className="sm:hidden">{isSaving ? 'Saving...' : 'Save'}</span>
@@ -167,7 +171,8 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
           <button 
             className="btn btn-xs btn-soft btn-accent" 
             onClick={handleLoad} 
-            disabled={isLoading || isMixingDown}
+            disabled={isLoading || isMixingDown || isGuest}
+            title={isGuest ? "Guest users cannot load projects. Please sign up to access this feature." : undefined}
           >
             <span className="hidden sm:inline">{isLoading ? 'Loading...' : 'Load Project'}</span>
             <span className="sm:hidden">{isLoading ? 'Loading...' : 'Load'}</span>
@@ -179,8 +184,8 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
         <button
           className="btn btn-xs btn-soft btn-info"
           onClick={handleMixdownClick}
-          disabled={isMixingDown}
-          title="Export project as WAV file"
+          disabled={isMixingDown || isGuest}
+          title={isGuest ? "Guest users cannot export mixdown. Please sign up to access this feature." : "Export project as WAV file"}
         >
           Mixdown
         </button>

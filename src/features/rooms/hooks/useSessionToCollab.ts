@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { InstrumentCategory } from '@/shared/constants/instruments';
 import type { Room, RoomUser, EffectChainState, Scale } from '@/shared/types';
 import type { Socket } from 'socket.io-client';
+import { useUserStore } from '@/shared/stores/userStore';
 
 // ============================================================================
 // Types
@@ -287,6 +288,13 @@ export function useSessionToCollab(options: UseSessionToCollabOptions) {
    * Start recording session
    */
   const startRecording = useCallback(() => {
+    // Guest users cannot record
+    const { isAuthenticated, userType } = useUserStore.getState();
+    const isGuest = userType === "GUEST" || !isAuthenticated;
+    if (isGuest) {
+      onError?.(new Error("Guest users cannot record. Please sign up to access this feature."));
+      return;
+    }
     if (isRecording) return;
 
     console.log('🎬 Starting session recording...');
@@ -344,7 +352,7 @@ export function useSessionToCollab(options: UseSessionToCollabOptions) {
       scale: scaleAtStartRef.current,
       roomName: roomNameAtStartRef.current,
     });
-  }, [isRecording, bpm, ownerScale, currentRoom?.name, currentUser, localVoiceStream, voiceUsers, startAudioRecording]);
+  }, [isRecording, bpm, ownerScale, currentRoom?.name, currentUser, localVoiceStream, voiceUsers, startAudioRecording, onError]);
 
   /**
    * Stop recording and return the session snapshot
