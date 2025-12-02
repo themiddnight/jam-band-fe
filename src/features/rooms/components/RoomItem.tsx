@@ -1,4 +1,5 @@
 import type { Room } from "@/shared/types";
+import { useUserStore } from "@/shared/stores/userStore";
 
 interface RoomItemProps {
   room: Room;
@@ -14,6 +15,8 @@ export default function RoomItem({
   onCopyRoomUrl,
 }: RoomItemProps) {
   const userCount = room.users.length;
+  const { isAuthenticated, userType } = useUserStore();
+  const isGuest = userType === "GUEST" || !isAuthenticated;
 
   return (
     <div className="card bg-base-200">
@@ -46,18 +49,27 @@ export default function RoomItem({
             </div>
           </div>
           <div className="flex gap-2 flex-wrap justify-end">
-            <button
-              onClick={() => onJoinAsBandMember(room.id)}
-              className="btn btn-sm btn-primary"
-            >
-              Join as Band Member
-            </button>
-            <button
-              onClick={() => onJoinAsAudience(room.id)}
-              className="btn btn-sm btn-outline"
-            >
-              Join as Audience
-            </button>
+            {room.isPrivate && isGuest ? (
+              <div className="text-sm text-warning">
+                <p>Sign up to join private rooms</p>
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={() => onJoinAsBandMember(room.id)}
+                  className="btn btn-sm btn-primary"
+                  disabled={room.isPrivate && isGuest}
+                >
+                  Join as Band Member
+                </button>
+                <button
+                  onClick={() => onJoinAsAudience(room.id)}
+                  className="btn btn-sm btn-outline"
+                >
+                  Join as Audience
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

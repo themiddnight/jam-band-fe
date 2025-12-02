@@ -39,6 +39,13 @@ import { useAudioRegionLoader } from "@/features/daw/hooks/playback/useAudioRegi
 import { useBroadcast } from "@/features/daw/hooks/useBroadcast";
 import { useBroadcastPlayback } from "@/features/daw/hooks/useBroadcastPlayback";
 import { useArrangeUserStateStore } from "@/features/daw/stores/userStateStore";
+import { getRoomProject } from "@/features/daw/services/projectUploader";
+import { deserializeProject } from "@/features/daw/services/projectSerializer";
+import { useProjectStore } from "@/features/daw/stores/projectStore";
+import { useRegionStore } from "@/features/daw/stores/regionStore";
+import { useTrackStore } from "@/features/daw/stores/trackStore";
+import { useSynthStore } from "@/features/daw/stores/synthStore";
+import { useEffectsStore } from "@/features/effects/stores/effectsStore";
 
 /**
  * Arrange Room page for multi-track production with async editing
@@ -326,6 +333,76 @@ export default function ArrangeRoom() {
     }
   }, [roomId, username, userId, isConnected, isConnecting]);
 
+  // Load project state when room is connected (for page refresh)
+  useEffect(() => {
+    if (!roomId || !isConnected) return;
+
+    let isMounted = true;
+
+    const loadProjectState = async () => {
+      try {
+        const project = await getRoomProject(roomId);
+        if (!project || !isMounted) return;
+
+        console.log('🔄 Loading project state from server after refresh:', {
+          projectName: project.metadata?.name,
+          tracks: project.tracks?.length,
+          regions: project.regions?.length,
+        });
+
+        // Set loading flag
+        useProjectStore.getState().setIsLoadingProject(true);
+
+        // Deserialize project settings
+        deserializeProject(project);
+
+        // Load regions (they already have audioUrl set by the server)
+        useRegionStore.setState({
+          regions: project.regions || [],
+          selectedRegionIds: [],
+          lastSelectedRegionId: null,
+        });
+
+        // Load tracks
+        if (project.tracks) {
+          useTrackStore.setState({ tracks: project.tracks });
+        }
+
+        // Load synth states
+        if (project.synthStates) {
+          useSynthStore.setState({ synthStates: project.synthStates });
+        }
+
+        // Load effect chains
+        if (project.effectChains) {
+          useEffectsStore.setState({ chains: project.effectChains });
+        }
+
+        // Clear loading flag
+        setTimeout(() => {
+          if (isMounted) {
+            useProjectStore.getState().setIsLoadingProject(false);
+          }
+        }, 200);
+
+        console.log('✅ Project state loaded successfully');
+      } catch (error) {
+        console.error('Failed to load project state:', error);
+        if (isMounted) {
+          useProjectStore.getState().setIsLoadingProject(false);
+        }
+      }
+    };
+
+    // Small delay to ensure room is fully connected
+    const timeoutId = setTimeout(loadProjectState, 500);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, [roomId, isConnected]);
+
   const handleKickConfirm = useCallback(() => {
     if (userToKick) {
       kickUser(userToKick.id);
@@ -439,6 +516,8 @@ export default function ArrangeRoom() {
 
   // Computed values
   const pendingCount = currentRoom?.pendingMembers?.length ?? 0;
+  const isLoadingProject = useProjectStore((state) => state.isLoadingProject);
+  const isSavingProject = useProjectStore((state) => state.isSavingProject);
 
   return (
     <DAWCollaborationProvider
@@ -450,6 +529,37 @@ export default function ArrangeRoom() {
       <TrackAudioParamsBridge />
       <KeyboardShortcutsBridge />
       <RecordingEngineBridge onHandlerReady={setRecordingHandlerBase} />
+      
+      {/* Loading Overlay */}
+      {isLoadingProject && (
+        <div className="fixed inset-0 bg-base-100/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="card bg-base-200 shadow-xl p-8">
+            <div className="card-body items-center text-center">
+              <span className="loading loading-spinner loading-lg text-primary"></span>
+              <h3 className="card-title mt-4">Loading Project</h3>
+              <p className="text-base-content/70">
+                Please wait while we load the project...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Saving Overlay */}
+      {isSavingProject && (
+        <div className="fixed inset-0 bg-base-100/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="card bg-base-200 shadow-xl p-8">
+            <div className="card-body items-center text-center">
+              <span className="loading loading-spinner loading-lg text-primary"></span>
+              <h3 className="card-title mt-4">Saving Project</h3>
+              <p className="text-base-content/70">
+                Please wait while we save the project...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="min-h-dvh bg-base-200 flex flex-col">
         <div className="flex-1 pt-3 px-3">
           <div className="">

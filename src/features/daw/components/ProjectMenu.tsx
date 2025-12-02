@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useProjectManager } from '../hooks/useProjectManager';
 import { useRoom } from '@/features/rooms';
 import { useMixdown } from '../hooks/useMixdown';
@@ -8,6 +8,13 @@ import type { MixdownSettings } from '../hooks/useMixdown';
 import { getRoomContext } from '@/shared/analytics/context';
 import { trackProjectExport, trackProjectSave } from '@/shared/analytics/events';
 import { trackEvent } from '@/shared/analytics/client';
+import { useUserStore } from '@/shared/stores/userStore';
+import { SaveProjectModal } from '@/features/projects/components/SaveProjectModal';
+import { ProjectLimitModal } from '@/features/projects/components/ProjectLimitModal';
+import { useProjectSave } from '@/features/projects/hooks/useProjectSave';
+import { getArrangeRoomProjectData } from '@/features/projects/utils/projectDataHelpers';
+import { useProjectStore } from '../stores/projectStore';
+import { saveProjectAsZip } from '../services/projectFileManager';
 
 type ProjectMenuProps = {
   canLoadProject?: boolean;
@@ -29,24 +36,109 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
   });
 
   const { currentRoom, currentUser } = useRoom();
+  const { isAuthenticated, userType } = useUserStore();
+  const isGuest = userType === "GUEST" || !isAuthenticated;
+  const isPremium = userType === "PREMIUM";
+  const isRegisteredOrPremium = userType === "REGISTERED" || userType === "PREMIUM";
   const [showRecoverDialog, setShowRecoverDialog] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const analyticsContext = useMemo(() => getRoomContext(currentRoom), [currentRoom]);
+  const setIsSavingProject = useProjectStore((state) => state.setIsSavingProject);
   
   // Mixdown state
   const { isMixingDown, progress, error: mixdownError, startMixdown, abortMixdown } = useMixdown();
   const [showMixdownSettings, setShowMixdownSettings] = useState(false);
 
-  const handleSave = async () => {
-    try {
-      await saveProjectAs('project');
+  // Save project modal state
+  const [showSaveModal, setShowSaveModal] = useState(false);
+
+  // Project save hook
+  const {
+    isSaving: isSavingProject,
+    savedProjectId,
+    checkAndSave,
+    clearSavedProject,
+    showLimitModal,
+    limitProjects,
+    handleLimitModalClose,
+    handleProjectDeleted,
+    checkProjectLimit,
+    setLimitProjectsAndShow,
+  } = useProjectSave({
+    roomId: currentRoom?.id,
+    roomType: "arrange",
+    getProjectData: async () => {
+      return getArrangeRoomProjectData('project');
+    },
+    onSaved: (projectId) => {
+      console.log("✅ Project saved:", projectId);
       trackProjectSave(analyticsContext, {
         hasUnsavedChanges,
         source: 'project_menu',
       });
-    } catch (err) {
-      console.error('Save failed:', err);
+    },
+  });
+
+  // Sync saving state to project store for loading overlay
+  useEffect(() => {
+    setIsSavingProject(isSaving || isSavingProject);
+  }, [isSaving, isSavingProject, setIsSavingProject]);
+
+  // Clear saved project when leaving room
+  useEffect(() => {
+    return () => {
+      clearSavedProject();
+    };
+  }, [clearSavedProject]);
+
+  // Wrapper for handleProjectDeleted that checks if we can proceed to save
+  const handleProjectDeletedWrapper = useCallback(async () => {
+    await handleProjectDeleted();
+    // Check if we can now proceed to save
+    const { isLimitReached } = await checkProjectLimit();
+    if (!isLimitReached) {
+      // Project limit not reached, show save modal
+      handleLimitModalClose();
+      setShowSaveModal(true);
     }
+  }, [handleProjectDeleted, checkProjectLimit, handleLimitModalClose]);
+
+  const handleSave = async () => {
+    if (isGuest) {
+      // For guests, use the old download behavior
+      try {
+        await saveProjectAs('project');
+        trackProjectSave(analyticsContext, {
+          hasUnsavedChanges,
+          source: 'project_menu',
+        });
+      } catch (err) {
+        console.error('Save failed:', err);
+      }
+      return;
+    }
+
+    // If there's already a saved project, save over it directly
+    if (savedProjectId) {
+      try {
+        // Save over existing project without showing modal (projectName not needed)
+        await checkAndSave(undefined, savedProjectId);
+      } catch (err) {
+        console.error('Save failed:', err);
+      }
+      return;
+    }
+
+    // For first-time save, check project limit first
+    const { isLimitReached, projects } = await checkProjectLimit();
+    if (isLimitReached) {
+      // Show limit modal
+      setLimitProjectsAndShow(projects);
+      return;
+    }
+
+    // Project limit not reached, show save modal
+    setShowSaveModal(true);
   };
 
   const handleLoad = async () => {
@@ -68,6 +160,19 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
       console.error('Load failed:', err);
     } finally {
       setUploadProgress(0);
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const projectName = currentRoom?.name || 'project';
+      await saveProjectAsZip(projectName);
+      trackProjectExport(analyticsContext, {
+        format: 'collab',
+        source: 'project_menu',
+      });
+    } catch (err) {
+      console.error('Export failed:', err);
     }
   };
 
@@ -157,20 +262,34 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
         <button 
           className="btn btn-xs btn-soft btn-secondary" 
           onClick={handleSave} 
-          disabled={isSaving || isMixingDown}
+          disabled={(isSaving || isSavingProject) || isMixingDown || !isRegisteredOrPremium}
+          title={!isRegisteredOrPremium ? "Registered and premium users can save projects. Please sign up to access this feature." : undefined}
         >
-          <span className="hidden sm:inline">{isSaving ? 'Saving...' : 'Save Project'}</span>
-          <span className="sm:hidden">{isSaving ? 'Saving...' : 'Save'}</span>
+          <span className="hidden sm:inline">{(isSaving || isSavingProject) ? 'Saving...' : 'Save Project'}</span>
+          <span className="sm:hidden">{(isSaving || isSavingProject) ? 'Saving...' : 'Save'}</span>
         </button>
         
         {canLoadProject && (
           <button 
             className="btn btn-xs btn-soft btn-accent" 
             onClick={handleLoad} 
-            disabled={isLoading || isMixingDown}
+            disabled={isLoading || isMixingDown || !isPremium}
+            title={!isPremium ? "Premium users can import projects. Please upgrade to access this feature." : undefined}
           >
-            <span className="hidden sm:inline">{isLoading ? 'Loading...' : 'Load Project'}</span>
+            <span className="hidden sm:inline">{isLoading ? 'Importing...' : 'Import Project'}</span>
             <span className="sm:hidden">{isLoading ? 'Loading...' : 'Load'}</span>
+          </button>
+        )}
+
+        {canLoadProject && (
+          <button 
+            className="btn btn-xs btn-soft btn-accent" 
+            onClick={handleExport} 
+            disabled={isLoading || isMixingDown || !isPremium}
+            title={!isPremium ? "Premium users can export projects. Please upgrade to access this feature." : "Export project as .collab file"}
+          >
+            <span className="hidden sm:inline">Export Project</span>
+            <span className="sm:hidden">Export</span>
           </button>
         )}
 
@@ -179,8 +298,8 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
         <button
           className="btn btn-xs btn-soft btn-info"
           onClick={handleMixdownClick}
-          disabled={isMixingDown}
-          title="Export project as WAV file"
+          disabled={isMixingDown || !isRegisteredOrPremium}
+          title={!isRegisteredOrPremium ? "Registered and premium users can export mixdown. Please sign up to access this feature." : "Export project as WAV file"}
         >
           Mixdown
         </button>
@@ -230,6 +349,32 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
         open={isMixingDown}
         progress={progress}
         onAbort={handleAbortMixdown}
+      />
+
+      {/* Save Project Modal */}
+      <SaveProjectModal
+        open={showSaveModal}
+        onClose={() => {
+          setShowSaveModal(false);
+        }}
+        onSave={async (name: string) => {
+          await checkAndSave(name, savedProjectId || undefined);
+          setShowSaveModal(false);
+        }}
+        existingProjectName={savedProjectId ? undefined : undefined}
+        isSaving={isSavingProject}
+      />
+
+      {/* Project Limit Modal */}
+      <ProjectLimitModal
+        open={showLimitModal}
+        onClose={handleLimitModalClose}
+        projects={limitProjects}
+        onProjectDeleted={handleProjectDeletedWrapper}
+        onProceed={() => {
+          handleLimitModalClose();
+          setShowSaveModal(true);
+        }}
       />
     </div>
   );

@@ -2,6 +2,8 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { InstrumentCategory } from '@/shared/constants/instruments';
 import type { Room, RoomUser, EffectChainState, Scale } from '@/shared/types';
 import type { Socket } from 'socket.io-client';
+import { useUserStore } from '@/shared/stores/userStore';
+import type { SynthState } from '@/features/instruments/utils/InstrumentEngine';
 
 // ============================================================================
 // Types
@@ -24,6 +26,7 @@ export interface UserMetadata {
   instrument: string;
   category: InstrumentCategory;
   effectChain?: EffectChainState;
+  synthParams?: SynthState;
 }
 
 interface AudioRecorderState {
@@ -56,6 +59,7 @@ export interface UseSessionToCollabOptions {
   voiceUsers: VoiceUser[];
   bpm: number;
   ownerScale?: { rootNote: string; scale: Scale };
+  getCurrentUserSynthParams?: () => SynthState | null;
   onRecordingComplete?: (snapshot: SessionRecordingSnapshot) => void;
   onError?: (error: Error) => void;
 }
@@ -72,6 +76,7 @@ export function useSessionToCollab(options: UseSessionToCollabOptions) {
     voiceUsers,
     bpm,
     ownerScale,
+    getCurrentUserSynthParams,
     onRecordingComplete,
     onError,
   } = options;
@@ -106,14 +111,21 @@ export function useSessionToCollab(options: UseSessionToCollabOptions) {
 
   /**
    * Capture or update user metadata on first interaction
+   * Note: Metadata stores the first instrument, but individual MIDI events contain
+   * their instrument at recording time. The converter handles instrument changes
+   * by grouping events by instrument and creating separate tracks.
    */
   const captureUserMetadata = useCallback((
     userId: string,
     username: string,
     instrument: string,
     category: InstrumentCategory,
-    effectChain?: EffectChainState
+    effectChain?: EffectChainState,
+    synthParams?: SynthState
   ) => {
+    // Only capture metadata on first interaction (for backwards compatibility)
+    // Individual MIDI events already store their instrument, so instrument changes
+    // are handled in the converter by grouping events by instrument
     if (!userMetadataRef.current.has(userId)) {
       userMetadataRef.current.set(userId, {
         userId,
@@ -121,8 +133,21 @@ export function useSessionToCollab(options: UseSessionToCollabOptions) {
         instrument,
         category,
         effectChain,
+        synthParams,
       });
-      console.log(`🎬 Captured metadata for user: ${username}`, { instrument, category });
+      console.log(`🎬 Captured metadata for user: ${username}`, { instrument, category, hasSynthParams: !!synthParams });
+    } else {
+      // Update synth params if instrument hasn't changed and it's a synthesizer
+      const existingMetadata = userMetadataRef.current.get(userId);
+      if (existingMetadata && 
+          existingMetadata.instrument === instrument && 
+          existingMetadata.category === InstrumentCategory.Synthesizer &&
+          synthParams) {
+        userMetadataRef.current.set(userId, {
+          ...existingMetadata,
+          synthParams,
+        });
+      }
     }
   }, []);
 
@@ -245,7 +270,20 @@ export function useSessionToCollab(options: UseSessionToCollabOptions) {
     const beatPosition = timestampToBeats(performance.now());
 
     // Capture user metadata on first interaction
-    captureUserMetadata(userId, username, instrument, category, findUserEffectChain(userId));
+    // For current user, include synth parameters if available
+    let synthParams: SynthState | undefined;
+    if (userId === currentUser?.id && getCurrentUserSynthParams) {
+      synthParams = getCurrentUserSynthParams() || undefined;
+    }
+    
+    captureUserMetadata(
+      userId, 
+      username, 
+      instrument, 
+      category, 
+      findUserEffectChain(userId),
+      synthParams
+    );
 
     // For sustain events, record a single event (no notes array)
     if (eventType === 'sustain_on' || eventType === 'sustain_off') {
@@ -277,7 +315,7 @@ export function useSessionToCollab(options: UseSessionToCollabOptions) {
         beatPosition,
       });
     }
-  }, [isRecording, timestampToBeats, captureUserMetadata, findUserEffectChain]);
+  }, [isRecording, timestampToBeats, captureUserMetadata, findUserEffectChain, currentUser?.id, getCurrentUserSynthParams]);
 
   // ============================================================================
   // Recording Control
@@ -287,6 +325,13 @@ export function useSessionToCollab(options: UseSessionToCollabOptions) {
    * Start recording session
    */
   const startRecording = useCallback(() => {
+    // Guest users cannot record
+    const { isAuthenticated, userType } = useUserStore.getState();
+    const isGuest = userType === "GUEST" || !isAuthenticated;
+    if (isGuest) {
+      onError?.(new Error("Guest users cannot record. Please sign up to access this feature."));
+      return;
+    }
     if (isRecording) return;
 
     console.log('🎬 Starting session recording...');
@@ -344,7 +389,7 @@ export function useSessionToCollab(options: UseSessionToCollabOptions) {
       scale: scaleAtStartRef.current,
       roomName: roomNameAtStartRef.current,
     });
-  }, [isRecording, bpm, ownerScale, currentRoom?.name, currentUser, localVoiceStream, voiceUsers, startAudioRecording]);
+  }, [isRecording, bpm, ownerScale, currentRoom?.name, currentUser, localVoiceStream, voiceUsers, startAudioRecording, onError]);
 
   /**
    * Stop recording and return the session snapshot

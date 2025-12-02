@@ -260,7 +260,7 @@ const AudienceRoom = memo(() => {
       <div className="flex-1 p-3">
         <div className="flex flex-col items-center">
           {/* Room Header */}
-          <div className="w-full max-w-6xl mb-4">
+          <div className="w-full  mb-4">
             <div className="flex justify-between items-center gap-2">
               <div className="flex items-center gap-2">
                 <h2 className="text-lg sm:text-xl font-bold text-success">
@@ -292,7 +292,7 @@ const AudienceRoom = memo(() => {
           </div>
 
           {/* Radio-style Live Indicator */}
-          <div className="w-full max-w-6xl mb-4">
+          <div className="w-full  mb-4">
             <div className="card bg-gradient-to-r from-primary/20 to-secondary/20 shadow-xl">
               <div className="card-body items-center text-center py-8">
                 {/* Animated Radio Icon */}
@@ -375,7 +375,7 @@ const AudienceRoom = memo(() => {
           </div>
 
           {/* Chat and Users Section */}
-          <div className="w-full max-w-6xl flex flex-col-reverse lg:flex-row gap-3">
+          <div className="w-full  flex flex-col-reverse lg:flex-row gap-3">
             {/* Users List Panel */}
             <div className="flex-3">
               <div className="card bg-base-100 shadow-xl h-full">

@@ -191,25 +191,39 @@ export function convertSessionToProject(snapshot: SessionRecordingSnapshot): {
   const regions: RegionData[] = [];
   const audioFiles: { regionId: string; fileName: string; blob: Blob }[] = [];
   const effectChains: Record<string, any> = {};
+  const userIdToTrackIdMap = new Map<string, string>(); // Map userId -> trackId for synth states
 
   let trackIndex = 0;
 
-  // Group MIDI events by userId
-  const midiByUser = new Map<string, RecordedMidiEvent[]>();
+  // Group MIDI events by userId AND instrument (to handle instrument changes mid-recording)
+  // Key format: "userId:instrument:category" to create separate tracks per instrument
+  const midiByUserAndInstrument = new Map<string, RecordedMidiEvent[]>();
   for (const event of snapshot.midiEvents) {
-    const existing = midiByUser.get(event.userId) || [];
+    const compositeKey = `${event.userId}:${event.instrument}:${event.category}`;
+    const existing = midiByUserAndInstrument.get(compositeKey) || [];
     existing.push(event);
-    midiByUser.set(event.userId, existing);
+    midiByUserAndInstrument.set(compositeKey, existing);
   }
 
-  // Process each user with MIDI data
-  for (const [odId, events] of midiByUser) {
-    const metadata = snapshot.userMetadata.get(odId);
-    if (!metadata) continue;
+  // Process each user+instrument combination with MIDI data
+  for (const [compositeKey, events] of midiByUserAndInstrument) {
+    // Parse composite key to get userId, instrument, and category
+    const [userId, instrument, category] = compositeKey.split(':');
+    
+    // Get base metadata for the user
+    const baseMetadata = snapshot.userMetadata.get(userId);
+    if (!baseMetadata) continue;
 
     const trackId = uuidv4();
     const regionId = uuidv4();
     const color = getColorForIndex(trackIndex);
+
+    // Create metadata for this specific instrument (use info from events)
+    const metadata = {
+      ...baseMetadata,
+      instrument,
+      category: category as InstrumentCategory,
+    };
 
     // Convert events to notes and sustain events
     const { notes, sustainEvents } = convertEventsToNotesAndSustain(events);
@@ -253,10 +267,18 @@ export function convertSessionToProject(snapshot: SessionRecordingSnapshot): {
       sampleNormalizedNotes: normalizedNotes.slice(0, 3),
     });
 
-    // Create MIDI track
+    // Create MIDI track with instrument-specific name if user has multiple instruments
+    const hasMultipleInstruments = Array.from(midiByUserAndInstrument.keys()).filter(
+      key => key.startsWith(`${userId}:`)
+    ).length > 1;
+    
+    const trackName = hasMultipleInstruments 
+      ? `${metadata.username}-${instrument.replace(/_/g, '-')}`
+      : `${metadata.username}-midi`;
+    
     tracks.push({
       id: trackId,
-      name: `${metadata.username}-midi`,
+      name: trackName,
       type: 'midi',
       instrumentId: metadata.instrument,
       instrumentCategory: metadata.category,
@@ -283,6 +305,10 @@ export function convertSessionToProject(snapshot: SessionRecordingSnapshot): {
     if (metadata.effectChain) {
       effectChains[`track:${trackId}`] = metadata.effectChain;
     }
+
+    // Store composite key -> trackId mapping for synth states
+    // Use the most recent synth params if available (from base metadata or events)
+    userIdToTrackIdMap.set(compositeKey, trackId);
 
     trackIndex++;
   }
@@ -345,6 +371,24 @@ export function convertSessionToProject(snapshot: SessionRecordingSnapshot): {
     trackIndex++;
   }
 
+  // Collect synth states from user metadata
+  // Map synth params to tracks based on instrument (only for synthesizer tracks)
+  const synthStates: Record<string, any> = {};
+  for (const [compositeKey, trackId] of userIdToTrackIdMap) {
+    const [userId, instrument, category] = compositeKey.split(':');
+    
+    // Only apply synth params to synthesizer tracks
+    if (category !== InstrumentCategory.Synthesizer) continue;
+    
+    // Get user metadata - synth params are stored per user
+    // Note: If user switched instruments, synth params are from the most recent synthesizer
+    const metadata = snapshot.userMetadata.get(userId);
+    if (metadata && metadata.synthParams) {
+      synthStates[trackId] = metadata.synthParams;
+      console.log(`🎛️ Saving synth params for ${metadata.username} (${instrument}) on track ${trackId}`);
+    }
+  }
+
   // Build the serialized project
   const project: SerializedProject = {
     version: '1.0.0',
@@ -392,7 +436,7 @@ export function convertSessionToProject(snapshot: SessionRecordingSnapshot): {
       return serializedRegion;
     }),
     effectChains,
-    synthStates: {}, // TODO: Could capture synth states if needed
+    synthStates,
     markers: [],
   };
 

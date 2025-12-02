@@ -7,6 +7,7 @@ import {
   recoverFromAutoSave,
 } from '../services/projectFileManager';
 import { uploadProjectToRoom } from '../services/projectUploader';
+import { useUserStore } from '@/shared/stores/userStore';
 
 interface UseProjectManagerOptions {
   autoSaveInterval?: number; // in milliseconds, default 60000 (1 minute)
@@ -24,6 +25,15 @@ export function useProjectManager(options: UseProjectManagerOptions = {}) {
 
   // Save project
   const saveProject = useCallback(async (projectName: string) => {
+    // Guest users cannot save projects
+    const { isAuthenticated, userType } = useUserStore.getState();
+    const isGuest = userType === "GUEST" || !isAuthenticated;
+    if (isGuest) {
+      const errorMessage = "Guest users cannot save projects. Please sign up to access this feature.";
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    }
+
     setIsSaving(true);
     setError(null);
 
@@ -42,6 +52,15 @@ export function useProjectManager(options: UseProjectManagerOptions = {}) {
 
   // Save as (always show picker)
   const saveProjectAs = useCallback(async (projectName: string) => {
+    // Guest users cannot save projects
+    const { isAuthenticated, userType } = useUserStore.getState();
+    const isGuest = userType === "GUEST" || !isAuthenticated;
+    if (isGuest) {
+      const errorMessage = "Guest users cannot save projects. Please sign up to access this feature.";
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    }
+
     setIsSaving(true);
     setError(null);
 
@@ -60,6 +79,15 @@ export function useProjectManager(options: UseProjectManagerOptions = {}) {
 
   // Load project
   const loadProject = useCallback(async (file?: File) => {
+    // Guest users cannot load projects
+    const { isAuthenticated, userType } = useUserStore.getState();
+    const isGuest = userType === "GUEST" || !isAuthenticated;
+    if (isGuest) {
+      const errorMessage = "Guest users cannot load projects. Please sign up to access this feature.";
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    }
+
     setIsLoading(true);
     setError(null);
 

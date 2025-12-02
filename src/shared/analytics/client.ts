@@ -121,9 +121,14 @@ export function trackEvent(eventName: string, options: TrackOptions = {}) {
     cachedDevice = getDeviceInfo();
   }
 
+  const isAuthenticated = userStore.isAuthenticated ?? false;
+  const authenticatedUserId = userStore.authUser?.id ?? null;
+
   const event: AnalyticsEventPayload = {
     eventName,
     userId,
+    isAuthenticated,
+    authenticatedUserId: isAuthenticated ? authenticatedUserId : null,
     sessionId,
     roomId: options.roomId ?? undefined,
     roomType: options.roomType ?? undefined,

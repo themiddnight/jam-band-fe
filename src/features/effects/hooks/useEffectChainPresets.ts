@@ -6,6 +6,9 @@ import type {
   EffectChain
 } from '../types';
 import { useReducer, useEffect, useCallback } from 'react';
+import { useUserStore } from "@/shared/stores/userStore";
+import * as userPresetsAPI from "@/shared/api/userPresets";
+import type { UserPreset } from "@/shared/api/userPresets";
 
 const STORAGE_KEY = 'jam-band-effect-chain-presets';
 const PRESET_VERSION = '1.0.0';
@@ -95,16 +98,39 @@ const presetManagerReducer = (
   }
 };
 
+// Helper to convert UserPreset to EffectChainPreset
+const userPresetToEffectChainPreset = (userPreset: UserPreset): EffectChainPreset => {
+  const data = userPreset.data as {
+    chainType: EffectChainType;
+    effects: any[];
+  };
+  return {
+    id: userPreset.id,
+    name: userPreset.name,
+    chainType: data.chainType,
+    effects: data.effects,
+    createdAt: new Date(userPreset.createdAt),
+    updatedAt: new Date(userPreset.updatedAt),
+  };
+};
+
+// Helper to convert EffectChainPreset to API format
+const effectChainPresetToAPIData = (preset: EffectChainPreset) => ({
+  chainType: preset.chainType,
+  effects: preset.effects,
+});
+
 export const useEffectChainPresets = (): EffectChainPresetManager => {
   const [state, dispatch] = useReducer(presetManagerReducer, initialState);
+  const { isAuthenticated, userType } = useUserStore();
+  const isGuest = userType === "GUEST" || !isAuthenticated;
 
+  // Load from localStorage (for guests or fallback)
   const loadPresetsFromStorage = useCallback(() => {
     try {
-      dispatch({ type: 'SET_LOADING', payload: true });
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const presetBank: EffectChainPresetBank = JSON.parse(stored);
-        // Convert date strings back to Date objects
         const parsedPresets = presetBank.presets.map((preset) => ({
           ...preset,
           createdAt: new Date(preset.createdAt),
@@ -112,23 +138,42 @@ export const useEffectChainPresets = (): EffectChainPresetManager => {
         }));
         dispatch({ type: 'SET_PRESETS', payload: parsedPresets });
       }
-      dispatch({ type: 'SET_ERROR', payload: null });
     } catch (err) {
-      dispatch({
-        type: 'SET_ERROR',
-        payload: 'Failed to load presets from storage',
-      });
-      console.error('Error loading presets:', err);
-    } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
+      console.error('Error loading presets from storage:', err);
     }
   }, []);
 
-  // Load presets from localStorage on initialization
-  useEffect(() => {
-    loadPresetsFromStorage();
+  // Load from API (for authenticated users)
+  const loadPresetsFromAPI = useCallback(async () => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      const response = await userPresetsAPI.getPresets("EFFECT");
+      const effectPresets = response.presets.map(userPresetToEffectChainPreset);
+      dispatch({ type: 'SET_PRESETS', payload: effectPresets });
+      dispatch({ type: 'SET_ERROR', payload: null });
+    } catch (err) {
+      console.error('Error loading presets from API:', err);
+      // Fallback to localStorage if API fails
+      loadPresetsFromStorage();
+      dispatch({
+        type: 'SET_ERROR',
+        payload: 'Failed to load presets from server',
+      });
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
   }, [loadPresetsFromStorage]);
 
+  // Load presets on initialization
+  useEffect(() => {
+    if (isGuest) {
+      loadPresetsFromStorage();
+    } else {
+      loadPresetsFromAPI();
+    }
+  }, [isGuest, loadPresetsFromStorage, loadPresetsFromAPI]);
+
+  // Save to localStorage (for guests)
   const savePresetsToStorage = useCallback((presetsToSave: EffectChainPreset[]) => {
     try {
       const presetBank: EffectChainPresetBank = {
@@ -146,7 +191,7 @@ export const useEffectChainPresets = (): EffectChainPresetManager => {
   }, []);
 
   const savePreset = useCallback(
-    (name: string, chainType: EffectChainType, chain: EffectChain): void => {
+    async (name: string, chainType: EffectChainType, chain: EffectChain): Promise<void> => {
       try {
         const now = new Date();
         
@@ -169,16 +214,37 @@ export const useEffectChainPresets = (): EffectChainPresetManager => {
           updatedAt: now,
         };
 
-        const updatedPresets = [...state.presets, newPreset];
-        dispatch({ type: 'ADD_PRESET', payload: newPreset });
-        savePresetsToStorage(updatedPresets);
+        if (isGuest) {
+          // Guest: save to localStorage only
+          const updatedPresets = [...state.presets, newPreset];
+          dispatch({ type: 'ADD_PRESET', payload: newPreset });
+          savePresetsToStorage(updatedPresets);
+        } else {
+          // Authenticated: save to API
+          try {
+            const response = await userPresetsAPI.savePreset({
+              presetType: "EFFECT",
+              name,
+              data: effectChainPresetToAPIData(newPreset),
+            });
+            // Update with server ID
+            const serverPreset = userPresetToEffectChainPreset(response.preset);
+            dispatch({ type: 'ADD_PRESET', payload: serverPreset });
+          } catch (apiErr) {
+            // Fallback to localStorage if API fails
+            const updatedPresets = [...state.presets, newPreset];
+            dispatch({ type: 'ADD_PRESET', payload: newPreset });
+            savePresetsToStorage(updatedPresets);
+            throw apiErr;
+          }
+        }
       } catch (err) {
         dispatch({ type: 'SET_ERROR', payload: 'Failed to save preset' });
         console.error('Error saving preset:', err);
         throw err;
       }
     },
-    [state.presets, savePresetsToStorage]
+    [state.presets, savePresetsToStorage, isGuest]
   );
 
   const loadPreset = useCallback((preset: EffectChainPreset) => {
@@ -186,19 +252,33 @@ export const useEffectChainPresets = (): EffectChainPresetManager => {
   }, []);
 
   const deletePreset = useCallback(
-    (presetId: string): void => {
+    async (presetId: string): Promise<void> => {
       try {
+        if (!isGuest) {
+          // Authenticated: delete from API
+          try {
+            await userPresetsAPI.deletePreset(presetId);
+          } catch (apiErr) {
+            console.error('Error deleting preset from API:', apiErr);
+            // Continue with local delete even if API fails
+          }
+        }
+        
+        // Update local state
         const updatedPresets = state.presets.filter(
           (preset) => preset.id !== presetId
         );
         dispatch({ type: 'DELETE_PRESET', payload: presetId });
+        
+        // Save to localStorage (for guests or as backup)
         savePresetsToStorage(updatedPresets);
       } catch (err) {
         dispatch({ type: 'SET_ERROR', payload: 'Failed to delete preset' });
         console.error('Error deleting preset:', err);
+        throw err;
       }
     },
-    [state.presets, savePresetsToStorage]
+    [state.presets, savePresetsToStorage, isGuest]
   );
 
   const exportPresets = useCallback((): string => {
@@ -216,7 +296,7 @@ export const useEffectChainPresets = (): EffectChainPresetManager => {
   }, [state.presets]);
 
   const importPresets = useCallback(
-    (jsonData: string, mode: 'replace' | 'merge' = 'merge'): void => {
+    async (jsonData: string, mode: 'replace' | 'merge' = 'merge'): Promise<void> => {
       try {
         const importedBank: EffectChainPresetBank = JSON.parse(jsonData);
 
@@ -227,19 +307,45 @@ export const useEffectChainPresets = (): EffectChainPresetManager => {
           updatedAt: new Date(preset.updatedAt),
         }));
 
-        const updatedPresets =
-          mode === 'replace'
-            ? importedPresets
-            : [...state.presets, ...importedPresets];
-
-        dispatch({ type: 'SET_PRESETS', payload: updatedPresets });
-        savePresetsToStorage(updatedPresets);
+        if (isGuest) {
+          // Guest: save to localStorage only
+          const updatedPresets =
+            mode === 'replace'
+              ? importedPresets
+              : [...state.presets, ...importedPresets];
+          dispatch({ type: 'SET_PRESETS', payload: updatedPresets });
+          savePresetsToStorage(updatedPresets);
+        } else {
+          // Authenticated: save to API
+          const updatedPresets =
+            mode === 'replace'
+              ? importedPresets
+              : [...state.presets, ...importedPresets];
+          
+          // Save each preset to API
+          for (const preset of importedPresets) {
+            try {
+              await userPresetsAPI.savePreset({
+                presetType: "EFFECT",
+                name: preset.name,
+                data: effectChainPresetToAPIData(preset),
+              });
+            } catch (apiErr) {
+              console.error('Error saving imported preset to API:', apiErr);
+            }
+          }
+          
+          dispatch({ type: 'SET_PRESETS', payload: updatedPresets });
+          // Also save to localStorage as backup
+          savePresetsToStorage(updatedPresets);
+        }
       } catch (err) {
         dispatch({ type: 'SET_ERROR', payload: 'Failed to import presets' });
         console.error('Error importing presets:', err);
+        throw err;
       }
     },
-    [state.presets, savePresetsToStorage]
+    [state.presets, savePresetsToStorage, isGuest]
   );
 
   const getPresetsForChainType = useCallback(
