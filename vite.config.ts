@@ -6,7 +6,12 @@ import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
 
 // https://vite.dev/config/
-export default defineConfig(() => ({
+export default defineConfig(({ mode }) => ({
+  // mode กำหนด import.meta.env.DEV:
+  // - mode === 'development' → import.meta.env.DEV = true
+  // - mode === 'production' → import.meta.env.DEV = false
+  // สามารถ override ด้วย: VITE_MODE=development npm run build
+  mode: process.env.VITE_MODE || mode,
   plugins: [
     react(), 
     tailwindcss(), 

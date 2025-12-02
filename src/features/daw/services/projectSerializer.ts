@@ -28,7 +28,6 @@ export interface SerializedProject {
       start: number;
       end: number;
     };
-    isMetronomeEnabled: boolean;
     snapToGrid: boolean;
   };
   scale: {
@@ -164,7 +163,6 @@ export function serializeProject(projectName: string): SerializedProject {
         start: project.loop.start,
         end: project.loop.end,
       },
-      isMetronomeEnabled: project.isMetronomeEnabled,
       snapToGrid: project.snapToGrid,
     },
     scale: {
@@ -431,7 +429,6 @@ export function deserializeProject(data: SerializedProject): void {
     timeSignature: data.project.timeSignature,
     gridDivision: data.project.gridDivision,
     loop: data.project.loop,
-    isMetronomeEnabled: data.project.isMetronomeEnabled,
     snapToGrid: data.project.snapToGrid,
     transportState: 'stopped',
     playhead: 0,

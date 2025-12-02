@@ -572,7 +572,7 @@ export default function ArrangeRoom() {
                 <span className="badge badge-xs sm:badge-sm badge-primary">
                   {currentRoom?.name}
                 </span>
-                <div className='divider divider-horizontal !m-0' />
+                <div className='divider divider-horizontal m-0!' />
                 <span className="text-xs">
                   {currentUser?.username}
                 </span>
