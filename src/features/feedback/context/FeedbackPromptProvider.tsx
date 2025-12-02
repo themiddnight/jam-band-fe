@@ -7,7 +7,7 @@ import {
 } from "react";
 import { FeedbackFormModal } from "../components/FeedbackFormModal";
 import { useFeedbackPromptState } from "../hooks/useFeedbackPromptState";
-import { FEEDBACK_REMIND_DELAY_MS } from "../constants";
+import { FEEDBACK_REMIND_DELAY_SEC } from "../constants";
 import { FeedbackPromptContext } from "./FeedbackPromptContext";
 import { useUserStore } from "@/shared/stores/userStore";
 import { updateFeedbackState } from "@/shared/api/auth";
@@ -114,7 +114,7 @@ export const FeedbackPromptProvider = ({ children }: { children: ReactNode }) =>
   }, [resumePromptOnClose, state.skipToastActive, state.submittedAt]);
 
   const handleRemindLater = useCallback(() => {
-    const nextTime = Date.now() + FEEDBACK_REMIND_DELAY_MS;
+    const nextTime = Date.now() + FEEDBACK_REMIND_DELAY_SEC * 1000;
     setShouldShowPrompt(false);
     setResumePromptOnClose(false);
     updateState((prev) => ({
@@ -175,7 +175,7 @@ export const FeedbackPromptProvider = ({ children }: { children: ReactNode }) =>
 
       {shouldShowPrompt && (
         <div className="toast toast-top toast-end z-50">
-          <div className="alert alert-info shadow max-w-2xs sm:max-w-xs !gap-0">
+          <div className="alert alert-info shadow max-w-2xs sm:max-w-xs gap-0!">
             <div className="flex flex-col gap-3">
               <div>
                 <p className="font-bold mb-1">🌟 Collab ขอฟีดแบคสั้นๆ เพื่อพัฒนาแอปฯ</p>
@@ -201,7 +201,7 @@ export const FeedbackPromptProvider = ({ children }: { children: ReactNode }) =>
 
       {shouldShowSkipToast && (
         <div className="toast toast-top toast-end z-50">
-          <div className="alert alert-success shadow max-w-2xs sm:max-w-xs !gap-0">
+          <div className="alert alert-success shadow max-w-2xs sm:max-w-xs gap-0!">
             <div>
               <p className="font-bold mb-1">✔︎ รับทราบ!</p>
               <p className="text-xs ml-4">

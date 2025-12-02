@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, useEffect } from "react";
 import {
-  FEEDBACK_PROMPT_DELAY_MS,
+  FEEDBACK_PROMPT_DELAY_SEC,
   FEEDBACK_PROMPT_STORAGE_KEY,
 } from "../constants";
 import type { FeedbackStorageState } from "../types";
@@ -9,7 +9,7 @@ import { getFeedbackState } from "@/shared/api/auth";
 
 const createInitialState = (): FeedbackStorageState => ({
   hasSeenInitialPrompt: false,
-  nextPromptAt: Date.now() + FEEDBACK_PROMPT_DELAY_MS,
+  nextPromptAt: Date.now() + FEEDBACK_PROMPT_DELAY_SEC * 1000,
   skipToastActive: false,
   skipToastDismissed: false,
 });
@@ -25,22 +25,23 @@ const readStateFromStorage = (): FeedbackStorageState => {
       const initial = createInitialState();
       window.localStorage.setItem(
         FEEDBACK_PROMPT_STORAGE_KEY,
-        JSON.stringify(initial),
+        JSON.stringify(initial)
       );
       return initial;
     }
 
     const parsed = JSON.parse(raw) as FeedbackStorageState;
-    
+
     // ถ้าเคย skip หรือ submit แล้ว ไม่ต้องตั้ง nextPromptAt ใหม่
     const shouldSkipPrompt = parsed.skipToastDismissed || parsed.submittedAt;
-    
+
     return {
       ...createInitialState(),
       ...parsed,
       nextPromptAt: shouldSkipPrompt
         ? undefined
-        : (parsed.nextPromptAt ?? Date.now() + FEEDBACK_PROMPT_DELAY_MS),
+        : (parsed.nextPromptAt ??
+          Date.now() + FEEDBACK_PROMPT_DELAY_SEC * 1000),
     };
   } catch (error) {
     console.warn("ไม่สามารถอ่านสถานะฟีดแบคจาก localStorage", error);
@@ -56,7 +57,7 @@ const persistState = (state: FeedbackStorageState) => {
   try {
     window.localStorage.setItem(
       FEEDBACK_PROMPT_STORAGE_KEY,
-      JSON.stringify(state),
+      JSON.stringify(state)
     );
   } catch (error) {
     console.warn("ไม่สามารถบันทึกสถานะฟีดแบคลง localStorage", error);
@@ -65,7 +66,9 @@ const persistState = (state: FeedbackStorageState) => {
 
 export const useFeedbackPromptState = () => {
   const { isAuthenticated } = useUserStore();
-  const [state, setState] = useState<FeedbackStorageState>(() => readStateFromStorage());
+  const [state, setState] = useState<FeedbackStorageState>(() =>
+    readStateFromStorage()
+  );
   const [isLoading, setIsLoading] = useState(false);
 
   // Load feedback state from user database if authenticated
@@ -79,7 +82,7 @@ export const useFeedbackPromptState = () => {
       try {
         setIsLoading(true);
         const feedbackState = await getFeedbackState();
-        
+
         // Convert database timestamps to state
         const newState: FeedbackStorageState = {
           hasSeenInitialPrompt: false,
@@ -88,14 +91,16 @@ export const useFeedbackPromptState = () => {
         };
 
         if (feedbackState.feedbackSubmittedAt) {
-          newState.submittedAt = new Date(feedbackState.feedbackSubmittedAt).getTime();
+          newState.submittedAt = new Date(
+            feedbackState.feedbackSubmittedAt
+          ).getTime();
           newState.nextPromptAt = undefined;
         } else if (feedbackState.feedbackDismissedAt) {
           newState.skipToastDismissed = true;
           newState.nextPromptAt = undefined;
         } else {
           // User hasn't submitted or dismissed, show prompt normally
-          newState.nextPromptAt = Date.now() + FEEDBACK_PROMPT_DELAY_MS;
+          newState.nextPromptAt = Date.now() + FEEDBACK_PROMPT_DELAY_SEC * 1000;
         }
 
         setState(newState);
@@ -121,7 +126,7 @@ export const useFeedbackPromptState = () => {
         return next;
       });
     },
-    [isAuthenticated],
+    [isAuthenticated]
   );
 
   const value = useMemo(
@@ -130,7 +135,7 @@ export const useFeedbackPromptState = () => {
       updateState,
       isLoading,
     }),
-    [state, updateState, isLoading],
+    [state, updateState, isLoading]
   );
 
   return value;
