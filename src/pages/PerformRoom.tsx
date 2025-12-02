@@ -1132,7 +1132,7 @@ const PerformRoom = memo(() => {
                   {currentRoom?.name}
                 </span>
 
-                <div className='divider divider-horizontal !m-0' />
+                <div className='divider divider-horizontal m-0!' />
 
                 {/* User Name and Role */}
                 <div className="flex items-center">
@@ -1330,7 +1330,7 @@ const PerformRoom = memo(() => {
                   </button>
                 )}
 
-                <div className='divider divider-horizontal !m-0' />
+                <div className='divider divider-horizontal m-0!' />
 
                 {/* Pending notification button for room owner */}
                 {currentUser?.role === "room_owner" && (
@@ -1600,7 +1600,7 @@ const PerformRoom = memo(() => {
                   onCancelSwap={handleCancelSwap}
                 />
               </div>
-              <div className="border-t border-base-300 flex-shrink-0">
+              <div className="border-t border-base-300 shrink-0">
                 {/* Chat Box */}
                 <ChatBox
                   currentUserId={currentUser?.id || ""}

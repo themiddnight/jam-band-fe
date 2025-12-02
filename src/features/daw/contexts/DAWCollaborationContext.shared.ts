@@ -207,6 +207,6 @@ export const createNoopDAWCollaborationValue = (): DAWCollaborationContextValue 
   },
   isLocked: () => null,
   isLockedByUser: () => false,
-  acquireInteractionLock: () => false,
+  acquireInteractionLock: () => true, // Return true to allow interactions when no collaboration context (e.g., PerformRoom)
   releaseInteractionLock: () => {},
 });
