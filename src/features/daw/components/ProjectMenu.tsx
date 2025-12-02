@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useProjectManager } from '../hooks/useProjectManager';
 import { useRoom } from '@/features/rooms';
 import { useMixdown } from '../hooks/useMixdown';
@@ -9,6 +9,10 @@ import { getRoomContext } from '@/shared/analytics/context';
 import { trackProjectExport, trackProjectSave } from '@/shared/analytics/events';
 import { trackEvent } from '@/shared/analytics/client';
 import { useUserStore } from '@/shared/stores/userStore';
+import { SaveProjectModal } from '@/features/projects/components/SaveProjectModal';
+import { ProjectLimitModal } from '@/features/projects/components/ProjectLimitModal';
+import { useProjectSave } from '@/features/projects/hooks/useProjectSave';
+import { getArrangeRoomProjectData } from '@/features/projects/utils/projectDataHelpers';
 
 type ProjectMenuProps = {
   canLoadProject?: boolean;
@@ -40,16 +44,58 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
   const { isMixingDown, progress, error: mixdownError, startMixdown, abortMixdown } = useMixdown();
   const [showMixdownSettings, setShowMixdownSettings] = useState(false);
 
-  const handleSave = async () => {
-    try {
-      await saveProjectAs('project');
+  // Save project modal state
+  const [showSaveModal, setShowSaveModal] = useState(false);
+
+  // Project save hook
+  const {
+    isSaving: isSavingProject,
+    savedProjectId,
+    checkAndSave,
+    clearSavedProject,
+    showLimitModal,
+    limitProjects,
+    handleLimitModalClose,
+    handleProjectDeleted,
+  } = useProjectSave({
+    roomId: currentRoom?.id,
+    roomType: "arrange",
+    getProjectData: async () => {
+      return getArrangeRoomProjectData('project');
+    },
+    onSaved: (projectId) => {
+      console.log("✅ Project saved:", projectId);
       trackProjectSave(analyticsContext, {
         hasUnsavedChanges,
         source: 'project_menu',
       });
-    } catch (err) {
-      console.error('Save failed:', err);
+    },
+  });
+
+  // Clear saved project when leaving room
+  useEffect(() => {
+    return () => {
+      clearSavedProject();
+    };
+  }, [clearSavedProject]);
+
+  const handleSave = async () => {
+    if (isGuest) {
+      // For guests, use the old download behavior
+      try {
+        await saveProjectAs('project');
+        trackProjectSave(analyticsContext, {
+          hasUnsavedChanges,
+          source: 'project_menu',
+        });
+      } catch (err) {
+        console.error('Save failed:', err);
+      }
+      return;
     }
+
+    // For authenticated users, show save modal
+    setShowSaveModal(true);
   };
 
   const handleLoad = async () => {
@@ -160,11 +206,11 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
         <button 
           className="btn btn-xs btn-soft btn-secondary" 
           onClick={handleSave} 
-          disabled={isSaving || isMixingDown || isGuest}
+          disabled={(isSaving || isSavingProject) || isMixingDown || isGuest}
           title={isGuest ? "Guest users cannot save projects. Please sign up to access this feature." : undefined}
         >
-          <span className="hidden sm:inline">{isSaving ? 'Saving...' : 'Save Project'}</span>
-          <span className="sm:hidden">{isSaving ? 'Saving...' : 'Save'}</span>
+          <span className="hidden sm:inline">{(isSaving || isSavingProject) ? 'Saving...' : 'Save Project'}</span>
+          <span className="sm:hidden">{(isSaving || isSavingProject) ? 'Saving...' : 'Save'}</span>
         </button>
         
         {canLoadProject && (
@@ -235,6 +281,28 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
         open={isMixingDown}
         progress={progress}
         onAbort={handleAbortMixdown}
+      />
+
+      {/* Save Project Modal */}
+      <SaveProjectModal
+        open={showSaveModal}
+        onClose={() => {
+          setShowSaveModal(false);
+        }}
+        onSave={async (name: string) => {
+          await checkAndSave(name, savedProjectId || undefined);
+          setShowSaveModal(false);
+        }}
+        existingProjectName={savedProjectId ? undefined : undefined}
+        isSaving={isSavingProject}
+      />
+
+      {/* Project Limit Modal */}
+      <ProjectLimitModal
+        open={showLimitModal}
+        onClose={handleLimitModalClose}
+        projects={limitProjects}
+        onProjectDeleted={handleProjectDeleted}
       />
     </div>
   );

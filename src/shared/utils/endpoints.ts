@@ -29,4 +29,10 @@ export const endpoints = {
   getUserSettings: (type?: string) =>
     type ? `${apiURL}/user/settings?type=${type}` : `${apiURL}/user/settings`,
   updateUserSettings: `${apiURL}/user/settings`,
+  // Saved projects
+  getUserProjects: `${apiURL}/projects`,
+  saveProject: `${apiURL}/projects`,
+  updateProject: (id: string) => `${apiURL}/projects/${id}`,
+  deleteProject: (id: string) => `${apiURL}/projects/${id}`,
+  loadProject: (id: string) => `${apiURL}/projects/${id}`,
 };

@@ -51,8 +51,12 @@ import { useNetworkAnalytics } from "@/shared/analytics/useNetworkAnalytics";
 import { EffectsChainSection } from "@/features/effects";
 import { useEffectsIntegration } from "@/features/effects/hooks/useEffectsIntegration";
 import { usePerformRoomRecording } from "@/features/rooms/hooks/usePerformRoomRecording";
-import { useSessionToCollab, saveSessionAsCollab } from "@/features/rooms";
+import { useSessionToCollab } from "@/features/rooms";
 import type { SessionRecordingSnapshot } from "@/features/rooms";
+import { SaveProjectModal } from "@/features/projects/components/SaveProjectModal";
+import { ProjectLimitModal } from "@/features/projects/components/ProjectLimitModal";
+import { useProjectSave } from "@/features/projects/hooks/useProjectSave";
+import { convertSessionToProjectData } from "@/features/projects/utils/projectDataHelpers";
 import { useMetronome } from "@/features/metronome/hooks/useMetronome";
 import { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
@@ -290,14 +294,59 @@ const PerformRoom = memo(() => {
     },
   });
 
+  // Store snapshot for saving
+  const [pendingSnapshot, setPendingSnapshot] = useState<SessionRecordingSnapshot | null>(null);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+
+  // Project save hook
+  const {
+    isSaving,
+    savedProjectId,
+    checkAndSave,
+    clearSavedProject,
+    showLimitModal,
+    limitProjects,
+    handleLimitModalClose,
+    handleProjectDeleted,
+  } = useProjectSave({
+    roomId: currentRoom?.id,
+    roomType: "perform",
+    getProjectData: async () => {
+      if (!pendingSnapshot) {
+        throw new Error("No snapshot available");
+      }
+      return convertSessionToProjectData(pendingSnapshot);
+    },
+    onSaved: (projectId) => {
+      console.log("✅ Project saved:", projectId);
+      setPendingSnapshot(null);
+    },
+  });
+
   // Session to Collab recording (new - records MIDI + separate audio tracks)
   const handleSessionRecordingComplete = useCallback(async (snapshot: SessionRecordingSnapshot) => {
-    try {
-      await saveSessionAsCollab(snapshot);
-    } catch (error) {
-      console.error('❌ Failed to save session:', error);
+    if (!isAuthenticated) {
+      // For guests, use the old download behavior
+      const { saveSessionAsCollab } = await import("@/features/rooms");
+      try {
+        await saveSessionAsCollab(snapshot);
+      } catch (error) {
+        console.error('❌ Failed to save session:', error);
+      }
+      return;
     }
-  }, []);
+
+    // For authenticated users, show save modal
+    setPendingSnapshot(snapshot);
+    setShowSaveModal(true);
+  }, [isAuthenticated]);
+
+  // Clear saved project when leaving room
+  useEffect(() => {
+    return () => {
+      clearSavedProject();
+    };
+  }, [clearSavedProject]);
 
   const {
     isRecording: isSessionRecording,
@@ -1558,6 +1607,29 @@ const PerformRoom = memo(() => {
         room={currentRoom}
         onSave={handleSaveRoomSettings}
         isLoading={isUpdatingRoomSettings}
+      />
+
+      {/* Save Project Modal */}
+      <SaveProjectModal
+        open={showSaveModal}
+        onClose={() => {
+          setShowSaveModal(false);
+          setPendingSnapshot(null);
+        }}
+        onSave={async (name: string) => {
+          await checkAndSave(name, savedProjectId || undefined);
+          setShowSaveModal(false);
+        }}
+        existingProjectName={savedProjectId ? undefined : undefined}
+        isSaving={isSaving}
+      />
+
+      {/* Project Limit Modal */}
+      <ProjectLimitModal
+        open={showLimitModal}
+        onClose={handleLimitModalClose}
+        projects={limitProjects}
+        onProjectDeleted={handleProjectDeleted}
       />
 
       <Footer />
