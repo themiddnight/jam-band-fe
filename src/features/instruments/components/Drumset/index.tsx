@@ -102,7 +102,7 @@ export default function Drumset({
   };
 
   return (
-    <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
+    <div className="card bg-base-100 shadow-xl w-full ">
       <div className="card-body p-3">
         <div className="flex justify-around gap-3 mb-3 flex-wrap">
           <div className="space-y-4">

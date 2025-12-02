@@ -221,6 +221,132 @@ VITE_API_URL=http://localhost:3001
 
 > **Note**: Socket.IO URL is automatically derived from API URL. HTTPS is auto-configured in development via `vite-plugin-mkcert` for WebRTC compatibility.
 
+## 🔐 Authentication Flow
+
+The application supports two authentication methods: **Email/Password Login** and **Google OAuth**. Users can also continue as **Guest** without authentication.
+
+### Email/Password Login Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant Backend
+    
+    User->>Frontend: 1. Enter email/password
+    Frontend->>Backend: 2. POST /api/auth/login<br/>{email, password}
+    Backend->>Backend: 3. Validate credentials<br/>Generate JWT tokens
+    Backend->>Frontend: 4. Return {user, accessToken, refreshToken}
+    Frontend->>Frontend: 5. Store tokens in localStorage
+    Frontend->>Frontend: 6. Update userStore state
+    Frontend->>User: 7. Redirect to Lobby
+```
+
+**Steps:**
+1. User enters email and password on `/login` page
+2. Frontend sends `POST /api/auth/login` with credentials
+3. Backend validates credentials, generates JWT access token and refresh token
+4. Backend returns user data and tokens
+5. Frontend stores tokens in `localStorage` (`auth_token`, `refresh_token`)
+6. Frontend updates `userStore` with authenticated user state
+7. User is redirected to Lobby (`/`)
+
+**Token Management:**
+- Access tokens are stored in `localStorage` and sent in `Authorization` header
+- Refresh tokens are used to obtain new access tokens when expired
+- Tokens are automatically validated on app startup via `checkAuth()` hook
+
+### Google OAuth Login Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant Backend
+    participant Google
+    
+    User->>Frontend: 1. Click "Continue with Google"
+    Frontend->>Backend: 2. Redirect to /api/auth/google
+    Backend->>Google: 3. Redirect to Google OAuth consent screen
+    User->>Google: 4. User authorizes on Google consent screen
+    Google->>Backend: 5. Redirect with authorization code<br/>{BACKEND_URL}/api/auth/google/callback
+    Backend->>Google: 6. Exchange code for tokens<br/>Get user profile
+    Google->>Backend: 7. Return profile data (email, name, id)
+    Backend->>Backend: 8. Find or create user<br/>Generate JWT tokens
+    Backend->>Frontend: 9. Redirect to /auth/callback<br/>?accessToken=...&refreshToken=...
+    Frontend->>Frontend: 10. Extract tokens from URL<br/>Store in localStorage
+    Frontend->>Backend: 11. GET /api/auth/me
+    Backend->>Frontend: 12. Return user data
+    Frontend->>Frontend: 13. Update userStore state
+    Frontend->>User: 14. Redirect to Lobby
+```
+
+**Steps:**
+1. User clicks "Continue with Google" on `/login` page
+2. Frontend redirects browser to `{BACKEND_URL}/api/auth/google`
+3. Backend redirects to Google OAuth consent screen
+4. User authorizes the application on Google
+5. Google redirects back to `{BACKEND_URL}/api/auth/google/callback` with authorization code
+6. Backend exchanges code for Google tokens, finds or creates user, generates JWT tokens
+7. Backend redirects to `{FRONTEND_URL}/auth/callback?accessToken=...&refreshToken=...`
+8. Frontend `AuthCallback` page receives tokens in URL query parameters
+9. Frontend extracts and stores tokens in `localStorage`
+10. Frontend fetches user data with `GET /api/auth/me` using access token
+11. Backend returns authenticated user data
+12. Frontend updates `userStore` with authenticated user state
+13. User is redirected to Lobby (`/`)
+
+**OAuth Configuration:**
+- **Authorized JavaScript origins**: Frontend URL (e.g., `http://localhost:5173`)
+- **Authorized redirect URIs**: Backend callback URL (e.g., `http://localhost:3001/api/auth/google/callback`)
+- See `GOOGLE_OAUTH_SETUP.md` for detailed setup instructions
+
+### Guest Mode Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    
+    User->>Frontend: 1. Click "Continue as Guest"
+    Frontend->>Frontend: 2. Generate guest userId (UUID)
+    Frontend->>Frontend: 3. Set userStore to GUEST mode
+    Frontend->>User: 4. Redirect to Lobby
+```
+
+**Steps:**
+1. User clicks "Continue as Guest" on login page or lobby
+2. Frontend generates a unique guest `userId` (UUID)
+3. Frontend sets `userStore` to `GUEST` mode with generated username
+4. User can access public rooms but cannot join private rooms
+
+### Authentication State Management
+
+**User Store (`userStore.ts`):**
+- `isAuthenticated`: Boolean indicating if user is logged in
+- `userType`: `"GUEST" | "REGISTERED" | "PREMIUM"`
+- `authUser`: User object with id, email, username, etc.
+- `userId`: Unique user identifier (for both authenticated and guest users)
+
+**Token Storage:**
+- Access token: `localStorage.getItem("auth_token")`
+- Refresh token: `localStorage.getItem("refresh_token")`
+- Tokens are automatically included in API requests via `axiosInstance` interceptors
+
+**Auto-authentication:**
+- On app startup, `useAuth().checkAuth()` validates stored tokens
+- If token is valid, user is automatically logged in
+- If token is invalid/expired, tokens are removed and user is logged out
+
+### Authentication Pages
+
+- **`/login`**: Login page with email/password form and Google OAuth button
+- **`/register`**: Registration page for new users
+- **`/auth/callback`**: OAuth callback handler that processes tokens from URL
+- **`/verify-email/:token`**: Email verification page
+- **`/forgot-password`**: Password reset request page
+- **`/reset-password`**: Password reset page with token
+
 ## 🤝 Contributing
 
 1. Fork the repository

@@ -33,6 +33,8 @@ export interface FeedbackStorageState {
 
 export interface SubmitFeedbackPayload {
   userId: string;
+  isAuthenticated?: boolean;
+  authenticatedUserId?: string | null;
   sessionId?: string | null;
   satisfactionScore: number;
   roles: FeedbackRoleOption[];

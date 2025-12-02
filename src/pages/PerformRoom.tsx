@@ -51,11 +51,17 @@ import { useNetworkAnalytics } from "@/shared/analytics/useNetworkAnalytics";
 import { EffectsChainSection } from "@/features/effects";
 import { useEffectsIntegration } from "@/features/effects/hooks/useEffectsIntegration";
 import { usePerformRoomRecording } from "@/features/rooms/hooks/usePerformRoomRecording";
-import { useSessionToCollab, saveSessionAsCollab } from "@/features/rooms";
+import { useSessionToCollab } from "@/features/rooms";
 import type { SessionRecordingSnapshot } from "@/features/rooms";
+import { SaveProjectModal } from "@/features/projects/components/SaveProjectModal";
+import { ProjectLimitModal } from "@/features/projects/components/ProjectLimitModal";
+import { useProjectSave } from "@/features/projects/hooks/useProjectSave";
+import { convertSessionToProjectData } from "@/features/projects/utils/projectDataHelpers";
 import { useMetronome } from "@/features/metronome/hooks/useMetronome";
 import { memo, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import * as Tone from "tone";
+import { useUserStore } from "@/shared/stores/userStore";
 
 // Helper function to format recording duration
 function formatDuration(seconds: number): string {
@@ -69,6 +75,8 @@ function formatDuration(seconds: number): string {
  */
 const PerformRoom = memo(() => {
   const navigate = useNavigate();
+  const { isAuthenticated, userType } = useUserStore();
+  const isRegisteredOrPremium = userType === "REGISTERED" || userType === "PREMIUM";
   // Instrument mute state (defined before useRoom)
   const { isMuted: isInstrumentMuted, setMuted: setInstrumentMuted } =
     useInstrumentMute(false);
@@ -163,6 +171,9 @@ const PerformRoom = memo(() => {
 
     // Socket connection
     getActiveSocket,
+
+    // Instrument manager
+    instrumentManager,
   } = useRoom({ isInstrumentMuted });
 
   // All hooks must be called before any early returns
@@ -255,6 +266,15 @@ const PerformRoom = memo(() => {
     canEdit: currentUser?.role === "room_owner" || currentUser?.role === "band_member",
   });
 
+  // Sync BPM with Tone.js Transport and InstrumentEngine for LFO sync mode
+  useEffect(() => {
+    if (bpm > 0) {
+      Tone.getTransport().bpm.value = bpm;
+      // Update InstrumentEngine's LFO frequency when BPM changes
+      instrumentManager.updateBPM(bpm);
+    }
+  }, [bpm, instrumentManager]);
+
   // Recording dropdown state
   const [isRecordingMenuOpen, setIsRecordingMenuOpen] = useState(false);
   const recordingBtnRef = useRef<HTMLButtonElement>(null);
@@ -274,14 +294,83 @@ const PerformRoom = memo(() => {
     },
   });
 
+  // Store snapshot for saving
+  const [pendingSnapshot, setPendingSnapshot] = useState<SessionRecordingSnapshot | null>(null);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+
+  // Project save hook
+  const {
+    isSaving,
+    savedProjectId,
+    checkAndSave,
+    clearSavedProject,
+    showLimitModal,
+    limitProjects,
+    handleLimitModalClose,
+    handleProjectDeleted,
+    checkProjectLimit,
+    setLimitProjectsAndShow,
+  } = useProjectSave({
+    roomId: currentRoom?.id,
+    roomType: "perform",
+    getProjectData: async () => {
+      if (!pendingSnapshot) {
+        throw new Error("No snapshot available");
+      }
+      return convertSessionToProjectData(pendingSnapshot);
+    },
+    onSaved: (projectId) => {
+      console.log("✅ Project saved:", projectId);
+      setPendingSnapshot(null);
+    },
+  });
+
+  // Wrapper for handleProjectDeleted that checks if we can proceed to save
+  const handleProjectDeletedWrapper = useCallback(async () => {
+    await handleProjectDeleted();
+    // Check if we can now proceed to save
+    const { isLimitReached } = await checkProjectLimit();
+    if (!isLimitReached) {
+      // Project limit not reached, show save modal
+      handleLimitModalClose();
+      setShowSaveModal(true);
+    }
+  }, [handleProjectDeleted, checkProjectLimit, handleLimitModalClose]);
+
   // Session to Collab recording (new - records MIDI + separate audio tracks)
   const handleSessionRecordingComplete = useCallback(async (snapshot: SessionRecordingSnapshot) => {
-    try {
-      await saveSessionAsCollab(snapshot);
-    } catch (error) {
-      console.error('❌ Failed to save session:', error);
+    if (!isAuthenticated) {
+      // For guests, use the old download behavior
+      const { saveSessionAsCollab } = await import("@/features/rooms");
+      try {
+        await saveSessionAsCollab(snapshot);
+      } catch (error) {
+        console.error('❌ Failed to save session:', error);
+      }
+      return;
     }
-  }, []);
+
+    // Store snapshot for saving
+    setPendingSnapshot(snapshot);
+
+    // Check project limit before showing save modal
+    const { isLimitReached, projects } = await checkProjectLimit();
+    if (isLimitReached) {
+      // Show limit modal
+      setLimitProjectsAndShow(projects);
+      return;
+    }
+
+    // Project limit not reached, show save modal
+    setShowSaveModal(true);
+  }, [isAuthenticated, checkProjectLimit, setLimitProjectsAndShow]);
+
+  // Clear saved project when leaving room
+  useEffect(() => {
+    return () => {
+      clearSavedProject();
+    };
+  }, [clearSavedProject]);
 
   const {
     isRecording: isSessionRecording,
@@ -296,6 +385,13 @@ const PerformRoom = memo(() => {
     voiceUsers,
     bpm,
     ownerScale: currentRoom?.ownerScale,
+    getCurrentUserSynthParams: () => {
+      // Only return synth params if current category is Synthesizer
+      if (currentCategory === InstrumentCategory.Synthesizer && synthState) {
+        return synthState;
+      }
+      return null;
+    },
     onRecordingComplete: handleSessionRecordingComplete,
     onError: (error) => {
       console.error('Session recording error:', error);
@@ -311,6 +407,9 @@ const PerformRoom = memo(() => {
   useEffect(() => {
     recordMidiEventRef.current = recordMidiEvent;
   }, [recordMidiEvent]);
+
+  // Ref to access sequencer in callbacks without circular dependency
+  const sequencerRef = useRef<ReturnType<typeof useSequencer> | null>(null);
 
   // Broadcast streaming for audience (room owner only)
   const {
@@ -391,15 +490,6 @@ const PerformRoom = memo(() => {
   const handleStreamRemoved = useCallback(() => {
     removeLocalStream();
   }, [removeLocalStream]);
-
-  // Wrapper function to adapt onPlayNotes signature to handlePlayNote (respects mute state)
-  const handlePlayNotesWrapper = useCallback(
-    (notes: string[], velocity: number, isKeyHeld: boolean) => {
-      const playNoteHandler = createPlayNoteHandler(isInstrumentMuted);
-      playNoteHandler(notes, velocity, "note_on", isKeyHeld);
-    },
-    [createPlayNoteHandler, isInstrumentMuted]
-  );
 
   // Wrapper function for note stop
   const handleStopNotesWrapper = useCallback(
@@ -509,19 +599,8 @@ const PerformRoom = memo(() => {
     [handleUpdateRoomSettings]
   );
 
-  // Sequencer hook for recording integration
-  const sequencer = useSequencer({
-    socket: activeSocket,
-    currentCategory,
-    onPlayNotes: handlePlayNotesWrapper,
-    onStopNotes: handleStopNotesWrapper,
-  });
-
-  // Get sequencer UI state from store
-  const { settings, setSelectedBeat, setEditMode, resetUI } =
-    useSequencerStore();
-
   // Enhanced note playing wrapper that also handles recording (respects mute state)
+  // Defined before sequencer to avoid circular dependency
   const handlePlayNotesWithRecording = useCallback(
     (notes: string[], velocity: number, isKeyHeld: boolean) => {
       // Always play the note (respecting mute state)
@@ -545,11 +624,12 @@ const PerformRoom = memo(() => {
       }
 
       // Also record to sequencer if recording is enabled
-      if (sequencer.isRecording) {
+      const currentSequencer = sequencerRef.current;
+      if (currentSequencer?.isRecording) {
         notes.forEach((note) => {
           // Determine if this is realtime recording (while sequencer is playing)
-          const isRealtime = sequencer.isPlaying;
-          sequencer.handleRecordNote(note, velocity, undefined, isRealtime);
+          const isRealtime = currentSequencer.isPlaying;
+          currentSequencer.handleRecordNote(note, velocity, undefined, isRealtime);
         });
       }
     },
@@ -559,11 +639,26 @@ const PerformRoom = memo(() => {
       currentUser,
       currentInstrument,
       currentCategory,
-      sequencer.isRecording,
-      sequencer.handleRecordNote,
-      sequencer.isPlaying,
     ]
   );
+
+  // Sequencer hook for recording integration
+  // Use handlePlayNotesWithRecording to record sequencer notes
+  const sequencer = useSequencer({
+    socket: activeSocket,
+    currentCategory,
+    onPlayNotes: handlePlayNotesWithRecording,
+    onStopNotes: handleStopNotesWrapper,
+  });
+
+  // Update sequencer ref when sequencer changes
+  useEffect(() => {
+    sequencerRef.current = sequencer;
+  }, [sequencer]);
+
+  // Get sequencer UI state from store
+  const { settings, setSelectedBeat, setEditMode, resetUI } =
+    useSequencerStore();
 
   // Wrapper for key release that also records note_off events
   const handleReleaseKeyHeldNoteWithRecording = useCallback(
@@ -992,11 +1087,26 @@ const PerformRoom = memo(() => {
   // Render room interface
   return (
     <div className="min-h-dvh bg-base-200 flex flex-col">
-      <div className="flex-1 p-3">
-        <div className="flex flex-col items-center">
+      {/* Saving Overlay */}
+      {isSaving && (
+        <div className="fixed inset-0 bg-base-100/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="card bg-base-200 shadow-xl p-8">
+            <div className="card-body items-center text-center">
+              <span className="loading loading-spinner loading-lg text-primary"></span>
+              <h3 className="card-title mt-4">Saving Project</h3>
+              <p className="text-base-content/70">
+                Please wait while we save the project...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 pt-3 px-3">
+        <div className="">
           {/* Fallback Notification */}
           {fallbackNotification && (
-            <div className="alert alert-info mb-4 w-full max-w-6xl">
+            <div className="alert alert-info mb-4 w-full">
               <div>
                 <h4 className="font-bold">Safari Compatibility</h4>
                 <p className="text-sm">{fallbackNotification.message}</p>
@@ -1011,7 +1121,7 @@ const PerformRoom = memo(() => {
           )}
 
           {/* Room Header */}
-          <div className="w-full max-w-6xl mb-4">
+          <div className="w-full mb-4">
             {/* Room Name and Copy URL Button */}
             <div className="flex justify-between items-center flex-wrap">
               <div className="flex items-center gap-2 flrx-wrap">
@@ -1146,7 +1256,8 @@ const PerformRoom = memo(() => {
                       }
                     }}
                     className={`btn btn-xs ${isRecording ? 'btn-error' : 'btn-soft btn-error'}`}
-                    title={isRecording ? `Recording... ${formatDuration(recordingDuration)}` : 'Start recording'}
+                    title={isRecording ? `Recording... ${formatDuration(recordingDuration)}` : (!isRegisteredOrPremium ? 'Registered and premium users can record. Please sign up to access this feature.' : 'Start recording')}
+                    disabled={!isRegisteredOrPremium}
                   >
                     {isRecording ? 'Stop' : 'Record'}
                     {isRecording && (
@@ -1325,7 +1436,11 @@ const PerformRoom = memo(() => {
             </div>
           </div>
 
-          <div className="flex gap-2 flex-wrap w-full max-w-6xl mb-3">
+          {/* Main Content */}
+          <div className="flex flex-col xl:flex-row xl:h-[calc(100vh-8rem)]">
+            {/* Main content area */}
+            <main className="flex flex-1 flex-col gap-2 p-1 overflow-y-auto min-w-0">
+              <div className="flex gap-2 flex-wrap w-full mb-3">
             {/* Instrument Controls */}
             {(currentUser?.role === "room_owner" ||
               currentUser?.role === "band_member") && (
@@ -1405,7 +1520,7 @@ const PerformRoom = memo(() => {
                   {/* Synthesizer Controls */}
                   {currentCategory === InstrumentCategory.Synthesizer &&
                     synthState && (
-                      <div className="w-full max-w-6xl">
+                      <div className="w-full">
                         <SynthControls
                           currentInstrument={currentInstrument}
                           synthState={synthState}
@@ -1416,7 +1531,7 @@ const PerformRoom = memo(() => {
                     )}
 
                   {/* Step Sequencer */}
-                  <div className="w-full max-w-6xl">
+                  <div className="w-full">
                     <StepSequencer
                       socket={activeSocket}
                       currentCategory={currentCategory}
@@ -1449,7 +1564,7 @@ const PerformRoom = memo(() => {
                         ),
                       ]}
                       rootNote={scaleState.rootNote}
-                      onPlayNotes={handlePlayNotesWrapper}
+                      onPlayNotes={handlePlayNotesWithRecording}
                       onStopNotes={handleStopNotesWrapper}
                       editMode={settings.editMode}
                       onSelectedBeatChange={setSelectedBeat}
@@ -1461,33 +1576,38 @@ const PerformRoom = memo(() => {
                   {renderInstrumentControl()}
 
                   {/* Effects Chain Section */}
-                  <div className="w-full max-w-6xl">
+                  <div className="w-full">
                     <EffectsChainSection />
                   </div>
                 </>
               )}
-          </div>
+              </div>
+            </main>
 
-          {/* Room Members and Chat */}
-          <div className="flex flex-col-reverse md:flex-row gap-3 w-full max-w-6xl">
-            <RoomMembers
-              users={currentRoom?.users ?? []}
-              pendingMembers={currentRoom?.pendingMembers ?? []}
-              playingIndicators={playingIndicators}
-              voiceUsers={voiceUsers}
-              onApproveMember={handleApproveMember}
-              onRejectMember={handleRejectMember}
-              onSwapInstrument={handleSwapInstrument}
-              onKickUser={handleKickUser}
-              pendingSwapTarget={pendingSwapTarget}
-              onCancelSwap={handleCancelSwap}
-            />
-
-            {/* Chat Box */}
-            <ChatBox
-              currentUserId={currentUser?.id || ""}
-              onSendMessage={sendChatMessage}
-            />
+            {/* Sidebar: Right on desktop, bottom on mobile */}
+            <aside className="w-full xl:w-96 xl:border-l border-t xl:border-t-0 border-base-300 bg-base-100 flex flex-col xl:h-full overflow-hidden">
+              <div className="flex-1 overflow-y-auto min-h-0 p-3">
+                <RoomMembers
+                  users={currentRoom?.users ?? []}
+                  pendingMembers={currentRoom?.pendingMembers ?? []}
+                  playingIndicators={playingIndicators}
+                  voiceUsers={voiceUsers}
+                  onApproveMember={handleApproveMember}
+                  onRejectMember={handleRejectMember}
+                  onSwapInstrument={handleSwapInstrument}
+                  onKickUser={handleKickUser}
+                  pendingSwapTarget={pendingSwapTarget}
+                  onCancelSwap={handleCancelSwap}
+                />
+              </div>
+              <div className="border-t border-base-300 flex-shrink-0">
+                {/* Chat Box */}
+                <ChatBox
+                  currentUserId={currentUser?.id || ""}
+                  onSendMessage={sendChatMessage}
+                />
+              </div>
+            </aside>
           </div>
         </div>
       </div>
@@ -1534,6 +1654,33 @@ const PerformRoom = memo(() => {
         isLoading={isUpdatingRoomSettings}
       />
 
+      {/* Save Project Modal */}
+      <SaveProjectModal
+        open={showSaveModal}
+        onClose={() => {
+          setShowSaveModal(false);
+          setPendingSnapshot(null);
+        }}
+        onSave={async (name: string) => {
+          await checkAndSave(name, savedProjectId || undefined);
+          setShowSaveModal(false);
+        }}
+        existingProjectName={savedProjectId ? undefined : undefined}
+        isSaving={isSaving}
+      />
+
+      {/* Project Limit Modal */}
+      <ProjectLimitModal
+        open={showLimitModal}
+        onClose={handleLimitModalClose}
+        projects={limitProjects}
+        onProjectDeleted={handleProjectDeletedWrapper}
+        onProceed={() => {
+          handleLimitModalClose();
+          setShowSaveModal(true);
+        }}
+      />
+
       <Footer />
     </div>
   );
@@ -1546,7 +1693,7 @@ const PerformRoom = memo(() => {
       // If user gesture is needed, show initialization button
       if (needsUserGesture) {
         return (
-          <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
+          <div className="card bg-base-100 shadow-xl w-full">
             <div className="card-body text-center">
               <h3 className="card-title justify-center text-xl">
                 Audio Setup Required
@@ -1570,7 +1717,7 @@ const PerformRoom = memo(() => {
 
       // Otherwise show loading spinner
       return (
-        <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
+        <div className="card bg-base-100 shadow-xl w-full">
           <div className="card-body text-center">
             <h3 className="card-title justify-center text-xl">
               Initializing Audio...
@@ -1591,7 +1738,7 @@ const PerformRoom = memo(() => {
         !isSynthesizerLoaded)
     ) {
       return (
-        <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
+        <div className="card bg-base-100 shadow-xl w-full">
           <div className="card-body text-center">
             <h3 className="card-title justify-center text-xl">
               Loading Instrument...
@@ -1608,7 +1755,7 @@ const PerformRoom = memo(() => {
     // Show error state
     if (audioContextError && !isLoadingInstrument) {
       return (
-        <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
+        <div className="card bg-base-100 shadow-xl w-full">
           <div className="card-body text-center">
             <h3 className="card-title justify-center text-xl text-error">
               Audio Error

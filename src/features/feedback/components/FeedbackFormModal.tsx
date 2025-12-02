@@ -57,6 +57,8 @@ export const FeedbackFormModal = ({ open, onClose, onSubmitted, onSkip }: Feedba
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const ensureUserId = useUserStore((state: UserState) => state.ensureUserId);
+  const isAuthenticated = useUserStore((state: UserState) => state.isAuthenticated);
+  const authUser = useUserStore((state: UserState) => state.authUser);
 
   useEffect(() => {
     if (!open) {
@@ -121,6 +123,8 @@ export const FeedbackFormModal = ({ open, onClose, onSubmitted, onSkip }: Feedba
       const sessionId = getSessionId();
       const payload: SubmitFeedbackPayload = {
         userId,
+        isAuthenticated: isAuthenticated ?? false,
+        authenticatedUserId: isAuthenticated && authUser ? authUser.id : null,
         sessionId,
         satisfactionScore: formData.satisfactionScore!,
         roles: formData.roles,
@@ -133,6 +137,7 @@ export const FeedbackFormModal = ({ open, onClose, onSubmitted, onSkip }: Feedba
       };
 
       await submitFeedback(payload);
+      // onSubmitted will handle updating user database if authenticated
       onSubmitted();
     } catch (err) {
       if (err instanceof Error) {

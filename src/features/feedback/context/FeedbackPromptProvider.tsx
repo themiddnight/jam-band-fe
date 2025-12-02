@@ -9,9 +9,12 @@ import { FeedbackFormModal } from "../components/FeedbackFormModal";
 import { useFeedbackPromptState } from "../hooks/useFeedbackPromptState";
 import { FEEDBACK_REMIND_DELAY_MS } from "../constants";
 import { FeedbackPromptContext } from "./FeedbackPromptContext";
+import { useUserStore } from "@/shared/stores/userStore";
+import { updateFeedbackState } from "@/shared/api/auth";
 
 export const FeedbackPromptProvider = ({ children }: { children: ReactNode }) => {
   const { state, updateState } = useFeedbackPromptState();
+  const { isAuthenticated } = useUserStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [shouldShowPrompt, setShouldShowPrompt] = useState(false);
   const [resumePromptOnClose, setResumePromptOnClose] = useState(false);
@@ -67,18 +70,29 @@ export const FeedbackPromptProvider = ({ children }: { children: ReactNode }) =>
     updateState,
   ]);
 
-  const handleSubmitSuccess = useCallback(() => {
+  const handleSubmitSuccess = useCallback(async () => {
     setIsModalOpen(false);
     setShouldShowPrompt(false);
     setResumePromptOnClose(false);
+    
+    const now = Date.now();
     updateState((prev) => ({
       ...prev,
-      submittedAt: Date.now(),
+      submittedAt: now,
       nextPromptAt: undefined,
       skipToastActive: false,
       skipToastDismissed: true,
     }));
-  }, [updateState]);
+
+    // Update user database if authenticated
+    if (isAuthenticated) {
+      try {
+        await updateFeedbackState("submitted");
+      } catch (error) {
+        console.warn("ไม่สามารถอัพเดทสถานะฟีดแบคใน server", error);
+      }
+    }
+  }, [updateState, isAuthenticated]);
 
   const handleOpenModal = useCallback(
     (options?: { fromPrompt?: boolean }) => {
@@ -110,7 +124,7 @@ export const FeedbackPromptProvider = ({ children }: { children: ReactNode }) =>
     }));
   }, [updateState]);
 
-  const handleSkip = useCallback(() => {
+  const handleSkip = useCallback(async () => {
     setShouldShowPrompt(false);
     setResumePromptOnClose(false);
     updateState((prev) => ({
@@ -119,15 +133,33 @@ export const FeedbackPromptProvider = ({ children }: { children: ReactNode }) =>
       skipToastActive: true,
       skipToastDismissed: false,
     }));
-  }, [updateState]);
 
-  const handleDismissSkipToast = useCallback(() => {
+    // Update user database if authenticated
+    if (isAuthenticated) {
+      try {
+        await updateFeedbackState("dismissed");
+      } catch (error) {
+        console.warn("ไม่สามารถอัพเดทสถานะฟีดแบคใน server", error);
+      }
+    }
+  }, [updateState, isAuthenticated]);
+
+  const handleDismissSkipToast = useCallback(async () => {
     updateState((prev) => ({
       ...prev,
       skipToastActive: false,
       skipToastDismissed: true,
     }));
-  }, [updateState]);
+
+    // Update user database if authenticated
+    if (isAuthenticated) {
+      try {
+        await updateFeedbackState("dismissed");
+      } catch (error) {
+        console.warn("ไม่สามารถอัพเดทสถานะฟีดแบคใน server", error);
+      }
+    }
+  }, [updateState, isAuthenticated]);
 
   const openFeedbackModal = useCallback(() => {
     handleOpenModal();

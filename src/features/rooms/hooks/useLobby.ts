@@ -15,7 +15,16 @@ export const useLobby = () => {
   const navigate = useNavigate();
 
   // User state
-  const { username, userId, setUsername, setUserId } = useUserStore();
+  const { username, userId, setUsername, setUserId, isAuthenticated, userType, setAsGuest } = useUserStore();
+  const isGuest = userType === "GUEST" || !isAuthenticated;
+  
+  // Auth choice modal state
+  const [showAuthChoiceModal, setShowAuthChoiceModal] = useState(false);
+  
+  // Check session storage on mount to see if user already chose
+  const [hasChosenAuth, setHasChosenAuth] = useState(() => {
+    return !!sessionStorage.getItem("auth_choice_made");
+  });
 
   // Room socket
   const {
@@ -113,6 +122,13 @@ export const useLobby = () => {
       const roomType = room?.roomType || "perform";
 
       try {
+        // Guest limitations: cannot join private rooms
+        if (isGuest && isPrivateRoom) {
+          alert("Guest users cannot join private rooms. Please sign up to access this feature.");
+          navigate("/register");
+          return;
+        }
+
         if (isPrivateRoom && role === "band_member") {
           // For private rooms, band members need approval
           setPendingRoomIntent({ roomId, role });
@@ -134,29 +150,91 @@ export const useLobby = () => {
       userId,
       filteredRooms,
       clearRoom,
+      isGuest,
       requestRoomApproval,
       connectToRoom,
       navigate,
     ],
   );
 
-  // Initialize lobby connection when component mounts
+  // Initialize lobby connection when component mounts or when username/userId changes
   useEffect(() => {
     if (
       username &&
       userId &&
       connectionState === ConnectionState.DISCONNECTED
     ) {
+      console.log("🔌 Connecting to lobby with:", { username, userId, isAuthenticated, userType });
       connectToLobby();
     }
-  }, [username, userId, connectionState, connectToLobby]);
+  }, [username, userId, connectionState, connectToLobby, isAuthenticated, userType]);
 
-  // Show username modal if no username is set
+  // Ensure guest username persists after leaving room
   useEffect(() => {
-    if (!username) {
-      setShowUsernameModal(true);
+    // If user is guest and has chosen auth but lost username, restore it
+    const sessionAuthChoice = sessionStorage.getItem("auth_choice_made");
+    if (!isAuthenticated && sessionAuthChoice === "guest" && !username) {
+      console.log("🔄 Restoring guest username after room leave");
+      setAsGuest();
     }
-  }, [username]);
+  }, [isAuthenticated, username, setAsGuest]);
+
+  // Clear session auth choice when user logs in
+  useEffect(() => {
+    if (isAuthenticated) {
+      sessionStorage.removeItem("auth_choice_made");
+      setHasChosenAuth(false);
+    }
+  }, [isAuthenticated]);
+
+  // Update connection when authentication state changes
+  useEffect(() => {
+    if (isAuthenticated && username && userId && connectionState === ConnectionState.DISCONNECTED) {
+      connectToLobby();
+    }
+  }, [isAuthenticated, username, userId, connectionState, connectToLobby]);
+
+  // Show auth choice modal if user is not authenticated and hasn't chosen yet
+  useEffect(() => {
+    // Check if user has chosen auth method in this session
+    const sessionAuthChoice = sessionStorage.getItem("auth_choice_made");
+    
+    // Only show modal if not authenticated, hasn't chosen in this render, and no session choice
+    // Also check if user has username (which means they've chosen guest)
+    if (!isAuthenticated && !hasChosenAuth && !sessionAuthChoice && !username) {
+      setShowAuthChoiceModal(true);
+    } else {
+      // Close modal when authenticated, has chosen, or has username (guest chosen)
+      setShowAuthChoiceModal(false);
+    }
+  }, [isAuthenticated, hasChosenAuth, username]);
+
+  // Handle guest entry
+  const handleGuestEnter = useCallback(() => {
+    // Check if already a guest with username and userId
+    const currentState = useUserStore.getState();
+    if (currentState.userType === "GUEST" && currentState.username && currentState.userId) {
+      console.log("🎭 Already a guest, keeping existing username and userId");
+      // Just mark as chosen and ensure connection
+      setHasChosenAuth(true);
+      sessionStorage.setItem("auth_choice_made", "guest");
+      
+      // Ensure connection if disconnected
+      if (connectionState === ConnectionState.DISCONNECTED && currentState.username && currentState.userId) {
+        connectToLobby();
+      }
+      return;
+    }
+    
+    console.log("🎭 Entering as guest...");
+    setAsGuest();
+    setHasChosenAuth(true);
+    // Mark that user has chosen auth method in this session (but don't persist across refresh)
+    sessionStorage.setItem("auth_choice_made", "guest");
+    
+    // The useEffect for username/userId will handle the connection
+    // No need to manually connect here
+  }, [setAsGuest, connectionState, connectToLobby]);
 
   // Handle pending invite from sessionStorage
   useEffect(() => {
@@ -259,12 +337,32 @@ export const useLobby = () => {
 
   // Room creation
   const handleCreateRoomButtonClick = useCallback(() => {
-    if (!username) {
-      setShowUsernameModal(true);
+    console.log("🏠 Create room button clicked", { username, userId, isAuthenticated, userType });
+    
+    if (!isAuthenticated) {
+      // For guests, check if they have username
+      if (!username) {
+        console.log("⚠️ No username, showing auth choice modal");
+        setShowAuthChoiceModal(true);
+        return;
+      }
+    }
+    
+    if (!username || !userId) {
+      console.log("⚠️ Missing username or userId", { username, userId });
+      // Show auth choice modal if not authenticated, otherwise show username modal
+      if (!isAuthenticated) {
+        setShowAuthChoiceModal(true);
+      } else {
+        setShowUsernameModal(true);
+      }
       return;
     }
+    
+    // Guests can create rooms (no limitation)
+    console.log("✅ Opening create room modal");
     setShowCreateRoomModal(true);
-  }, [username]);
+  }, [username, userId, isAuthenticated, userType]);
 
   const handleCreateRoomSubmit = useCallback(async () => {
     if (!newRoomName.trim() || !username || !userId) return;
@@ -332,6 +430,7 @@ export const useLobby = () => {
     rooms: filteredRooms,
     loading,
     showUsernameModal,
+    showAuthChoiceModal,
     tempUsername,
     showCreateRoomModal,
     newRoomName,
@@ -357,6 +456,7 @@ export const useLobby = () => {
     handleCreateRoomSubmit,
     handleCreateRoomButtonClick,
     cancelApproval,
+    handleGuestEnter,
 
     // Setters
     setTempUsername,

@@ -177,7 +177,7 @@ export default function Drumpad({
   });
 
   return (
-    <div className="card bg-base-100 shadow-xl w-full max-w-6xl">
+    <div className="card bg-base-100 shadow-xl w-full ">
       <div className="card-body">
         <h3 className="card-title text-xl mb-4">Drumpad</h3>
 

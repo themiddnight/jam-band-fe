@@ -24,6 +24,7 @@ export interface SynthState {
 
   // Analog synth controls
   oscillatorType: string;
+  portamento: number;
   filterFrequency: number;
   filterResonance: number;
 
@@ -32,6 +33,14 @@ export interface SynthState {
   filterDecay: number;
   filterSustain: number;
   filterRelease: number;
+
+  // LFO controls
+  lfoTarget: "pitch" | "filter";
+  lfoWaveform: string;
+  lfoAmount: number;
+  lfoFrequency: number;
+  lfoSync: boolean;
+  lfoSyncSubdivision: string;
 
   // FM synth controls
   modulationIndex: number;
@@ -49,12 +58,19 @@ const defaultSynthState: SynthState = {
   ampSustain: 0.8,
   ampRelease: 0.3,
   oscillatorType: "sawtooth",
+  portamento: 0,
   filterFrequency: 1000,
   filterResonance: 5,
   filterAttack: 0.01,
   filterDecay: 0.1,
   filterSustain: 0.5,
   filterRelease: 0.3,
+  lfoTarget: "pitch",
+  lfoWaveform: "sine",
+  lfoAmount: 0,
+  lfoFrequency: 5,
+  lfoSync: false,
+  lfoSyncSubdivision: "4n",
   modulationIndex: 10,
   harmonicity: 1,
   modAttack: 0.01,
@@ -89,6 +105,7 @@ export class InstrumentEngine {
   private filterRef: Tone.Filter | null = null;
   private filterEnvelopeRef: Tone.FrequencyEnvelope | null = null;
   private gainRef: Tone.Gain | null = null;
+  private lfoRef: Tone.LFO | null = null;
 
   // Audio buffer cache integration (uses shared cache)
 
@@ -836,16 +853,25 @@ export class InstrumentEngine {
 
   private createSynthesizer(): any {
     const isSafariBrowser = isSafari();
-    
+    const requestedOscillator = this.synthState.oscillatorType;
+    const isNoiseOscillator = this.isNoiseOscillator(requestedOscillator);
+
     // Safari-safe oscillator types (avoid complex waveforms that may cause issues)
     // Safari has known issues with custom PeriodicWave and some complex oscillator types
     const safeOscillatorTypes = ['sine', 'square', 'sawtooth', 'triangle'];
-    const safeOscillatorType = isSafariBrowser && 
-      !safeOscillatorTypes.includes(this.synthState.oscillatorType)
-      ? 'sawtooth' // Default to sawtooth for Safari if using unsupported type
+    const fallbackOscillatorType = isNoiseOscillator
+      ? 'sawtooth'
       : this.synthState.oscillatorType;
-    
-    if (isSafariBrowser && safeOscillatorType !== this.synthState.oscillatorType) {
+    const safeOscillatorType = isSafariBrowser && 
+      !safeOscillatorTypes.includes(fallbackOscillatorType)
+      ? 'sawtooth' // Default to sawtooth for Safari if using unsupported type
+      : fallbackOscillatorType;
+
+    if (
+      !isNoiseOscillator &&
+      isSafariBrowser &&
+      safeOscillatorType !== this.synthState.oscillatorType
+    ) {
       console.log(
         `🍎 Safari: Using safe oscillator type '${safeOscillatorType}' instead of '${this.synthState.oscillatorType}'`
       );
@@ -866,6 +892,12 @@ export class InstrumentEngine {
       case "analog_mono":
       case "analog_bass":
       case "analog_lead":
+        if (isNoiseOscillator) {
+          return new Tone.NoiseSynth({
+            envelope: commonEnvelope,
+            noise: { type: "white" },
+          });
+        }
         return new Tone.Synth({
           oscillator: commonOscillator,
           envelope: commonEnvelope,
@@ -881,6 +913,12 @@ export class InstrumentEngine {
           );
         }
         
+        if (isNoiseOscillator) {
+          console.warn(
+            "Noise waveform is currently limited to mono analog synths. Falling back to sawtooth for polyphonic mode.",
+          );
+        }
+
         const polySynth = new Tone.PolySynth(Tone.Synth, {
           oscillator: commonOscillator,
           envelope: commonEnvelope,
@@ -946,9 +984,27 @@ export class InstrumentEngine {
 
     // Update local state
     const prevState = { ...this.synthState };
-    this.synthState = { ...this.synthState, ...params };
+    const nextState = { ...this.synthState, ...params };
+    const needsRebuild = this.requiresSynthRebuild(
+      prevState.oscillatorType,
+      nextState.oscillatorType,
+    );
+    this.synthState = nextState;
 
     // Initialize synthesizer if not already done
+    if (needsRebuild && this.synthRef) {
+      try {
+        await this.rebuildSynthesizer();
+      } catch (error) {
+        console.error(
+          `❌ Failed to rebuild synthesizer for parameter update:`,
+          error,
+        );
+        this.synthState = prevState;
+        return;
+      }
+    }
+
     if (!this.synthRef) {
       try {
         await this.initializeSynthesizer();
@@ -973,6 +1029,22 @@ export class InstrumentEngine {
     } catch (error) {
       console.error(`❌ Failed to apply synthesizer parameters:`, error);
       this.synthState = prevState;
+    }
+  }
+
+  /**
+   * Update the BPM for LFO sync mode
+   * This should be called when the room BPM changes
+   */
+  updateBPM(bpm: number): void {
+    if (bpm > 0) {
+      Tone.getTransport().bpm.value = bpm;
+      // If LFO is in sync mode, update its frequency
+      if (this.synthState.lfoSync && this.lfoRef) {
+        const newFrequency = this.subdivisionToHz(this.synthState.lfoSyncSubdivision);
+        this.lfoRef.frequency.value = newFrequency;
+        console.log(`🎛️ LFO: BPM updated to ${bpm}, frequency = ${newFrequency.toFixed(2)} Hz`);
+      }
     }
   }
 
@@ -1012,12 +1084,18 @@ export class InstrumentEngine {
           this.filterEnvelopeRef.release = params.filterRelease;
       }
 
+      if (params.portamento !== undefined) {
+        this.applyPortamento(params.portamento);
+      }
+
       // Handle PolySynth vs mono synth updates
       if (synth instanceof Tone.PolySynth) {
         this.updatePolySynthParams(synth, params);
       } else {
         this.updateMonoSynthParams(synth, params);
       }
+
+      this.updateLFO();
     } catch (error) {
       console.error("Error updating synth parameters:", error);
     }
@@ -1027,7 +1105,7 @@ export class InstrumentEngine {
     // Update default options for new voices
     const updates: any = {};
 
-    if (params.oscillatorType) {
+    if (params.oscillatorType && !this.isNoiseOscillator(params.oscillatorType)) {
       updates.oscillator = { type: params.oscillatorType as any };
     }
 
@@ -1080,7 +1158,7 @@ export class InstrumentEngine {
 
   private updateMonoSynthParams(synth: any, params: Partial<SynthState>): void {
     // Update oscillator
-    if (params.oscillatorType && synth.oscillator) {
+    if (params.oscillatorType && synth.oscillator && !this.isNoiseOscillator(params.oscillatorType)) {
       synth.oscillator.type = params.oscillatorType as any;
     }
 
@@ -1117,7 +1195,7 @@ export class InstrumentEngine {
   }
 
   private updateVoiceParams(voice: any, params: Partial<SynthState>): void {
-    if (params.oscillatorType && voice.oscillator) {
+    if (params.oscillatorType && voice.oscillator && !this.isNoiseOscillator(params.oscillatorType)) {
       voice.oscillator.type = params.oscillatorType;
     }
     if (voice.envelope) {
@@ -1357,7 +1435,8 @@ export class InstrumentEngine {
       const topNote = this.getTopNote();
 
       if (topNote === note) {
-        if (this.currentNote) {
+        const canSetNote = typeof (this.synthRef as any).setNote === "function";
+        if (this.currentNote && canSetNote) {
           this.synthRef.setNote(note);
           this.activeNotes.delete(this.currentNote);
         } else {
@@ -1685,7 +1764,11 @@ export class InstrumentEngine {
     if (remainingHeldKeys.length > 0) {
       const mostRecentHeldKey = remainingHeldKeys[remainingHeldKeys.length - 1];
       try {
-        this.synthRef.setNote(mostRecentHeldKey);
+        if (typeof (this.synthRef as any).setNote === "function") {
+          this.synthRef.setNote(mostRecentHeldKey);
+        } else {
+          this.synthRef.triggerAttack(mostRecentHeldKey);
+        }
         this.currentNote = mostRecentHeldKey;
         this.activeNotes.set(mostRecentHeldKey, () =>
           this.handleMonoSynthRelease(mostRecentHeldKey),
@@ -1794,44 +1877,10 @@ export class InstrumentEngine {
       }
     }
 
-    if (this.synthRef) {
-      try {
-        this.synthRef.dispose();
-      } catch (error) {
-        console.error("Error disposing synthesizer:", error);
-      }
-    }
-
-    if (this.filterRef) {
-      try {
-        this.filterRef.dispose();
-      } catch (error) {
-        console.error("Error disposing filter:", error);
-      }
-    }
-
-    if (this.filterEnvelopeRef) {
-      try {
-        this.filterEnvelopeRef.dispose();
-      } catch (error) {
-        console.error("Error disposing filter envelope:", error);
-      }
-    }
-
-    if (this.gainRef) {
-      try {
-        this.gainRef.dispose();
-      } catch (error) {
-        console.error("Error disposing gain:", error);
-      }
-    }
+    this.disposeSynthChain();
 
     // Reset references
     this.instrument = null;
-    this.synthRef = null;
-    this.filterRef = null;
-    this.filterEnvelopeRef = null;
-    this.gainRef = null;
   }
 
   // WebRTC performance optimization methods
@@ -1886,5 +1935,287 @@ export class InstrumentEngine {
     this.noteProcessingQueue.clear();
 
     this.cleanup();
+  }
+
+  private requiresSynthRebuild(previousType: string, nextType: string): boolean {
+    return this.isNoiseOscillator(previousType) !== this.isNoiseOscillator(nextType);
+  }
+
+  private isNoiseOscillator(type?: string): boolean {
+    return type === "noise";
+  }
+
+  private async rebuildSynthesizer(): Promise<void> {
+    try {
+      await this.stopAllNotes();
+    } catch (error) {
+      console.warn("Failed to stop notes before rebuilding synthesizer:", error);
+    }
+
+    this.disposeSynthChain();
+    await this.initializeSynthesizer();
+  }
+
+  private disposeSynthChain(): void {
+    if (this.synthRef) {
+      try {
+        this.synthRef.dispose();
+      } catch (error) {
+        console.error("Error disposing synthesizer:", error);
+      }
+    }
+
+    if (this.filterRef) {
+      try {
+        this.filterRef.dispose();
+      } catch (error) {
+        console.error("Error disposing filter:", error);
+      }
+    }
+
+    if (this.filterEnvelopeRef) {
+      try {
+        this.filterEnvelopeRef.dispose();
+      } catch (error) {
+        console.error("Error disposing filter envelope:", error);
+      }
+    }
+
+    if (this.gainRef) {
+      try {
+        this.gainRef.dispose();
+      } catch (error) {
+        console.error("Error disposing gain:", error);
+      }
+    }
+
+    this.disposeLFO();
+
+    this.synthRef = null;
+    this.filterRef = null;
+    this.filterEnvelopeRef = null;
+    this.gainRef = null;
+  }
+
+  private applyPortamento(value: number): void {
+    if (!this.synthRef) return;
+
+    if (this.synthRef instanceof Tone.PolySynth) {
+      const polySynth = this.synthRef as Tone.PolySynth<any> & {
+        voices?: any[];
+      };
+
+      if (Array.isArray(polySynth.voices)) {
+        polySynth.voices.forEach((voice: any) => {
+          if (typeof voice.portamento === "number") {
+            voice.portamento = value;
+          }
+        });
+      }
+
+      if (typeof polySynth.set === "function") {
+        polySynth.set({ portamento: value });
+      }
+      return;
+    }
+
+    if (typeof (this.synthRef as any).portamento === "number") {
+      (this.synthRef as any).portamento = value;
+    }
+  }
+
+  private updateLFO(): void {
+    if (!this.synthRef) {
+      this.disposeLFO();
+      return;
+    }
+
+    if (this.synthState.lfoAmount <= 0) {
+      this.disposeLFO();
+      return;
+    }
+
+    // Check if target param exists before creating LFO
+    const targetParam = this.getLfoTargetParam();
+    if (!targetParam) {
+      console.warn("🎛️ LFO: No valid target parameter found, skipping LFO setup");
+      this.disposeLFO();
+      return;
+    }
+
+    const { min, max } = this.getLfoRange();
+    
+    // Calculate LFO frequency
+    // For synced mode, convert subdivision to Hz based on current BPM from Transport
+    // This works even when Transport is not running (metronome sets Transport.bpm)
+    const lfoFrequency = this.synthState.lfoSync
+      ? this.subdivisionToHz(this.synthState.lfoSyncSubdivision)
+      : this.synthState.lfoFrequency;
+
+    // Create new LFO if needed
+    if (!this.lfoRef) {
+      this.lfoRef = new Tone.LFO({
+        min,
+        max,
+        type: this.synthState.lfoWaveform as any,
+        frequency: lfoFrequency,
+      });
+      
+      // Connect to target first
+      this.lfoRef.connect(targetParam as any);
+      this.lfoRef.start();
+      
+      console.log("🎛️ LFO: Created new LFO", {
+        min,
+        max,
+        type: this.synthState.lfoWaveform,
+        frequency: lfoFrequency,
+        target: this.synthState.lfoTarget,
+        synced: this.synthState.lfoSync,
+        bpm: Tone.getTransport().bpm.value,
+      });
+      return;
+    }
+
+    // Update LFO parameters
+    this.lfoRef.min = min;
+    this.lfoRef.max = max;
+    this.lfoRef.type = this.synthState.lfoWaveform as any;
+    this.lfoRef.frequency.value = lfoFrequency;
+
+    // Ensure connected to target
+    try {
+      this.lfoRef.disconnect();
+    } catch {
+      // Ignore disconnect errors
+    }
+    this.lfoRef.connect(targetParam as any);
+
+    // Ensure started
+    if (this.lfoRef.state !== "started") {
+      this.lfoRef.start();
+      console.log("🎛️ LFO: Started");
+    }
+  }
+
+  private getLfoTargetParam(): any {
+    if (!this.synthRef) return null;
+
+    if (this.synthState.lfoTarget === "pitch") {
+      // Try different paths to find detune parameter
+      // 1. Direct detune (AMSynth, FMSynth, ModulationSynth)
+      if ((this.synthRef as any).detune) {
+        console.log("🎛️ LFO: Connected to synth.detune");
+        return (this.synthRef as any).detune;
+      }
+      // 2. Oscillator detune (Tone.Synth)
+      if ((this.synthRef as any).oscillator?.detune) {
+        console.log("🎛️ LFO: Connected to synth.oscillator.detune");
+        return (this.synthRef as any).oscillator.detune;
+      }
+      // 3. PolySynth - need to connect to each voice's oscillator detune
+      if (this.synthRef instanceof Tone.PolySynth) {
+        // For PolySynth, we can't easily modulate all voices with one LFO
+        // Instead, we'll use the frequency parameter if available
+        console.warn(
+          "🎛️ LFO: PolySynth pitch modulation is limited. Consider using filter target instead.",
+        );
+        return null;
+      }
+      console.warn("🎛️ LFO: Could not find detune parameter for pitch modulation");
+      return null;
+    }
+
+    if (this.filterRef) {
+      console.log("🎛️ LFO: Connected to filter.frequency");
+      return this.filterRef.frequency;
+    }
+
+    return null;
+  }
+
+  private getLfoRange(): { min: number; max: number } {
+    // LFO pivots at min (current value) and sweeps up to max
+    // This means: at LFO min -> parameter stays at current value
+    //             at LFO max -> parameter goes to current + amount
+    
+    if (this.synthState.lfoTarget === "pitch") {
+      // For pitch: amount is in cents (0-2400 range, where 1200 = 1 octave)
+      // LFO sweeps from 0 cents (no detune) to +amount cents
+      const depthInCents = Math.max(0, Math.min(2400, this.synthState.lfoAmount));
+      return { min: 0, max: depthInCents };
+    }
+
+    // For filter: amount is in Hz (0-20000 range)
+    // LFO sweeps from current filter frequency to current + amount
+    const baseFreq = this.synthState.filterFrequency;
+    const amount = Math.max(0, Math.min(20000, this.synthState.lfoAmount));
+    const min = baseFreq;
+    const max = Math.min(20000, baseFreq + amount);
+    return { min, max };
+  }
+
+  private disposeLFO(): void {
+    if (this.lfoRef) {
+      try {
+        this.lfoRef.stop();
+        this.lfoRef.dispose();
+      } catch (error) {
+        console.error("Error disposing LFO:", error);
+      }
+    }
+    this.lfoRef = null;
+  }
+
+  /**
+   * Convert note subdivision to Hz based on current Transport BPM
+   * This allows LFO to work in sync mode without Transport running
+   */
+  private subdivisionToHz(subdivision: string): number {
+    const bpm = Tone.getTransport().bpm.value;
+    const beatsPerSecond = bpm / 60;
+
+    // Parse subdivision string
+    // Format: "1n" = whole, "2n" = half, "4n" = quarter, "8n" = eighth, etc.
+    // "1m" = 1 bar (4 beats in 4/4), "2m" = 2 bars
+    // "." suffix = dotted (1.5x duration)
+    // "t" suffix = triplet (2/3 duration)
+
+    let baseValue: number;
+    let multiplier = 1;
+
+    // Check for dotted or triplet
+    if (subdivision.endsWith(".")) {
+      multiplier = 1.5; // Dotted = 1.5x duration = 1/1.5 frequency
+      subdivision = subdivision.slice(0, -1);
+    } else if (subdivision.endsWith("t")) {
+      multiplier = 2 / 3; // Triplet = 2/3 duration = 1.5x frequency
+      subdivision = subdivision.slice(0, -1);
+    }
+
+    // Parse the base value
+    if (subdivision.endsWith("m")) {
+      // Measures (bars) - assuming 4/4 time
+      const bars = parseInt(subdivision.slice(0, -1), 10) || 1;
+      baseValue = bars * 4; // 4 beats per bar
+    } else if (subdivision.endsWith("n")) {
+      // Note values: 1n = 4 beats, 2n = 2 beats, 4n = 1 beat, 8n = 0.5 beats
+      const noteValue = parseInt(subdivision.slice(0, -1), 10) || 4;
+      baseValue = 4 / noteValue; // Convert to beats
+    } else {
+      // Fallback: try to parse as number (Hz)
+      const parsed = parseFloat(subdivision);
+      return isNaN(parsed) ? 1 : parsed;
+    }
+
+    // Apply dotted/triplet multiplier
+    const durationInBeats = baseValue * multiplier;
+    
+    // Convert to Hz: frequency = beatsPerSecond / durationInBeats
+    const hz = beatsPerSecond / durationInBeats;
+    
+    console.log(`🎛️ LFO Sync: ${subdivision} @ ${bpm} BPM = ${hz.toFixed(2)} Hz`);
+    
+    return hz;
   }
 }

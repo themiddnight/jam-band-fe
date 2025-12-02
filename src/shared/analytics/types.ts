@@ -26,6 +26,8 @@ export interface TrackOptions {
 export interface AnalyticsEventPayload {
   eventName: string;
   userId: string;
+  isAuthenticated?: boolean;
+  authenticatedUserId?: string | null;
   sessionId: string;
   roomId?: string;
   roomType?: string;

@@ -24,6 +24,7 @@ export interface ProjectStoreState {
   snapToGrid: boolean;
   projectScale: { rootNote: string; scale: 'major' | 'minor' };
   isLoadingProject: boolean;
+  isSavingProject: boolean;
   setBpm: (bpm: number) => void;
   setTimeSignature: (timeSignature: TimeSignature) => void;
   setTransportState: (state: TransportState) => void;
@@ -36,12 +37,13 @@ export interface ProjectStoreState {
   toggleSnap: (enabled?: boolean) => void;
   setProjectScale: (rootNote: string, scale: 'major' | 'minor') => void;
   setIsLoadingProject: (isLoading: boolean) => void;
+  setIsSavingProject: (isSaving: boolean) => void;
   reset: () => void;
 }
 
 const initialState: Omit<
   ProjectStoreState,
-  'setBpm' | 'setTimeSignature' | 'setTransportState' | 'setPlayhead' | 'setGridDivision' | 'setLoop' | 'toggleLoop' | 'toggleMetronome' | 'toggleRecording' | 'toggleSnap' | 'setProjectScale' | 'setIsLoadingProject' | 'reset'
+  'setBpm' | 'setTimeSignature' | 'setTransportState' | 'setPlayhead' | 'setGridDivision' | 'setLoop' | 'toggleLoop' | 'toggleMetronome' | 'toggleRecording' | 'toggleSnap' | 'setProjectScale' | 'setIsLoadingProject' | 'setIsSavingProject' | 'reset'
 > = {
   bpm: DEFAULT_BPM,
   timeSignature: DEFAULT_TIME_SIGNATURE,
@@ -58,6 +60,7 @@ const initialState: Omit<
   snapToGrid: true,
   projectScale: { rootNote: 'C', scale: 'major' },
   isLoadingProject: false,
+  isSavingProject: false,
 };
 
 type PersistedState = Pick<ProjectStoreState, 'bpm' | 'timeSignature' | 'gridDivision' | 'loop'>;
@@ -132,6 +135,7 @@ export const useProjectStore = create<ProjectStoreState>()(
       setProjectScale: (rootNote, scale) =>
         set({ projectScale: { rootNote, scale } }),
       setIsLoadingProject: (isLoading) => set({ isLoadingProject: isLoading }),
+      setIsSavingProject: (isSaving) => set({ isSavingProject: isSaving }),
       reset: () => set(() => ({ ...initialState })),
     }),
     {
