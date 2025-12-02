@@ -766,11 +766,22 @@ export const useDAWCollaboration = ({
         return; // Locked by someone else
       }
 
-      const region = useRegionStore.getState().regions.find((r) => r.id === regionId);
-      const baseStart = region?.start ?? 0;
+      const regionStore = useRegionStore.getState();
+      const region = regionStore.regions.find((r) => r.id === regionId);
+      if (!region) return;
+      
+      const baseStart = region.start;
+      const originalTrackId = region.trackId;
       moveRegion(regionId, deltaBeats);
+      
       const newStart = Math.max(0, baseStart + deltaBeats);
-      dawSyncService.syncRegionUpdate(regionId, { start: newStart });
+      // Include trackId to ensure remote clients have the correct track
+      // (in case they received incorrect track changes during drag)
+      // moveRegion only updates start, so trackId remains the same
+      dawSyncService.syncRegionUpdate(regionId, { 
+        start: newStart,
+        trackId: originalTrackId 
+      });
     },
     [moveRegion, isLocked, userId]
   );

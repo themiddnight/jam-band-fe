@@ -34,7 +34,7 @@ export function useAuth() {
       setError(null);
       try {
         const result = await authAPI.login(data);
-        login(result.user, result.token);
+        login(result.user, result.accessToken);
         return { success: true };
       } catch (err: any) {
         setError(err.response?.data?.error || err.message || "Login failed");

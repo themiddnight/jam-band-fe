@@ -76,7 +76,7 @@ function formatDuration(seconds: number): string {
 const PerformRoom = memo(() => {
   const navigate = useNavigate();
   const { isAuthenticated, userType } = useUserStore();
-  const isGuest = userType === "GUEST" || !isAuthenticated;
+  const isRegisteredOrPremium = userType === "REGISTERED" || userType === "PREMIUM";
   // Instrument mute state (defined before useRoom)
   const { isMuted: isInstrumentMuted, setMuted: setInstrumentMuted } =
     useInstrumentMute(false);
@@ -308,6 +308,8 @@ const PerformRoom = memo(() => {
     limitProjects,
     handleLimitModalClose,
     handleProjectDeleted,
+    checkProjectLimit,
+    setLimitProjectsAndShow,
   } = useProjectSave({
     roomId: currentRoom?.id,
     roomType: "perform",
@@ -323,6 +325,18 @@ const PerformRoom = memo(() => {
     },
   });
 
+  // Wrapper for handleProjectDeleted that checks if we can proceed to save
+  const handleProjectDeletedWrapper = useCallback(async () => {
+    await handleProjectDeleted();
+    // Check if we can now proceed to save
+    const { isLimitReached } = await checkProjectLimit();
+    if (!isLimitReached) {
+      // Project limit not reached, show save modal
+      handleLimitModalClose();
+      setShowSaveModal(true);
+    }
+  }, [handleProjectDeleted, checkProjectLimit, handleLimitModalClose]);
+
   // Session to Collab recording (new - records MIDI + separate audio tracks)
   const handleSessionRecordingComplete = useCallback(async (snapshot: SessionRecordingSnapshot) => {
     if (!isAuthenticated) {
@@ -336,10 +350,20 @@ const PerformRoom = memo(() => {
       return;
     }
 
-    // For authenticated users, show save modal
+    // Store snapshot for saving
     setPendingSnapshot(snapshot);
+
+    // Check project limit before showing save modal
+    const { isLimitReached, projects } = await checkProjectLimit();
+    if (isLimitReached) {
+      // Show limit modal
+      setLimitProjectsAndShow(projects);
+      return;
+    }
+
+    // Project limit not reached, show save modal
     setShowSaveModal(true);
-  }, [isAuthenticated]);
+  }, [isAuthenticated, checkProjectLimit, setLimitProjectsAndShow]);
 
   // Clear saved project when leaving room
   useEffect(() => {
@@ -361,6 +385,13 @@ const PerformRoom = memo(() => {
     voiceUsers,
     bpm,
     ownerScale: currentRoom?.ownerScale,
+    getCurrentUserSynthParams: () => {
+      // Only return synth params if current category is Synthesizer
+      if (currentCategory === InstrumentCategory.Synthesizer && synthState) {
+        return synthState;
+      }
+      return null;
+    },
     onRecordingComplete: handleSessionRecordingComplete,
     onError: (error) => {
       console.error('Session recording error:', error);
@@ -376,6 +407,9 @@ const PerformRoom = memo(() => {
   useEffect(() => {
     recordMidiEventRef.current = recordMidiEvent;
   }, [recordMidiEvent]);
+
+  // Ref to access sequencer in callbacks without circular dependency
+  const sequencerRef = useRef<ReturnType<typeof useSequencer> | null>(null);
 
   // Broadcast streaming for audience (room owner only)
   const {
@@ -456,15 +490,6 @@ const PerformRoom = memo(() => {
   const handleStreamRemoved = useCallback(() => {
     removeLocalStream();
   }, [removeLocalStream]);
-
-  // Wrapper function to adapt onPlayNotes signature to handlePlayNote (respects mute state)
-  const handlePlayNotesWrapper = useCallback(
-    (notes: string[], velocity: number, isKeyHeld: boolean) => {
-      const playNoteHandler = createPlayNoteHandler(isInstrumentMuted);
-      playNoteHandler(notes, velocity, "note_on", isKeyHeld);
-    },
-    [createPlayNoteHandler, isInstrumentMuted]
-  );
 
   // Wrapper function for note stop
   const handleStopNotesWrapper = useCallback(
@@ -574,19 +599,8 @@ const PerformRoom = memo(() => {
     [handleUpdateRoomSettings]
   );
 
-  // Sequencer hook for recording integration
-  const sequencer = useSequencer({
-    socket: activeSocket,
-    currentCategory,
-    onPlayNotes: handlePlayNotesWrapper,
-    onStopNotes: handleStopNotesWrapper,
-  });
-
-  // Get sequencer UI state from store
-  const { settings, setSelectedBeat, setEditMode, resetUI } =
-    useSequencerStore();
-
   // Enhanced note playing wrapper that also handles recording (respects mute state)
+  // Defined before sequencer to avoid circular dependency
   const handlePlayNotesWithRecording = useCallback(
     (notes: string[], velocity: number, isKeyHeld: boolean) => {
       // Always play the note (respecting mute state)
@@ -610,11 +624,12 @@ const PerformRoom = memo(() => {
       }
 
       // Also record to sequencer if recording is enabled
-      if (sequencer.isRecording) {
+      const currentSequencer = sequencerRef.current;
+      if (currentSequencer?.isRecording) {
         notes.forEach((note) => {
           // Determine if this is realtime recording (while sequencer is playing)
-          const isRealtime = sequencer.isPlaying;
-          sequencer.handleRecordNote(note, velocity, undefined, isRealtime);
+          const isRealtime = currentSequencer.isPlaying;
+          currentSequencer.handleRecordNote(note, velocity, undefined, isRealtime);
         });
       }
     },
@@ -624,11 +639,26 @@ const PerformRoom = memo(() => {
       currentUser,
       currentInstrument,
       currentCategory,
-      sequencer.isRecording,
-      sequencer.handleRecordNote,
-      sequencer.isPlaying,
     ]
   );
+
+  // Sequencer hook for recording integration
+  // Use handlePlayNotesWithRecording to record sequencer notes
+  const sequencer = useSequencer({
+    socket: activeSocket,
+    currentCategory,
+    onPlayNotes: handlePlayNotesWithRecording,
+    onStopNotes: handleStopNotesWrapper,
+  });
+
+  // Update sequencer ref when sequencer changes
+  useEffect(() => {
+    sequencerRef.current = sequencer;
+  }, [sequencer]);
+
+  // Get sequencer UI state from store
+  const { settings, setSelectedBeat, setEditMode, resetUI } =
+    useSequencerStore();
 
   // Wrapper for key release that also records note_off events
   const handleReleaseKeyHeldNoteWithRecording = useCallback(
@@ -1057,6 +1087,21 @@ const PerformRoom = memo(() => {
   // Render room interface
   return (
     <div className="min-h-dvh bg-base-200 flex flex-col">
+      {/* Saving Overlay */}
+      {isSaving && (
+        <div className="fixed inset-0 bg-base-100/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="card bg-base-200 shadow-xl p-8">
+            <div className="card-body items-center text-center">
+              <span className="loading loading-spinner loading-lg text-primary"></span>
+              <h3 className="card-title mt-4">Saving Project</h3>
+              <p className="text-base-content/70">
+                Please wait while we save the project...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 pt-3 px-3">
         <div className="">
           {/* Fallback Notification */}
@@ -1211,8 +1256,8 @@ const PerformRoom = memo(() => {
                       }
                     }}
                     className={`btn btn-xs ${isRecording ? 'btn-error' : 'btn-soft btn-error'}`}
-                    title={isRecording ? `Recording... ${formatDuration(recordingDuration)}` : (isGuest ? 'Guest users cannot record. Please sign up to access this feature.' : 'Start recording')}
-                    disabled={isGuest}
+                    title={isRecording ? `Recording... ${formatDuration(recordingDuration)}` : (!isRegisteredOrPremium ? 'Registered and premium users can record. Please sign up to access this feature.' : 'Start recording')}
+                    disabled={!isRegisteredOrPremium}
                   >
                     {isRecording ? 'Stop' : 'Record'}
                     {isRecording && (
@@ -1519,7 +1564,7 @@ const PerformRoom = memo(() => {
                         ),
                       ]}
                       rootNote={scaleState.rootNote}
-                      onPlayNotes={handlePlayNotesWrapper}
+                      onPlayNotes={handlePlayNotesWithRecording}
                       onStopNotes={handleStopNotesWrapper}
                       editMode={settings.editMode}
                       onSelectedBeatChange={setSelectedBeat}
@@ -1629,7 +1674,11 @@ const PerformRoom = memo(() => {
         open={showLimitModal}
         onClose={handleLimitModalClose}
         projects={limitProjects}
-        onProjectDeleted={handleProjectDeleted}
+        onProjectDeleted={handleProjectDeletedWrapper}
+        onProceed={() => {
+          handleLimitModalClose();
+          setShowSaveModal(true);
+        }}
       />
 
       <Footer />

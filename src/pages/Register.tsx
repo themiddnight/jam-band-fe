@@ -118,7 +118,7 @@ export default function Register() {
 
             <button
               type="submit"
-              className="btn btn-neutral mt-2 w-full"
+              className="btn btn-primary mt-2 w-full"
               disabled={loading}
             >
               {loading ? "Registering..." : "Sign Up"}

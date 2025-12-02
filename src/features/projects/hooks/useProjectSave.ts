@@ -7,7 +7,7 @@ import {
   type SaveProjectRequest,
   type SavedProject,
 } from "@/shared/api/projects";
-import { ProjectLimitModal } from "../components/ProjectLimitModal";
+import { isProjectLimitReached } from "@/shared/constants/projectLimits";
 
 interface UseProjectSaveOptions {
   roomId?: string;
@@ -32,7 +32,7 @@ export function useProjectSave({
   const [limitProjects, setLimitProjects] = useState<SavedProject[]>([]);
 
   const checkAndSave = useCallback(
-    async (projectName: string, existingProjectId?: string) => {
+    async (projectName?: string, existingProjectId?: string) => {
       if (!isAuthenticated) {
         throw new Error("You must be logged in to save projects");
       }
@@ -43,14 +43,20 @@ export function useProjectSave({
         const { projectData, audioFiles } = await getProjectData();
 
         if (existingProjectId) {
-          // Save over existing project
+          // Save over existing project (projectName not needed)
           await updateProject(existingProjectId, projectData, audioFiles);
           setSavedProjectId(existingProjectId);
           onSaved?.(existingProjectId);
         } else {
+          // New project - projectName is required
+          if (!projectName || !projectName.trim()) {
+            throw new Error("Project name is required for new projects");
+          }
+
           // Check project limit first
           const { projects } = await getUserProjects();
-          if (projects.length >= 2) {
+          const { userType } = useUserStore.getState();
+          if (isProjectLimitReached(projects.length, userType)) {
             setLimitProjects(projects);
             setShowLimitModal(true);
             setIsSaving(false);
@@ -59,7 +65,7 @@ export function useProjectSave({
 
           // Save new project
           const saveRequest: SaveProjectRequest = {
-            name: projectName,
+            name: projectName.trim(),
             roomType,
             projectData,
             metadata: {
@@ -101,13 +107,40 @@ export function useProjectSave({
     // Refresh projects list
     try {
       const { projects } = await getUserProjects();
+      const { userType } = useUserStore.getState();
       setLimitProjects(projects);
-      if (projects.length < 2) {
+      if (!isProjectLimitReached(projects.length, userType)) {
         setShowLimitModal(false);
       }
     } catch (error) {
       console.error("Failed to refresh projects:", error);
     }
+  }, []);
+
+  const checkProjectLimit = useCallback(async (): Promise<{
+    isLimitReached: boolean;
+    projects: SavedProject[];
+  }> => {
+    if (!isAuthenticated) {
+      return { isLimitReached: false, projects: [] };
+    }
+
+    try {
+      const { projects } = await getUserProjects();
+      const { userType } = useUserStore.getState();
+      return {
+        isLimitReached: isProjectLimitReached(projects.length, userType),
+        projects,
+      };
+    } catch (error) {
+      console.error("Failed to check project limit:", error);
+      return { isLimitReached: false, projects: [] };
+    }
+  }, [isAuthenticated]);
+
+  const setLimitProjectsAndShow = useCallback((projects: SavedProject[]) => {
+    setLimitProjects(projects);
+    setShowLimitModal(true);
   }, []);
 
   return {
@@ -119,6 +152,8 @@ export function useProjectSave({
     limitProjects,
     handleLimitModalClose,
     handleProjectDeleted,
+    checkProjectLimit,
+    setLimitProjectsAndShow,
   };
 }
 

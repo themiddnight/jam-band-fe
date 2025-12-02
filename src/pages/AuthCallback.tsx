@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useUserStore } from "../shared/stores/userStore";
-import { getCurrentUser, setToken } from "../shared/api/auth";
+import { getCurrentUser, setToken, setRefreshToken } from "../shared/api/auth";
 
 export default function AuthCallback() {
   const navigate = useNavigate();
@@ -9,12 +9,28 @@ export default function AuthCallback() {
   const { login } = useUserStore();
 
   useEffect(() => {
-    const token = searchParams.get("token");
-    if (token) {
-      setToken(token);
+    const accessToken = searchParams.get("accessToken");
+    const refreshToken = searchParams.get("refreshToken");
+    // Support legacy token parameter for backward compatibility
+    const legacyToken = searchParams.get("token");
+
+    if (accessToken && refreshToken) {
+      setToken(accessToken);
+      setRefreshToken(refreshToken);
       getCurrentUser()
         .then((result) => {
-          login(result.user, token);
+          login(result.user, accessToken);
+          navigate("/");
+        })
+        .catch(() => {
+          navigate("/login");
+        });
+    } else if (legacyToken) {
+      // Legacy support: if only token is provided, treat it as accessToken
+      setToken(legacyToken);
+      getCurrentUser()
+        .then((result) => {
+          login(result.user, legacyToken);
           navigate("/");
         })
         .catch(() => {

@@ -440,11 +440,18 @@ const TrackCanvasComponent = ({
           onRegionDragRealtime &&
           (delta !== dragState.delta || targetTrackId !== dragState.targetTrackId)
         ) {
+          // Check if all regions started on the same track
+          const allSameTrack = dragState.regionIds.every(id =>
+            dragState.initialTrackIds[id] === dragState.initialTrackIds[dragState.regionIds[0]]
+          );
+
           const updates: RegionDragUpdatePayload[] = dragState.regionIds.map((regionId) => {
             const initialStart = dragState.initialPositions[regionId];
             const nextStart = Math.max(0, initialStart + delta);
             const fallbackTrackId = dragState.initialTrackIds[regionId];
-            const nextTrackId = targetTrackId ?? fallbackTrackId;
+            // Only use targetTrackId if all regions started on the same track
+            // Otherwise, keep each region on its original track
+            const nextTrackId = (allSameTrack && targetTrackId) ? targetTrackId : fallbackTrackId;
             return {
               regionId,
               newStart: nextStart,
@@ -740,22 +747,22 @@ const TrackCanvasComponent = ({
         });
       } else {
         // Normal drag: Move regions
-        const isTrackChange = dragState.targetTrackId &&
+        // Check if all regions started on the same track
+        const allSameTrack = dragState.regionIds.every(id =>
+          dragState.initialTrackIds[id] === dragState.initialTrackIds[dragState.regionIds[0]]
+        );
+
+        // Only consider track change if all regions started on the same track
+        // and the target track is different from their initial track
+        const isTrackChange = allSameTrack &&
+          dragState.targetTrackId &&
           dragState.regionIds.some(id => dragState.initialTrackIds[id] !== dragState.targetTrackId);
 
         if (isTrackChange && dragState.targetTrackId) {
-          // Move to different track (only if all regions were on the same track initially)
-          const allSameTrack = dragState.regionIds.every(id =>
-            dragState.initialTrackIds[id] === dragState.initialTrackIds[dragState.regionIds[0]]
-          );
-          if (allSameTrack) {
-            onMoveRegionsToTrack(dragState.regionIds, dragState.targetTrackId, dragState.delta);
-          } else if (dragState.delta !== 0) {
-            // Different initial tracks, just move horizontally
-            onMoveRegions(dragState.regionIds, dragState.delta);
-          }
+          // All regions started on the same track, move them to the target track
+          onMoveRegionsToTrack(dragState.regionIds, dragState.targetTrackId, dragState.delta);
         } else if (dragState.delta !== 0) {
-          // Same track, just move horizontally
+          // Just move horizontally (either same track or regions from different tracks)
           onMoveRegions(dragState.regionIds, dragState.delta);
         }
       }
@@ -1161,9 +1168,19 @@ const TrackCanvasComponent = ({
           const shouldRenderOriginal = !isDragging || isDuplicating;
 
           // Determine which track to use for rendering
-          const effectiveTrackId = isDragging && dragState?.targetTrackId && !isDuplicating
-            ? dragState.targetTrackId
-            : region.trackId;
+          // Only use targetTrackId if all regions started on the same track
+          let effectiveTrackId = region.trackId;
+          if (isDragging && dragState && !isDuplicating) {
+            const allSameTrack = dragState.regionIds.every(id =>
+              dragState.initialTrackIds[id] === dragState.initialTrackIds[dragState.regionIds[0]]
+            );
+            if (allSameTrack && dragState.targetTrackId) {
+              effectiveTrackId = dragState.targetTrackId;
+            } else {
+              // Keep each region on its original track
+              effectiveTrackId = dragState.initialTrackIds[region.id] ?? region.trackId;
+            }
+          }
 
           const track = tracks.find((t) => t.id === effectiveTrackId);
           if (!track) {
@@ -1240,7 +1257,13 @@ const TrackCanvasComponent = ({
               return null;
             }
 
-            const effectiveTrackId = dragState.targetTrackId ?? region.trackId;
+            // For duplicate previews, only use targetTrackId if all regions started on the same track
+            const allSameTrack = dragState.regionIds.every(id =>
+              dragState.initialTrackIds[id] === dragState.initialTrackIds[dragState.regionIds[0]]
+            );
+            const effectiveTrackId = (allSameTrack && dragState.targetTrackId)
+              ? dragState.targetTrackId
+              : (dragState.initialTrackIds[region.id] ?? region.trackId);
             const track = tracks.find((t) => t.id === effectiveTrackId);
             if (!track) {
               return null;

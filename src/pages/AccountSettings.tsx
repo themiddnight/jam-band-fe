@@ -12,14 +12,19 @@ import { OpenProjectModal } from "../features/projects/components/OpenProjectMod
 import { createRoom } from "../features/rooms/services/api";
 import { useUserStore as useUserStoreForRoom } from "../shared/stores/userStore";
 import { uploadProjectToRoom } from "../features/daw/services/projectUploader";
+import { updateUsername } from "../shared/api/auth";
 import JSZip from "jszip";
 
 export default function AccountSettings() {
   const navigate = useNavigate();
-  const { authUser, isAuthenticated, logout } = useUserStore();
+  const { authUser, isAuthenticated, logout, updateAuthUser } = useUserStore();
   const { resendVerification, loading, error } = useAuth();
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
+  const [isEditingUsername, setIsEditingUsername] = useState(false);
+  const [newUsername, setNewUsername] = useState("");
+  const [usernameError, setUsernameError] = useState("");
+  const [isUpdatingUsername, setIsUpdatingUsername] = useState(false);
   const [projects, setProjects] = useState<SavedProject[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [selectedProject, setSelectedProject] = useState<SavedProject | null>(null);
@@ -58,7 +63,7 @@ export default function AccountSettings() {
     }
   };
 
-  const handleOpenProject = async (roomName: string, description?: string) => {
+  const handleOpenProject = async (roomName: string, description?: string, isPrivate?: boolean, isHidden?: boolean) => {
     if (!selectedProject) return;
 
     setIsOpening(true);
@@ -76,8 +81,8 @@ export default function AccountSettings() {
         roomName,
         username,
         userId,
-        false,
-        false,
+        isPrivate ?? false,
+        isHidden ?? false,
         description,
         "arrange"
       );
@@ -166,6 +171,60 @@ export default function AccountSettings() {
     await resendVerification();
   };
 
+  const validateUsername = (value: string): string => {
+    if (!value || value.trim().length === 0) {
+      return "Username cannot be empty";
+    }
+    const trimmed = value.trim();
+    if (trimmed.length < 3 || trimmed.length > 30) {
+      return "Username must be between 3 and 30 characters";
+    }
+    if (!/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
+      return "Username can only contain letters, numbers, underscores, and hyphens";
+    }
+    return "";
+  };
+
+  const handleStartEditUsername = () => {
+    setNewUsername(username);
+    setUsernameError("");
+    setIsEditingUsername(true);
+  };
+
+  const handleCancelEditUsername = () => {
+    setNewUsername("");
+    setUsernameError("");
+    setIsEditingUsername(false);
+  };
+
+  const handleSaveUsername = async () => {
+    const error = validateUsername(newUsername);
+    if (error) {
+      setUsernameError(error);
+      return;
+    }
+
+    if (newUsername.trim() === username) {
+      setIsEditingUsername(false);
+      return;
+    }
+
+    setIsUpdatingUsername(true);
+    setUsernameError("");
+    try {
+      const response = await updateUsername(newUsername.trim());
+      setUsername(response.user.username || "");
+      if (authUser) {
+        updateAuthUser(response.user);
+      }
+      setIsEditingUsername(false);
+    } catch (err: any) {
+      setUsernameError(err.response?.data?.error || err.message || "Failed to update username");
+    } finally {
+      setIsUpdatingUsername(false);
+    }
+  };
+
   const handleLogout = async () => {
     await logout();
     navigate("/");
@@ -214,17 +273,70 @@ export default function AccountSettings() {
                     <label className="label">
                       <span className="label-text">Username</span>
                     </label>
-                    <input
-                      type="text"
-                      className="input input-bordered w-full"
-                      value={username}
-                      disabled
-                    />
-                    <label className="label">
-                      <span className="label-text-alt">
-                        Username changes coming soon
-                      </span>
-                    </label>
+                    {isEditingUsername ? (
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          className={`input input-bordered w-full ${usernameError ? "input-error" : ""}`}
+                          value={newUsername}
+                          onChange={(e) => {
+                            setNewUsername(e.target.value);
+                            setUsernameError("");
+                          }}
+                          disabled={isUpdatingUsername}
+                          placeholder="Enter new username"
+                        />
+                        {usernameError && (
+                          <label className="label">
+                            <span className="label-text-alt text-error">
+                              {usernameError}
+                            </span>
+                          </label>
+                        )}
+                        <div className="flex gap-2">
+                          <button
+                            className="btn btn-sm btn-primary"
+                            onClick={handleSaveUsername}
+                            disabled={isUpdatingUsername}
+                          >
+                            {isUpdatingUsername ? (
+                              <span className="loading loading-spinner loading-xs"></span>
+                            ) : (
+                              "Save"
+                            )}
+                          </button>
+                          <button
+                            className="btn btn-sm btn-ghost"
+                            onClick={handleCancelEditUsername}
+                            disabled={isUpdatingUsername}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <input
+                          type="text"
+                          className="input input-bordered w-full"
+                          value={username}
+                          disabled
+                        />
+                        <div className="flex items-center justify-between mt-2">
+                          <label className="label">
+                            <span className="label-text-alt">
+                              Your username for this account
+                            </span>
+                          </label>
+                          <button
+                            className="btn btn-sm btn-outline"
+                            onClick={handleStartEditUsername}
+                          >
+                            Change Username
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

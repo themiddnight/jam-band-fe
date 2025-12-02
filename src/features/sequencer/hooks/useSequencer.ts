@@ -8,6 +8,7 @@ import { getSequencerWorker } from "../services/SequencerWorkerService";
 import type { SequencerSpeed, BankMode, DisplayMode } from "../types";
 import { SEQUENCER_CONSTANTS } from "@/shared/constants";
 import type { SequencerStep } from "../types";
+import { InstrumentCategory } from "@/shared/constants/instruments";
 
 interface UseSequencerProps {
   socket: Socket | null;
@@ -15,6 +16,18 @@ interface UseSequencerProps {
   onPlayNotes: (notes: string[], velocity: number, isKeyHeld: boolean) => void;
   onStopNotes: (notes: string[]) => void;
 }
+
+/**
+ * Normalizes the category for sequencer state management.
+ * Melodic and Synthesizer share the same sequencer state.
+ */
+const normalizeSequencerCategory = (category: string): string => {
+  // Both Melodic and Synthesizer use the same sequencer state
+  if (category === InstrumentCategory.Synthesizer) {
+    return InstrumentCategory.Melodic;
+  }
+  return category;
+};
 
 export const useSequencer = ({
   socket,
@@ -30,6 +43,9 @@ export const useSequencer = ({
   const [error, setError] = useState<string | null>(null);
   const [currentBPM, setCurrentBPM] = useState(120);
   
+  // Normalize category so Melodic and Synthesizer share the same sequencer state
+  const normalizedCategory = normalizeSequencerCategory(currentCategory);
+  
   // Use refs to store current values for service callbacks
   const onPlayNotesRef = useRef(onPlayNotes);
   const onStopNotesRef = useRef(onStopNotes);
@@ -39,8 +55,8 @@ export const useSequencer = ({
   const currentlyPlayingNotesRef = useRef<Set<string>>(new Set()); // Track playing notes for hard-stop
   const bankGenerationRef = useRef(0); // Incremented on bank switch to invalidate pending timeouts
   useLayoutEffect(() => {
-    setActiveCategory(currentCategory);
-  }, [currentCategory, setActiveCategory]);
+    setActiveCategory(normalizedCategory);
+  }, [normalizedCategory, setActiveCategory]);
 
   useEffect(() => {
     hasStartedPlayingRef.current = false;
@@ -62,7 +78,7 @@ export const useSequencer = ({
         sequencerServiceRef.current.setSteps(currentBankState.steps);
       }
     }
-  }, [currentCategory, isInitialized]);
+  }, [normalizedCategory, isInitialized]);
 
   
   // Debounced service update functions to prevent excessive calls with Lodash

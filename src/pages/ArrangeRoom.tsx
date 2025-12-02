@@ -517,6 +517,7 @@ export default function ArrangeRoom() {
   // Computed values
   const pendingCount = currentRoom?.pendingMembers?.length ?? 0;
   const isLoadingProject = useProjectStore((state) => state.isLoadingProject);
+  const isSavingProject = useProjectStore((state) => state.isSavingProject);
 
   return (
     <DAWCollaborationProvider
@@ -538,6 +539,21 @@ export default function ArrangeRoom() {
               <h3 className="card-title mt-4">Loading Project</h3>
               <p className="text-base-content/70">
                 Please wait while we load the project...
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Saving Overlay */}
+      {isSavingProject && (
+        <div className="fixed inset-0 bg-base-100/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <div className="card bg-base-200 shadow-xl p-8">
+            <div className="card-body items-center text-center">
+              <span className="loading loading-spinner loading-lg text-primary"></span>
+              <h3 className="card-title mt-4">Saving Project</h3>
+              <p className="text-base-content/70">
+                Please wait while we save the project...
               </p>
             </div>
           </div>

@@ -2,12 +2,15 @@ import { useState } from "react";
 import { Modal } from "@/features/ui";
 import type { SavedProject } from "@/shared/api/projects";
 import { deleteProject } from "@/shared/api/projects";
+import { useUserStore } from "@/shared/stores/userStore";
+import { getProjectLimit, isProjectLimitReached } from "@/shared/constants/projectLimits";
 
 interface ProjectLimitModalProps {
   open: boolean;
   onClose: () => void;
   projects: SavedProject[];
   onProjectDeleted: () => void;
+  onProceed?: () => void;
 }
 
 export function ProjectLimitModal({
@@ -15,6 +18,7 @@ export function ProjectLimitModal({
   onClose,
   projects,
   onProjectDeleted,
+  onProceed,
 }: ProjectLimitModalProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,21 +44,26 @@ export function ProjectLimitModal({
     }
   };
 
+  const { userType } = useUserStore();
+  const projectLimit = getProjectLimit(userType);
+  const canProceed = !isProjectLimitReached(projects.length, userType);
+
   return (
     <Modal
       open={open}
       setOpen={(open) => !open && onClose()}
       title="Project Limit Reached"
-      okText="Close"
-      cancelText={null}
-      onOk={onClose}
-      showCancelButton={false}
+      okText={canProceed && onProceed ? "Proceed" : "Close"}
+      onOk={canProceed && onProceed ? onProceed : onClose}
+      showCancelButton={!canProceed || !onProceed}
       size="md"
     >
       <div className="space-y-4">
         <div className="alert alert-warning">
           <span>
-            You have reached the limit of 2 saved projects. Please delete an existing project to save a new one.
+            {canProceed
+              ? "You can now save a new project. Please proceed to name your project."
+              : `You have reached the limit of ${projectLimit === Infinity ? "unlimited" : projectLimit} saved project${projectLimit > 1 ? "s" : ""}. Please delete an existing project to save a new one.`}
           </span>
         </div>
 

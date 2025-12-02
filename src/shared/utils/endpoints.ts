@@ -12,6 +12,7 @@ export const endpoints = {
   // Auth endpoints
   register: `${apiURL}/auth/register`,
   login: `${apiURL}/auth/login`,
+  refreshToken: `${apiURL}/auth/refresh-token`,
   verifyEmail: (token: string) => `${apiURL}/auth/verify-email/${token}`,
   resendVerification: `${apiURL}/auth/resend-verification`,
   forgotPassword: `${apiURL}/auth/forgot-password`,
@@ -19,6 +20,7 @@ export const endpoints = {
   googleAuth: `${apiURL}/auth/google`,
   googleCallback: `${apiURL}/auth/google/callback`,
   getCurrentUser: `${apiURL}/auth/me`,
+  updateUsername: `${apiURL}/auth/username`,
   logout: `${apiURL}/auth/logout`,
   // User presets and settings
   getUserPresets: (type?: string) => 
@@ -29,6 +31,9 @@ export const endpoints = {
   getUserSettings: (type?: string) =>
     type ? `${apiURL}/user/settings?type=${type}` : `${apiURL}/user/settings`,
   updateUserSettings: `${apiURL}/user/settings`,
+  // Feedback state
+  getFeedbackState: `${apiURL}/user/feedback-state`,
+  updateFeedbackState: `${apiURL}/user/feedback-state`,
   // Saved projects
   getUserProjects: `${apiURL}/projects`,
   saveProject: `${apiURL}/projects`,

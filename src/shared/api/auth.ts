@@ -27,7 +27,8 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   user: User;
-  token: string;
+  accessToken: string;
+  refreshToken: string;
 }
 
 export interface VerifyEmailResponse {
@@ -36,6 +37,15 @@ export interface VerifyEmailResponse {
 }
 
 export interface GetCurrentUserResponse {
+  user: User;
+}
+
+export interface UpdateUsernameRequest {
+  username: string;
+}
+
+export interface UpdateUsernameResponse {
+  message: string;
   user: User;
 }
 
@@ -51,9 +61,12 @@ export async function register(
 export async function login(data: LoginRequest): Promise<LoginResponse> {
   const response = await axiosInstance.post(endpoints.login, data);
   const result = response.data;
-  // Store token
-  if (result.token) {
-    localStorage.setItem("auth_token", result.token);
+  // Store tokens
+  if (result.accessToken) {
+    localStorage.setItem("auth_token", result.accessToken);
+  }
+  if (result.refreshToken) {
+    localStorage.setItem("refresh_token", result.refreshToken);
   }
   return result;
 }
@@ -103,7 +116,30 @@ export async function getCurrentUser(): Promise<GetCurrentUserResponse> {
   return response.data;
 }
 
-// Logout (removes token)
+// Update username
+export async function updateUsername(
+  username: string
+): Promise<UpdateUsernameResponse> {
+  const response = await axiosInstance.put(endpoints.updateUsername, {
+    username,
+  });
+  return response.data;
+}
+
+// Refresh access token
+export async function refreshToken(): Promise<{ accessToken: string; refreshToken: string }> {
+  const refreshToken = localStorage.getItem("refresh_token");
+  if (!refreshToken) {
+    throw new Error("No refresh token available");
+  }
+  const response = await axiosInstance.post(endpoints.refreshToken, { refreshToken });
+  const result = response.data;
+  localStorage.setItem("auth_token", result.accessToken);
+  localStorage.setItem("refresh_token", result.refreshToken);
+  return result;
+}
+
+// Logout (removes tokens)
 export async function logout(): Promise<{ message: string }> {
   try {
     await axiosInstance.post(endpoints.logout);
@@ -111,21 +147,59 @@ export async function logout(): Promise<{ message: string }> {
     // Continue even if request fails
   }
   localStorage.removeItem("auth_token");
+  localStorage.removeItem("refresh_token");
   return { message: "Logged out successfully" };
 }
 
-// Get stored token
+// Get stored access token
 export function getToken(): string | null {
   return localStorage.getItem("auth_token");
 }
 
-// Set token
+// Get stored refresh token
+export function getRefreshToken(): string | null {
+  return localStorage.getItem("refresh_token");
+}
+
+// Set access token
 export function setToken(token: string): void {
   localStorage.setItem("auth_token", token);
 }
 
-// Remove token
+// Set refresh token
+export function setRefreshToken(token: string): void {
+  localStorage.setItem("refresh_token", token);
+}
+
+// Remove tokens
 export function removeToken(): void {
   localStorage.removeItem("auth_token");
+  localStorage.removeItem("refresh_token");
+}
+
+// Feedback state types
+export interface FeedbackState {
+  feedbackSubmittedAt: string | null;
+  feedbackDismissedAt: string | null;
+}
+
+export interface UpdateFeedbackStateRequest {
+  action: "submitted" | "dismissed";
+}
+
+// Get feedback state
+export async function getFeedbackState(): Promise<FeedbackState> {
+  const response = await axiosInstance.get(endpoints.getFeedbackState);
+  return response.data;
+}
+
+// Update feedback state
+export async function updateFeedbackState(
+  action: "submitted" | "dismissed"
+): Promise<{ user: { id: string; feedbackSubmittedAt: string | null; feedbackDismissedAt: string | null } }> {
+  const response = await axiosInstance.put(endpoints.updateFeedbackState, {
+    action,
+  });
+  return response.data;
 }
 
