@@ -409,7 +409,6 @@ export function convertSessionToProject(snapshot: SessionRecordingSnapshot): {
         start: 0,
         end: Math.ceil(snapshot.durationBeats / 4) * 4, // Round up to nearest 4 beats
       },
-      isMetronomeEnabled: false,
       snapToGrid: true,
     },
     scale: {

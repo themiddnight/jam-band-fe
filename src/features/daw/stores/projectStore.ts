@@ -63,7 +63,7 @@ const initialState: Omit<
   isSavingProject: false,
 };
 
-type PersistedState = Pick<ProjectStoreState, 'bpm' | 'timeSignature' | 'gridDivision' | 'loop'>;
+type PersistedState = Pick<ProjectStoreState, 'bpm' | 'timeSignature' | 'gridDivision' | 'loop' | 'isMetronomeEnabled'>;
 
 const storage =
   typeof window !== 'undefined'
@@ -146,6 +146,7 @@ export const useProjectStore = create<ProjectStoreState>()(
         timeSignature: state.timeSignature,
         gridDivision: state.gridDivision,
         loop: state.loop,
+        isMetronomeEnabled: state.isMetronomeEnabled,
       }),
     }
   )
