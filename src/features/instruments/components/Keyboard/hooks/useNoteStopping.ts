@@ -6,6 +6,7 @@ import {
   chordTriadKeys,
   chromaticWhiteKeyMapping,
   chromaticBlackKeyMapping,
+  sharpNote,
 } from "../../../index";
 import type {
   KeyboardState,
@@ -99,7 +100,10 @@ export const useNoteStopping = (
       }
 
       if (note) {
+        // Release both the normal note and the sharp version
+        // because we don't know if shift was held when the note was pressed
         keyboardState.releaseKeyHeldNote(note);
+        keyboardState.releaseKeyHeldNote(sharpNote(note));
       }
     },
     [keyboardState, scaleState, virtualKeyboard],

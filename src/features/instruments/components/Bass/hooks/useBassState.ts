@@ -1,4 +1,5 @@
 import { useCallback, useRef } from "react";
+import type React from "react";
 
 import type { Scale } from "../../../../ui";
 import { useInstrumentState } from "../../../index";
@@ -19,6 +20,7 @@ export const useBassState = (
   onSustainChange: (sustain: boolean) => void,
   onSustainToggleChange?: (sustainToggle: boolean) => void,
   onSelectionActiveChange?: (isActive: boolean) => void,
+  sharpModifierRef?: React.MutableRefObject<boolean>,
 ) => {
   // Unified instrument state
   const unifiedState = useInstrumentState({
@@ -67,6 +69,7 @@ export const useBassState = (
     {
       onSelectionActiveChange: handleSelectionActiveChange,
     },
+    sharpModifierRef,
   );
 
   // Construct bass state for controllers

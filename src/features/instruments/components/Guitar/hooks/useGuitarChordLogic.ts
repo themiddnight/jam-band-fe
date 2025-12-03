@@ -1,8 +1,9 @@
 import { getChordFromDegree } from "../../../../../shared/utils/musicUtils";
 import type { Scale } from "../../../../ui";
-import { GUITAR_STRUM } from "../../../index";
+import { GUITAR_STRUM, sharpNotes, sharpNote } from "../../../index";
 import type { StrumConfig } from "../types/guitar";
 import { useState, useCallback, useEffect } from "react";
+import type React from "react";
 
 export const useGuitarChordLogic = (
   onPlayNotes: (notes: string[], velocity: number, isKeyHeld: boolean) => void,
@@ -15,6 +16,7 @@ export const useGuitarChordLogic = (
   velocity: number,
   chordVoicing: number,
   brushingSpeed: number,
+  sharpModifierRef?: React.MutableRefObject<boolean>,
 ) => {
   const [chordModifiers, setChordModifiers] = useState<Set<string>>(new Set());
   const [powerChordMode, setPowerChordMode] = useState(false);
@@ -93,6 +95,12 @@ export const useGuitarChordLogic = (
         chordVoicing,
         convertChordModifiers(chordModifiers),
       );
+
+      // Apply sharp modifier (+1 semitone) if shift is held
+      const applySharp = sharpModifierRef?.current ?? false;
+      if (applySharp) {
+        chordNotes = sharpNotes(chordNotes);
+      }
 
       // For power chords, use exactly 2 notes. For normal chords, ensure 5 notes
       if (powerChordMode) {
@@ -195,6 +203,7 @@ export const useGuitarChordLogic = (
       onStopNotes,
       playedChordNotes,
       scheduledTimeouts,
+      sharpModifierRef,
     ],
   );
 
@@ -213,6 +222,12 @@ export const useGuitarChordLogic = (
         chordVoicing,
         convertChordModifiers(chordModifiers),
       );
+
+      // Apply sharp modifier (+1 semitone) if shift is held
+      const applySharp = sharpModifierRef?.current ?? false;
+      if (applySharp) {
+        chordNotes = sharpNotes(chordNotes);
+      }
 
       // For power chords, use exactly 2 notes. For normal chords, ensure 5 notes
       if (powerChordMode) {
@@ -253,6 +268,7 @@ export const useGuitarChordLogic = (
       convertChordModifiers,
       chordModifiers,
       powerChordMode,
+      sharpModifierRef,
     ],
   );
 
@@ -274,10 +290,13 @@ export const useGuitarChordLogic = (
       }
 
       // Stop the notes that were actually played for this chord
+      // Release both normal and sharp versions since we don't know if shift was held when pressed
       const actualPlayedNotes = playedChordNotes.get(chordIndex);
       if (actualPlayedNotes) {
         // Stop all the notes that were played for this chord immediately
+        // Also stop sharp versions in case shift was held during press
         onStopNotes(actualPlayedNotes);
+        onStopNotes(actualPlayedNotes.map((note) => sharpNote(note)));
 
         // Remove the chord from played notes
         setPlayedChordNotes((prev) => {

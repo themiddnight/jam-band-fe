@@ -17,8 +17,11 @@ export interface GuitarShortcut {
 }
 
 export interface GuitarShortcuts {
-  // Mode controls
+  // Mode controls (no shortcut key - use buttons only)
   toggleMode: GuitarShortcut;
+
+  // Sharp modifier (shift key = +1 semitone)
+  sharpModifier: GuitarShortcut;
 
   // Note controls (Simple - Note mode)
   lowerOctaveNotes: GuitarShortcut;
@@ -100,10 +103,16 @@ export const GUITAR_STRUM = {
 
 export const DEFAULT_GUITAR_SHORTCUTS: GuitarShortcuts = {
   toggleMode: {
-    key: "shift",
+    key: "",
     description:
-      "Switch from basic to melody mode, or toggle between melody and chord modes",
+      "Switch from basic to melody mode, or toggle between melody and chord modes (use buttons)",
     category: "mode",
+  },
+
+  sharpModifier: {
+    key: "shift",
+    description: "Hold to transpose notes up by 1 semitone (+1 sharp)",
+    category: "control",
   },
 
   // Note controls (Simple - Note mode)

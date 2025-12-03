@@ -77,6 +77,7 @@ export * from "./utils/guitarAudioUtils";
 export * from "./utils/InstrumentEngine";
 export * from "./utils/instrumentGrouping";
 export { gmNoteMapper } from "./utils/gmNoteMapper";
+export * from "./utils/transposeUtils";
 
 // Types exports
 export * from "./types/presets";
