@@ -6,6 +6,7 @@ import {
   chordTriadKeys,
   chromaticWhiteKeyMapping,
   chromaticBlackKeyMapping,
+  sharpNote,
 } from "../../../index";
 import type {
   KeyboardState,
@@ -18,9 +19,12 @@ export const useNotePlaying = (
   keyboardState: KeyboardState,
   scaleState: ScaleState,
   virtualKeyboard: VirtualKeyboardState,
+  sharpModifierRef?: React.MutableRefObject<boolean>,
 ) => {
   const handleNotePlaying = useCallback(
     async (key: string) => {
+      // Check if sharp modifier is active (shift key held)
+      const applySharp = sharpModifierRef?.current ?? false;
       // Check if the key is a note key
       const isNoteKey =
         melodySimpleKeys.includes(key) ||
@@ -98,10 +102,12 @@ export const useNotePlaying = (
       }
 
       if (note) {
-        await keyboardState.playNote(note, keyboardState.velocity, true);
+        // Apply sharp modifier (+1 semitone) if shift is held
+        const finalNote = applySharp ? sharpNote(note) : note;
+        await keyboardState.playNote(finalNote, keyboardState.velocity, true);
       }
     },
-    [keyboardState, scaleState, virtualKeyboard],
+    [keyboardState, scaleState, virtualKeyboard, sharpModifierRef],
   );
 
   return { handleNotePlaying };

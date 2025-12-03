@@ -10,8 +10,11 @@ export interface BassShortcut {
 }
 
 export interface BassShortcuts {
-  // Mode controls
+  // Mode controls (no shortcut key - use buttons only)
   toggleMode: BassShortcut;
+
+  // Sharp modifier (shift key = +1 semitone)
+  sharpModifier: BassShortcut;
 
   // Note controls (Melody mode)
   lowerOctaveNotes: BassShortcut; // ASDFGHJKL;'
@@ -28,9 +31,15 @@ export interface BassShortcuts {
 
 export const DEFAULT_BASS_SHORTCUTS: BassShortcuts = {
   toggleMode: {
-    key: "shift",
-    description: "Toggle between melody and basic modes",
+    key: "",
+    description: "Toggle between melody and basic modes (use buttons)",
     category: "mode",
+  },
+
+  sharpModifier: {
+    key: "shift",
+    description: "Hold to transpose notes up by 1 semitone (+1 sharp)",
+    category: "control",
   },
   lowerOctaveNotes: {
     key: "asdfghjkl;'",

@@ -4,6 +4,7 @@ import { useVelocityControl } from "../../../index";
 import { useGuitarStore } from "../../../stores/guitarStore";
 import type { GuitarState } from "../types/guitar";
 import { useCallback } from "react";
+import type React from "react";
 
 interface UseGuitarKeysControllerProps {
   guitarState: GuitarState;
@@ -60,7 +61,12 @@ export const useGuitarKeysController = ({
   guitarState,
   scaleState,
   guitarControls,
-}: UseGuitarKeysControllerProps) => {
+  sharpModifierRef,
+  setSharpModifierActive,
+}: UseGuitarKeysControllerProps & {
+  sharpModifierRef?: React.MutableRefObject<boolean>;
+  setSharpModifierActive?: (active: boolean) => void;
+}) => {
   const shortcuts = DEFAULT_GUITAR_SHORTCUTS;
   const { handleVelocityChange } = useVelocityControl({
     velocity: guitarControls.velocity,
@@ -72,7 +78,15 @@ export const useGuitarKeysController = ({
 
   const handleKeyDown = useCallback(
     async (event: KeyboardEvent) => {
+      // Normalize key: when shift is pressed, event.key might be uppercase
       const key = event.key.toLowerCase();
+      const isShiftPressed = event.shiftKey;
+
+      // Update sharp modifier state when shift is pressed
+      if (isShiftPressed && sharpModifierRef) {
+        sharpModifierRef.current = true;
+        setSharpModifierActive?.(true);
+      }
 
       // Check if the target is an input element (including chat input)
       const target = event.target as HTMLElement;
@@ -98,21 +112,6 @@ export const useGuitarKeysController = ({
 
       // Handle velocity changes first
       if (handleVelocityChange(key)) {
-        return;
-      }
-
-      // Mode controls
-      if (key === shortcuts.toggleMode.key) {
-        if (guitarState.mode.type === "basic") {
-          // When in basic mode, shift switches to melody mode
-          guitarControls.setMode("melody");
-        } else if (guitarState.mode.type === "melody") {
-          // When in melody mode, shift switches to chord mode
-          guitarControls.setMode("chord");
-        } else if (guitarState.mode.type === "chord") {
-          // When in chord mode, shift switches back to melody mode
-          guitarControls.setMode("melody");
-        }
         return;
       }
 
@@ -189,6 +188,8 @@ export const useGuitarKeysController = ({
           const baseOctaveNotes = allScaleNotes.slice(0, lowerRowLength);
 
           if (baseOctaveNotes[keyIndex]) {
+            const noteToPlay = baseOctaveNotes[keyIndex];
+
             // Check if hammer-on is enabled for this string
             const string = guitarState.strings.lower;
             const currentTime = Date.now();
@@ -200,13 +201,13 @@ export const useGuitarKeysController = ({
               // Try hammer-on
               guitarControls.handleHammerOnPress(
                 "lower",
-                baseOctaveNotes[keyIndex],
+                noteToPlay,
               );
             } else {
               // Normal note press
               guitarControls.handleNotePress(
                 "lower",
-                baseOctaveNotes[keyIndex],
+                noteToPlay,
               );
             }
           }
@@ -243,6 +244,8 @@ export const useGuitarKeysController = ({
           const higherOctaveNotes = allScaleNotes.slice(fourthOffset, fourthOffset + higherRowLength);
 
           if (higherOctaveNotes[keyIndex]) {
+            const noteToPlay = higherOctaveNotes[keyIndex];
+
             // Check if hammer-on is enabled for this string
             const string = guitarState.strings.higher;
             const currentTime = Date.now();
@@ -254,13 +257,13 @@ export const useGuitarKeysController = ({
               // Try hammer-on
               guitarControls.handleHammerOnPress(
                 "higher",
-                higherOctaveNotes[keyIndex],
+                noteToPlay,
               );
             } else {
               // Normal note press
               guitarControls.handleNotePress(
                 "higher",
-                higherOctaveNotes[keyIndex],
+                noteToPlay,
               );
             }
           }
@@ -411,12 +414,20 @@ export const useGuitarKeysController = ({
       handleVelocityChange,
       decrementBrushingSpeed,
       incrementBrushingSpeed,
+      sharpModifierRef,
+      setSharpModifierActive,
     ],
   );
 
   const handleKeyUp = useCallback(
     (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
+
+      // Update sharp modifier state when shift is released
+      if (key === "shift" && sharpModifierRef) {
+        sharpModifierRef.current = false;
+        setSharpModifierActive?.(false);
+      }
 
       // Basic mode - sustain release
       if (guitarState.mode.type === "basic") {
@@ -575,7 +586,7 @@ export const useGuitarKeysController = ({
         return;
       }
     },
-    [guitarState, scaleState, guitarControls, shortcuts],
+    [guitarState, scaleState, guitarControls, shortcuts, sharpModifierRef, setSharpModifierActive],
   );
 
   return { handleKeyDown, handleKeyUp };

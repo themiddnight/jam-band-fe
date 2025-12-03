@@ -1,6 +1,6 @@
 import type { Scale } from "../../../../ui";
 import { getChordFromDegree } from "../../../../ui";
-import { DEFAULT_KEYBOARD_SHORTCUTS } from "../../../index";
+import { DEFAULT_KEYBOARD_SHORTCUTS, sharpNotes, sharpNote } from "../../../index";
 import {
   chordRootKeys,
   chordTriadKeys,
@@ -20,6 +20,7 @@ export const useVirtualKeyboard = (
   onPlayNotes: (notes: string[], velocity: number, isKeyHeld: boolean) => void,
   onReleaseKeyHeldNote: (note: string) => void,
   keyboardState?: any, // Add keyboardState parameter
+  sharpModifierRef?: React.MutableRefObject<boolean>, // Sharp modifier ref for +1 semitone
 ) => {
   const shortcuts = DEFAULT_KEYBOARD_SHORTCUTS;
   const {
@@ -234,7 +235,11 @@ export const useVirtualKeyboard = (
         chordModifiers,
       );
 
-      const ordered = sortNotesLowToHigh(chord);
+      // Apply sharp modifier (+1 semitone) if shift is held
+      const applySharp = sharpModifierRef?.current ?? false;
+      const transposedChord = applySharp ? sharpNotes(chord) : chord;
+
+      const ordered = sortNotesLowToHigh(transposedChord);
 
       // Store active chord (for reference)
       setActiveTriadChords((prev: Map<number, string[]>) => {
@@ -293,6 +298,7 @@ export const useVirtualKeyboard = (
       onPlayNotes,
       arpeggioSpeed,
       sortNotesLowToHigh,
+      sharpModifierRef,
     ],
   );
 
@@ -311,12 +317,19 @@ export const useVirtualKeyboard = (
 
       // Always release the planned chord notes to ensure all notes are properly released
       // This is more reliable than depending on playedTriadNotes which might be incomplete
+      // Release both normal and sharp versions since we don't know if shift was held when pressed
       const chord = activeTriadChords.get(index);
       if (chord) {
         if (keyboardState) {
-          chord.forEach((note) => keyboardState.releaseKeyHeldNote(note));
+          chord.forEach((note) => {
+            keyboardState.releaseKeyHeldNote(note);
+            keyboardState.releaseKeyHeldNote(sharpNote(note));
+          });
         } else {
-          chord.forEach((note) => onReleaseKeyHeldNote(note));
+          chord.forEach((note) => {
+            onReleaseKeyHeldNote(note);
+            onReleaseKeyHeldNote(sharpNote(note));
+          });
         }
       }
 

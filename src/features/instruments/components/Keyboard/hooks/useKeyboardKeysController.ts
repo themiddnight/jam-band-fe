@@ -23,6 +23,8 @@ export const useKeyboardKeysController = (
   keyboardState: KeyboardState,
   scaleState: ScaleState,
   virtualKeyboard: VirtualKeyboardState,
+  sharpModifierRef?: React.MutableRefObject<boolean>,
+  setSharpModifierActive?: (active: boolean) => void,
 ) => {
   const { handleAllControlKeys, handleSustainRelease } = useControlKeys(
     keyboardState,
@@ -34,6 +36,7 @@ export const useKeyboardKeysController = (
     keyboardState,
     scaleState,
     virtualKeyboard,
+    sharpModifierRef,
   );
   const { handleNoteStopping } = useNoteStopping(
     keyboardState,
@@ -96,7 +99,16 @@ export const useKeyboardKeysController = (
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
+      // Normalize key: when shift is pressed, event.key might be uppercase
+      // We need to use the lowercase version for matching shortcuts
       const key = event.key.toLowerCase();
+      const isShiftPressed = event.shiftKey;
+
+      // Update sharp modifier state when shift is pressed
+      if (isShiftPressed && sharpModifierRef) {
+        sharpModifierRef.current = true;
+        setSharpModifierActive?.(true);
+      }
 
       // Check if the target is an input element (input, textarea, contenteditable)
       const target = event.target as HTMLElement;
@@ -162,12 +174,20 @@ export const useKeyboardKeysController = (
       updateHeldKeys,
       noteKeys,
       controlKeys,
+      sharpModifierRef,
+      setSharpModifierActive,
     ],
   );
 
   const handleKeyUp = useCallback(
     (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
+
+      // Update sharp modifier state when shift is released
+      if (key === "shift" && sharpModifierRef) {
+        sharpModifierRef.current = false;
+        setSharpModifierActive?.(false);
+      }
 
       // Check if the target is an input element (input, textarea, contenteditable)
       const target = event.target as HTMLElement;
@@ -212,6 +232,8 @@ export const useKeyboardKeysController = (
       controlKeys,
       noteKeys,
       handleNoteStopping,
+      sharpModifierRef,
+      setSharpModifierActive,
     ],
   );
 

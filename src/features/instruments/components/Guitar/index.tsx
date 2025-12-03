@@ -1,4 +1,4 @@
-import { DEFAULT_GUITAR_SHORTCUTS, getKeyDisplayName } from "../../index";
+import { DEFAULT_GUITAR_SHORTCUTS } from "../../index";
 import { BasicFretboard } from "./components/BasicFretboard";
 import { SimpleChordKeys } from "./components/ChordGuitar";
 import { MelodyGuitar } from "./components/MelodyGuitar";
@@ -7,7 +7,7 @@ import { useGuitarState } from "./hooks/useGuitarState";
 import { useSustainSync } from "@/features/audio";
 import type { Scale } from "@/features/ui";
 import { BaseInstrument } from "@/features/ui";
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 
 export interface GuitarProps {
   scaleState: {
@@ -34,6 +34,10 @@ export default function Guitar({
   onSustainToggleChange,
   onSelectionActiveChange,
 }: GuitarProps) {
+  // Sharp modifier state for +1 semitone feature (must be before useGuitarState)
+  const sharpModifierRef = useRef(false);
+  const [sharpModifierActive, setSharpModifierActive] = useState(false);
+
   // Use the separated guitar state hook
   const {
     unifiedState,
@@ -65,6 +69,7 @@ export default function Guitar({
     onSustainChange,
     onSustainToggleChange,
     onSelectionActiveChange,
+    sharpModifierRef, // Pass sharp modifier ref for chord transposition
   );
 
   // Use shared sustain sync hook to eliminate duplicate useEffect blocks
@@ -81,6 +86,8 @@ export default function Guitar({
     guitarState,
     scaleState,
     guitarControls,
+    sharpModifierRef,
+    setSharpModifierActive,
   });
 
   // Get shortcuts
@@ -168,26 +175,20 @@ export default function Guitar({
     }
   };
 
-  // Mode controls JSX
+  // Mode controls JSX (no shortcut key - use buttons only)
   const modeControls = (
     <div className="block join">
       <button
         onClick={() => setMode("melody")}
         className={`btn btn-xs sm:btn-sm join-item touch-manipulation ${mode === "melody" ? "btn-primary" : "btn-outline"}`}
       >
-        Melody{" "}
-        <kbd className="kbd kbd-xs hidden sm:inline">
-          {getKeyDisplayName(shortcuts.toggleMode.key)}
-        </kbd>
+        Melody
       </button>
       <button
         onClick={() => setMode("chord")}
         className={`btn btn-xs sm:btn-sm join-item touch-manipulation ${mode === "chord" ? "btn-primary" : "btn-outline"}`}
       >
-        Chord{" "}
-        <kbd className="kbd kbd-xs hidden sm:inline">
-          {getKeyDisplayName(shortcuts.toggleMode.key)}
-        </kbd>
+        Chord
       </button>
       <button
         onClick={() => setMode("basic")}
@@ -205,17 +206,20 @@ export default function Guitar({
         return {
           velocity: true,
           sustain: true,
+          sharpModifier: false,
         };
       case "melody":
         return {
           velocity: true,
           octave: true,
+          sharpModifier: true,
         };
       case "chord":
         return {
           velocity: true,
           chordVoicing: true,
           brushingSpeed: true,
+          sharpModifier: true,
         };
       default:
         return {};
@@ -242,6 +246,11 @@ export default function Guitar({
       setChordVoicing={setChordVoicing}
       brushingSpeed={brushingSpeed}
       setBrushingSpeed={setBrushingSpeed}
+      sharpModifierActive={sharpModifierActive}
+      setSharpModifierActive={(active) => {
+        sharpModifierRef.current = active;
+        setSharpModifierActive(active);
+      }}
       handleKeyDown={handleKeyDown}
       handleKeyUp={handleKeyUp}
     >

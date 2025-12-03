@@ -14,6 +14,7 @@ export { default as AnchoredPopup } from "./components/shared/AnchoredPopup";
 export { TechnicalInfoPanel } from "./components/TechnicalInfoPanel";
 export { SharedChordKeys as ChordKeys } from "./components/shared/ChordKeys";
 export { ChordModifierButton } from "./components/shared/ChordModifierButton";
+export { SharpModifierButton } from "./components/shared/SharpModifierButton";
 export { FretboardBase } from "./components/shared/FretboardBase";
 export { default as GroupedDropdown } from "./components/shared/GroupedDropdown";
 export { SharedNoteKeys as NoteKeys } from "./components/shared/NoteKeys";

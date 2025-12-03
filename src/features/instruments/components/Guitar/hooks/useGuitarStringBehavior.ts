@@ -1,6 +1,7 @@
-import { HAMMER_ON_PULL_OFF } from "../../../index";
+import { HAMMER_ON_PULL_OFF, sharpNote } from "../../../index";
 import type { GuitarString, HammerOnState } from "../types/guitar";
 import { useState, useCallback, useRef } from "react";
+import type React from "react";
 
 interface GuitarStringBehaviorOptions {
   onSelectionActiveChange?: (isActive: boolean) => void;
@@ -11,6 +12,7 @@ export const useGuitarStringBehavior = (
   onStopNotes: (notes: string[]) => void,
   velocity: number,
   options?: GuitarStringBehaviorOptions,
+  sharpModifierRef?: React.MutableRefObject<boolean>,
 ) => {
   // State for string behavior
   const [strings, setStrings] = useState<{
@@ -21,7 +23,9 @@ export const useGuitarStringBehavior = (
       id: "lower",
       pressedNotes: new Set<string>(),
       activeNote: null,
+      activeOutputNote: null,
       lastPlayedNote: null,
+      lastOutputNote: null,
       lastPlayTime: 0,
       isHammerOnEnabled: false,
     },
@@ -29,7 +33,9 @@ export const useGuitarStringBehavior = (
       id: "higher",
       pressedNotes: new Set<string>(),
       activeNote: null,
+      activeOutputNote: null,
       lastPlayedNote: null,
+      lastOutputNote: null,
       lastPlayTime: 0,
       isHammerOnEnabled: false,
     },
@@ -45,6 +51,9 @@ export const useGuitarStringBehavior = (
   // Ref to track current state for stable callbacks
   const stateRef = useRef({ strings, hammerOnState, velocity });
   stateRef.current = { strings, hammerOnState, velocity };
+
+  const applySharpModifier = (note: string) =>
+    sharpModifierRef?.current ? sharpNote(note) : note;
 
   const optionsRef = useRef(options);
   optionsRef.current = options;
@@ -214,41 +223,49 @@ export const useGuitarStringBehavior = (
 
         if (isPullOff) {
           // Pull-off: stop current note and play the lower remaining note with 70% velocity
-          if (string.activeNote) {
-            stopNote(string.activeNote);
+          if (string.activeOutputNote) {
+            stopNote(string.activeOutputNote);
           }
           // Schedule playNote to run after state update to avoid setState during render
           setTimeout(() => {
             playNote(
-              highestNote,
+              applySharpModifier(highestNote),
               velocity * HAMMER_ON_PULL_OFF.VELOCITY_MULTIPLIER,
               true,
             );
           }, 0);
           string.activeNote = highestNote;
+          string.activeOutputNote = applySharpModifier(highestNote);
           string.lastPlayedNote = highestNote;
+          string.lastOutputNote = string.activeOutputNote;
           string.lastPlayTime = currentTime; // Reset timer for chaining
           string.isHammerOnEnabled = true; // Keep hammer-on enabled for chaining
         } else if (string.activeNote === note) {
           // The released note was the active note - stop it
-          stopNote(string.activeNote);
+          if (string.activeOutputNote) {
+            stopNote(string.activeOutputNote);
+          }
           if (highestNote) {
             // There's still a note pressed, make it active but don't play it
             string.activeNote = highestNote;
+            string.activeOutputNote = null;
           } else {
             // No notes pressed, clear active state
             string.activeNote = null;
+            string.activeOutputNote = null;
             string.isHammerOnEnabled = false;
           }
         } else if (highestNote && highestNote !== string.activeNote) {
           // Normal note change: update active note but don't play it
           string.activeNote = highestNote;
+          string.activeOutputNote = null;
         } else if (!highestNote) {
           // No notes pressed, stop current note and clear state
-          if (string.activeNote) {
-            stopNote(string.activeNote);
-            string.activeNote = null;
+          if (string.activeOutputNote) {
+            stopNote(string.activeOutputNote);
           }
+          string.activeNote = null;
+          string.activeOutputNote = null;
           string.isHammerOnEnabled = false;
         }
 
@@ -268,11 +285,11 @@ export const useGuitarStringBehavior = (
       // Get current state to check what needs to be stopped
       const currentStrings = stateRef.current.strings;
       const currentString = currentStrings[stringId];
-      const currentActiveNote = currentString?.activeNote;
+      const currentActiveOutputNote = currentString?.activeOutputNote;
 
-      // Stop the current active note first (outside state update)
-      if (currentActiveNote) {
-        stopNote(currentActiveNote);
+      // Stop the current sounding note first (outside state update)
+      if (currentActiveOutputNote) {
+        stopNote(currentActiveOutputNote);
       }
 
       setStrings((prevStrings) => {
@@ -291,15 +308,23 @@ export const useGuitarStringBehavior = (
           if (shouldPlay) {
             const finalVelocity =
               customVelocity !== undefined ? customVelocity : velocity;
+            const outputNote = applySharpModifier(highestNote);
             // Play the note after state update
             setTimeout(() => {
-              playNote(highestNote, finalVelocity, false);
+              playNote(outputNote, finalVelocity, false);
             }, 0);
+            string.activeOutputNote = outputNote;
+            string.lastOutputNote = outputNote;
+          } else {
+            string.activeOutputNote = applySharpModifier(highestNote);
           }
 
           string.activeNote = highestNote;
           string.lastPlayedNote = highestNote;
           string.lastPlayTime = currentTime;
+          if (!shouldPlay) {
+            string.lastOutputNote = string.activeOutputNote;
+          }
           string.isHammerOnEnabled = true; // Enable hammer-on after normal play
         }
 

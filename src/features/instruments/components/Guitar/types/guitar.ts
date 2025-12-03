@@ -36,7 +36,9 @@ export interface GuitarString {
   id: "lower" | "higher";
   pressedNotes: Set<string>;
   activeNote: string | null;
+  activeOutputNote: string | null;
   lastPlayedNote: string | null;
+  lastOutputNote?: string | null;
   lastPlayTime: number;
   isHammerOnEnabled: boolean;
 }
