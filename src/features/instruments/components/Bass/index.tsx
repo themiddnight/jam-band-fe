@@ -6,7 +6,7 @@ import { useBassState } from "./hooks/useBassState";
 import { useSustainSync } from "@/features/audio";
 import type { Scale } from "@/features/ui";
 import { BaseInstrument } from "@/features/ui";
-import { useMemo, useCallback } from "react";
+import { useMemo, useCallback, useRef, useState } from "react";
 
 export interface BassProps {
   scaleState: {
@@ -31,6 +31,10 @@ export default function Bass({
   onSustainChange,
   onSelectionActiveChange,
 }: BassProps) {
+  // Sharp modifier state for +1 semitone feature (must be before useBassState)
+  const sharpModifierRef = useRef(false);
+  const [sharpModifierActive, setSharpModifierActive] = useState(false);
+
   const {
     unifiedState,
     bassState,
@@ -55,7 +59,9 @@ export default function Bass({
     onStopSustainedNotes,
     onReleaseKeyHeldNote,
     onSustainChange,
+    undefined, // onSustainToggleChange
     onSelectionActiveChange,
+    sharpModifierRef, // Pass sharp modifier ref for note transposition
   );
 
   // Velocity control hook
@@ -135,7 +141,15 @@ export default function Bass({
   // Keyboard controller for Bass
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
+      // Normalize key: when shift is pressed, event.key might be uppercase
       const key = event.key.toLowerCase();
+      const isShiftPressed = event.shiftKey;
+
+      // Update sharp modifier state when shift is pressed
+      if (isShiftPressed && sharpModifierRef) {
+        sharpModifierRef.current = true;
+        setSharpModifierActive(true);
+      }
 
       // Check if the target is an input element (including chat input)
       const target = event.target as HTMLElement;
@@ -158,12 +172,6 @@ export default function Bass({
 
       // Velocity controls
       if (handleVelocityChange(key)) {
-        return;
-      }
-
-      // Mode toggle
-      if (key === shortcuts.toggleMode.key) {
-        setMode(mode === "basic" ? "melody" : "basic");
         return;
       }
 
@@ -257,6 +265,8 @@ export default function Bass({
           }
 
           if (lowerOctaveNotes[keyIndex]) {
+            const noteToPlay = lowerOctaveNotes[keyIndex];
+
             // Check if hammer-on is enabled for this string
             const string = bassState.strings.lower;
             const currentTime = Date.now();
@@ -267,16 +277,16 @@ export default function Bass({
             if (
               string.isHammerOnEnabled &&
               isHammerOnWindow &&
-              string.lastPlayedNote !== lowerOctaveNotes[keyIndex]
+              string.lastPlayedNote !== noteToPlay
             ) {
               // Try hammer-on
               bassControls.handleHammerOnPress(
                 "lower",
-                lowerOctaveNotes[keyIndex],
+                noteToPlay,
               );
             } else {
               // Normal note press
-              bassControls.handleNotePress("lower", lowerOctaveNotes[keyIndex]);
+              bassControls.handleNotePress("lower", noteToPlay);
             }
           }
           return;
@@ -356,6 +366,8 @@ export default function Bass({
           }
 
           if (higherOctaveNotes[keyIndex]) {
+            const noteToPlay = higherOctaveNotes[keyIndex];
+
             // Check if hammer-on is enabled for this string
             const string = bassState.strings.higher;
             const currentTime = Date.now();
@@ -366,18 +378,18 @@ export default function Bass({
             if (
               string.isHammerOnEnabled &&
               isHammerOnWindow &&
-              string.lastPlayedNote !== higherOctaveNotes[keyIndex]
+              string.lastPlayedNote !== noteToPlay
             ) {
               // Try hammer-on
               bassControls.handleHammerOnPress(
                 "higher",
-                higherOctaveNotes[keyIndex],
+                noteToPlay,
               );
             } else {
               // Normal note press
               bassControls.handleNotePress(
                 "higher",
-                higherOctaveNotes[keyIndex],
+                noteToPlay,
               );
             }
           }
@@ -408,7 +420,6 @@ export default function Bass({
     [
       shortcuts,
       mode,
-      setMode,
       setCurrentOctave,
       currentOctave,
       setAlwaysRoot,
@@ -421,12 +432,20 @@ export default function Bass({
       scaleState,
       bassState,
       handleVelocityChange,
+      sharpModifierRef,
+      setSharpModifierActive,
     ],
   );
 
   const handleKeyUp = useCallback(
     (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
+
+      // Update sharp modifier state when shift is released
+      if (key === "shift" && sharpModifierRef) {
+        sharpModifierRef.current = false;
+        setSharpModifierActive(false);
+      }
 
       if (mode === "basic") {
         if (key === (shortcuts.sustain?.key || "")) {
@@ -606,20 +625,19 @@ export default function Bass({
       currentOctave,
       alwaysRoot,
       bassControls,
+      sharpModifierRef,
+      setSharpModifierActive,
     ],
   );
 
-  // Mode controls
+  // Mode controls (no shortcut key - use buttons only)
   const modeControls = (
     <div className="block join">
       <button
         onClick={() => setMode("melody")}
         className={`btn btn-sm join-item touch-manipulation ${mode === "melody" ? "btn-primary" : "btn-outline"}`}
       >
-        Melody{" "}
-        <kbd className="kbd kbd-xs">
-          {getKeyDisplayName(shortcuts.toggleMode.key)}
-        </kbd>
+        Melody
       </button>
       <button
         onClick={() => setMode("basic")}
@@ -633,8 +651,8 @@ export default function Bass({
   // Control config per mode
   const controlConfig =
     mode === "basic"
-      ? { velocity: true, sustain: true }
-      : { velocity: true, octave: true };
+      ? { velocity: true, sustain: true, sharpModifier: true }
+      : { velocity: true, octave: true, sharpModifier: true };
 
   // Additional controls
   const additionalControls = (
@@ -669,6 +687,11 @@ export default function Bass({
       setSustainToggle={setSustainToggle}
       onStopSustainedNotes={onStopSustainedNotes}
       hasSustainedNotes={false}
+      sharpModifierActive={sharpModifierActive}
+      setSharpModifierActive={(active) => {
+        sharpModifierRef.current = active;
+        setSharpModifierActive(active);
+      }}
       additionalControls={additionalControls}
       handleKeyDown={handleKeyDown}
       handleKeyUp={handleKeyUp}

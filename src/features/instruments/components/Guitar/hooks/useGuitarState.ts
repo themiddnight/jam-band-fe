@@ -1,4 +1,5 @@
 import { useCallback, useRef } from "react";
+import type React from "react";
 
 import type { Scale } from "../../../../ui";
 import { useInstrumentState } from "../../../index";
@@ -20,6 +21,7 @@ export const useGuitarState = (
   onSustainChange: (sustain: boolean) => void,
   onSustainToggleChange?: (sustainToggle: boolean) => void,
   onSelectionActiveChange?: (isActive: boolean) => void,
+  sharpModifierRef?: React.MutableRefObject<boolean>,
 ) => {
   // Use the unified instrument state hook
   const unifiedState = useInstrumentState({
@@ -70,6 +72,7 @@ export const useGuitarState = (
     {
       onSelectionActiveChange: handleSelectionActiveChange,
     },
+    sharpModifierRef,
   );
 
   const chordLogic = useGuitarChordLogic(
@@ -79,6 +82,7 @@ export const useGuitarState = (
     velocity,
     chordVoicing,
     brushingSpeed,
+    sharpModifierRef,
   );
 
   const basicMode = useGuitarBasicMode(

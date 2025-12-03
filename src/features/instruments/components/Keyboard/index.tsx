@@ -13,6 +13,7 @@ import { useVirtualKeyboard } from "./hooks/useVirtualKeyboard";
 import { useSustainSync } from "@/features/audio";
 import type { Scale } from "@/features/ui";
 import { BaseInstrument } from "@/features/ui";
+import { useRef, useState } from "react";
 
 export interface Props {
   // Scale state - the core functionality
@@ -80,6 +81,10 @@ export default function Keyboard({
     setLocalSustainToggle: setSustainToggle,
   });
 
+  // Sharp modifier state for +1 semitone feature (must be before useVirtualKeyboard)
+  const sharpModifierRef = useRef(false);
+  const [sharpModifierActive, setSharpModifierActive] = useState(false);
+
   const virtualKeyboard = useVirtualKeyboard(
     scaleState.getScaleNotes,
     scaleState.rootNote,
@@ -87,6 +92,7 @@ export default function Keyboard({
     onPlayNotes,
     onReleaseKeyHeldNote,
     unifiedState, // Pass unified state to respect sustain settings
+    sharpModifierRef, // Pass sharp modifier ref for chord transposition
   );
 
   const {
@@ -138,6 +144,8 @@ export default function Keyboard({
       activeTriadChords,
       setActiveTriadChords,
     },
+    sharpModifierRef,
+    setSharpModifierActive,
   );
 
   const virtualKeys = virtualKeyboard.generateVirtualKeys;
@@ -188,22 +196,20 @@ export default function Keyboard({
     }
   };
 
-  // Mode controls JSX
+  // Mode controls JSX (no shortcut key - use buttons only)
   const modeControls = (
     <div className="block join">
       <button
         onClick={() => setMode("simple-melody")}
         className={`btn btn-xs sm:btn-sm join-item touch-manipulation ${mode === "simple-melody" ? "btn-primary" : "btn-outline"}`}
       >
-        Melody{" "}
-        <kbd className="kbd kbd-xs hidden sm:inline">{shortcuts.toggleMode.key}</kbd>
+        Melody
       </button>
       <button
         onClick={() => setMode("simple-chord")}
         className={`btn btn-xs sm:btn-sm join-item touch-manipulation ${mode === "simple-chord" ? "btn-primary" : "btn-outline"}`}
       >
-        Chord{" "}
-        <kbd className="kbd kbd-xs hidden sm:inline">{shortcuts.toggleMode.key}</kbd>
+        Chord
       </button>
       <button
         onClick={() => setMode("basic")}
@@ -221,6 +227,7 @@ export default function Keyboard({
         velocity: true,
         octave: true,
         sustain: true,
+        sharpModifier: true,
       };
     } else if (mode === "simple-chord") {
       return {
@@ -228,12 +235,14 @@ export default function Keyboard({
         octave: true,
         sustain: true,
         chordVoicing: true,
+        sharpModifier: true,
       };
     } else if (mode === "basic") {
       return {
         velocity: true,
         octave: true,
         sustain: true,
+        sharpModifier: false,
       };
     }
     return {};
@@ -316,6 +325,11 @@ export default function Keyboard({
       hasSustainedNotes={unifiedState.hasSustainedNotes}
       chordVoicing={chordVoicing}
       setChordVoicing={setChordVoicing}
+      sharpModifierActive={sharpModifierActive}
+      setSharpModifierActive={(active) => {
+        sharpModifierRef.current = active;
+        setSharpModifierActive(active);
+      }}
       handleKeyDown={handleKeyDown}
       handleKeyUp={handleKeyUp}
       additionalControls={additionalControls}

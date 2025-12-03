@@ -10,8 +10,11 @@ export interface KeyboardShortcut {
 }
 
 export interface KeyboardShortcuts {
-  // Mode controls
+  // Mode controls (no shortcut key - use buttons only)
   toggleMode: KeyboardShortcut;
+
+  // Sharp modifier (shift key = +1 semitone)
+  sharpModifier: KeyboardShortcut;
 
   // Chord modifiers
   dominant7: KeyboardShortcut;
@@ -72,10 +75,16 @@ export const ARPEGGIO_TIME_STEPS: ArpeggioTime[] = [
 
 export const DEFAULT_KEYBOARD_SHORTCUTS: KeyboardShortcuts = {
   toggleMode: {
-    key: "shift",
+    key: "",
     description:
-      "Switch from basic to melody mode, or toggle between melody and chord modes",
+      "Switch from basic to melody mode, or toggle between melody and chord modes (use buttons)",
     category: "mode",
+  },
+
+  sharpModifier: {
+    key: "shift",
+    description: "Hold to transpose notes up by 1 semitone (+1 sharp)",
+    category: "control",
   },
 
   dominant7: {

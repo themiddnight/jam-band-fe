@@ -12,6 +12,7 @@ interface ControlConfig {
   sustain?: boolean;
   chordVoicing?: boolean;
   brushingSpeed?: boolean;
+  sharpModifier?: boolean;
 }
 
 export interface BaseInstrumentProps {
@@ -47,6 +48,10 @@ export interface BaseInstrumentProps {
   // Additional controls
   additionalControls?: ReactNode;
 
+  // Sharp modifier state
+  sharpModifierActive?: boolean;
+  setSharpModifierActive?: (active: boolean) => void;
+
   // Keyboard event handlers
   handleKeyDown?: (event: KeyboardEvent) => void;
   handleKeyUp?: (event: KeyboardEvent) => void;
@@ -73,6 +78,8 @@ export default function BaseInstrument({
   brushingSpeed,
   setBrushingSpeed,
   additionalControls,
+  sharpModifierActive,
+  setSharpModifierActive,
   handleKeyDown,
   handleKeyUp,
 }: BaseInstrumentProps) {
@@ -97,7 +104,9 @@ export default function BaseInstrument({
             <h3 className="card-title text-sm sm:text-base">{title}</h3>
           </div>
 
-          <div className="flex gap-2 sm:gap-3 flex-wrap justify-start sm:justify-end w-full sm:w-auto">{modeControls}</div>
+          <div className="flex gap-2 sm:gap-3 flex-wrap justify-start sm:justify-end w-full sm:w-auto">
+            {modeControls}
+          </div>
         </div>
 
         <div className="bg-neutral p-2 sm:p-4 rounded-lg overflow-auto touch-none">
@@ -105,6 +114,54 @@ export default function BaseInstrument({
         </div>
 
         <div className="flex justify-center items-center gap-2 sm:gap-3 flex-wrap mt-1">
+          {/* Sharp Modifier Control (+1 Semitone) */}
+          {controlConfig.sharpModifier &&
+            sharpModifierActive !== undefined &&
+            setSharpModifierActive && (
+              <button
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setSharpModifierActive(true);
+                }}
+                onMouseUp={(e) => {
+                  e.preventDefault();
+                  setSharpModifierActive(false);
+                }}
+                onMouseLeave={() => {
+                  setSharpModifierActive(false);
+                }}
+                onTouchStart={(e) => {
+                  e.preventDefault();
+                  setSharpModifierActive(true);
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  setSharpModifierActive(false);
+                }}
+                onTouchCancel={(e) => {
+                  e.preventDefault();
+                  setSharpModifierActive(false);
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                }}
+                className={`btn btn-xs sm:btn-sm touch-manipulation select-none ${
+                  sharpModifierActive ? "btn-accent" : "btn-outline"
+                }`}
+                style={{
+                  WebkitTapHighlightColor: "transparent",
+                  WebkitTouchCallout: "none",
+                  WebkitUserSelect: "none",
+                  touchAction: "manipulation",
+                }}
+              >
+                <span>#</span>{" "}
+                <kbd className="kbd kbd-xs hidden sm:inline">
+                  {getKeyDisplayName(shortcuts.sharpModifier?.key || "")}
+                </kbd>
+              </button>
+            )}
+
           {/* Sustain Controls */}
           {controlConfig.sustain && sustain !== undefined && setSustain && (
             <div className="join">
@@ -329,16 +386,14 @@ export default function BaseInstrument({
                       }{" "}
                       ({brushingSpeed}ms)
                     </span>
-                    <span className="sm:hidden">
-                      Brush: {brushingSpeed}ms
-                    </span>
+                    <span className="sm:hidden">Brush: {brushingSpeed}ms</span>
                   </span>
                 </label>
                 <div className="join">
                   <button
                     onClick={() => {
                       const currentStep = BRUSHING_TIME_STEPS.indexOf(
-                        brushingSpeed as any,
+                        brushingSpeed as any
                       );
                       if (currentStep > 0) {
                         const newSpeed = BRUSHING_TIME_STEPS[currentStep - 1];
@@ -350,14 +405,14 @@ export default function BaseInstrument({
                     -{" "}
                     <kbd className="kbd kbd-xs hidden sm:inline">
                       {getKeyDisplayName(
-                        shortcuts.brushingSpeedDown?.key || "N",
+                        shortcuts.brushingSpeedDown?.key || "N"
                       )}
                     </kbd>
                   </button>
                   <button
                     onClick={() => {
                       const currentStep = BRUSHING_TIME_STEPS.indexOf(
-                        brushingSpeed as any,
+                        brushingSpeed as any
                       );
                       if (currentStep < BRUSHING_TIME_STEPS.length - 1) {
                         const newSpeed = BRUSHING_TIME_STEPS[currentStep + 1];
