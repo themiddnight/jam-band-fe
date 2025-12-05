@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback, useState, useMemo } from "react";
 
 export interface MidiControllerProps {
   onNoteOn: (note: number, velocity: number) => void;
@@ -237,12 +237,19 @@ export const useMidiController = ({
     };
   }, [cleanupInputs]);
 
-  return {
+  return useMemo(() => ({
     isConnected,
     connectionError,
     isRequesting,
     requestMidiAccess,
     getMidiInputs,
-    refreshMidiDevices, // Expose for manual refresh if needed
-  };
+    refreshMidiDevices,
+  }), [
+    isConnected,
+    connectionError,
+    isRequesting,
+    requestMidiAccess,
+    getMidiInputs,
+    refreshMidiDevices
+  ]);
 };

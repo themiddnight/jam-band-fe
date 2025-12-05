@@ -81,22 +81,13 @@ export function serializeProject(projectName: string): SerializedProject {
   const synthState = useSynthStore.getState();
   const markerState = useMarkerStore.getState();
 
-  console.log('🔄 Starting serialization...');
-  console.log(`  Tracks: ${tracks.length}`);
-  console.log(`  Regions: ${regions.length}`);
-  console.log(`  Effect chains: ${Object.keys(effectsState.chains).length}`);
-  console.log(`  Synth states: ${Object.keys(synthState.synthStates).length}`);
-  console.log(`  Markers: ${markerState.markers.length}`);
-
   // Collect all effect chains (including track-specific ones)
   // Sanitize effect chains to ensure they're serializable
   const effectChains: Record<string, EffectChain> = {};
-  console.log(`🎛️ Processing ${Object.keys(effectsState.chains).length} effect chains...`);
   
   Object.entries(effectsState.chains).forEach(([chainType, chain]) => {
     // Only save chains that have effects
     if (chain && chain.effects && chain.effects.length > 0) {
-      console.log(`  Sanitizing chain ${chainType} with ${chain.effects.length} effects...`);
       try {
         // Create a clean copy to avoid circular references
         effectChains[chainType] = {
@@ -193,12 +184,9 @@ export function serializeProject(projectName: string): SerializedProject {
     })),
   };
 
-  console.log('✅ Serialization complete');
-  
   // Validate the serialized project can be stringified
   try {
-    const testJson = JSON.stringify(serializedProject);
-    console.log(`✅ Serialization validation passed (${(testJson.length / 1024).toFixed(2)} KB)`);
+    JSON.stringify(serializedProject);
   } catch (error) {
     console.error('❌ Serialization validation failed:', error);
     throw new Error(`Project data contains non-serializable values: ${error}`);

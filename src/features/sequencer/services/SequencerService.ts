@@ -382,9 +382,6 @@ export class SequencerService {
                   
                   // Play steps for this beat after bank switch
                   const stepsForBeat = this.getStepsForBeatSync(beat);
-                  console.log(`🎵 Found ${stepsForBeat.length} steps for beat ${beat} (after bank switch)`, {
-                    steps: stepsForBeat.map(s => ({ note: s.note, beat: s.beat, gate: s.gate }))
-                  });
                   if (stepsForBeat.length > 0) {
                     this.events.onPlayStep(stepsForBeat);
                   }
@@ -438,9 +435,6 @@ export class SequencerService {
               
               // Play steps for this beat after bank switch
               const stepsForBeat = this.getStepsForBeatSync(beat);
-              console.log(`🎵 Found ${stepsForBeat.length} steps for beat ${beat} (after bank switch)`, {
-                steps: stepsForBeat.map(s => ({ note: s.note, beat: s.beat, gate: s.gate }))
-              });
               if (stepsForBeat.length > 0) {
                 this.events.onPlayStep(stepsForBeat);
               }

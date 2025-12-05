@@ -3,9 +3,10 @@ import type { Socket } from 'socket.io-client';
 import { useBroadcastStore } from '../stores/broadcastStore';
 import { useTrackStore } from '../stores/trackStore';
 import type { MidiMessage } from './useMidiInput';
+import { useRoomSocketContext } from '@/features/rooms/hooks/useRoomSocketContext';
 
 interface UseBroadcastProps {
-  socket: Socket | null;
+  socket?: Socket | null;
   roomId: string | null;
   userId: string;
   username: string;
@@ -19,12 +20,15 @@ interface UseBroadcastReturn {
 }
 
 export const useBroadcast = ({
-  socket,
+  socket: propSocket,
   roomId,
   userId,
   username,
   enabled,
 }: UseBroadcastProps): UseBroadcastReturn => {
+  const { socket: contextSocket } = useRoomSocketContext();
+  const socket = propSocket ?? contextSocket;
+
   const isBroadcasting = useBroadcastStore((state) => state.isBroadcasting);
   const setBroadcasting = useBroadcastStore((state) => state.setBroadcasting);
   const addBroadcastingUser = useBroadcastStore((state) => state.addBroadcastingUser);

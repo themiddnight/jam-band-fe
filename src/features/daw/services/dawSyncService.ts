@@ -70,13 +70,6 @@ export class DAWSyncService {
       maxQueueSize: 50,
     });
 
-    console.log('🎵 DAW Sync Service initialized', {
-      roomId,
-      userId,
-      username,
-      socketId: socket.id,
-      socketNamespace: (socket as any).nsp,
-    });
     this.setupEventListeners();
   }
 
@@ -134,8 +127,6 @@ export class DAWSyncService {
       this.pendingInstrumentLoads = null;
       this.cleanupUserInteractionListener();
       
-      console.log(`🎵 Loading instruments for ${Object.keys(pending.synthStates).length} tracks`);
-      
       for (const [trackId, synthState] of Object.entries(pending.synthStates)) {
         const track = pending.tracks.find((t) => t.id === trackId);
         if (!track || track.type !== 'midi') {
@@ -148,7 +139,6 @@ export class DAWSyncService {
             instrumentCategory: track.instrumentCategory,
           });
           await engine.updateSynthParams(synthState);
-          console.log(`✅ Loaded instrument for track ${track.name}`);
         } catch (error) {
           console.warn('Failed to apply synced synth parameters', {
             trackId,
@@ -160,10 +150,8 @@ export class DAWSyncService {
     
     // For WebKit browsers, wait for user interaction
     if (isWebKitBrowser) {
-      console.log('🍎 WebKit detected: Deferring instrument loading until user interaction');
       
       this.userInteractionListener = () => {
-        console.log('🍎 User interaction detected, loading deferred instruments...');
         void loadInstruments();
       };
       
@@ -182,7 +170,6 @@ export class DAWSyncService {
           const ctx = await AudioContextManager.getInstrumentContext();
           
           if (ctx.state === 'running') {
-            console.log('🍎 AudioContext already running, loading instruments immediately');
             void loadInstruments();
           }
         } catch {
@@ -288,7 +275,6 @@ export class DAWSyncService {
    * Outgoing updates are still sent so other users can continue working
    */
   pauseSync(): void {
-    console.log('🎵 DAW Sync paused (incoming updates blocked)');
     this.isPaused = true;
   }
 
@@ -296,7 +282,6 @@ export class DAWSyncService {
    * Resume incoming sync updates and request latest state from server
    */
   resumeSync(): void {
-    console.log('🎵 DAW Sync resumed (requesting latest state)');
     this.isPaused = false;
     this.requestState();
   }
@@ -588,11 +573,6 @@ export class DAWSyncService {
       TrackService.syncSetTracks(data.tracks);
 
       // Set regions using sync handler
-      console.log('State sync - received regions:', data.regions.map(r => ({
-        id: r.id,
-        type: r.type,
-        audioUrl: r.type === 'audio' ? (r as any).audioUrl : undefined,
-      })));
       RegionService.syncSetRegions(data.regions);
 
       // Set synth states
@@ -927,7 +907,6 @@ export class DAWSyncService {
         // Apply the saved synth parameters (isSyncing flag prevents broadcasts)
         await engine.updateSynthParams(synthState);
         
-        console.log(`Applied synth state to track ${track.name} from server project`);
       } catch (error) {
         console.warn(`Failed to apply synth state to track ${track.id}:`, error);
       }
@@ -1202,13 +1181,6 @@ export class DAWSyncService {
     };
   }): void {
     if (this.shouldBlockIncoming() || data.userId === this.userId) return;
-    
-    console.log('🔄 Received full state update from undo/redo', {
-      userId: data.userId,
-      tracks: data.state.tracks.length,
-      regions: data.state.regions.length,
-      markers: data.state.markers.length,
-    });
     
     this.isSyncing = true;
     try {

@@ -1402,6 +1402,9 @@ export const useRoomSocket = (instrumentManager?: any) => {
   const onSynthParamsChanged = useCallback(
     (callback: (data: SynthParamsData) => void) => {
       synthParamsChangedCallbackRef.current = callback;
+      return () => {
+        synthParamsChangedCallbackRef.current = null;
+      };
     },
     [],
   );
@@ -1414,6 +1417,9 @@ export const useRoomSocket = (instrumentManager?: any) => {
       }) => void,
     ) => {
       requestSynthParamsResponseCallbackRef.current = callback;
+      return () => {
+        requestSynthParamsResponseCallbackRef.current = null;
+      };
     },
     [],
   );
@@ -1426,6 +1432,9 @@ export const useRoomSocket = (instrumentManager?: any) => {
       }) => void,
     ) => {
       autoSendSynthParamsToNewUserCallbackRef.current = callback;
+      return () => {
+        autoSendSynthParamsToNewUserCallbackRef.current = null;
+      };
     },
     [],
   );
@@ -1438,6 +1447,9 @@ export const useRoomSocket = (instrumentManager?: any) => {
       }) => void,
     ) => {
       sendCurrentSynthParamsToNewUserCallbackRef.current = callback;
+      return () => {
+        sendCurrentSynthParamsToNewUserCallbackRef.current = null;
+      };
     },
     [],
   );
@@ -1452,6 +1464,9 @@ export const useRoomSocket = (instrumentManager?: any) => {
       }) => void,
     ) => {
       requestCurrentSynthParamsForNewUserCallbackRef.current = callback;
+      return () => {
+        requestCurrentSynthParamsForNewUserCallbackRef.current = null;
+      };
     },
     [],
   );
@@ -1466,6 +1481,9 @@ export const useRoomSocket = (instrumentManager?: any) => {
       }) => void,
     ) => {
       sendSynthParamsToNewUserNowCallbackRef.current = callback;
+      return () => {
+        sendSynthParamsToNewUserNowCallbackRef.current = null;
+      };
     },
     [],
   );

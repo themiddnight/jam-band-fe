@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Socket } from "socket.io-client";
 
 interface UseMetronomeOptions {
-  socket: Socket | null;
+  socket?: Socket | null;
   canEdit: boolean; // Whether user can edit metronome (room owner or band member)
 }
 
@@ -30,7 +30,7 @@ export const useMetronome = ({ socket, canEdit }: UseMetronomeOptions) => {
   // Initialize services
   useEffect(() => {
     soundServiceRef.current = new MetronomeSoundService();
-    socketServiceRef.current = new MetronomeSocketService(socket);
+    socketServiceRef.current = new MetronomeSocketService(socket ?? null);
 
     return () => {
       socketServiceRef.current?.removeListeners();
@@ -40,7 +40,7 @@ export const useMetronome = ({ socket, canEdit }: UseMetronomeOptions) => {
   // Update socket service when socket changes
   useEffect(() => {
     if (socketServiceRef.current) {
-      socketServiceRef.current.updateSocket(socket);
+      socketServiceRef.current.updateSocket(socket ?? null);
     }
   }, [socket]);
 

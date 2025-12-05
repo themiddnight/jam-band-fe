@@ -3,6 +3,7 @@ import type { Socket } from 'socket.io-client';
 import { useTrackStore } from '../stores/trackStore';
 import { trackInstrumentRegistry } from '../utils/trackInstrumentRegistry';
 import { midiNumberToNoteName } from '../utils/midiUtils';
+import { useRoomSocketContext } from '@/features/rooms/hooks/useRoomSocketContext';
 
 interface BroadcastNoteData {
   userId: string;
@@ -16,7 +17,7 @@ interface BroadcastNoteData {
 }
 
 interface UseBroadcastPlaybackProps {
-  socket: Socket | null;
+  socket?: Socket | null;
   enabled: boolean;
 }
 
@@ -24,9 +25,12 @@ interface UseBroadcastPlaybackProps {
 const activeNotesByUser = new Map<string, Map<string, Set<number>>>();
 
 export const useBroadcastPlayback = ({
-  socket,
+  socket: propSocket,
   enabled,
 }: UseBroadcastPlaybackProps) => {
+  const { socket: contextSocket } = useRoomSocketContext();
+  const socket = propSocket ?? contextSocket;
+
   const tracks = useTrackStore((state) => state.tracks);
   const lastProcessedTimestampRef = useRef<Map<string, number>>(new Map());
 

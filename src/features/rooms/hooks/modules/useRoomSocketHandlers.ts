@@ -7,7 +7,9 @@ import type {
   NewUserSynthParamsData,
 } from "@/features/audio/hooks/useRoomSocket";
 
-interface UseRoomSocketHandlersProps {
+// --- Interface Definitions ---
+
+export interface RoomState {
   connectionState: ConnectionState;
   currentInstrument: string;
   currentCategory: InstrumentCategory;
@@ -16,6 +18,9 @@ interface UseRoomSocketHandlersProps {
   synthState: SynthState | null;
   isSynthesizerLoaded: boolean;
   hasInitialInstrumentSent: React.MutableRefObject<boolean>;
+}
+
+export interface RoomActions {
   changeInstrument: (instrument: string, category: string) => void;
   updateSynthParams: (params: any) => void;
   updateRemoteUserSynthParams: (
@@ -37,6 +42,9 @@ interface UseRoomSocketHandlersProps {
     instrument: string,
     category: InstrumentCategory,
   ) => void;
+}
+
+export interface RoomEvents {
   onSynthParamsChanged: any;
   onRequestSynthParamsResponse: any;
   onAutoSendSynthParamsToNewUser: any;
@@ -47,32 +55,103 @@ interface UseRoomSocketHandlersProps {
   onStopAllNotes: any;
 }
 
+interface UseRoomSocketHandlersProps {
+  state: RoomState;
+  actions: RoomActions;
+  events: RoomEvents;
+}
+
+// --- Helper Hook for Synth Params Sync ---
+const useSynthParamsSync = (
+  state: RoomState,
+  actions: RoomActions,
+  events: RoomEvents
+) => {
+  const { currentCategory, synthState, userId } = state;
+  const { updateSynthParams } = actions;
+
+  const syncSynthParams = useCallback(() => {
+    if (
+      currentCategory === InstrumentCategory.Synthesizer &&
+      synthState &&
+      Object.keys(synthState).length > 0
+    ) {
+      updateSynthParams(synthState);
+    }
+  }, [currentCategory, synthState, updateSynthParams]);
+
+  const syncSynthParamsIfUserMatch = useCallback(
+    (data: NewUserSynthParamsData) => {
+      if (data.synthUserId === userId) {
+        syncSynthParams();
+      }
+    },
+    [userId, syncSynthParams]
+  );
+
+  // 1. Standard requests
+  useEffect(() => {
+    const unsubscribe1 = events.onRequestSynthParamsResponse(syncSynthParams);
+    const unsubscribe2 = events.onAutoSendSynthParamsToNewUser(syncSynthParams);
+    const unsubscribe3 = events.onSendCurrentSynthParamsToNewUser(syncSynthParams);
+    
+    return () => {
+      unsubscribe1();
+      unsubscribe2();
+      unsubscribe3();
+    };
+  }, [
+    events,
+    syncSynthParams
+  ]);
+
+  // 2. User-specific requests
+  useEffect(() => {
+    const unsubscribe1 = events.onRequestCurrentSynthParamsForNewUser(syncSynthParamsIfUserMatch);
+    const unsubscribe2 = events.onSendSynthParamsToNewUserNow(syncSynthParamsIfUserMatch);
+
+    return () => {
+      unsubscribe1();
+      unsubscribe2();
+    };
+  }, [
+    events,
+    syncSynthParamsIfUserMatch
+  ]);
+};
+
 export const useRoomSocketHandlers = ({
-  connectionState,
-  currentInstrument,
-  currentCategory,
-  userId,
-  currentUser,
-  synthState,
-  isSynthesizerLoaded,
-  hasInitialInstrumentSent,
-  changeInstrument,
-  updateSynthParams,
-  updateRemoteUserSynthParams,
-  updateRemoteUserInstrument,
-  stopRemoteUserNote,
-  onSynthParamsChanged,
-  onRequestSynthParamsResponse,
-  onAutoSendSynthParamsToNewUser,
-  onSendCurrentSynthParamsToNewUser,
-  onRequestCurrentSynthParamsForNewUser,
-  onSendSynthParamsToNewUserNow,
-  onInstrumentChanged,
-  onStopAllNotes,
+  state,
+  actions,
+  events,
 }: UseRoomSocketHandlersProps) => {
-  
+  const {
+    connectionState,
+    currentInstrument,
+    currentCategory,
+    userId,
+    currentUser,
+    synthState,
+    isSynthesizerLoaded,
+    hasInitialInstrumentSent,
+  } = state;
+
+  const {
+    changeInstrument,
+    updateSynthParams,
+    updateRemoteUserSynthParams,
+    updateRemoteUserInstrument,
+    stopRemoteUserNote,
+  } = actions;
+
+  const {
+    onInstrumentChanged,
+    onStopAllNotes,
+    onSynthParamsChanged,
+  } = events;
+
   // --- Instrument Change Handlers ---
-  
+
   const handleInstrumentChanged = useCallback(
     (data: {
       userId: string;
@@ -134,7 +213,6 @@ export const useRoomSocketHandlers = ({
     return unsubscribe;
   }, [onStopAllNotes, connectionState, handleStopAllNotes]);
 
-
   // --- Auto Send Instrument Handlers ---
 
   useEffect(() => {
@@ -159,15 +237,6 @@ export const useRoomSocketHandlers = ({
     }
 
     if (!currentUser?.currentInstrument || !currentUser?.currentCategory) {
-      console.log(
-        "🎵 Automatically sending current instrument preferences to server:",
-        {
-          instrument: currentInstrument,
-          category: currentCategory,
-          userRole: currentUser?.role,
-        },
-      );
-
       changeInstrument(currentInstrument, currentCategory);
 
       if (
@@ -175,9 +244,6 @@ export const useRoomSocketHandlers = ({
         synthState &&
         Object.keys(synthState).length > 0
       ) {
-        console.log(
-          "🎛️ Automatically sending restored synth params to server",
-        );
         updateSynthParams(synthState);
       }
 
@@ -197,9 +263,9 @@ export const useRoomSocketHandlers = ({
     hasInitialInstrumentSent,
   ]);
 
-
   // --- Synth Params Handlers ---
 
+  // 1. Listen for remote synth params changes
   useEffect(() => {
     const unsubscribe = onSynthParamsChanged((data: SynthParamsData) => {
       try {
@@ -211,103 +277,13 @@ export const useRoomSocketHandlers = ({
           data.params,
         );
       } catch (error) {
+        // Keep error log for debugging critical issues
         console.error("❌ Failed to update remote synth params:", error);
       }
     });
     return unsubscribe;
   }, [onSynthParamsChanged, updateRemoteUserSynthParams]);
 
-  useEffect(() => {
-    const unsubscribe = onRequestSynthParamsResponse(() => {
-      if (
-        currentCategory === InstrumentCategory.Synthesizer &&
-        synthState &&
-        Object.keys(synthState).length > 0
-      ) {
-        updateSynthParams(synthState);
-      }
-    });
-    return unsubscribe;
-  }, [
-    onRequestSynthParamsResponse,
-    currentCategory,
-    synthState,
-    updateSynthParams,
-  ]);
-
-  useEffect(() => {
-    const unsubscribe = onAutoSendSynthParamsToNewUser(() => {
-      if (
-        currentCategory === InstrumentCategory.Synthesizer &&
-        synthState &&
-        Object.keys(synthState).length > 0
-      ) {
-        updateSynthParams(synthState);
-      }
-    });
-    return unsubscribe;
-  }, [
-    onAutoSendSynthParamsToNewUser,
-    currentCategory,
-    synthState,
-    updateSynthParams,
-  ]);
-
-  useEffect(() => {
-    const unsubscribe = onSendCurrentSynthParamsToNewUser(() => {
-      if (
-        currentCategory === InstrumentCategory.Synthesizer &&
-        synthState &&
-        Object.keys(synthState).length > 0
-      ) {
-        updateSynthParams(synthState);
-      }
-    });
-    return unsubscribe;
-  }, [
-    onSendCurrentSynthParamsToNewUser,
-    currentCategory,
-    synthState,
-    updateSynthParams,
-  ]);
-
-  useEffect(() => {
-    const unsubscribe = onRequestCurrentSynthParamsForNewUser((data: NewUserSynthParamsData) => {
-      if (
-        data.synthUserId === userId &&
-        currentCategory === InstrumentCategory.Synthesizer &&
-        synthState &&
-        Object.keys(synthState).length > 0
-      ) {
-        updateSynthParams(synthState);
-      }
-    });
-    return unsubscribe;
-  }, [
-    onRequestCurrentSynthParamsForNewUser,
-    currentCategory,
-    synthState,
-    updateSynthParams,
-    userId,
-  ]);
-
-  useEffect(() => {
-    const unsubscribe = onSendSynthParamsToNewUserNow((data: NewUserSynthParamsData) => {
-      if (
-        data.synthUserId === userId &&
-        currentCategory === InstrumentCategory.Synthesizer &&
-        synthState &&
-        Object.keys(synthState).length > 0
-      ) {
-        updateSynthParams(synthState);
-      }
-    });
-    return unsubscribe;
-  }, [
-    onSendSynthParamsToNewUserNow,
-    currentCategory,
-    synthState,
-    updateSynthParams,
-    userId,
-  ]);
+  // 2. Sync local synth params using the helper hook
+  useSynthParamsSync(state, actions, events);
 };

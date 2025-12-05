@@ -32,6 +32,7 @@ import { PerformanceSettingsModal } from "@/features/daw/components/PerformanceS
 import { useRoom } from "@/features/rooms";
 import { useWebRTCVoice, useCombinedLatency } from "@/features/audio";
 import { DAWCollaborationProvider } from "@/features/daw/contexts/DAWCollaborationContext";
+import { RoomSocketProvider } from "@/features/rooms/contexts/RoomSocketProvider";
 import { KickUserModal, RoomSettingsModal } from "@/features/rooms";
 import type { Socket } from "socket.io-client";
 import { useDAWCollaboration } from "@/features/daw/hooks/useDAWCollaboration";
@@ -520,12 +521,13 @@ export default function ArrangeRoom() {
   const isSavingProject = useProjectStore((state) => state.isSavingProject);
 
   return (
-    <DAWCollaborationProvider
-      socket={activeSocket}
-      roomId={currentRoom?.id || null}
-      enabled={isCollaborationEnabled}
-      value={collaborationValue}
-    >
+    <RoomSocketProvider socket={activeSocket}>
+      <DAWCollaborationProvider
+        socket={activeSocket}
+        roomId={currentRoom?.id || null}
+        enabled={isCollaborationEnabled}
+        value={collaborationValue}
+      >
       <TrackAudioParamsBridge />
       <KeyboardShortcutsBridge />
       <RecordingEngineBridge onHandlerReady={setRecordingHandlerBase} />
@@ -861,8 +863,8 @@ export default function ArrangeRoom() {
         <RoomSettingsModal
           open={showRoomSettingsModal}
           onClose={handleCloseRoomSettings}
-          room={currentRoom}
           onSave={handleSaveRoomSettings}
+          room={currentRoom}
           isLoading={isUpdatingRoomSettings}
         />
 
@@ -875,6 +877,7 @@ export default function ArrangeRoom() {
         />
       </div>
     </DAWCollaborationProvider>
+  </RoomSocketProvider>
   );
 }
 
