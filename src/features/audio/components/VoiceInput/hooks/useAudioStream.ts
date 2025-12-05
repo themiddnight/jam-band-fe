@@ -200,13 +200,16 @@ export const useAudioStream = ({
           error,
         );
         // Fallback: Create dedicated ultra-low latency context for voice
+        // Use browser-specific optimal sample rate to avoid resampling latency
+        const { optimalSampleRate } = browserCapabilitiesRef.current;
+        
         audioContextRef.current = new (window.AudioContext ||
           (window as any).webkitAudioContext)({
-          sampleRate: 48000,
+          sampleRate: optimalSampleRate,
           latencyHint: "interactive", // Lowest latency hint available
         });
         console.log(
-          `🎤 Created fallback AudioContext (${audioContextRef.current.sampleRate}Hz, baseLatency: ${audioContextRef.current.baseLatency?.toFixed(4)}s)`,
+          `🎤 Created fallback AudioContext (${audioContextRef.current.sampleRate}Hz, optimized for ${browserCapabilitiesRef.current.browserType})`,
         );
       }
 
