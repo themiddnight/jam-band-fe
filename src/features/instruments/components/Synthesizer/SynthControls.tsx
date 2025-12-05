@@ -29,18 +29,19 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
     (synth) => synth.value === currentInstrument,
   );
 
+  // Automatically switch LFO target to filter if pitch is selected but not available (poly mode)
+  React.useEffect(() => {
+    const isMonoInternal = currentSynthData?.polyphony === "mono";
+    if (currentSynthData && !isMonoInternal && synthState.lfoTarget === "pitch") {
+      onParamChange({ lfoTarget: "filter" });
+    }
+  }, [currentSynthData, synthState.lfoTarget, onParamChange]);
+
   if (!currentSynthData) return null;
 
   const isAnalog = currentSynthData.type === "analog";
   const isFM = currentSynthData.type === "fm";
   const isMono = currentSynthData.polyphony === "mono";
-
-  // Automatically switch LFO target to filter if pitch is selected but not available (poly mode)
-  React.useEffect(() => {
-    if (!isMono && synthState.lfoTarget === "pitch") {
-      onParamChange({ lfoTarget: "filter" });
-    }
-  }, [isMono, synthState.lfoTarget, onParamChange]);
 
   const LFO_WAVEFORMS = ["sine", "triangle", "square", "sawtooth"];
   // Tone.js note subdivision format: "1n" = whole note, "2n" = half note, "4n" = quarter note, etc.

@@ -24,7 +24,6 @@ export default function Drumpad({
     isEditMode,
     selectedPadForAssign,
     pads,
-    currentPreset,
     currentPage,
     padNoteMapping,
     setVelocity,
@@ -34,10 +33,6 @@ export default function Drumpad({
     resetAssignments,
     toggleEditMode,
     loadPreset,
-    savePreset,
-    deletePreset,
-    exportPreset,
-    importPreset,
     setPadAssignments,
     setPadVolume,
   } = drumpadState;
@@ -47,23 +42,6 @@ export default function Drumpad({
   const [selectedPadForModal, setSelectedPadForModal] = useState<string | null>(
     null,
   );
-
-  // Enhanced import handler for file reading
-  const handleImportPreset = async (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const presetData = JSON.parse(event.target?.result as string);
-        importPreset(presetData);
-      } catch {
-        throw new Error("Invalid preset file format");
-      }
-    };
-    reader.onerror = () => {
-      throw new Error("Failed to read file");
-    };
-    reader.readAsText(file);
-  };
 
   // Handle pad press in edit mode
   const handlePadPressInEditMode = (

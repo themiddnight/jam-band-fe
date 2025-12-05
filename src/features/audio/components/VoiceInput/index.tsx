@@ -82,7 +82,7 @@ const VoiceInputComponent: React.FC<VoiceInputProps> = ({
   const setAutoGain = useVoiceStateStore((state) => state.setAutoGain);
 
   // Create a voiceState object for compatibility with existing code
-  const voiceState: VoiceState = {
+  const voiceState: VoiceState = React.useMemo(() => ({
     isMuted,
     gain,
     inputLevel: storedInputLevel,
@@ -91,7 +91,16 @@ const VoiceInputComponent: React.FC<VoiceInputProps> = ({
     hasSeenHeadphoneModal,
     cleanMode,
     autoGain,
-  };
+  }), [
+    isMuted,
+    gain,
+    storedInputLevel,
+    isSelfMonitoring,
+    isConnected,
+    hasSeenHeadphoneModal,
+    cleanMode,
+    autoGain,
+  ]);
 
   const {
     mediaStream,

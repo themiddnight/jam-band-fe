@@ -945,6 +945,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
     executePendingOperations,
     setIsConnecting,
     roomAudio,
+    setRoomError,
   ]);
 
   // Connection methods
