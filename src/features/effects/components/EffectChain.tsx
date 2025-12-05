@@ -12,7 +12,7 @@ import GraphicEQModule from './GraphicEQModule';
 interface EffectChainProps {
   chainType: EffectChainType;
   title: string;
-  mode?: 'perform'| 'arrange' ;
+  mode?: 'perform' | 'arrange';
 }
 
 const EffectChain = memo(function EffectChain({ chainType, title, mode = 'perform' }: EffectChainProps) {
@@ -83,7 +83,7 @@ const EffectChain = memo(function EffectChain({ chainType, title, mode = 'perfor
 
     const sortedEffects = [...chain.effects].sort((a, b) => a.order - b.order);
     const sourceIndex = sortedEffects.findIndex(effect => effect.id === draggingEffectId);
-    
+
     if (sourceIndex === -1 || sourceIndex === targetIndex) {
       setDraggingEffectId(null);
       return;
@@ -115,6 +115,7 @@ const EffectChain = memo(function EffectChain({ chainType, title, mode = 'perfor
               storageKey="jam-band-effect-chain-presets"
               version="1.0.0"
               validator={effectChainPresetValidator}
+              backendType="EFFECT"
               currentContext={{ chainType }}
               contextDescription={`the current chain type (${chainType})`}
               filterPresets={(preset) => preset.chainType === chainType}

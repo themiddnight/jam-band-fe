@@ -8,36 +8,39 @@ interface PresetManagerProps<T extends BasePreset> {
   storageKey: string;
   version: string;
   validator?: PresetValidator<T>;
-  
+
   // Context for filtering and validation
   currentContext?: any;
   contextDescription?: string;
-  
+
   // Filter function to determine which presets to show
   filterPresets?: (preset: T, context: any) => boolean;
-  
+
   // Export filename customization
   getExportFilename?: (context: any) => string;
-  
+
   // Callbacks
   onSave?: (partialPreset: Partial<T>) => T;  // Should return full preset with all data
   onLoad?: (preset: T) => void;
   onDelete?: (presetId: string) => void;
   onImportSuccess?: (presets: T[]) => void;
   onImportError?: (error: string) => void;
-  
+
   // UI customization
   saveButtonText?: string;
   saveButtonDisabled?: boolean;
   saveButtonTitle?: string;
   size?: 'xs' | 'sm' | 'md' | 'lg';
   className?: string;
-  
+
   // Additional presets to merge with stored ones (e.g., default presets)
   additionalPresets?: T[];
-  
+
   // Children for rendering save modal content
   renderSaveModalContent?: (presetName: string, setPresetName: (name: string) => void) => React.ReactNode;
+
+  // Backend type for saving to account
+  backendType?: 'SYNTH' | 'EFFECT' | 'SEQUENCER' | 'INSTRUMENT';
 }
 
 export function PresetManager<T extends BasePreset>({
@@ -60,6 +63,7 @@ export function PresetManager<T extends BasePreset>({
   className = "",
   additionalPresets = [],
   renderSaveModalContent,
+  backendType,
 }: PresetManagerProps<T>) {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -71,6 +75,7 @@ export function PresetManager<T extends BasePreset>({
     storageKey,
     version,
     validator,
+    backendType,
     onImportSuccess: (presets) => {
       onImportSuccess?.(presets);
     },
@@ -112,7 +117,7 @@ export function PresetManager<T extends BasePreset>({
   const handleDeletePreset = () => {
     if (presetToDelete) {
       const isAdditionalPreset = additionalPresets.some(p => p.id === presetToDelete.id);
-      
+
       if (isAdditionalPreset) {
         // Can't delete default/additional presets
         console.warn("Cannot delete default preset");
@@ -120,7 +125,7 @@ export function PresetManager<T extends BasePreset>({
         setPresetToDelete(null);
         return;
       }
-      
+
       presetManager.deletePreset(presetToDelete.id);
       onDelete?.(presetToDelete.id);
       setPresetToDelete(null);
@@ -134,7 +139,7 @@ export function PresetManager<T extends BasePreset>({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = getExportFilename 
+    a.download = getExportFilename
       ? getExportFilename(currentContext)
       : `presets-${storageKey}.json`;
     a.click();

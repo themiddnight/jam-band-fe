@@ -1,11 +1,11 @@
-import { DRUMPAD_SHORTCUTS, DRUMPAD_PAGE_SHORTCUTS } from "../../index";
-import { useKeyboardHandler } from "../../index";
+import { useState } from "react";
+import { DRUMPAD_SHORTCUTS, DRUMPAD_PAGE_SHORTCUTS, useKeyboardHandler } from "../../index";
 import { PadButton } from "./components/PadButton";
-import { PresetManager } from "./components/PresetManager";
 import { SoundSelectionModal } from "./components/SoundSelectionModal";
 import { useDrumpadState } from "./hooks/useDrumpadState";
 import type { DrumpadProps } from "./types/drumpad";
-import { useState } from "react";
+import { DEFAULT_DRUM_PRESETS, type DrumPreset } from "../../constants/presets/drumPresets";
+import { PresetManager as SharedPresetManager } from "@/shared/components";
 
 export default function Drumpad({
   onPlayNotes,
@@ -244,20 +244,28 @@ export default function Drumpad({
           </div>
 
           {/* Preset Controls */}
-          <PresetManager
-            currentPreset={currentPreset}
-            onLoadPreset={loadPreset}
-            onSavePreset={(name, description) =>
-              savePreset(
-                name,
-                description,
-                drumpadState.padAssignments,
-                drumpadState.padVolumes,
-              )
-            }
-            onDeletePreset={deletePreset}
-            onExportPreset={exportPreset}
-            onImportPreset={handleImportPreset}
+          <SharedPresetManager<DrumPreset>
+            storageKey="jam-band-drumpad-presets"
+            version="1.0.0"
+            backendType="INSTRUMENT"
+            currentContext={{ drumMachine: currentInstrument }}
+            filterPresets={(preset) => preset.drumMachine === currentInstrument}
+            additionalPresets={Object.values(DEFAULT_DRUM_PRESETS).flat()}
+            onSave={(partial) => {
+              return {
+                ...partial,
+                drumMachine: currentInstrument,
+                padAssignments: drumpadState.padAssignments,
+                padVolumes: drumpadState.padVolumes,
+                description: "", // Shared component doesn't ask for description
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              } as DrumPreset;
+            }}
+            onLoad={(preset) => {
+              loadPreset(preset);
+            }}
+            size="xs"
           />
         </div>
 
@@ -377,8 +385,8 @@ export default function Drumpad({
         padShortcut={
           selectedPadForModal
             ? DRUMPAD_SHORTCUTS[
-                selectedPadForModal as keyof typeof DRUMPAD_SHORTCUTS
-              ]
+            selectedPadForModal as keyof typeof DRUMPAD_SHORTCUTS
+            ]
             : null
         }
       />

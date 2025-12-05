@@ -1314,8 +1314,8 @@ const PerformRoom = memo(() => {
                   <button
                     onClick={toggleBroadcast}
                     className={`btn btn-xs ${isBroadcasting ? 'btn-success' : 'btn-soft btn-success'}`}
-                    title={isBroadcasting ? 'Stop broadcasting to audience' : 'Start broadcasting to audience'}
-                    disabled={isBroadcastStarting}
+                    title={isBroadcasting ? 'Stop broadcasting to audience' : (!isRegisteredOrPremium ? 'Registered and premium users can broadcast. Please sign up to access this feature.' : 'Start broadcasting to audience')}
+                    disabled={isBroadcastStarting || !isRegisteredOrPremium}
                   >
                     {isBroadcastStarting ? (
                       <span className="loading loading-spinner loading-xs"></span>

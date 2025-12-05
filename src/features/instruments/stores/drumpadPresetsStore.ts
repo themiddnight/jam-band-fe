@@ -57,6 +57,8 @@ export const useDrumpadPresetsStore = create<DrumpadPresetsState>()(
           drumMachine: currentInstrument,
           padAssignments: { ...padAssignments },
           padVolumes: { ...padVolumes },
+          createdAt: new Date(),
+          updatedAt: new Date(),
         };
 
         const currentMachinePresets = presets[currentInstrument] || [];
@@ -115,6 +117,8 @@ export const useDrumpadPresetsStore = create<DrumpadPresetsState>()(
             ...presetData,
             id: `imported-${Date.now()}`,
             name: `${presetData.name} (Imported)`,
+            createdAt: new Date(),
+            updatedAt: new Date(),
           };
 
           const updatedPresets = {
@@ -147,6 +151,8 @@ export const useDrumpadPresetsStore = create<DrumpadPresetsState>()(
           drumMachine: instrument,
           padAssignments: smartAssignments,
           padVolumes: defaultPadVolumes,
+          createdAt: new Date(),
+          updatedAt: new Date(),
         };
       },
 

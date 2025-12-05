@@ -289,6 +289,7 @@ export const StepSequencer = memo(
             <PresetManager
               storageKey="sequencer-presets"
               version="1.0.0"
+              backendType="SEQUENCER"
               additionalPresets={currentCategory === 'drum_beat' ? DEFAULT_DRUM_BEAT_PRESETS : DEFAULT_MELODIC_PRESETS}
               filterPresets={(preset: any) => {
                 // Group melodic and synthesizer presets together, separate drums

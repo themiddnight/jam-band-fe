@@ -637,7 +637,7 @@ export class InstrumentEngine {
   private async loadTraditionalInstrument(): Promise<any> {
     const { isSafari } = await import("../../../shared/utils/webkitCompat");
     const isSafariBrowser = isSafari();
-    
+
     // Use separate audio context for instruments
     const { AudioContextManager } = await import(
       "../../audio/constants/audioConfig"
@@ -681,7 +681,7 @@ export class InstrumentEngine {
     }
 
     const loadTimeout = getSafariLoadTimeout();
-    
+
     // Safari-specific: Log extended timeout for user awareness
     if (isSafariBrowser) {
       console.log(
@@ -699,29 +699,29 @@ export class InstrumentEngine {
       newInstrument.load
         .then(() => {
           clearTimeout(timeoutId);
-          
+
           // Safari-specific: Validate that instrument actually loaded samples
           if (isSafariBrowser) {
             console.log(
               `🍎 Safari: Successfully loaded ${this.config.instrumentName}`
             );
           }
-          
+
           resolve();
         })
         .catch((error: any) => {
           clearTimeout(timeoutId);
-          
+
           // Enhanced Safari error handling with format-specific messages
           const enhancedError = handleSafariAudioError(error, this.config.instrumentName);
-          
+
           if (isSafariBrowser) {
             console.error(
               `🍎 Safari: Failed to load ${this.config.instrumentName}:`,
               enhancedError.message
             );
           }
-          
+
           reject(enhancedError);
         });
     });
@@ -862,7 +862,7 @@ export class InstrumentEngine {
     const fallbackOscillatorType = isNoiseOscillator
       ? 'sawtooth'
       : this.synthState.oscillatorType;
-    const safeOscillatorType = isSafariBrowser && 
+    const safeOscillatorType = isSafariBrowser &&
       !safeOscillatorTypes.includes(fallbackOscillatorType)
       ? 'sawtooth' // Default to sawtooth for Safari if using unsupported type
       : fallbackOscillatorType;
@@ -876,7 +876,7 @@ export class InstrumentEngine {
         `🍎 Safari: Using safe oscillator type '${safeOscillatorType}' instead of '${this.synthState.oscillatorType}'`
       );
     }
-    
+
     const commonEnvelope = {
       attack: this.synthState.ampAttack,
       decay: this.synthState.ampDecay,
@@ -906,13 +906,13 @@ export class InstrumentEngine {
       case "analog_poly": {
         // Safari: Reduce polyphony for better stability
         const maxPolyphony = isSafariBrowser ? 16 : 32;
-        
+
         if (isSafariBrowser) {
           console.log(
             `🍎 Safari: Using reduced polyphony (${maxPolyphony}) for analog_poly synth`
           );
         }
-        
+
         if (isNoiseOscillator) {
           console.warn(
             "Noise waveform is currently limited to mono analog synths. Falling back to sawtooth for polyphonic mode.",
@@ -944,13 +944,13 @@ export class InstrumentEngine {
       case "fm_poly": {
         // Safari: Reduce polyphony for FM synths (more CPU intensive)
         const fmMaxPolyphony = isSafariBrowser ? 12 : 32;
-        
+
         if (isSafariBrowser) {
           console.log(
             `🍎 Safari: Using reduced polyphony (${fmMaxPolyphony}) for fm_poly synth`
           );
         }
-        
+
         const fmPolySynth = new Tone.PolySynth(Tone.FMSynth, {
           harmonicity: this.synthState.harmonicity,
           modulationIndex: this.synthState.modulationIndex,
@@ -1272,8 +1272,8 @@ export class InstrumentEngine {
       this.clearPendingNote(note);
 
       // Check if this is a polyphonic synth by name (more reliable than instanceof)
-      const isPolySynth = this.config.instrumentName === 'analog_poly' || 
-                          this.config.instrumentName === 'fm_poly';
+      const isPolySynth = this.config.instrumentName === 'analog_poly' ||
+        this.config.instrumentName === 'fm_poly';
 
       if (isPolySynth) {
         this.playPolySynthNote(note, velocity, isKeyHeld);
@@ -1291,13 +1291,13 @@ export class InstrumentEngine {
     try {
       // Check polyphony limit
       const maxPolyphony = this.getMaxPolyphony();
-      
+
       // More aggressive cleanup when approaching polyphony limit
       if (this.activeNotes.size >= maxPolyphony) {
         // Stop multiple oldest notes to make room for chords
         const notesToRemove = Math.max(1, Math.ceil(maxPolyphony * 0.2)); // Remove 20% of capacity
         const oldestNotes = Array.from(this.activeNotes.keys()).slice(0, notesToRemove);
-        
+
         oldestNotes.forEach((oldNote) => {
           try {
             this.synthRef.triggerRelease(oldNote, Tone.now());
@@ -1308,8 +1308,8 @@ export class InstrumentEngine {
             console.warn(`Failed to release old note ${oldNote}:`, error);
           }
         });
-        
-        
+
+
       }
 
       // Release existing note to avoid stacking - more thorough cleanup
@@ -1335,7 +1335,7 @@ export class InstrumentEngine {
         // If triggerAttack fails, don't continue with tracking
         return;
       }
-      
+
       // Store cleanup function for this note
       this.activeNotes.set(note, () => {
         try {
@@ -1375,7 +1375,7 @@ export class InstrumentEngine {
       if (!isKeyHeld && !this.sustain) {
         // Shorter timeout for sequencer-triggered notes to prevent accumulation
         const autoReleaseTime = this.isWebRTCOptimized ? 150 : 250;
-        
+
         const releaseTimeout = setTimeout(() => {
           if (this.activeNotes.has(note) && !this.keyHeldNotes.has(note)) {
             try {
@@ -1391,10 +1391,10 @@ export class InstrumentEngine {
           }
           this.pendingReleases.delete(note);
         }, autoReleaseTime);
-        
+
         // Store timeout for potential cancellation
         this.pendingReleases.set(note, releaseTimeout as unknown as number);
-        
+
         // Additional emergency cleanup for sequencer-triggered chords
         const emergencyTimeout = autoReleaseTime + 750; // Extra buffer for chords
         setTimeout(() => {
@@ -1569,7 +1569,7 @@ export class InstrumentEngine {
   // Emergency cleanup method for stuck sounds - force reset everything
   emergencyCleanup(): void {
     console.warn("🆘 Emergency cleanup triggered - forcing stop of all notes and resetting synthesizer");
-    
+
     try {
       // Clear all tracking
       this.activeNotes.clear();
@@ -1579,7 +1579,7 @@ export class InstrumentEngine {
       this.pendingStop.clear();
       this.noteStack = [];
       this.currentNote = null;
-      
+
       // Force release all notes from synthesizer
       if (this.synthRef && this.config.category === InstrumentCategory.Synthesizer) {
         try {
@@ -1593,7 +1593,7 @@ export class InstrumentEngine {
         } catch (error) {
           console.warn("Failed to release synthesizer notes during emergency cleanup:", error);
         }
-        
+
         // Reset filter envelope
         if (this.filterEnvelopeRef && this.filterEnvelopeActive) {
           try {
@@ -1604,8 +1604,8 @@ export class InstrumentEngine {
           }
         }
       }
-      
-      
+
+
     } catch (error) {
       console.error("Error during emergency cleanup:", error);
       // Even if emergency cleanup fails, clear the tracking
@@ -2044,7 +2044,7 @@ export class InstrumentEngine {
     }
 
     const { min, max } = this.getLfoRange();
-    
+
     // Calculate LFO frequency
     // For synced mode, convert subdivision to Hz based on current BPM from Transport
     // This works even when Transport is not running (metronome sets Transport.bpm)
@@ -2052,22 +2052,41 @@ export class InstrumentEngine {
       ? this.subdivisionToHz(this.synthState.lfoSyncSubdivision)
       : this.synthState.lfoFrequency;
 
+    // Correction for Square wave Gibbs phenomenon (Band-limited normalization)
+    // Web Audio oscillators normalize the peak (including overshoot) to 1.0
+    // This forces the steady-state plateau to be lower (approx 0.85)
+    // To get the correct steady-state range (e.g., 0 to 1200 cents), we must EXPAND the requested range
+    let effectiveMin = min;
+    let effectiveMax = max;
+
+    if (this.synthState.lfoWaveform === "square") {
+      const range = max - min;
+      const center = min + range / 2;
+      // Inverse of 0.85 is ~1.176. Using 1.18 to be safe.
+      const COMPENSTATION = 1.18;
+      const newRange = range * COMPENSTATION;
+      effectiveMin = center - newRange / 2;
+      effectiveMax = center + newRange / 2;
+    }
+
     // Create new LFO if needed
     if (!this.lfoRef) {
       this.lfoRef = new Tone.LFO({
-        min,
-        max,
+        min: effectiveMin,
+        max: effectiveMax,
         type: this.synthState.lfoWaveform as any,
         frequency: lfoFrequency,
       });
-      
+
       // Connect to target first
       this.lfoRef.connect(targetParam as any);
       this.lfoRef.start();
-      
+
       console.log("🎛️ LFO: Created new LFO", {
-        min,
-        max,
+        min: effectiveMin,
+        max: effectiveMax,
+        originalMin: min,
+        originalMax: max,
         type: this.synthState.lfoWaveform,
         frequency: lfoFrequency,
         target: this.synthState.lfoTarget,
@@ -2078,8 +2097,8 @@ export class InstrumentEngine {
     }
 
     // Update LFO parameters
-    this.lfoRef.min = min;
-    this.lfoRef.max = max;
+    this.lfoRef.min = effectiveMin;
+    this.lfoRef.max = effectiveMax;
     this.lfoRef.type = this.synthState.lfoWaveform as any;
     this.lfoRef.frequency.value = lfoFrequency;
 
@@ -2138,11 +2157,14 @@ export class InstrumentEngine {
     // LFO pivots at min (current value) and sweeps up to max
     // This means: at LFO min -> parameter stays at current value
     //             at LFO max -> parameter goes to current + amount
-    
+
     if (this.synthState.lfoTarget === "pitch") {
-      // For pitch: amount is in cents (0-2400 range, where 1200 = 1 octave)
+      // For pitch: amount is in cents (0-3600 range, where 1200 = 1 octave)
       // LFO sweeps from 0 cents (no detune) to +amount cents
-      const depthInCents = Math.max(0, Math.min(2400, this.synthState.lfoAmount));
+
+      // Standard Cents mode (0-3600)
+      const depthInCents = Math.max(0, Math.min(3600, this.synthState.lfoAmount));
+
       return { min: 0, max: depthInCents };
     }
 
@@ -2210,12 +2232,12 @@ export class InstrumentEngine {
 
     // Apply dotted/triplet multiplier
     const durationInBeats = baseValue * multiplier;
-    
+
     // Convert to Hz: frequency = beatsPerSecond / durationInBeats
     const hz = beatsPerSecond / durationInBeats;
-    
+
     console.log(`🎛️ LFO Sync: ${subdivision} @ ${bpm} BPM = ${hz.toFixed(2)} Hz`);
-    
+
     return hz;
   }
 }

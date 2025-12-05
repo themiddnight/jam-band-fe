@@ -108,6 +108,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
             storageKey="jam-band-synth-presets"
             version="1.0.0"
             validator={synthPresetValidator}
+            backendType="SYNTH"
             currentContext={{
               synthType: currentSynthData.type,
               polyphony: currentSynthData.polyphony,
@@ -672,7 +673,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                   <Knob
                     value={synthState.lfoAmount}
                     min={0}
-                    max={synthState.lfoTarget === "pitch" ? 2400 : 20000}
+                    max={synthState.lfoTarget === "pitch" ? 3600 : 20000}
                     step={synthState.lfoTarget === "pitch" ? 10 : 100}
                     onChange={(value) =>
                       onParamChange({ lfoAmount: value })
