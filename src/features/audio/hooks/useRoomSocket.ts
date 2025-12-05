@@ -1213,15 +1213,15 @@ export const useRoomSocket = (instrumentManager?: any) => {
 
   // Instrument swap functions
   const requestInstrumentSwap = useCallback(
-    (targetUserId: string) => {
-      safeEmit("request_instrument_swap", { targetUserId });
+    (targetUserId: string, synthParams?: any) => {
+      safeEmit("request_instrument_swap", { targetUserId, synthParams });
     },
     [safeEmit],
   );
 
   const approveInstrumentSwap = useCallback(
-    (requesterId: string) => {
-      safeEmit("approve_instrument_swap", { requesterId });
+    (requesterId: string, synthParams?: any) => {
+      safeEmit("approve_instrument_swap", { requesterId, synthParams });
     },
     [safeEmit],
   );

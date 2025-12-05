@@ -476,6 +476,11 @@ export const useRoom = (options?: { isInstrumentMuted?: boolean }) => {
       return;
     }
 
+    // Wait for synthesizer to load if applicable
+    if (currentCategory === InstrumentCategory.Synthesizer && !isSynthesizerLoaded) {
+      return;
+    }
+
     // Prevent sending the same instrument repeatedly due to dependency changes
     if (hasInitialInstrumentSent.current) {
       return;
@@ -496,6 +501,17 @@ export const useRoom = (options?: { isInstrumentMuted?: boolean }) => {
       // Send the current instrument preferences to the backend
       // This ensures the user's stored preferences from localStorage are used
       changeInstrument(currentInstrument, currentCategory);
+
+      // Send current synth parameters if we're using a synthesizer
+      if (
+        currentCategory === InstrumentCategory.Synthesizer &&
+        synthState &&
+        Object.keys(synthState).length > 0
+      ) {
+        console.log("🎛️ Automatically sending restored synth params to server");
+        updateSynthParams(synthState);
+      }
+
       hasInitialInstrumentSent.current = true;
     } else {
       console.log(
@@ -515,6 +531,9 @@ export const useRoom = (options?: { isInstrumentMuted?: boolean }) => {
     currentCategory,
     currentUser,
     changeInstrument,
+    isSynthesizerLoaded,
+    synthState,
+    updateSynthParams,
   ]);
 
   // Set up synth params changed handler

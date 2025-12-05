@@ -363,6 +363,7 @@ export const useInstrument = (
             currentUserId.current,
             validatedInstrument,
             validatedCategory,
+            preferences.synthParams,
           );
         }
 
@@ -385,7 +386,7 @@ export const useInstrument = (
             setLastFallbackCategory(category);
             setCurrentInstrument(fallbackInstrument);
             setCurrentCategory(category);
-            setPreferences(currentUserId.current, fallbackInstrument, category);
+            setPreferences(currentUserId.current, fallbackInstrument, category, preferences.synthParams);
           },
         });
       }
@@ -499,6 +500,7 @@ export const useInstrument = (
                 currentUserId.current,
                 fallbackInstrument,
                 category,
+                preferences.synthParams,
               );
             },
           });
@@ -512,11 +514,15 @@ export const useInstrument = (
         setCurrentInstrument(instrumentName);
         setCurrentCategory(validatedCategory);
 
+        // Get fresh preferences to preserve synth params if they exist
+        const currentPrefs = getPreferences(currentUserId.current);
+        
         // Save preferences when instrument changes
         setPreferences(
           currentUserId.current,
           instrumentName,
           validatedCategory,
+          currentPrefs?.synthParams,
         );
 
         // Update available samples for drum machines
@@ -566,6 +572,17 @@ export const useInstrument = (
 
         // For synthesizers, ensure parameters are synchronized after instrument change
         if (validatedCategory === InstrumentCategory.Synthesizer) {
+          // Check if we have saved params to restore
+          const savedPrefs = getPreferences(currentUserId.current);
+          if (savedPrefs && savedPrefs.synthParams && Object.keys(savedPrefs.synthParams).length > 0) {
+            console.log("🎛️ Restoring saved synth params:", savedPrefs.synthParams);
+            try {
+              await instrumentManager.updateLocalSynthParams(savedPrefs.synthParams);
+            } catch (error) {
+              console.error("Failed to restore synth params:", error);
+            }
+          }
+
           // Get the current synth state after instrument change
           const localEngine = instrumentManager.getLocalEngine();
           if (localEngine && localEngine.isReady()) {
@@ -711,11 +728,26 @@ export const useInstrument = (
       try {
         await instrumentManager.updateLocalSynthParams(params);
         setSynthStateUpdateTrigger((prev) => prev + 1); // Trigger update
+        
+        // Save synth params to preferences
+        const currentPrefs = getPreferences(currentUserId.current);
+        // Merge with existing params
+        const newSynthParams = {
+          ...(currentPrefs.synthParams || {}),
+          ...params
+        };
+        
+        setPreferences(
+          currentUserId.current,
+          currentInstrument,
+          currentCategory,
+          newSynthParams
+        );
       } catch (error) {
         console.error("Failed to update synth parameters:", error);
       }
     },
-    [instrumentManager],
+    [instrumentManager, currentInstrument, currentCategory, getPreferences, setPreferences],
   );
 
   const loadPresetParams = useCallback(

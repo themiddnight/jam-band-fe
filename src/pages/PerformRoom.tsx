@@ -520,10 +520,12 @@ const PerformRoom = memo(() => {
       );
       if (targetUser) {
         setPendingSwapTarget(targetUser);
-        requestInstrumentSwap(targetUserId);
+        // Pass current synth params if category is Synthesizer
+        const params = currentCategory === InstrumentCategory.Synthesizer ? synthState : undefined;
+        requestInstrumentSwap(targetUserId, params);
       }
     },
-    [currentRoom?.users, requestInstrumentSwap]
+    [currentRoom?.users, requestInstrumentSwap, currentCategory, synthState]
   );
 
   const handleCancelSwap = useCallback(() => {
@@ -533,10 +535,12 @@ const PerformRoom = memo(() => {
 
   const handleApproveSwap = useCallback(() => {
     if (swapRequestData.requester) {
-      approveInstrumentSwap(swapRequestData.requester.id);
+      // Pass current synth params if category is Synthesizer
+      const params = currentCategory === InstrumentCategory.Synthesizer ? synthState : undefined;
+      approveInstrumentSwap(swapRequestData.requester.id, params);
     }
     setSwapRequestData({ requester: null, isModalOpen: false });
-  }, [swapRequestData.requester, approveInstrumentSwap]);
+  }, [swapRequestData.requester, approveInstrumentSwap, currentCategory, synthState]);
 
   const handleRejectSwap = useCallback(() => {
     if (swapRequestData.requester) {
