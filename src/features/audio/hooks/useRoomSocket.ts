@@ -6,7 +6,7 @@ import type { ConnectionConfig } from "../types/connectionState";
 import { useRoomAudio } from "./useRoomAudio";
 import type { SynthState } from "@/features/instruments";
 import { useRoomStore } from "@/features/rooms";
-import { useEffectsStore } from "@/features/effects";
+import { EffectsService } from "@/features/effects/services/effectsService";
 import type {
   EffectChain as UiEffectChain,
   EffectChainType as UiEffectChainType,
@@ -15,7 +15,8 @@ import type {
   EffectChainState,
   EffectChainType as SharedEffectChainType,
 } from "@/shared/types";
-import { useUserStore } from "@/shared/stores/userStore";
+import { SocketMessageQueue } from "@/shared/utils/SocketMessageQueue";
+import { UserService } from "@/shared/services/userService";
 import { throttle } from "lodash";
 import { useRef, useCallback, useState, useEffect, useMemo } from "react";
 import { Socket } from "socket.io-client";
@@ -105,6 +106,11 @@ export const useRoomSocket = (instrumentManager?: any) => {
   // Socket manager instance
   const socketManagerRef = useRef<RoomSocketManager | null>(null);
 
+  // Get active socket
+  const getActiveSocket = useCallback((): Socket | null => {
+    return socketManagerRef.current?.getActiveSocket() || null;
+  }, []);
+
   // Connection state
   const [connectionState, setConnectionState] = useState<ConnectionState>(
     ConnectionState.DISCONNECTED,
@@ -172,12 +178,16 @@ export const useRoomSocket = (instrumentManager?: any) => {
   >(null);
 
   // Performance optimizations
-  const messageQueueRef = useRef<
-    Array<{ event: string; data: any; timestamp: number }>
-  >([]);
-  const batchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const BATCH_INTERVAL = 8;
-  const MAX_QUEUE_SIZE = 100;
+  const queueRef = useRef<SocketMessageQueue | null>(null);
+  
+  // Initialize message queue
+  useEffect(() => {
+    queueRef.current = new SocketMessageQueue(getActiveSocket, {
+      batchInterval: 8,
+      maxQueueSize: 100
+    });
+    return () => queueRef.current?.clear();
+  }, [getActiveSocket]);
 
   // Deduplication for note events
   const recentNoteEvents = useRef<Map<string, number>>(new Map());
@@ -230,8 +240,8 @@ export const useRoomSocket = (instrumentManager?: any) => {
           config?.roomId &&
           joinedRoomRef.current !== config.roomId
         ) {
-          const userId = useUserStore.getState().userId;
-          const username = useUserStore.getState().username;
+          const userId = UserService.getUserId();
+          const username = UserService.getUsername();
           if (userId && username) {
             // console.log(
             //   "🚪 Auto-joining room after state change to IN_ROOM:",
@@ -288,10 +298,6 @@ export const useRoomSocket = (instrumentManager?: any) => {
     // joinRoom is declared later; auto-join is guarded by state and refs.
   }, [setIsConnected, setPendingApproval, setRoomError, instrumentManager]);
 
-  // Get active socket
-  const getActiveSocket = useCallback((): Socket | null => {
-    return socketManagerRef.current?.getActiveSocket() || null;
-  }, []);
 
   // Room audio management - Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.7
   const roomAudio = useRoomAudio({
@@ -301,55 +307,12 @@ export const useRoomSocket = (instrumentManager?: any) => {
 
   // WebRTC is handled separately by useWebRTCVoice in Room.tsx
 
-  // Batch message processing
-  const processMessageBatch = useCallback(() => {
-    if (messageQueueRef.current.length === 0) return;
-
-    const messages = [...messageQueueRef.current];
-    messageQueueRef.current = [];
-
-    const groupedMessages = messages.reduce(
-      (acc, msg) => {
-        const key = `${msg.event}-${msg.data.userId || "global"}`;
-        if (!acc[key]) {
-          acc[key] = [];
-        }
-        acc[key].push(msg.data);
-        return acc;
-      },
-      {} as Record<string, any[]>,
-    );
-
-    Object.entries(groupedMessages).forEach(([key, dataArray]) => {
-      const socket = getActiveSocket();
-      if (socket?.connected) {
-        const latestData = dataArray[dataArray.length - 1];
-        socket.emit(key.split("-")[0], latestData);
-      }
-    });
-
-    batchTimeoutRef.current = null;
-  }, [getActiveSocket]);
-
   // Queue message for batched processing
   const queueMessage = useCallback(
     (event: string, data: any) => {
-      messageQueueRef.current.push({ event, data, timestamp: Date.now() });
-
-      if (messageQueueRef.current.length > MAX_QUEUE_SIZE) {
-        messageQueueRef.current = messageQueueRef.current.slice(
-          -MAX_QUEUE_SIZE / 2,
-        );
-      }
-
-      if (!batchTimeoutRef.current) {
-        batchTimeoutRef.current = setTimeout(
-          processMessageBatch,
-          BATCH_INTERVAL,
-        );
-      }
+      queueRef.current?.enqueue(event, data);
     },
-    [processMessageBatch],
+    [],
   );
 
   // Execute pending operations when socket connects
@@ -425,7 +388,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
 
     let isActive = true;
 
-    const unsubscribe = useEffectsStore.subscribe((state) => {
+    const unsubscribe = EffectsService.subscribe((state) => {
       if (!isActive) return;
 
       const chains = state.chains as Record<UiEffectChainType, UiEffectChain>;
@@ -447,8 +410,8 @@ export const useRoomSocket = (instrumentManager?: any) => {
 
       throttledEffectsEmit({ chains: payloadChains });
 
-      const userId = useUserStore.getState().userId;
-      const username = useUserStore.getState().username;
+      const userId = UserService.getUserId();
+      const username = UserService.getUsername();
       if (userId) {
         roomAudio
           .applyUserEffectChains(userId, payloadChains, username || undefined, {
@@ -558,7 +521,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
             pendingMembers: data.pendingMembers,
           });
 
-          const currentUserId = useUserStore.getState().userId;
+          const currentUserId = UserService.getUserId();
           if (currentUserId) {
             const currentUserData =
               data.self && data.self.id === currentUserId
@@ -588,10 +551,10 @@ export const useRoomSocket = (instrumentManager?: any) => {
 
           if (data.effectChains) {
             skipNextEffectSyncRef.current = true;
-            useEffectsStore.getState().setChainsFromState(data.effectChains);
+            EffectsService.setChainsFromState(data.effectChains);
 
-            const currentUserId = useUserStore.getState().userId;
-            const currentUsername = useUserStore.getState().username;
+            const currentUserId = UserService.getUserId();
+            const currentUsername = UserService.getUsername();
             if (currentUserId) {
               await roomAudio.applyUserEffectChains(
                 currentUserId,
@@ -683,7 +646,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
           setCurrentRoom(data.room);
           setPendingApproval(false);
 
-          const currentUserId = useUserStore.getState().userId;
+          const currentUserId = UserService.getUserId();
           if (currentUserId) {
             const approvedUser = data.room.users.find(
               (user: any) => user.id === currentUserId,
@@ -712,7 +675,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
       on("ownership_transferred", (data: { newOwner: any; oldOwner: any }) => {
         transferOwnership(data.newOwner.id);
 
-        const currentUserId = useUserStore.getState().userId;
+        const currentUserId = UserService.getUserId();
         if (
           currentUserId &&
           data.oldOwner &&
@@ -967,8 +930,8 @@ export const useRoomSocket = (instrumentManager?: any) => {
       setIsConnecting(true);
       try {
         // Get user info for session storage
-        const userId = useUserStore.getState().userId;
-        const username = useUserStore.getState().username;
+        const userId = UserService.getUserId();
+        const username = UserService.getUsername();
 
         await socketManagerRef.current.connectToRoom(
           roomId,
@@ -1706,17 +1669,9 @@ export const useRoomSocket = (instrumentManager?: any) => {
 
   // Cleanup function
   const cleanup = useCallback(() => {
-    if (batchTimeoutRef.current) {
-      clearTimeout(batchTimeoutRef.current);
-      batchTimeoutRef.current = null;
-    }
-
-    if (messageQueueRef.current.length > 0) {
-      processMessageBatch();
-    }
-
+    queueRef.current?.clear();
     recentNoteEvents.current.clear();
-  }, [processMessageBatch]);
+  }, []);
 
   return {
     // Connection state

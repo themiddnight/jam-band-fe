@@ -160,6 +160,55 @@ Jam Band lets you create music together with friends in real-time using **virtua
 - **PWA**: VitePWA with Workbox
 - **Dev Tools**: ESLint 9, Prettier 3, TypeScript 5.8
 
+## 🏗️ Architecture & Data Flow
+
+### **Service Layer & State Management**
+We use **Zustand** for state management, but direct access to stores is abstracted via a **Service Layer**.
+- **Stores**: Hold the state and basic actions (e.g., `trackStore`, `regionStore`).
+- **Services**: Encapsulate business logic, synchronize with other services, and handle store interactions (e.g., `TrackService`, `DAWSyncService`).
+- **Selectors**: Optimized hooks for reading state in React components to prevent unnecessary re-renders.
+
+```mermaid
+graph TD
+    UI[React Components] --> Service[Service Layer]
+    Service --> Store[Zustand Store]
+    Store --> UI
+    Service --> Socket[Socket.IO / DAWSyncService]
+    Socket --> Backend
+```
+
+### **Real-time Data Flow (DAW Sync)**
+The **Arrange Room** uses a sophisticated synchronization engine to keep multiple users in sync while editing audio/MIDI tracks.
+
+```mermaid
+sequenceDiagram
+    participant User A
+    participant DAWSyncService
+    participant SocketMessageQueue
+    participant Server
+    participant User B
+
+    %% Outgoing Update
+    User A->>DAWSyncService: User moves a region
+    DAWSyncService->>SocketMessageQueue: enqueue('region_drag', data)
+    SocketMessageQueue->>SocketMessageQueue: Batch & Throttle (16ms)
+    SocketMessageQueue->>Server: emit('arrange:region_drag', batchedData)
+    
+    %% Incoming Update
+    Server->>User B: emit('arrange:region_drag', batchedData)
+    User B->>DAWSyncService: handleRegionDragBatch(data)
+    DAWSyncService->>DAWSyncService: set isSyncing = true
+    DAWSyncService->>RegionService: syncUpdateRegion(id, pos)
+    RegionService->>RegionStore: setState(...)
+    DAWSyncService->>DAWSyncService: set isSyncing = false
+    note over DAWSyncService: isSyncing flag prevents echo/loops
+```
+
+### **Performance Optimizations**
+- **SocketMessageQueue**: A utility class that batches and throttles high-frequency events (like cursor movement, fader adjustment, region dragging) to reduce network load and server strain. It drops intermediate updates and only sends the latest state per entity within a batch interval (default 16ms).
+- **Lazy Loading**: Route-based code splitting using `React.lazy` and `Suspense` to minimize initial bundle size.
+- **WebRTC Mesh**: Peer-to-peer voice chat that bypasses the server for audio streaming, ensuring minimal latency.
+
 ## 📁 Project Structure
 
 ```
