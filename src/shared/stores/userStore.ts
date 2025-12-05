@@ -10,20 +10,20 @@ export interface UserState {
   // Legacy fields (for backward compatibility)
   username: string | null;
   userId: string | null;
-  
+
   // Auth fields
   userType: UserType;
   isAuthenticated: boolean;
   email: string | null;
   authUser: User | null;
-  
+
   // Actions
   setUsername: (username: string) => void;
   setUserId: (userId: string) => void;
   generateUserId: () => string;
   clearUser: () => void;
   ensureUserId: () => string;
-  
+
   // Auth actions
   setAsGuest: () => void;
   setAsRegistered: (user: User, token: string) => void;
@@ -38,13 +38,13 @@ export const useUserStore = create<UserState>()(
       // Legacy fields
       username: null,
       userId: null,
-      
+
       // Auth fields
       userType: "GUEST" as UserType,
       isAuthenticated: false,
       email: null,
       authUser: null,
-      
+
       // Legacy actions
       setUsername: (username: string) => set({ username }),
       setUserId: (userId: string) => set({ userId }),
@@ -55,8 +55,8 @@ export const useUserStore = create<UserState>()(
       },
       clearUser: () => {
         removeToken();
-        set({ 
-          username: null, 
+        set({
+          username: null,
           userId: null,
           userType: "GUEST",
           isAuthenticated: false,
@@ -73,7 +73,7 @@ export const useUserStore = create<UserState>()(
         }
         return userId;
       },
-      
+
       // Auth actions
       setAsGuest: () => {
         removeToken();
@@ -85,7 +85,7 @@ export const useUserStore = create<UserState>()(
         const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
         const randomNumber = Math.floor(Math.random() * 1000);
         const guestUsername = `${randomAdjective}${randomNoun}${randomNumber}`;
-        
+
         set({
           userType: "GUEST",
           isAuthenticated: false,
@@ -139,22 +139,15 @@ export const useUserStore = create<UserState>()(
     {
       name: "user-store",
       storage: createJSONStorage(() => localStorage),
-      // Only persist authenticated users, not guests
-      partialize: (state) => {
-        if (state.isAuthenticated && state.userType !== "GUEST") {
-          // Persist authenticated user
-          return {
-            userType: state.userType,
-            isAuthenticated: state.isAuthenticated,
-            email: state.email,
-            authUser: state.authUser,
-            userId: state.userId,
-            username: state.username,
-          };
-        }
-        // Don't persist guest state
-        return {};
-      },
+      // Persist both authenticated users and guests to allow page refreshes
+      partialize: (state) => ({
+        userType: state.userType,
+        isAuthenticated: state.isAuthenticated,
+        email: state.email,
+        authUser: state.authUser,
+        userId: state.userId,
+        username: state.username,
+      }),
     },
   ),
 );

@@ -53,7 +53,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({ currentUserId, onSendMessage }) => {
   const handleIncomingMessage = useCallback((message: ChatMessage) => {
     // Check if we've already processed this message
     if (processedMessageIds.current.has(message.id)) {
-      
+
       return;
     }
 
@@ -188,14 +188,14 @@ const ChatBox: React.FC<ChatBoxProps> = ({ currentUserId, onSendMessage }) => {
   };
 
   return (
-    <div className="card bg-base-100 shadow-lg w-full">
+    <div className="card bg-base-100 shadow-lg w-full h-full">
       <div className="card-body p-3">
         <h3 className="card-title text-lg">Room Chat</h3>
 
         {/* Messages Container */}
         <div
           ref={messagesContainerRef}
-          className="flex-1 min-h-96 max-h-96 overflow-y-auto border border-base-300 rounded-lg p-2 bg-base-50"
+          className="flex-1 overflow-y-auto border border-base-300 rounded-lg p-2 bg-base-50"
           onScroll={handleScroll}
         >
           {messages.length === 0 ? (
@@ -208,18 +208,16 @@ const ChatBox: React.FC<ChatBoxProps> = ({ currentUserId, onSendMessage }) => {
               {messages.map((message, index) => (
                 <div
                   key={`${message.id}-${index}`}
-                  className={`flex flex-col ${
-                    message.userId === currentUserId
-                      ? "items-end"
-                      : "items-start"
-                  }`}
+                  className={`flex flex-col ${message.userId === currentUserId
+                    ? "items-end"
+                    : "items-start"
+                    }`}
                 >
                   <div
-                    className={`max-w-xs px-3 py-2 rounded-lg ${
-                      message.userId === currentUserId
-                        ? "bg-primary text-primary-content"
-                        : "bg-base-200 text-base-content"
-                    }`}
+                    className={`max-w-xs px-3 py-2 rounded-lg ${message.userId === currentUserId
+                      ? "bg-primary text-primary-content"
+                      : "bg-base-200 text-base-content"
+                      }`}
                   >
                     <div className="text-xs opacity-70 mb-1">
                       {message.username}

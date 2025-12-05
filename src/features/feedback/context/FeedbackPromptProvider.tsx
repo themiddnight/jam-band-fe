@@ -68,6 +68,7 @@ export const FeedbackPromptProvider = ({ children }: { children: ReactNode }) =>
     state.hasSeenInitialPrompt,
     state.snoozedUntil,
     updateState,
+    isLoading,
   ]);
 
   const handleSubmitSuccess = useCallback(async () => {

@@ -52,8 +52,10 @@ export const useGuitarStringBehavior = (
   const stateRef = useRef({ strings, hammerOnState, velocity });
   stateRef.current = { strings, hammerOnState, velocity };
 
-  const applySharpModifier = (note: string) =>
-    sharpModifierRef?.current ? sharpNote(note) : note;
+  const applySharpModifier = useCallback(
+    (note: string) => (sharpModifierRef?.current ? sharpNote(note) : note),
+    [sharpModifierRef],
+  );
 
   const optionsRef = useRef(options);
   optionsRef.current = options;
@@ -274,7 +276,7 @@ export const useGuitarStringBehavior = (
         return newStrings;
       });
     },
-    [getHighestNote, playNote, stopNote, velocity, hammerOnState.windowMs, notifySelectionActiveChange],
+    [getHighestNote, playNote, stopNote, velocity, hammerOnState.windowMs, notifySelectionActiveChange, applySharpModifier],
   );
 
   // Function to handle play button press
@@ -333,7 +335,7 @@ export const useGuitarStringBehavior = (
         return newStrings;
       });
     },
-    [getHighestNote, playNote, stopNote, velocity, notifySelectionActiveChange],
+    [getHighestNote, playNote, stopNote, velocity, notifySelectionActiveChange, applySharpModifier],
   );
 
   // Function to handle hammer-on note press (called after normal play)

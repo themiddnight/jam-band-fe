@@ -1586,7 +1586,7 @@ const PerformRoom = memo(() => {
 
             {/* Sidebar: Right on desktop, bottom on mobile */}
             <aside className="w-full xl:w-96 xl:border-l border-t xl:border-t-0 border-base-300 bg-base-100 flex flex-col md:flex-row xl:flex-col xl:h-full overflow-hidden">
-              <div className="flex-1 overflow-y-auto min-h-0 p-3">
+              <div className="flex-3 overflow-y-auto min-h-0 p-3">
                 <RoomMembers
                   users={currentRoom?.users ?? []}
                   pendingMembers={currentRoom?.pendingMembers ?? []}
@@ -1600,7 +1600,7 @@ const PerformRoom = memo(() => {
                   onCancelSwap={handleCancelSwap}
                 />
               </div>
-              <div className="flex-1 border-t border-base-300 shrink-0">
+              <div className="flex-4 border-t border-base-300 shrink-0">
                 {/* Chat Box */}
                 <ChatBox
                   currentUserId={currentUser?.id || ""}
