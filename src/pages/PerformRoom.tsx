@@ -1441,151 +1441,151 @@ const PerformRoom = memo(() => {
             {/* Main content area */}
             <main className="flex flex-1 flex-col gap-2 p-1 overflow-y-auto min-w-0">
               <div className="flex gap-2 flex-wrap w-full mb-3">
-            {/* Instrument Controls */}
-            {(currentUser?.role === "room_owner" ||
-              currentUser?.role === "band_member") && (
-                <MidiStatus
-                  isConnected={midiController.isConnected}
-                  getMidiInputs={midiController.getMidiInputs}
-                  onRequestAccess={midiController.requestMidiAccess}
-                  connectionError={midiController.connectionError}
-                  isRequesting={midiController.isRequesting}
-                  refreshMidiDevices={midiController.refreshMidiDevices}
-                />
-              )}
+                {/* Instrument Controls */}
+                {(currentUser?.role === "room_owner" ||
+                  currentUser?.role === "band_member") && (
+                    <MidiStatus
+                      isConnected={midiController.isConnected}
+                      getMidiInputs={midiController.getMidiInputs}
+                      onRequestAccess={midiController.requestMidiAccess}
+                      connectionError={midiController.connectionError}
+                      isRequesting={midiController.isRequesting}
+                      refreshMidiDevices={midiController.refreshMidiDevices}
+                    />
+                  )}
 
-            {/* Voice Communication - Only for users who can transmit */}
-            {isVoiceEnabled && canTransmitVoice && (
-              <VoiceInput
-                isVisible={isVoiceEnabled}
-                onStreamReady={handleStreamReady}
-                onStreamRemoved={handleStreamRemoved}
-                rtcLatency={currentLatency}
-                rtcLatencyActive={rtcLatencyActive}
-                userCount={currentRoom?.users?.length || 0}
-                browserAudioLatency={browserAudioLatency}
-                meshLatency={meshLatency}
-                isConnecting={isConnecting}
-                connectionError={!!error}
-                onConnectionRetry={() => window.location.reload()}
-              />
-            )}
-
-            {/* Instrument Controls */}
-            {(currentUser?.role === "room_owner" ||
-              currentUser?.role === "band_member") && (
-                <>
-                  {/* Virtual Instrument Mute Control */}
-                  <InstrumentMute
-                    isMuted={isInstrumentMuted}
-                    onMuteChange={setInstrumentMuted}
+                {/* Voice Communication - Only for users who can transmit */}
+                {isVoiceEnabled && canTransmitVoice && (
+                  <VoiceInput
+                    isVisible={isVoiceEnabled}
+                    onStreamReady={handleStreamReady}
+                    onStreamRemoved={handleStreamRemoved}
+                    rtcLatency={currentLatency}
+                    rtcLatencyActive={rtcLatencyActive}
+                    userCount={currentRoom?.users?.length || 0}
+                    browserAudioLatency={browserAudioLatency}
+                    meshLatency={meshLatency}
+                    isConnecting={isConnecting}
+                    connectionError={!!error}
+                    onConnectionRetry={() => window.location.reload()}
                   />
+                )}
 
-                  {/* Metronome Controls */}
-                  <MetronomeControls
-                    socket={activeSocket}
-                    canEdit={
-                      currentUser?.role === "room_owner" ||
-                      currentUser?.role === "band_member"
-                    }
-                  />
+                {/* Instrument Controls */}
+                {(currentUser?.role === "room_owner" ||
+                  currentUser?.role === "band_member") && (
+                    <>
+                      {/* Virtual Instrument Mute Control */}
+                      <InstrumentMute
+                        isMuted={isInstrumentMuted}
+                        onMuteChange={setInstrumentMuted}
+                      />
 
-                  <ScaleSlots
-                    onSlotSelect={(rootNote, scale) => {
-                      scaleState.setRootNote(rootNote);
-                      scaleState.setScale(scale);
+                      {/* Metronome Controls */}
+                      <MetronomeControls
+                        socket={activeSocket}
+                        canEdit={
+                          currentUser?.role === "room_owner" ||
+                          currentUser?.role === "band_member"
+                        }
+                      />
 
-                      // If user is room owner, broadcast the scale change
-                      if (currentUser?.role === "room_owner") {
-                        handleRoomOwnerScaleChange(rootNote, scale);
-                      }
-                    }}
-                    currentUser={currentUser}
-                    isRoomOwner={currentUser?.role === "room_owner"}
-                    followRoomOwner={currentUser?.followRoomOwner || false}
-                    onToggleFollowRoomOwner={handleToggleFollowRoomOwner}
-                    disabled={currentUser?.followRoomOwner || false}
-                    ownerScale={currentRoom?.ownerScale}
-                  />
+                      <ScaleSlots
+                        onSlotSelect={(rootNote, scale) => {
+                          scaleState.setRootNote(rootNote);
+                          scaleState.setScale(scale);
 
-                  <InstrumentCategorySelector
-                    currentCategory={currentCategory}
-                    currentInstrument={currentInstrument}
-                    onCategoryChange={handleCategoryChange}
-                    onInstrumentChange={handleInstrumentChange}
-                    isLoading={isLoadingInstrument}
-                    dynamicDrumMachines={dynamicDrumMachines}
-                  />
+                          // If user is room owner, broadcast the scale change
+                          if (currentUser?.role === "room_owner") {
+                            handleRoomOwnerScaleChange(rootNote, scale);
+                          }
+                        }}
+                        currentUser={currentUser}
+                        isRoomOwner={currentUser?.role === "room_owner"}
+                        followRoomOwner={currentUser?.followRoomOwner || false}
+                        onToggleFollowRoomOwner={handleToggleFollowRoomOwner}
+                        disabled={currentUser?.followRoomOwner || false}
+                        ownerScale={currentRoom?.ownerScale}
+                      />
 
-                  {/* Synthesizer Controls */}
-                  {currentCategory === InstrumentCategory.Synthesizer &&
-                    synthState && (
+                      <InstrumentCategorySelector
+                        currentCategory={currentCategory}
+                        currentInstrument={currentInstrument}
+                        onCategoryChange={handleCategoryChange}
+                        onInstrumentChange={handleInstrumentChange}
+                        isLoading={isLoadingInstrument}
+                        dynamicDrumMachines={dynamicDrumMachines}
+                      />
+
+                      {/* Step Sequencer */}
                       <div className="w-full">
-                        <SynthControls
-                          currentInstrument={currentInstrument}
-                          synthState={synthState}
-                          onParamChange={updateSynthParams}
-                          onLoadPreset={loadPresetParams}
+                        <StepSequencer
+                          socket={activeSocket}
+                          currentCategory={currentCategory}
+                          availableSamples={availableSamples}
+                          scaleNotes={[
+                            ...scaleState.getScaleNotes(
+                              scaleState.rootNote,
+                              scaleState.scale,
+                              2
+                            ),
+                            ...scaleState.getScaleNotes(
+                              scaleState.rootNote,
+                              scaleState.scale,
+                              3
+                            ),
+                            ...scaleState.getScaleNotes(
+                              scaleState.rootNote,
+                              scaleState.scale,
+                              4
+                            ),
+                            ...scaleState.getScaleNotes(
+                              scaleState.rootNote,
+                              scaleState.scale,
+                              5
+                            ),
+                            ...scaleState.getScaleNotes(
+                              scaleState.rootNote,
+                              scaleState.scale,
+                              6
+                            ),
+                          ]}
+                          rootNote={scaleState.rootNote}
+                          onPlayNotes={handlePlayNotesWithRecording}
+                          onStopNotes={handleStopNotesWrapper}
+                          editMode={settings.editMode}
+                          onSelectedBeatChange={setSelectedBeat}
+                          onEditModeChange={setEditMode}
                         />
                       </div>
-                    )}
 
-                  {/* Step Sequencer */}
-                  <div className="w-full">
-                    <StepSequencer
-                      socket={activeSocket}
-                      currentCategory={currentCategory}
-                      availableSamples={availableSamples}
-                      scaleNotes={[
-                        ...scaleState.getScaleNotes(
-                          scaleState.rootNote,
-                          scaleState.scale,
-                          2
-                        ),
-                        ...scaleState.getScaleNotes(
-                          scaleState.rootNote,
-                          scaleState.scale,
-                          3
-                        ),
-                        ...scaleState.getScaleNotes(
-                          scaleState.rootNote,
-                          scaleState.scale,
-                          4
-                        ),
-                        ...scaleState.getScaleNotes(
-                          scaleState.rootNote,
-                          scaleState.scale,
-                          5
-                        ),
-                        ...scaleState.getScaleNotes(
-                          scaleState.rootNote,
-                          scaleState.scale,
-                          6
-                        ),
-                      ]}
-                      rootNote={scaleState.rootNote}
-                      onPlayNotes={handlePlayNotesWithRecording}
-                      onStopNotes={handleStopNotesWrapper}
-                      editMode={settings.editMode}
-                      onSelectedBeatChange={setSelectedBeat}
-                      onEditModeChange={setEditMode}
-                    />
-                  </div>
+                      {/* Synthesizer Controls */}
+                      {currentCategory === InstrumentCategory.Synthesizer &&
+                        synthState && (
+                          <div className="w-full">
+                            <SynthControls
+                              currentInstrument={currentInstrument}
+                              synthState={synthState}
+                              onParamChange={updateSynthParams}
+                              onLoadPreset={loadPresetParams}
+                            />
+                          </div>
+                        )}
 
-                  {/* Instrument Interface */}
-                  {renderInstrumentControl()}
+                      {/* Instrument Interface */}
+                      {renderInstrumentControl()}
 
-                  {/* Effects Chain Section */}
-                  <div className="w-full">
-                    <EffectsChainSection />
-                  </div>
-                </>
-              )}
+                      {/* Effects Chain Section */}
+                      <div className="w-full">
+                        <EffectsChainSection />
+                      </div>
+                    </>
+                  )}
               </div>
             </main>
 
             {/* Sidebar: Right on desktop, bottom on mobile */}
-            <aside className="w-full xl:w-96 xl:border-l border-t xl:border-t-0 border-base-300 bg-base-100 flex flex-col xl:h-full overflow-hidden">
+            <aside className="w-full xl:w-96 xl:border-l border-t xl:border-t-0 border-base-300 bg-base-100 flex flex-col md:flex-row xl:flex-col xl:h-full overflow-hidden">
               <div className="flex-1 overflow-y-auto min-h-0 p-3">
                 <RoomMembers
                   users={currentRoom?.users ?? []}
@@ -1600,7 +1600,7 @@ const PerformRoom = memo(() => {
                   onCancelSwap={handleCancelSwap}
                 />
               </div>
-              <div className="border-t border-base-300 shrink-0">
+              <div className="flex-1 border-t border-base-300 shrink-0">
                 {/* Chat Box */}
                 <ChatBox
                   currentUserId={currentUser?.id || ""}

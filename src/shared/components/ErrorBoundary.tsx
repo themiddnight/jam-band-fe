@@ -34,20 +34,6 @@ export class ErrorBoundary extends Component<Props, State> {
     // Store error info for display in development
     this.setState({ errorInfo });
 
-    // Auto-recovery: Clear localStorage and reload once
-    const hasTriedRecovery = sessionStorage.getItem('error-recovery-attempted');
-    
-    if (!hasTriedRecovery) {
-      console.warn('🔄 Auto-recovery: Clearing localStorage and reloading...');
-      sessionStorage.setItem('error-recovery-attempted', 'true');
-      localStorage.clear();
-      window.location.reload();
-      return;
-    }
-
-    // If recovery was already attempted, show error UI
-    console.error('❌ Recovery failed, showing error UI');
-    
     // In a real app, you might want to send this to an error reporting service
     // Example: sendErrorToService(error, errorInfo);
   }

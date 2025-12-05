@@ -78,16 +78,16 @@ const RoomMembers = memo(
       const isCurrentUser = user.id === currentUserId;
       const hasPendingSwap = pendingSwapTarget && user.id === pendingSwapTarget.id;
       const isAudience = user.role === "audience";
-      
+
       // Check if current user can see three-dot menu
-      const canSeeActionsMenu = !isCurrentUser && 
-        (currentUserRole === "room_owner" || currentUserRole === "band_member") && 
+      const canSeeActionsMenu = !isCurrentUser &&
+        (currentUserRole === "room_owner" || currentUserRole === "band_member") &&
         !isAudience;
 
       // For audience members, use compact inline layout
       if (isAudience) {
         return (
-          <div 
+          <div
             key={user.id}
             className="flex items-center gap-1 p-1.5 bg-base-200 rounded-lg border-2"
             style={{
@@ -108,7 +108,7 @@ const RoomMembers = memo(
 
       // For performers, use the existing full layout
       return (
-        <div 
+        <div
           key={user.id}
           className="flex flex-col items-center gap-2 p-2 bg-base-200 rounded-lg w-full border-2"
           style={{
@@ -188,12 +188,12 @@ const RoomMembers = memo(
             <h3 className="card-title">Room Members</h3>
             <button className="btn btn-xs" onClick={handleResetAllVolumes} aria-label="reset-all-volumes">Reset</button>
           </div>
-          
+
           {/* Performers Section */}
           {sortedPerformers.length > 0 && (
             <div className="space-y-2">
               <h4 className="text-sm font-medium text-base-content/70">Performers</h4>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 overflow-auto">
                 {sortedPerformers.map((user) => renderUser(user, true))}
               </div>
             </div>

@@ -73,6 +73,9 @@ export const StepSequencer = memo(
       waitingBankChange,
     } = sequencer;
 
+    const isCollapsed = useSequencerStore((state) => state.isCollapsed);
+    const setIsCollapsed = useSequencerStore((state) => state.setIsCollapsed);
+
     // Get current bank steps for row calculation
     const currentBankSteps = useMemo(() => {
       const bank = banks[currentBank];
@@ -117,7 +120,7 @@ export const StepSequencer = memo(
     // Selection state for select mode
     const [selectMode, setSelectMode] = useState(false);
     const [selectedSteps, setSelectedSteps] = useState<Set<string>>(new Set());
-    
+
     // Handle updating selected steps (gate/velocity)
     const handleUpdateSelectedSteps = useCallback((updates: Partial<SequencerStep>) => {
       selectedSteps.forEach((stepKey) => {
@@ -125,7 +128,7 @@ export const StepSequencer = memo(
         sequencer.updateStep(parseInt(beat), note, updates);
       });
     }, [selectedSteps, sequencer]);
-    
+
     // Clear selection when switching modes
     const handleSelectModeChange = useCallback((enabled: boolean) => {
       setSelectMode(enabled);
@@ -155,11 +158,11 @@ export const StepSequencer = memo(
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
           // Prevent default scrolling behavior
           e.preventDefault();
-          
-          const newBeat = e.key === 'ArrowLeft' 
+
+          const newBeat = e.key === 'ArrowLeft'
             ? Math.max(0, currentBeat - 1)
             : Math.min(settings.length - 1, currentBeat + 1);
-          
+
           sequencer.setCurrentBeat(newBeat);
           onSelectedBeatChange(newBeat);
         }
@@ -216,8 +219,14 @@ export const StepSequencer = memo(
     }
 
     return (
-      <div className="collapse collapse-arrow bg-base-100 shadow-lg">
-        <input type="checkbox" id="step-sequencer" name="step-sequencer" defaultChecked />
+      <div className={`collapse collapse-arrow bg-base-100 shadow-lg ${!isCollapsed ? 'collapse-open' : 'collapse-close'}`}>
+        <input
+          type="checkbox"
+          id="step-sequencer"
+          name="step-sequencer"
+          checked={!isCollapsed}
+          onChange={() => setIsCollapsed(!isCollapsed)}
+        />
 
         {/* First Row: Title */}
         <h3 className="collapse-title font-bold">
@@ -276,7 +285,7 @@ export const StepSequencer = memo(
               onUpdateSelectedSteps={handleUpdateSelectedSteps}
               getStepData={getStepDataMemo}
             />
-            
+
             <PresetManager
               storageKey="sequencer-presets"
               version="1.0.0"
@@ -285,7 +294,7 @@ export const StepSequencer = memo(
                 // Group melodic and synthesizer presets together, separate drums
                 const isDrumPreset = preset.instrumentCategory === 'drum_beat';
                 const isCurrentDrum = currentCategory === 'drum_beat';
-                
+
                 if (isDrumPreset) {
                   return isCurrentDrum; // Only show drum presets when in drum mode
                 } else {

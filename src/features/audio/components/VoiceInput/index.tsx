@@ -62,18 +62,36 @@ const VoiceInputComponent: React.FC<VoiceInputProps> = ({
   const infoButtonRef = useRef<HTMLButtonElement>(null);
   const lastStoredInputLevelRef = useRef<number>(0);
 
-  // Use custom hooks for state and logic
-  const {
-    voiceState,
-    setMuted,
-    setGain,
-    setInputLevel,
-    setSelfMonitoring,
-    setConnected,
-    setHasSeenHeadphoneModal,
-    setCleanMode,
-    setAutoGain,
-  } = useVoiceStateStore();
+  // Use Zustand store for state management
+  const isMuted = useVoiceStateStore((state) => state.isMuted);
+  const gain = useVoiceStateStore((state) => state.gain);
+  const storedInputLevel = useVoiceStateStore((state) => state.inputLevel);
+  const isSelfMonitoring = useVoiceStateStore((state) => state.isSelfMonitoring);
+  const isConnected = useVoiceStateStore((state) => state.isConnected);
+  const hasSeenHeadphoneModal = useVoiceStateStore((state) => state.hasSeenHeadphoneModal);
+  const cleanMode = useVoiceStateStore((state) => state.cleanMode);
+  const autoGain = useVoiceStateStore((state) => state.autoGain);
+
+  const setMuted = useVoiceStateStore((state) => state.setMuted);
+  const setGain = useVoiceStateStore((state) => state.setGain);
+  const setInputLevel = useVoiceStateStore((state) => state.setInputLevel);
+  const setSelfMonitoring = useVoiceStateStore((state) => state.setSelfMonitoring);
+  const setConnected = useVoiceStateStore((state) => state.setConnected);
+  const setHasSeenHeadphoneModal = useVoiceStateStore((state) => state.setHasSeenHeadphoneModal);
+  const setCleanMode = useVoiceStateStore((state) => state.setCleanMode);
+  const setAutoGain = useVoiceStateStore((state) => state.setAutoGain);
+
+  // Create a voiceState object for compatibility with existing code
+  const voiceState: VoiceState = {
+    isMuted,
+    gain,
+    inputLevel: storedInputLevel,
+    isSelfMonitoring,
+    isConnected,
+    hasSeenHeadphoneModal,
+    cleanMode,
+    autoGain,
+  };
 
   const {
     mediaStream,
@@ -333,7 +351,7 @@ const VoiceInputComponent: React.FC<VoiceInputProps> = ({
     // assume we're connected even if latency measurement isn't working
     // (Safari often can't measure RTT but connection works fine)
     const hasOtherUsers = userCount > 1;
-    
+
     // If RTC is active with measured latency - fully connected (green)
     if (rtcLatencyActive && meshLatency !== null && meshLatency !== undefined) {
       return {
@@ -397,7 +415,7 @@ const VoiceInputComponent: React.FC<VoiceInputProps> = ({
               />
               {/* Clean Mode Status Icon */}
               {voiceState.cleanMode && (
-                <div 
+                <div
                   className="text-sm"
                   title="Clean Mode enabled - Ultra-low latency, no audio processing"
                 >
@@ -443,7 +461,7 @@ const VoiceInputComponent: React.FC<VoiceInputProps> = ({
                       width: `${Math.min(
                         inputLevel > 0
                           ? (Math.log10(1 + 9 * inputLevel) / Math.log10(10)) *
-                              100
+                          100
                           : 0,
                         100,
                       )}%`,
@@ -641,21 +659,21 @@ const VoiceInputComponent: React.FC<VoiceInputProps> = ({
                   {(browserAudioLatency === undefined ||
                     meshLatency === null ||
                     meshLatency === undefined) && (
-                    <div className="text-center text-base-content/50 py-2">
-                      {isConnecting ? (
-                        <div className="flex items-center justify-center gap-2">
-                          <div className="loading loading-spinner loading-xs"></div>
-                          <span>Measuring latency...</span>
-                        </div>
-                      ) : connectionError ? (
-                        <span>Connection error - unable to measure</span>
-                      ) : !rtcLatencyActive ? (
-                        <span>No active voice connections</span>
-                      ) : (
-                        <span>Latency data not available</span>
-                      )}
-                    </div>
-                  )}
+                      <div className="text-center text-base-content/50 py-2">
+                        {isConnecting ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="loading loading-spinner loading-xs"></div>
+                            <span>Measuring latency...</span>
+                          </div>
+                        ) : connectionError ? (
+                          <span>Connection error - unable to measure</span>
+                        ) : !rtcLatencyActive ? (
+                          <span>No active voice connections</span>
+                        ) : (
+                          <span>Latency data not available</span>
+                        )}
+                      </div>
+                    )}
                 </div>
               </div>
 
@@ -685,7 +703,7 @@ const VoiceInputComponent: React.FC<VoiceInputProps> = ({
       >
         <div className="space-y-4">
           <p className="text-base">
-            You're about to enable <strong>Clean Mode</strong> for ultra-low latency audio. 
+            You're about to enable <strong>Clean Mode</strong> for ultra-low latency audio.
             We strongly recommend using headphones to prevent audio feedback. 🎧
           </p>
 

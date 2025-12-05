@@ -13,14 +13,14 @@ import { useUserStore } from "@/shared/stores/userStore";
 import { updateFeedbackState } from "@/shared/api/auth";
 
 export const FeedbackPromptProvider = ({ children }: { children: ReactNode }) => {
-  const { state, updateState } = useFeedbackPromptState();
+  const { state, updateState, isLoading } = useFeedbackPromptState();
   const { isAuthenticated } = useUserStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [shouldShowPrompt, setShouldShowPrompt] = useState(false);
   const [resumePromptOnClose, setResumePromptOnClose] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") {
+    if (typeof window === "undefined" || isLoading) {
       return;
     }
 
@@ -74,7 +74,7 @@ export const FeedbackPromptProvider = ({ children }: { children: ReactNode }) =>
     setIsModalOpen(false);
     setShouldShowPrompt(false);
     setResumePromptOnClose(false);
-    
+
     const now = Date.now();
     updateState((prev) => ({
       ...prev,

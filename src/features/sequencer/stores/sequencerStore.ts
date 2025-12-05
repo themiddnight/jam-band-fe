@@ -103,6 +103,7 @@ interface SequencerStore extends SequencerState {
   setSelectedBeat: (beat: number) => void;
   setWaitingForMetronome: (waiting: boolean) => void;
   setWaitingBankChange: (bankId: string | null) => void;
+  setIsCollapsed: (isCollapsed: boolean) => void;
 
   // Preset management
   savePreset: (name: string, instrumentCategory: string) => Promise<void>;
@@ -150,7 +151,7 @@ const createDefaultBanks = (): Record<string, SequencerBank> => {
 const createDefaultCategoryState = (category?: string): SequencerCategoryState => {
   // Load default presets for melodic category
   const defaultPresets = category === InstrumentCategory.Melodic ? DEFAULT_MELODIC_PRESETS : [];
-  
+
   return {
     banks: createDefaultBanks(),
     settings: {
@@ -184,18 +185,10 @@ const createMemoryStorage = (): StateStorage => {
 };
 
 const resolvePersistenceStorage = (): StateStorage => {
-  if (typeof window === "undefined") {
-    return createMemoryStorage();
-  }
-
-  try {
-    const testKey = "__sequencer_store_test__";
-    window.localStorage.setItem(testKey, testKey);
-    window.localStorage.removeItem(testKey);
+  if (typeof window !== "undefined") {
     return window.localStorage;
-  } catch {
-    return createMemoryStorage();
   }
+  return createMemoryStorage();
 };
 
 const persistenceStorage = resolvePersistenceStorage();
@@ -268,6 +261,7 @@ const createInitialSequencerState = (): SequencerState => {
     categoryStates: {
       [DEFAULT_CATEGORY]: defaultCategoryState,
     },
+    isCollapsed: false,
   };
 };
 
@@ -279,6 +273,8 @@ export const useSequencerStore = create<SequencerStore>()(
     persist(
       (set, get) => ({
         ...initialState,
+
+        setIsCollapsed: (isCollapsed) => set({ isCollapsed }),
 
         // Step management
         addStep: (bankId, beat, note, velocity = SEQUENCER_CONSTANTS.DEFAULT_VELOCITY, gate = SEQUENCER_CONSTANTS.DEFAULT_GATE) => {
@@ -937,7 +933,7 @@ export const useSequencerStore = create<SequencerStore>()(
           const state = get();
           const { isAuthenticated, userType } = useUserStore.getState();
           const isGuest = userType === "GUEST" || !isAuthenticated;
-          
+
           // Exclude displayMode and editMode from saved settings (UI state only)
           const { speed, length, bankMode } = state.settings;
           const preset: SequencerPreset = {
@@ -1007,7 +1003,7 @@ export const useSequencerStore = create<SequencerStore>()(
         deletePreset: async (presetId) => {
           const { isAuthenticated, userType } = useUserStore.getState();
           const isGuest = userType === "GUEST" || !isAuthenticated;
-          
+
           if (!isGuest) {
             // Authenticated: delete from API
             try {
@@ -1035,11 +1031,11 @@ export const useSequencerStore = create<SequencerStore>()(
           const state = get();
           const preset = state.presets.find(p => p.id === presetId);
           return preset ? JSON.stringify(preset, null, 2) : "";
-        },        importPreset: async (presetData) => {
+        }, importPreset: async (presetData) => {
           try {
             const { isAuthenticated, userType } = useUserStore.getState();
             const isGuest = userType === "GUEST" || !isAuthenticated;
-            
+
             const preset: SequencerPreset = JSON.parse(presetData);
             // Regenerate ID to avoid conflicts
             preset.id = uuidv4();
@@ -1230,6 +1226,7 @@ export const useSequencerStore = create<SequencerStore>()(
           selectedBeat: state.selectedBeat,
           categoryStates: state.categoryStates,
           activeCategory: state.activeCategory,
+          isCollapsed: state.isCollapsed,
         }),
         migrate: (persistedState: any) => {
           if (!persistedState || persistedState.categoryStates) {

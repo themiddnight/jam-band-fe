@@ -35,6 +35,13 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
   const isFM = currentSynthData.type === "fm";
   const isMono = currentSynthData.polyphony === "mono";
 
+  // Automatically switch LFO target to filter if pitch is selected but not available (poly mode)
+  React.useEffect(() => {
+    if (!isMono && synthState.lfoTarget === "pitch") {
+      onParamChange({ lfoTarget: "filter" });
+    }
+  }, [isMono, synthState.lfoTarget, onParamChange]);
+
   const LFO_WAVEFORMS = ["sine", "triangle", "square", "sawtooth"];
   // Tone.js note subdivision format: "1n" = whole note, "2n" = half note, "4n" = quarter note, etc.
   // "t" suffix = triplet, "." suffix = dotted
@@ -85,6 +92,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
   return (
     <div className="card bg-base-100 shadow-xl">
       <div className="card-body">
+        {/* Synthesizer Menus */}
         <div className="flex justify-between items-center gap-5">
           <div className="flex gap-2">
             <h3 className="card-title">{currentSynthData.label} Controls</h3>
@@ -123,15 +131,17 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
           />
         </div>
 
-        {/* Analog Synthesizer Controls */}
-        {isAnalog && (
-          <div className="flex flex-col gap-3">
-            <div className="flex gap-3 flex-wrap">
+        {/* Synthesizer Controls */}
+        <div className="flex gap-3 flex-wrap">
+
+          {/* Analog Synthesizer Controls */}
+          {isAnalog && (
+            <>
               {/* Oscillator Group */}
               <div className="card bg-base-200 grow">
                 <div className="card-body">
                   <h4 className="card-title text-sm">Oscillator</h4>
-                  <div className="flex justify-around items-center flex-wrap gap-3">
+                  <div className="flex justify-center items-center flex-wrap gap-6">
                     <div className="flex flex-col gap-2">
                       <select
                         value={synthState.oscillatorType}
@@ -193,7 +203,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
               <div className="card bg-base-200 grow">
                 <div className="card-body">
                   <h4 className="card-title text-sm">Filter</h4>
-                  <div className="flex justify-around flex-wrap gap-3">
+                  <div className="flex justify-center items-center flex-wrap gap-6">
                     <div className="flex flex-col items-center gap-2">
                       <Knob
                         value={synthState.filterFrequency}
@@ -242,7 +252,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
               <div className="card bg-base-200 grow">
                 <div className="card-body">
                   <h4 className="card-title text-sm">Amp Envelope</h4>
-                  <div className="flex justify-around flex-wrap gap-3">
+                  <div className="flex justify-center items-center flex-wrap gap-6">
                     <div className="flex flex-col items-center gap-2">
                       <Knob
                         value={synthState.ampAttack}
@@ -328,7 +338,7 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
               <div className="card bg-base-200 grow">
                 <div className="card-body">
                   <h4 className="card-title text-sm">Filter Envelope</h4>
-                  <div className="flex justify-around flex-wrap gap-3">
+                  <div className="flex justify-center items-center flex-wrap gap-6">
                     <div className="flex flex-col items-center gap-2">
                       <Knob
                         value={synthState.filterAttack}
@@ -411,363 +421,363 @@ export const SynthControls: React.FC<SynthControlsProps> = ({
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
+            </>
+          )}
 
-        {/* FM Synthesizer Controls */}
-        {isFM && (
-          <div className="flex gap-3 flex-wrap">
-            {/* Volume Group */}
-            <div className="card bg-base-200 grow">
-              <div className="card-body">
-                <h4 className="card-title text-sm">Volume</h4>
-                <div className="flex justify-around flex-wrap gap-3">
-                  <div className="flex flex-col items-center gap-2">
-                    <Knob
-                      value={synthState.volume || 0.5}
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      onChange={(value) => onParamChange({ volume: value })}
-                      size={50}
-                      color="primary"
-                      {...resolveLockProps("volume")}
-                    />
-                    <label className="label">
-                      <span className="label-text text-base-content text-xs">
-                        Volume
-                      </span>
-                    </label>
+          {/* FM Synthesizer Controls */}
+          {isFM && (
+            <>
+              {/* Volume Group */}
+              <div className="card bg-base-200 grow">
+                <div className="card-body">
+                  <h4 className="card-title text-sm">Volume</h4>
+                  <div className="flex justify-center items-center flex-wrap gap-6">
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.volume || 0.5}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        onChange={(value) => onParamChange({ volume: value })}
+                        size={50}
+                        color="primary"
+                        {...resolveLockProps("volume")}
+                      />
+                      <label className="label">
+                        <span className="label-text text-base-content text-xs">
+                          Volume
+                        </span>
+                      </label>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Modulation Group */}
-            <div className="card bg-base-200 grow">
-              <div className="card-body">
-                <h4 className="card-title text-sm">Modulation</h4>
-                <div className="flex justify-around flex-wrap gap-3">
-                  <div className="flex flex-col items-center gap-2">
-                    <Knob
-                      value={synthState.modulationIndex}
-                      min={0}
-                      max={50}
-                      step={0.1}
-                      onChange={(value) =>
-                        onParamChange({ modulationIndex: value })
-                      }
-                      size={50}
-                      color="secondary"
-                      {...resolveLockProps("modulationIndex")}
-                    />
-                    <label className="label">
-                      <span className="label-text text-base-content text-xs">
-                        Modulation Index
-                      </span>
-                    </label>
-                  </div>
+              {/* Modulation Group */}
+              <div className="card bg-base-200 grow">
+                <div className="card-body">
+                  <h4 className="card-title text-sm">Modulation</h4>
+                  <div className="flex justify-center items-center flex-wrap gap-6">
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.modulationIndex}
+                        min={0}
+                        max={50}
+                        step={0.1}
+                        onChange={(value) =>
+                          onParamChange({ modulationIndex: value })
+                        }
+                        size={50}
+                        color="secondary"
+                        {...resolveLockProps("modulationIndex")}
+                      />
+                      <label className="label">
+                        <span className="label-text text-base-content text-xs">
+                          Modulation Index
+                        </span>
+                      </label>
+                    </div>
 
-                  <div className="flex flex-col items-center gap-2">
-                    <Knob
-                      value={synthState.harmonicity}
-                      min={0.1}
-                      max={10}
-                      step={0.01}
-                      onChange={(value) =>
-                        onParamChange({ harmonicity: value })
-                      }
-                      size={50}
-                      color="secondary"
-                      {...resolveLockProps("harmonicity")}
-                    />
-                    <label className="label">
-                      <span className="label-text text-base-content text-xs">
-                        Harmonicity
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Amp Envelope Group */}
-            <div className="card bg-base-200 grow">
-              <div className="card-body">
-                <h4 className="card-title text-sm">Amp Envelope</h4>
-                <div className="flex justify-around flex-wrap gap-3">
-                  <div className="flex flex-col items-center gap-2">
-                    <Knob
-                      value={synthState.ampAttack}
-                      min={0.001}
-                      max={2}
-                      step={0.001}
-                      onChange={(value) => onParamChange({ ampAttack: value })}
-                      size={50}
-                      color="accent"
-                      {...resolveLockProps("ampAttack")}
-                    />
-                    <label className="label">
-                      <span className="label-text text-base-content text-xs">
-                        Attack
-                      </span>
-                    </label>
-                  </div>
-
-                  <div className="flex flex-col items-center gap-2">
-                    <Knob
-                      value={synthState.ampDecay}
-                      min={0.001}
-                      max={10}
-                      step={0.001}
-                      onChange={(value) => onParamChange({ ampDecay: value })}
-                      size={50}
-                      color="accent"
-                      {...resolveLockProps("ampDecay")}
-                    />
-                    <label className="label">
-                      <span className="label-text text-base-content text-xs">
-                        Decay
-                      </span>
-                    </label>
-                  </div>
-
-                  <div className="flex flex-col items-center gap-2">
-                    <Knob
-                      value={synthState.ampSustain}
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      onChange={(value) => onParamChange({ ampSustain: value })}
-                      size={50}
-                      color="accent"
-                      {...resolveLockProps("ampSustain")}
-                    />
-                    <label className="label">
-                      <span className="label-text text-base-content text-xs">
-                        Sustain
-                      </span>
-                    </label>
-                  </div>
-
-                  <div className="flex flex-col items-center gap-2">
-                    <Knob
-                      value={synthState.ampRelease}
-                      min={0.001}
-                      max={5}
-                      step={0.001}
-                      onChange={(value) => onParamChange({ ampRelease: value })}
-                      size={50}
-                      color="accent"
-                      {...resolveLockProps("ampRelease")}
-                    />
-                    <label className="label">
-                      <span className="label-text text-base-content text-xs">
-                        Release
-                      </span>
-                    </label>
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.harmonicity}
+                        min={0.1}
+                        max={10}
+                        step={0.01}
+                        onChange={(value) =>
+                          onParamChange({ harmonicity: value })
+                        }
+                        size={50}
+                        color="secondary"
+                        {...resolveLockProps("harmonicity")}
+                      />
+                      <label className="label">
+                        <span className="label-text text-base-content text-xs">
+                          Harmonicity
+                        </span>
+                      </label>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Modulation Envelope Group */}
-            <div className="card bg-base-200 grow">
-              <div className="card-body">
-                <h4 className="card-title text-sm">Modulation Envelope</h4>
-                <div className="flex justify-around flex-wrap gap-3">
-                  <div className="flex flex-col items-center gap-2">
-                    <Knob
-                      value={synthState.modAttack}
-                      min={0.001}
-                      max={2}
-                      step={0.001}
-                      onChange={(value) => onParamChange({ modAttack: value })}
-                      size={50}
-                      color="info"
-                      {...resolveLockProps("modAttack")}
-                    />
-                    <label className="label">
-                      <span className="label-text text-base-content text-xs">
-                        Attack
-                      </span>
-                    </label>
-                  </div>
+              {/* Amp Envelope Group */}
+              <div className="card bg-base-200 grow">
+                <div className="card-body">
+                  <h4 className="card-title text-sm">Amp Envelope</h4>
+                  <div className="flex justify-center items-center flex-wrap gap-6">
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.ampAttack}
+                        min={0.001}
+                        max={2}
+                        step={0.001}
+                        onChange={(value) => onParamChange({ ampAttack: value })}
+                        size={50}
+                        color="accent"
+                        {...resolveLockProps("ampAttack")}
+                      />
+                      <label className="label">
+                        <span className="label-text text-base-content text-xs">
+                          Attack
+                        </span>
+                      </label>
+                    </div>
 
-                  <div className="flex flex-col items-center gap-2">
-                    <Knob
-                      value={synthState.modDecay}
-                      min={0.001}
-                      max={10}
-                      step={0.001}
-                      onChange={(value) => onParamChange({ modDecay: value })}
-                      size={50}
-                      color="info"
-                      {...resolveLockProps("modDecay")}
-                    />
-                    <label className="label">
-                      <span className="label-text text-base-content text-xs">
-                        Decay
-                      </span>
-                    </label>
-                  </div>
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.ampDecay}
+                        min={0.001}
+                        max={10}
+                        step={0.001}
+                        onChange={(value) => onParamChange({ ampDecay: value })}
+                        size={50}
+                        color="accent"
+                        {...resolveLockProps("ampDecay")}
+                      />
+                      <label className="label">
+                        <span className="label-text text-base-content text-xs">
+                          Decay
+                        </span>
+                      </label>
+                    </div>
 
-                  <div className="flex flex-col items-center gap-2">
-                    <Knob
-                      value={synthState.modSustain}
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      onChange={(value) => onParamChange({ modSustain: value })}
-                      size={50}
-                      color="info"
-                      {...resolveLockProps("modSustain")}
-                    />
-                    <label className="label">
-                      <span className="label-text text-base-content text-xs">
-                        Sustain
-                      </span>
-                    </label>
-                  </div>
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.ampSustain}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        onChange={(value) => onParamChange({ ampSustain: value })}
+                        size={50}
+                        color="accent"
+                        {...resolveLockProps("ampSustain")}
+                      />
+                      <label className="label">
+                        <span className="label-text text-base-content text-xs">
+                          Sustain
+                        </span>
+                      </label>
+                    </div>
 
-                  <div className="flex flex-col items-center gap-2">
-                    <Knob
-                      value={synthState.modRelease}
-                      min={0.001}
-                      max={5}
-                      step={0.001}
-                      onChange={(value) => onParamChange({ modRelease: value })}
-                      size={50}
-                      color="info"
-                      {...resolveLockProps("modRelease")}
-                    />
-                    <label className="label">
-                      <span className="label-text text-base-content text-xs">
-                        Release
-                      </span>
-                    </label>
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.ampRelease}
+                        min={0.001}
+                        max={5}
+                        step={0.001}
+                        onChange={(value) => onParamChange({ ampRelease: value })}
+                        size={50}
+                        color="accent"
+                        {...resolveLockProps("ampRelease")}
+                      />
+                      <label className="label">
+                        <span className="label-text text-base-content text-xs">
+                          Release
+                        </span>
+                      </label>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
 
-        {/* LFO Controls */}
-        <div className="card bg-base-200">
-          <div className="card-body">
-            <h4 className="card-title text-sm">LFO</h4>
-            <div className="flex flex-wrap gap-6 items-center">
-              <div className="flex flex-col items-center gap-2">
-                <Knob
-                  value={synthState.lfoAmount}
-                  min={0}
-                  max={synthState.lfoTarget === "pitch" ? 2400 : 20000}
-                  step={synthState.lfoTarget === "pitch" ? 10 : 100}
-                  onChange={(value) =>
-                    onParamChange({ lfoAmount: value })
-                  }
-                  size={50}
-                  color="accent"
-                  {...resolveLockProps("lfoAmount")}
-                />
-                <label className="label">
-                  <span className="label-text text-base-content text-xs">
-                    {synthState.lfoTarget === "pitch" ? "Cents" : "Hz"}
-                  </span>
-                </label>
+              {/* Modulation Envelope Group */}
+              <div className="card bg-base-200 grow">
+                <div className="card-body">
+                  <h4 className="card-title text-sm">Modulation Envelope</h4>
+                  <div className="flex justify-center items-center flex-wrap gap-6">
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.modAttack}
+                        min={0.001}
+                        max={2}
+                        step={0.001}
+                        onChange={(value) => onParamChange({ modAttack: value })}
+                        size={50}
+                        color="info"
+                        {...resolveLockProps("modAttack")}
+                      />
+                      <label className="label">
+                        <span className="label-text text-base-content text-xs">
+                          Attack
+                        </span>
+                      </label>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.modDecay}
+                        min={0.001}
+                        max={10}
+                        step={0.001}
+                        onChange={(value) => onParamChange({ modDecay: value })}
+                        size={50}
+                        color="info"
+                        {...resolveLockProps("modDecay")}
+                      />
+                      <label className="label">
+                        <span className="label-text text-base-content text-xs">
+                          Decay
+                        </span>
+                      </label>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.modSustain}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        onChange={(value) => onParamChange({ modSustain: value })}
+                        size={50}
+                        color="info"
+                        {...resolveLockProps("modSustain")}
+                      />
+                      <label className="label">
+                        <span className="label-text text-base-content text-xs">
+                          Sustain
+                        </span>
+                      </label>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-2">
+                      <Knob
+                        value={synthState.modRelease}
+                        min={0.001}
+                        max={5}
+                        step={0.001}
+                        onChange={(value) => onParamChange({ modRelease: value })}
+                        size={50}
+                        color="info"
+                        {...resolveLockProps("modRelease")}
+                      />
+                      <label className="label">
+                        <span className="label-text text-base-content text-xs">
+                          Release
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
               </div>
+            </>
+          )}
 
-              {!synthState.lfoSync && (
+          {/* LFO Controls */}
+          <div className="card bg-base-200 grow">
+            <div className="card-body">
+              <h4 className="card-title text-sm">LFO</h4>
+              <div className="flex justify-center items-center flex-wrap gap-6">
                 <div className="flex flex-col items-center gap-2">
                   <Knob
-                    value={synthState.lfoFrequency}
-                    min={0.1}
-                    max={20}
-                    step={0.1}
+                    value={synthState.lfoAmount}
+                    min={0}
+                    max={synthState.lfoTarget === "pitch" ? 2400 : 20000}
+                    step={synthState.lfoTarget === "pitch" ? 10 : 100}
                     onChange={(value) =>
-                      onParamChange({ lfoFrequency: value })
+                      onParamChange({ lfoAmount: value })
                     }
                     size={50}
                     color="accent"
-                    {...resolveLockProps("lfoFrequency")}
+                    {...resolveLockProps("lfoAmount")}
                   />
                   <label className="label">
                     <span className="label-text text-base-content text-xs">
-                      Rate (Hz)
+                      {synthState.lfoTarget === "pitch" ? "Cents" : "Hz"}
                     </span>
                   </label>
                 </div>
-              )}
 
-              <div className="form-control w-32">
-                <label className="label">
-                  <span className="label-text text-xs">Target</span>
-                </label>
-                <select
-                  className="select select-bordered select-sm"
-                  value={synthState.lfoTarget}
-                  onChange={(e) =>
-                    onParamChange({ lfoTarget: e.target.value as SynthState["lfoTarget"] })
-                  }
-                >
-                  <option value="pitch">Pitch</option>
-                  <option value="filter">Filter</option>
-                </select>
-              </div>
+                {!synthState.lfoSync && (
+                  <div className="flex flex-col items-center gap-2">
+                    <Knob
+                      value={synthState.lfoFrequency}
+                      min={0.1}
+                      max={20}
+                      step={0.1}
+                      onChange={(value) =>
+                        onParamChange({ lfoFrequency: value })
+                      }
+                      size={50}
+                      color="accent"
+                      {...resolveLockProps("lfoFrequency")}
+                    />
+                    <label className="label">
+                      <span className="label-text text-base-content text-xs">
+                        Rate (Hz)
+                      </span>
+                    </label>
+                  </div>
+                )}
 
-              <div className="form-control w-32">
-                <label className="label">
-                  <span className="label-text text-xs">Waveform</span>
-                </label>
-                <select
-                  className="select select-bordered select-sm"
-                  value={synthState.lfoWaveform}
-                  onChange={(e) =>
-                    onParamChange({ lfoWaveform: e.target.value })
-                  }
-                >
-                  {LFO_WAVEFORMS.map((wave) => (
-                    <option key={wave} value={wave}>
-                      {wave.charAt(0).toUpperCase() + wave.slice(1)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <label className="label cursor-pointer flex flex-col gap-1 w-20">
-                <span className="label-text text-xs">Sync</span>
-                <input
-                  type="checkbox"
-                  className="toggle toggle-sm"
-                  checked={synthState.lfoSync}
-                  onChange={(e) =>
-                    onParamChange({ lfoSync: e.target.checked })
-                  }
-                />
-              </label>
-
-              {synthState.lfoSync && (
                 <div className="form-control w-32">
                   <label className="label">
-                    <span className="label-text text-xs">Division</span>
+                    <span className="label-text text-xs">Target</span>
                   </label>
                   <select
                     className="select select-bordered select-sm"
-                    value={synthState.lfoSyncSubdivision}
+                    value={synthState.lfoTarget}
                     onChange={(e) =>
-                      onParamChange({ lfoSyncSubdivision: e.target.value })
+                      onParamChange({ lfoTarget: e.target.value as SynthState["lfoTarget"] })
                     }
                   >
-                    {LFO_SYNC_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
+                    {isMono && <option value="pitch">Pitch</option>}
+                    <option value="filter">Filter</option>
+                  </select>
+                </div>
+
+                <div className="form-control w-32">
+                  <label className="label">
+                    <span className="label-text text-xs">Waveform</span>
+                  </label>
+                  <select
+                    className="select select-bordered select-sm"
+                    value={synthState.lfoWaveform}
+                    onChange={(e) =>
+                      onParamChange({ lfoWaveform: e.target.value })
+                    }
+                  >
+                    {LFO_WAVEFORMS.map((wave) => (
+                      <option key={wave} value={wave}>
+                        {wave.charAt(0).toUpperCase() + wave.slice(1)}
                       </option>
                     ))}
                   </select>
                 </div>
-              )}
+
+                <label className="label cursor-pointer flex flex-col gap-1 w-20">
+                  <span className="label-text text-xs">Sync</span>
+                  <input
+                    type="checkbox"
+                    className="toggle toggle-sm"
+                    checked={synthState.lfoSync}
+                    onChange={(e) =>
+                      onParamChange({ lfoSync: e.target.checked })
+                    }
+                  />
+                </label>
+
+                {synthState.lfoSync && (
+                  <div className="form-control w-32">
+                    <label className="label">
+                      <span className="label-text text-xs">Division</span>
+                    </label>
+                    <select
+                      className="select select-bordered select-sm"
+                      value={synthState.lfoSyncSubdivision}
+                      onChange={(e) =>
+                        onParamChange({ lfoSyncSubdivision: e.target.value })
+                      }
+                    >
+                      {LFO_SYNC_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
