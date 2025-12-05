@@ -270,7 +270,7 @@ const AudienceRoom = memo(() => {
                   {currentRoom?.name}
                 </span>
 
-                <div className='divider divider-horizontal !m-0' />
+                <div className='divider divider-horizontal m-0!' />
 
                 {/* User Name and Role */}
                 <div className="flex items-center">
@@ -293,7 +293,7 @@ const AudienceRoom = memo(() => {
 
           {/* Radio-style Live Indicator */}
           <div className="w-full  mb-4">
-            <div className="card bg-gradient-to-r from-primary/20 to-secondary/20 shadow-xl">
+            <div className="card bg-linear-to-r from-primary/20 to-secondary/20 shadow-xl">
               <div className="card-body items-center text-center py-8">
                 {/* Animated Radio Icon */}
                 <div className="relative">
@@ -308,7 +308,7 @@ const AudienceRoom = memo(() => {
                 <div className="flex items-center mt-4">
                   <h3 className="text-xl font-semibold">{currentRoom?.name}</h3>
 
-                  <div className="divider divider-horizontal !m-0" />
+                  <div className="divider divider-horizontal m-0!" />
 
                   <h3 className="text-xl font-semibold">
                     {streamStatus === 'playing' ? 'Now Playing' :

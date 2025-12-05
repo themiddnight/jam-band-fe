@@ -43,12 +43,29 @@ interface NoteReceivedData {
   sampleNotes?: string[];
 }
 
-interface SynthParamsData {
+export interface SynthParamsData {
   userId: string;
   username: string;
   instrument: string;
   category: string;
   params: Partial<SynthState>;
+}
+
+export interface NewUserSynthParamsData {
+  newUserId: string;
+  newUsername: string;
+  synthUserId: string;
+  synthUsername: string;
+}
+
+export interface RequestSynthParamsResponseData {
+  requestingUserId: string;
+  requestingUsername: string;
+}
+
+export interface AutoSendSynthParamsData {
+  newUserId: string;
+  newUsername: string;
 }
 
 interface EffectsChainChangedData {
@@ -141,23 +158,23 @@ export const useRoomSocket = (instrumentManager?: any) => {
     ((data: SynthParamsData) => void) | null
   >(null);
   const requestSynthParamsResponseCallbackRef = useRef<
-    | ((data: { requestingUserId: string; requestingUsername: string }) => void)
+    | ((data: RequestSynthParamsResponseData) => void)
     | null
   >(null);
   const autoSendSynthParamsToNewUserCallbackRef = useRef<
-    | ((data: { newUserId: string; newUsername: string }) => void)
+    | ((data: AutoSendSynthParamsData) => void)
     | null
   >(null);
   const sendCurrentSynthParamsToNewUserCallbackRef = useRef<
-    | ((data: { newUserId: string; newUsername: string }) => void)
+    | ((data: AutoSendSynthParamsData) => void)
     | null
   >(null);
   const requestCurrentSynthParamsForNewUserCallbackRef = useRef<
-    | ((data: { newUserId: string; newUsername: string; synthUserId: string; synthUsername: string }) => void)
+    | ((data: NewUserSynthParamsData) => void)
     | null
   >(null);
   const sendSynthParamsToNewUserNowCallbackRef = useRef<
-    | ((data: { newUserId: string; newUsername: string; synthUserId: string; synthUsername: string }) => void)
+    | ((data: NewUserSynthParamsData) => void)
     | null
   >(null);
   const guestCancelledCallbackRef = useRef<((userId: string) => void) | null>(
@@ -789,7 +806,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
 
       on(
         "request_synth_params_response",
-        (data: { requestingUserId: string; requestingUsername: string }) => {
+        (data: RequestSynthParamsResponseData) => {
           if (requestSynthParamsResponseCallbackRef.current) {
             requestSynthParamsResponseCallbackRef.current(data);
           }
@@ -798,7 +815,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
 
       on(
         "auto_send_synth_params_to_new_user",
-        (data: { newUserId: string; newUsername: string }) => {
+        (data: AutoSendSynthParamsData) => {
           // console.log("🎛️ Auto send synth params to new user:", data);
           if (autoSendSynthParamsToNewUserCallbackRef.current) {
             autoSendSynthParamsToNewUserCallbackRef.current(data);
@@ -810,7 +827,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
 
       on(
         "send_current_synth_params_to_new_user",
-        (data: { newUserId: string; newUsername: string }) => {
+        (data: AutoSendSynthParamsData) => {
           // console.log("🎛️ Send current synth params to new user:", data);
           if (sendCurrentSynthParamsToNewUserCallbackRef.current) {
             sendCurrentSynthParamsToNewUserCallbackRef.current(data);
@@ -822,7 +839,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
 
       on(
         "request_current_synth_params_for_new_user",
-        (data: { newUserId: string; newUsername: string; synthUserId: string; synthUsername: string }) => {
+        (data: NewUserSynthParamsData) => {
           // console.log("🎛️ Request current synth params for new user:", data);
           if (requestCurrentSynthParamsForNewUserCallbackRef.current) {
             requestCurrentSynthParamsForNewUserCallbackRef.current(data);
@@ -834,7 +851,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
 
       on(
         "send_synth_params_to_new_user_now",
-        (data: { newUserId: string; newUsername: string; synthUserId: string; synthUsername: string }) => {
+        (data: NewUserSynthParamsData) => {
           // console.log("🎛️ Send synth params to new user now:", data);
           if (sendSynthParamsToNewUserNowCallbackRef.current) {
             sendSynthParamsToNewUserNowCallbackRef.current(data);
@@ -1176,15 +1193,15 @@ export const useRoomSocket = (instrumentManager?: any) => {
 
   // Instrument swap functions
   const requestInstrumentSwap = useCallback(
-    (targetUserId: string, synthParams?: any) => {
-      safeEmit("request_instrument_swap", { targetUserId, synthParams });
+    (targetUserId: string, synthParams?: any, sequencerState?: any) => {
+      safeEmit("request_instrument_swap", { targetUserId, synthParams, sequencerState });
     },
     [safeEmit],
   );
 
   const approveInstrumentSwap = useCallback(
-    (requesterId: string, synthParams?: any) => {
-      safeEmit("approve_instrument_swap", { requesterId, synthParams });
+    (requesterId: string, synthParams?: any, sequencerState?: any) => {
+      safeEmit("approve_instrument_swap", { requesterId, synthParams, sequencerState });
     },
     [safeEmit],
   );

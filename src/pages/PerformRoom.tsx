@@ -516,13 +516,19 @@ const PerformRoom = memo(() => {
   const handleSwapInstrument = useCallback(
     (targetUserId: string) => {
       const targetUser = currentRoom?.users.find(
-        (user) => user.id === targetUserId
+        (user: RoomUser) => user.id === targetUserId
       );
       if (targetUser) {
         setPendingSwapTarget(targetUser);
         // Pass current synth params if category is Synthesizer
         const params = currentCategory === InstrumentCategory.Synthesizer ? synthState : undefined;
-        requestInstrumentSwap(targetUserId, params);
+        // Capture current sequencer state
+        const seqState = {
+          banks: useSequencerStore.getState().banks,
+          settings: useSequencerStore.getState().settings,
+          currentBank: useSequencerStore.getState().currentBank,
+        };
+        requestInstrumentSwap(targetUserId, params, seqState);
       }
     },
     [currentRoom?.users, requestInstrumentSwap, currentCategory, synthState]
@@ -537,7 +543,13 @@ const PerformRoom = memo(() => {
     if (swapRequestData.requester) {
       // Pass current synth params if category is Synthesizer
       const params = currentCategory === InstrumentCategory.Synthesizer ? synthState : undefined;
-      approveInstrumentSwap(swapRequestData.requester.id, params);
+      // Capture current sequencer state
+      const seqState = {
+        banks: useSequencerStore.getState().banks,
+        settings: useSequencerStore.getState().settings,
+        currentBank: useSequencerStore.getState().currentBank,
+      };
+      approveInstrumentSwap(swapRequestData.requester.id, params, seqState);
     }
     setSwapRequestData({ requester: null, isModalOpen: false });
   }, [swapRequestData.requester, approveInstrumentSwap, currentCategory, synthState]);
@@ -553,7 +565,7 @@ const PerformRoom = memo(() => {
   const handleKickUser = useCallback(
     (targetUserId: string) => {
       const targetUser = currentRoom?.users.find(
-        (user) => user.id === targetUserId
+        (user: RoomUser) => user.id === targetUserId
       );
       if (targetUser) {
         setKickUserData({ targetUser, isModalOpen: true });
@@ -746,7 +758,7 @@ const PerformRoom = memo(() => {
     const unsubscribeSwapRequestReceived = onSwapRequestReceived((data) => {
       // Find the requester user in current room
       const requesterUser = currentRoom?.users.find(
-        (user) => user.id === data.requesterId
+        (user: RoomUser) => user.id === data.requesterId
       );
       if (requesterUser) {
         setSwapRequestData({
@@ -809,8 +821,27 @@ const PerformRoom = memo(() => {
           }, 100);
         }
 
-        // Request sequencer snapshot from the other user
-        if (otherData.userId) {
+        // Apply sequencer state if provided (new method) or request it (fallback)
+        if (myData.sequencerState) {
+          try {
+            console.log("🎹 Applying swapped sequencer state directly");
+            // Stop if playing
+            if (sequencer.isPlaying) {
+              useSequencerStore.getState().hardStop();
+            }
+            // Apply state
+            useSequencerStore.setState({
+              banks: myData.sequencerState.banks,
+              settings: myData.sequencerState.settings,
+              currentBeat: 0,
+              selectedBeat: 0,
+              currentBank: myData.sequencerState.currentBank,
+            });
+          } catch (e) {
+            console.error("❌ Failed to apply swapped sequencer state:", e);
+          }
+        } else if (otherData.userId) {
+          // Legacy fallback: Request sequencer snapshot from the other user
           requestSequencerState(otherData.userId);
         }
       }
@@ -1381,7 +1412,7 @@ const PerformRoom = memo(() => {
                           </div>
                         ) : (
                           <ul className="menu bg-base-100 w-full p-0">
-                            {currentRoom!.pendingMembers.map((user) => (
+                            {currentRoom!.pendingMembers.map((user: RoomUser) => (
                               <div
                                 key={user.id}
                                 className="flex items-center justify-between gap-2 px-0"

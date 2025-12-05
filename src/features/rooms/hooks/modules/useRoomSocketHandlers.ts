@@ -2,6 +2,10 @@ import { useCallback, useEffect } from "react";
 import { ConnectionState } from "@/features/audio/types/connectionState";
 import { InstrumentCategory } from "@/shared/constants/instruments";
 import type { SynthState } from "@/features/instruments";
+import type {
+  SynthParamsData,
+  NewUserSynthParamsData,
+} from "@/features/audio/hooks/useRoomSocket";
 
 interface UseRoomSocketHandlersProps {
   connectionState: ConnectionState;
@@ -197,7 +201,7 @@ export const useRoomSocketHandlers = ({
   // --- Synth Params Handlers ---
 
   useEffect(() => {
-    const unsubscribe = onSynthParamsChanged((data) => {
+    const unsubscribe = onSynthParamsChanged((data: SynthParamsData) => {
       try {
         updateRemoteUserSynthParams(
           data.userId,
@@ -268,7 +272,7 @@ export const useRoomSocketHandlers = ({
   ]);
 
   useEffect(() => {
-    const unsubscribe = onRequestCurrentSynthParamsForNewUser((data) => {
+    const unsubscribe = onRequestCurrentSynthParamsForNewUser((data: NewUserSynthParamsData) => {
       if (
         data.synthUserId === userId &&
         currentCategory === InstrumentCategory.Synthesizer &&
@@ -288,7 +292,7 @@ export const useRoomSocketHandlers = ({
   ]);
 
   useEffect(() => {
-    const unsubscribe = onSendSynthParamsToNewUserNow((data) => {
+    const unsubscribe = onSendSynthParamsToNewUserNow((data: NewUserSynthParamsData) => {
       if (
         data.synthUserId === userId &&
         currentCategory === InstrumentCategory.Synthesizer &&
