@@ -1,8 +1,8 @@
 // Drum preset configuration and assignments
 
-export interface DrumPreset {
-  id: string;
-  name: string;
+import type { BasePreset } from "@/shared/hooks/presetManagement";
+
+export interface DrumPreset extends BasePreset {
   description: string;
   drumMachine: string;
   padAssignments: Record<string, string>;
@@ -116,6 +116,8 @@ export const DEFAULT_DRUM_PRESETS: Record<string, DrumPreset[]> = {
       name: "Default",
       description: "Default MFB-512 layout",
       drumMachine: "MFB-512",
+      createdAt: new Date('2024-01-01'),
+      updatedAt: new Date('2024-01-01'),
       padAssignments: {
         "pad-0": "bd",
         "pad-1": "sd",
@@ -143,6 +145,8 @@ export const DEFAULT_DRUM_PRESETS: Record<string, DrumPreset[]> = {
       name: "Default",
       description: "Default TR-808 layout with classic drum sounds",
       drumMachine: "TR-808",
+      createdAt: new Date('2024-01-01'),
+      updatedAt: new Date('2024-01-01'),
       padAssignments: {
         // Group A (qwer asdf) - Main sounds
         "pad-0": "bd", // Q - Bass Drum
@@ -172,6 +176,8 @@ export const DEFAULT_DRUM_PRESETS: Record<string, DrumPreset[]> = {
       name: "Default",
       description: "Default LinnDrum LM-2 layout",
       drumMachine: "LM-2",
+      createdAt: new Date('2024-01-01'),
+      updatedAt: new Date('2024-01-01'),
       padAssignments: {
         "pad-0": "bd",
         "pad-1": "sd",
@@ -199,6 +205,8 @@ export const DEFAULT_DRUM_PRESETS: Record<string, DrumPreset[]> = {
       name: "Default",
       description: "Default Casio RZ-1 layout",
       drumMachine: "Casio-RZ1",
+      createdAt: new Date('2024-01-01'),
+      updatedAt: new Date('2024-01-01'),
       padAssignments: {
         "pad-0": "bd",
         "pad-1": "sd",
@@ -226,6 +234,8 @@ export const DEFAULT_DRUM_PRESETS: Record<string, DrumPreset[]> = {
       name: "Default",
       description: "Default Roland CR-8000 layout",
       drumMachine: "Roland CR-8000",
+      createdAt: new Date('2024-01-01'),
+      updatedAt: new Date('2024-01-01'),
       padAssignments: {
         "pad-0": "bd",
         "pad-1": "sd",

@@ -746,6 +746,12 @@ export const useRoomSocket = (instrumentManager?: any) => {
         }
       });
 
+      on("kicked", (data: { message: string }) => {
+        setRoomError(data.message);
+        clearRoom();
+        socketManagerRef.current?.disconnect();
+      });
+
       on("leave_confirmed", () => {
         clearRoom();
       });
@@ -932,7 +938,7 @@ export const useRoomSocket = (instrumentManager?: any) => {
     addPendingMember,
     removePendingMember,
     updateUserInstrument,
-  updateUserEffectChains,
+    updateUserEffectChains,
     transferOwnership,
     clearRoom,
     setPendingApproval,

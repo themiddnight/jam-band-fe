@@ -39,6 +39,7 @@ export interface PresetManagerConfig<T extends BasePreset> {
   validator?: PresetValidator<T>;
   onImportSuccess?: (presets: T[]) => void;
   onImportError?: (error: string) => void;
+  backendType?: 'SYNTH' | 'EFFECT' | 'SEQUENCER' | 'INSTRUMENT';
 }
 
 export interface PresetImportResult<T extends BasePreset> {

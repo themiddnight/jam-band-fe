@@ -51,6 +51,21 @@ export function AuthChoiceModal({
       showCancelButton={false}
       allowClose={allowClose} // Allow closing if allowClose is true
     >
+
+      <div className="flex gap-2 bg-base-300 p-3 rounded">
+        🌟
+        <div className="flex flex-col gap-3">
+          <p className="text-xs font-light">
+            This is an early-stage PoC project designed for musicians and producers to collaborate. Please note that it may contain bugs and limitations. To improve performance and stability (especially latency), we collect non-personally identifiable technical usage data (e.g., latency metrics, session duration, room usage statistics). This data will not be linked to your username.
+          </p>
+          <p className="text-xs font-light opacity-50">
+            นี่คือโปรเจกต์ Proof of Concept (PoC) ที่กำลังพัฒนาเพื่อให้นักดนตรี/โปรดิวเซอร์ได้ทำเพลงร่วมกัน อาจมีบั๊กและข้อบกพร่อง เราจะเก็บข้อมูลการใช้งานทางเทคนิค (เช่น Latency และสถิติการใช้ห้อง) เพื่อปรับปรุงแอปฯ ข้อมูลเหล่านี้ไม่ระบุตัวตนและจะไม่เชื่อมโยงกับ Username ของคุณ
+          </p>
+        </div>
+      </div>
+
+      <div className="divider"></div>
+
       <div className="space-y-4">
         <p className="text-base-content/70 mb-4 text-center">
           Please choose how you want to continue
@@ -82,20 +97,6 @@ export function AuthChoiceModal({
         <p className="text-base-content/30 text-xs text-center mt-4">
           Guest users have limited features. Sign up to unlock full functionality.
         </p>
-      </div>
-
-      <div className="divider"></div>
-      
-      <div className="flex gap-2 bg-base-300 p-3 rounded">
-        🌟
-        <div className="flex flex-col gap-3">
-          <p className="text-xs font-light">
-            This is an early-stage PoC project designed for musicians and producers to collaborate. Please note that it may contain bugs and limitations. To improve performance and stability (especially latency), we collect non-personally identifiable technical usage data (e.g., latency metrics, session duration, room usage statistics). This data will not be linked to your username.
-          </p>
-          <p className="text-xs font-light opacity-50">
-            นี่คือโปรเจกต์ Proof of Concept (PoC) ที่กำลังพัฒนาเพื่อให้นักดนตรี/โปรดิวเซอร์ได้ทำเพลงร่วมกัน อาจมีบั๊กและข้อบกพร่อง เราจะเก็บข้อมูลการใช้งานทางเทคนิค (เช่น Latency และสถิติการใช้ห้อง) เพื่อปรับปรุงแอปฯ ข้อมูลเหล่านี้ไม่ระบุตัวตนและจะไม่เชื่อมโยงกับ Username ของคุณ
-          </p>
-        </div>
       </div>
     </Modal>
   );

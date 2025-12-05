@@ -39,20 +39,23 @@ export interface SequencerState {
 
   // Banks
   banks: Record<string, SequencerBank>;
-  
+
   // Settings
   settings: SequencerSettings;
-  
+
   // UI state
   selectedBeat: number;
   presets: SequencerPreset[];
-  
+
   // Clipboard state
   clipboard: SequencerClipboard | null;
 
   // Category state management
   activeCategory: string;
   categoryStates: Record<string, SequencerCategoryState>;
+
+  // UI Persistence
+  isCollapsed: boolean;
 }
 
 export interface SequencerCategoryState {
