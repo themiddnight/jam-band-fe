@@ -111,7 +111,8 @@ export const useSequencer = ({
     onBeatChange,
     onPlayStep,
     banks: sequencerState.banks,
-    currentBank: sequencerState.currentBank
+    currentBank: sequencerState.currentBank,
+    settings: sequencerState.settings
   });
 
   // 4. Playback Controls

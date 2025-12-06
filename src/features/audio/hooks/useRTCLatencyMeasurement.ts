@@ -89,7 +89,7 @@ export function useRTCLatencyMeasurement({
         const validLatencies = stats
           .map((stat) => stat.currentLatency)
           .filter(
-            (latency): latency is number => latency !== null && latency > 0,
+            (latency): latency is number => latency !== null && latency >= 0,
           );
 
         if (validLatencies.length > 0) {
@@ -101,7 +101,7 @@ export function useRTCLatencyMeasurement({
 
           // Store measurements for history
           stats.forEach((stat) => {
-            if (stat.currentLatency !== null && stat.currentLatency > 0) {
+            if (stat.currentLatency !== null && stat.currentLatency >= 0) {
               const measurement: RTCLatencyMeasurement = {
                 latency: stat.currentLatency,
                 timestamp: now,
@@ -186,12 +186,13 @@ export function useRTCLatencyMeasurement({
             if (rtt === undefined) rtt = reportAny.rtt;
             if (rtt === undefined) rtt = reportAny.totalRoundTripTime; // Some WebKit versions
             
-            if (typeof rtt === "number" && rtt > 0) {
+            if (typeof rtt === "number" && rtt >= 0) {
               // RTT may be in seconds (standard) or milliseconds (some browsers)
               const latencyMs = rtt < 1 ? Math.round(rtt * 1000) : Math.round(rtt);
 
-              // Only accept reasonable latency values (1ms to 1000ms)
-              if (latencyMs >= 1 && latencyMs <= 1000) {
+              // Only accept reasonable latency values (0ms to 5000ms)
+              // Allow 0ms for localhost/testing environments
+              if (latencyMs >= 0 && latencyMs <= 5000) {
                 totalLatency += latencyMs;
                 validMeasurements++;
                 foundRtt = true;
@@ -212,9 +213,9 @@ export function useRTCLatencyMeasurement({
           if (!foundRtt && report.type === "remote-inbound-rtp") {
             const reportAny = report as any;
             const rtt = reportAny.roundTripTime;
-            if (typeof rtt === "number" && rtt > 0) {
+            if (typeof rtt === "number" && rtt >= 0) {
               const latencyMs = rtt < 1 ? Math.round(rtt * 1000) : Math.round(rtt);
-              if (latencyMs >= 1 && latencyMs <= 1000) {
+              if (latencyMs >= 0 && latencyMs <= 5000) {
                 totalLatency += latencyMs;
                 validMeasurements++;
                 foundRtt = true;

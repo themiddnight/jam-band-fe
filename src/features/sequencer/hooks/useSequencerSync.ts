@@ -5,7 +5,7 @@ import type { RefObject } from "react";
 import { SequencerService } from "../services/SequencerService";
 import { MetronomeSocketService } from "@/features/metronome/services/MetronomeSocketService";
 import { useSequencerStore } from "../stores/sequencerStore";
-import type { SequencerSpeed, SequencerBank } from "../types";
+import type { SequencerSpeed, SequencerBank, SequencerSettings } from "../types";
 import { useEvent } from "@/shared/hooks/useEvent";
 
 interface UseSequencerSyncProps {
@@ -16,6 +16,7 @@ interface UseSequencerSyncProps {
   onPlayStep: (steps: any[]) => void;
   banks: Record<string, SequencerBank>;
   currentBank: string;
+  settings: SequencerSettings;
 }
 
 export const useSequencerSync = ({
@@ -25,7 +26,8 @@ export const useSequencerSync = ({
   onBeatChange,
   onPlayStep,
   banks,
-  currentBank
+  currentBank,
+  settings
 }: UseSequencerSyncProps) => {
   const metronomeServiceRef = useRef<MetronomeSocketService | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -154,6 +156,13 @@ export const useSequencerSync = ({
     }
   }, [isInitialized, banks, currentBank, sequencerServiceRef]); 
   
+  // Update sequencer service when settings change (speed, length)
+  useEffect(() => {
+    if (isInitialized) {
+      debouncedServiceUpdate.current(currentBPM, settings.speed, settings.length);
+    }
+  }, [isInitialized, settings.speed, settings.length, currentBPM]);
+
   return {
     isInitialized,
     error,

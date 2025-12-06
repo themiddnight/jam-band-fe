@@ -564,7 +564,7 @@ export const useTrackInteractions = ({
         const pointer = stage.getPointerPosition();
         if (!pointer) return;
 
-        const pointerX = pointer.x;
+        const pointerX = pointer.x + stageOffsetX;
         const deltaPixels = pointerX - loopState.startX;
         const unitWidth = loopState.targetLength * beatWidth;
         
