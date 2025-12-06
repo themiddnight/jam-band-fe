@@ -39,7 +39,7 @@ export function AvailableRoomsSection({
               </button>
               <button
                 onClick={onCreateRoom}
-                className="btn btn-sm btn-primary"
+                className="btn btn-sm btn-accent"
               >
                 Create
               </button>
