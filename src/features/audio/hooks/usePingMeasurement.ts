@@ -33,6 +33,7 @@ export function usePingMeasurement({
   // Buffer updates to avoid frequent state updates from many responses
   const bufferedPingRef = useRef<number | null>(null);
   const updateTimerRef = useRef<number | null>(null);
+  const connectTimerRef = useRef<number | null>(null);
   const UI_THROTTLE = PING_UI_THROTTLE_MS;
 
   // Track the current socket ID to avoid unnecessary resets
@@ -137,6 +138,11 @@ export function usePingMeasurement({
       intervalRef.current = null;
     }
 
+    if (connectTimerRef.current) {
+      clearTimeout(connectTimerRef.current);
+      connectTimerRef.current = null;
+    }
+
     // Clear pending pings
     pendingPingsRef.current.clear();
 
@@ -183,9 +189,17 @@ export function usePingMeasurement({
     const handleConnect = () => {
       setIsConnected(true);
       lastConnectedStateRef.current = true;
+      
+      // Clear any existing connection timer
+      if (connectTimerRef.current) {
+        clearTimeout(connectTimerRef.current);
+        connectTimerRef.current = null;
+      }
+
       if (enabled) {
         // Small delay to ensure connection is stable
-        setTimeout(() => {
+        connectTimerRef.current = window.setTimeout(() => {
+          connectTimerRef.current = null;
           if (!intervalRef.current) {
             // Send initial ping
             sendPing();
@@ -202,6 +216,10 @@ export function usePingMeasurement({
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
+      }
+      if (connectTimerRef.current) {
+        clearTimeout(connectTimerRef.current);
+        connectTimerRef.current = null;
       }
       pendingPingsRef.current.clear();
       if (updateTimerRef.current) {
@@ -244,6 +262,10 @@ export function usePingMeasurement({
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
+      }
+      if (connectTimerRef.current) {
+        clearTimeout(connectTimerRef.current);
+        connectTimerRef.current = null;
       }
     };
   }, [socket, enabled, handlePingResponse, sendPing, interval, isConnected]);

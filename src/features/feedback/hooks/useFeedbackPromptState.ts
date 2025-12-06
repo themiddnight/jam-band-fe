@@ -69,7 +69,7 @@ export const useFeedbackPromptState = () => {
   const [state, setState] = useState<FeedbackStorageState>(() =>
     readStateFromStorage()
   );
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(isAuthenticated);
 
   // Load feedback state from user database if authenticated
   useEffect(() => {

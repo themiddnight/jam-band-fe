@@ -322,14 +322,11 @@ const VoiceInputComponent: React.FC<VoiceInputProps> = ({
   /**
    * Connection status indicator logic:
    * - Red: Disconnected (no mic) or connection error
-   * - Orange/Yellow: Connecting - mic is on but mesh not ready
-   * - Green: Fully connected to mesh and ready to communicate
-   * 
-   * WebKit compatibility: Safari may not report latency stats accurately,
-   * so we use userCount as a fallback indicator for mesh connectivity.
+   * - Yellow: Connecting, Reconnecting, or Waiting for connection (Mesh not active)
+   * - Green: Fully connected to mesh with active latency stats
    */
   const getConnectionStatus = () => {
-    // Error state - red
+    // 1. Red: Error state
     if (connectionError) {
       return {
         color: "bg-red-500",
@@ -338,7 +335,7 @@ const VoiceInputComponent: React.FC<VoiceInputProps> = ({
       };
     }
 
-    // Not connected at all - red
+    // 2. Red: Not connected locally (Mic off)
     if (!voiceState.isConnected) {
       return {
         color: "bg-red-500",
@@ -347,21 +344,18 @@ const VoiceInputComponent: React.FC<VoiceInputProps> = ({
       };
     }
 
-    // Mic connected but mesh is connecting - orange with pulse
+    // 3. Yellow: Explicit connecting state
     if (isConnecting) {
       return {
-        color: "bg-orange-500",
+        color: "bg-yellow-500",
         pulse: true,
         tooltip: "Connecting to voice mesh...",
       };
     }
 
-    // WebKit fallback: If we have other users in the room and mic is connected,
-    // assume we're connected even if latency measurement isn't working
-    // (Safari often can't measure RTT but connection works fine)
-    const hasOtherUsers = userCount > 1;
-
-    // If RTC is active with measured latency - fully connected (green)
+    // 4. Green: Connected to mesh (Confirmed via RTC Latency)
+    // We strictly require rtcLatencyActive (valid RTT measurements) to be confident.
+    // If we lose mesh connection, rtcLatencyActive becomes false, dropping us to Yellow.
     if (rtcLatencyActive && meshLatency !== null && meshLatency !== undefined) {
       return {
         color: "bg-green-500",
@@ -370,40 +364,29 @@ const VoiceInputComponent: React.FC<VoiceInputProps> = ({
       };
     }
 
-    // WebKit fallback: If we have other users and mic is on, show green
-    // because communication is likely working even without latency stats
-    if (hasOtherUsers && voiceState.isConnected && !voiceState.isMuted) {
-      return {
-        color: "bg-green-500",
-        pulse: false,
-        tooltip: `Connected to ${userCount - 1} user${userCount > 2 ? 's' : ''} - ready to communicate`,
-      };
-    }
+    // 5. Yellow: Fallback / Waiting state
+    // - Mic is on (isConnected=true)
+    // - Not connecting (isConnecting=false)
+    // - BUT no active mesh stats (rtcLatencyActive=false)
+    // This covers:
+    // - Waiting for other users to join
+    // - Reconnecting to mesh after drop
+    // - Connected but RTT stats unavailable (Safari fallback scenario - safer to show Yellow than false Green)
+    const hasOtherUsers = userCount > 1;
 
-    // Mic connected but no other users yet - yellow (waiting)
-    if (!hasOtherUsers) {
+    if (hasOtherUsers) {
+      return {
+        color: "bg-yellow-500",
+        pulse: true,
+        tooltip: "Waiting for mesh connection or reconnecting...",
+      };
+    } else {
       return {
         color: "bg-yellow-500",
         pulse: true,
         tooltip: "Waiting for other users to join...",
       };
     }
-
-    // Mic connected and muted with other users - green but muted
-    if (hasOtherUsers && voiceState.isMuted) {
-      return {
-        color: "bg-green-500",
-        pulse: false,
-        tooltip: `Connected (muted) - ${userCount - 1} user${userCount > 2 ? 's' : ''} in room`,
-      };
-    }
-
-    // Fallback: Still connecting/measuring
-    return {
-      color: "bg-orange-500",
-      pulse: true,
-      tooltip: "Establishing connection...",
-    };
   };
 
   const connectionStatus = getConnectionStatus();

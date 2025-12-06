@@ -3,6 +3,37 @@
 > **🎵 A real-time collaborative music-making web application**  
 > Built for musicians who want to jam together online with minimal latency!
 
+---
+
+## 📑 Table of Contents
+
+- [Project Disclaimer](#-project-disclaimer)
+- [What It Does](#-what-it-does)
+- [Key Features](#-key-features)
+  - [Perform Room](#perform-room-live-jamming)
+  - [Arrange Room](#arrange-room-collaborative-daw)
+- [Quick Start](#-quick-start)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+  - [Full Stack Setup](#full-stack-setup)
+- [Audio Architecture](#-audio-architecture)
+- [Technical Requirements & Notes](#-technical-requirements--notes)
+- [Perfect For](#-perfect-for)
+- [Tech Stack](#-tech-stack)
+- [Architecture & Data Flow](#-architecture--data-flow)
+- [Project Structure](#-project-structure)
+- [Development Guide](#-development-guide)
+- [Available Scripts](#-available-scripts)
+- [Browser Support](#-browser-support)
+- [Configuration](#-configuration)
+- [Authentication Flow](#-authentication-flow)
+- [Troubleshooting](#-troubleshooting)
+- [Contributing](#-contributing)
+- [Related Documentation](#-related-documentation)
+- [License](#-license)
+
+---
+
 ## ⚠️ Project Disclaimer
 
 **This is a vibe-coding project** by a frontend developer who:
@@ -52,7 +83,7 @@ Jam Band lets you create music together with friends in real-time using **virtua
 - **📱 Mobile Responsive**: Full touch support for mobile devices with optimized UI
 - **🎤 Voice Chat Integration**: Ultra-low latency voice communication while producing
 - **⌨️ Keyboard Shortcuts**: Professional DAW-style shortcuts for efficient workflow
-- **🧪 Comprehensive Testing**: 76 passing tests with regression prevention for all features
+- **🧪 Comprehensive Testing**: 300+ tests with regression prevention for all features
 
 ## 🚀 Quick Start
 
@@ -69,18 +100,46 @@ Jam Band lets you create music together with friends in real-time using **virtua
    bun install
    ```
 
-2. **Start development**
+2. **Configure environment**
+   ```bash
+   cp .env.example .env.local
+   # Edit .env.local with your settings
+   ```
+
+3. **Start development**
    ```bash
    bun dev
    ```
 
-3. **Open browser**
+4. **Open browser**
    Navigate to `http://localhost:5173`
 
-4. **Run tests (optional)**
+5. **Run tests (optional)**
    ```bash
    bun test
    ```
+
+### Full Stack Setup
+
+This frontend requires the backend server to be running for full functionality:
+
+1. **Start Backend** (in separate terminal)
+   ```bash
+   cd ../jam-band-be
+   bun install
+   cp env.local.example .env.local
+   bun run start:dev
+   ```
+   Backend runs on `http://localhost:3001`
+
+2. **Start Frontend**
+   ```bash
+   cd ../jam-band-fe
+   bun dev
+   ```
+   Frontend runs on `http://localhost:5173`
+
+> **Note**: See [`jam-band-be/README.md`](../jam-band-be/README.md) for detailed backend setup including database, HTTPS, and WebRTC configuration.
 
 ## 🎛️ Audio Architecture
 
@@ -156,9 +215,58 @@ Jam Band lets you create music together with friends in real-time using **virtua
 - **Real-time**: Socket.IO 4.8, WebRTC
 - **State**: Zustand 5, TanStack Query 5
 - **Styling**: Tailwind CSS 4, DaisyUI 5
-- **Testing**: Vitest 2, React Testing Library 16, 74 comprehensive tests with regression prevention
+- **Testing**: Vitest 3, React Testing Library 16, 300+ comprehensive tests with regression prevention
 - **PWA**: VitePWA with Workbox
 - **Dev Tools**: ESLint 9, Prettier 3, TypeScript 5.8
+
+## 🏗️ Architecture & Data Flow
+
+### **Service Layer & State Management**
+We use **Zustand** for state management, but direct access to stores is abstracted via a **Service Layer**.
+- **Stores**: Hold the state and basic actions (e.g., `trackStore`, `regionStore`).
+- **Services**: Encapsulate business logic, synchronize with other services, and handle store interactions (e.g., `TrackService`, `DAWSyncService`).
+- **Selectors**: Optimized hooks for reading state in React components to prevent unnecessary re-renders.
+
+```mermaid
+graph TD
+    UI[React Components] --> Service[Service Layer]
+    Service --> Store[Zustand Store]
+    Store --> UI
+    Service --> Socket[Socket.IO / DAWSyncService]
+    Socket --> Backend
+```
+
+### **Real-time Data Flow (DAW Sync)**
+The **Arrange Room** uses a sophisticated synchronization engine to keep multiple users in sync while editing audio/MIDI tracks.
+
+```mermaid
+sequenceDiagram
+    participant User A
+    participant DAWSyncService
+    participant SocketMessageQueue
+    participant Server
+    participant User B
+
+    %% Outgoing Update
+    User A->>DAWSyncService: User moves a region
+    DAWSyncService->>SocketMessageQueue: enqueue('region_drag', data)
+    SocketMessageQueue->>SocketMessageQueue: Batch & Throttle (16ms)
+    SocketMessageQueue->>Server: emit('arrange:region_drag', batchedData)
+    
+    %% Incoming Update
+    Server->>User B: emit('arrange:region_drag', batchedData)
+    User B->>DAWSyncService: handleRegionDragBatch(data)
+    DAWSyncService->>DAWSyncService: set isSyncing = true
+    DAWSyncService->>RegionService: syncUpdateRegion(id, pos)
+    RegionService->>RegionStore: setState(...)
+    DAWSyncService->>DAWSyncService: set isSyncing = false
+    note over DAWSyncService: isSyncing flag prevents echo/loops
+```
+
+### **Performance Optimizations**
+- **SocketMessageQueue**: A utility class that batches and throttles high-frequency events (like cursor movement, fader adjustment, region dragging) to reduce network load and server strain. It drops intermediate updates and only sends the latest state per entity within a batch interval (default 16ms).
+- **Lazy Loading**: Route-based code splitting using `React.lazy` and `Suspense` to minimize initial bundle size.
+- **WebRTC Mesh**: Peer-to-peer voice chat that bypasses the server for audio streaming, ensuring minimal latency.
 
 ## 📁 Project Structure
 
@@ -188,6 +296,85 @@ src/
 └── __tests__/          # Integration tests & testing documentation
 ```
 
+## 📚 Development Guide
+
+### How to Add a New Feature
+
+We follow a **Feature-based Architecture**. When adding a new feature that requires backend communication (API or WebSocket), please follow these patterns:
+
+#### 1. REST API Integration
+
+1.  **Add Endpoint URL**:
+    Add your new endpoint path in `src/shared/utils/endpoints.ts`.
+    ```typescript
+    export const endpoints = {
+      // ...
+      myFeature: `${apiURL}/my-feature`,
+    };
+    ```
+
+2.  **Create Service**:
+    Create an API service file in your feature directory (e.g., `src/features/my-feature/services/api.ts`) using the pre-configured `axiosInstance`.
+    ```typescript
+    import axiosInstance from "@/shared/utils/axiosInstance";
+    import { endpoints } from "@/shared/utils/endpoints";
+
+    export const fetchMyData = async () => {
+      const response = await axiosInstance.get(endpoints.myFeature);
+      return response.data;
+    };
+    ```
+
+#### 2. WebSocket Integration
+
+1.  **Create Context & Provider**:
+    Manage socket connections within a specific feature context to handle lifecycle (connect/disconnect) properly.
+
+    Structure:
+    ```
+    src/features/my-feature/contexts/
+    ├── MySocketContext.tsx  # Context definition
+    └── MySocketProvider.tsx # Connection logic
+    ```
+
+2.  **Implement Provider**:
+    ```typescript
+    // src/features/my-feature/contexts/MySocketProvider.tsx
+    export const MySocketProvider = ({ children }) => {
+      const [socket, setSocket] = useState<Socket | null>(null);
+
+      useEffect(() => {
+        const newSocket = io(import.meta.env.VITE_API_URL, {
+           path: '/socket.io',
+           auth: { token: localStorage.getItem('auth_token') }
+        });
+        setSocket(newSocket);
+        return () => newSocket.disconnect();
+      }, []);
+
+      return (
+        <MySocketContext.Provider value={{ socket }}>
+          {children}
+        </MySocketContext.Provider>
+      );
+    };
+    ```
+
+#### 3. Recommended File Structure
+
+```text
+src/features/<feature-name>/
+├── services/
+│   └── api.ts           # API functions
+├── contexts/
+│   ├── SocketContext.tsx
+│   └── SocketProvider.tsx
+├── hooks/               # Custom hooks using API/Socket
+│   ├── useMyData.ts
+│   └── useMySocketEvents.ts
+└── components/          # UI Components
+```
+
 ## 🎮 Available Scripts
 
 - **`bun dev`** - Start development server with HTTPS (required for WebRTC)
@@ -195,7 +382,7 @@ src/
 - **`bun preview`** - Preview production build locally
 - **`bun lint`** - Run ESLint with React hooks rules
 - **`bun format`** - Format code with Prettier
-- **`bun test`** - Run comprehensive test suite (74 tests with regression prevention)
+- **`bun test`** - Run comprehensive test suite (300+ tests with regression prevention)
 - **`bun test:run`** - Run tests once (CI mode)
 - **`bun test:ui`** - Run tests with interactive UI dashboard
 - **`bun test:coverage`** - Generate detailed coverage reports
@@ -214,12 +401,27 @@ src/
 ## 🔧 Configuration
 
 ### Environment Variables
-Create `.env.local`:
-```env
-VITE_API_URL=http://localhost:3001
+
+Create `.env.local` from the example file:
+```bash
+cp .env.example .env.local
 ```
 
-> **Note**: Socket.IO URL is automatically derived from API URL. HTTPS is auto-configured in development via `vite-plugin-mkcert` for WebRTC compatibility.
+**Required Variables:**
+```env
+VITE_API_URL=http://localhost:3001    # Backend API URL
+```
+
+**Optional Variables:**
+```env
+VITE_ENABLE_ANALYTICS=false           # Enable analytics tracking
+VITE_SENTRY_DSN=                       # Sentry error tracking DSN
+```
+
+> **Notes**:
+> - Socket.IO URL is automatically derived from `VITE_API_URL`
+> - HTTPS is auto-configured in development via `vite-plugin-mkcert` for WebRTC compatibility
+> - For Google OAuth, configure credentials in the backend (see [`GOOGLE_OAUTH_SETUP.md`](../GOOGLE_OAUTH_SETUP.md))
 
 ## 🔐 Authentication Flow
 
@@ -347,12 +549,79 @@ sequenceDiagram
 - **`/forgot-password`**: Password reset request page
 - **`/reset-password`**: Password reset page with token
 
+## ❓ Troubleshooting
+
+### Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| **Audio not playing** | Click anywhere on the page first (browser autoplay policy requires user interaction) |
+| **MIDI device not detected** | Use Chrome/Edge/Brave. Firefox and Safari have limited MIDI support |
+| **WebRTC voice not working** | Ensure both frontend and backend use HTTPS. Check microphone permissions |
+| **Socket connection failed** | Verify backend is running on `VITE_API_URL`. Check CORS settings |
+| **Instruments not loading** | Wait for samples to download. Check network tab for failed requests |
+| **High latency** | Use wired connection. Close other browser tabs. Use Chromium-based browser |
+
+### Debug Tips
+
+1. **Check browser console** for errors
+2. **Verify backend connection**: Open `{VITE_API_URL}/health` in browser
+3. **Test audio context**: Run `new AudioContext().state` in console (should be "running")
+4. **Check WebSocket**: Look for Socket.IO connection in Network tab
+
+### Performance Issues
+
+- Close unnecessary browser tabs and applications
+- Use headphones to avoid audio feedback loops
+- Prefer wired internet over WiFi
+- Use Chrome/Edge for best Web Audio API performance
+
+---
+
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
+### Development Workflow
+
+1. **Fork** the repository
+2. **Create** a feature branch from `main`
+3. **Run tests** before making changes:
+   ```bash
+   bun test
+   ```
+4. **Make changes** following the architecture patterns
+5. **Run tests** after changes to ensure no regressions:
+   ```bash
+   bun test
+   bun lint
+   ```
+6. **Submit** a pull request with clear description
+
+### Code Style
+
+- Follow existing patterns in the codebase
+- Use TypeScript strict mode
+- Format with Prettier: `bun format`
+- Lint with ESLint: `bun lint`
+
+### Testing Guidelines
+
+- Write tests for new features
+- Ensure all existing tests pass
+- Use React Testing Library patterns
+- Mock external dependencies appropriately
+
+---
+
+## 📚 Related Documentation
+
+| Document | Description |
+|----------|-------------|
+| [`jam-band-be/README.md`](../jam-band-be/README.md) | Backend setup, API endpoints, WebSocket events |
+| [`GOOGLE_OAUTH_SETUP.md`](../GOOGLE_OAUTH_SETUP.md) | Google OAuth configuration guide |
+| [`USER_GUIDE_TH.md`](../USER_GUIDE_TH.md) | User guide (Thai) |
+| [`ROOMS_ARCHITECTURE_TH.md`](../ROOMS_ARCHITECTURE_TH.md) | Room architecture documentation (Thai) |
+
+---
 
 ## 📄 License
 

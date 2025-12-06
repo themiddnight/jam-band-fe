@@ -1,15 +1,16 @@
 import type { Socket } from 'socket.io-client';
-import { useTrackStore } from '../stores/trackStore';
-import { useRegionStore } from '../stores/regionStore';
-import { usePianoRollStore } from '../stores/pianoRollStore';
-import { useLockStore, type LockType } from '../stores/lockStore';
-import { useEffectsStore } from '../../effects/stores/effectsStore';
-import { useProjectStore } from '../stores/projectStore';
-import { useSynthStore } from '../stores/synthStore';
-import { useRecordingStore } from '../stores/recordingStore';
-import { useMarkerStore } from '../stores/markerStore';
-import { useBroadcastStore } from '../stores/broadcastStore';
-import { useArrangeUserStateStore } from '../stores/userStateStore';
+import { TrackService } from './trackService';
+import { RegionService } from './regionService';
+import { PianoRollService } from './pianoRollService';
+import { LockService } from './lockService';
+import type { LockType } from '../stores/lockStore';
+import { EffectsService } from '../../effects/services/effectsService';
+import { ProjectService } from './projectService';
+import { SynthService } from './synthService';
+import { RecordingService } from './recordingService';
+import { MarkerService } from './markerService';
+import { BroadcastService } from './broadcastService';
+import { ArrangeUserStateService } from './arrangeUserStateService';
 import { trackInstrumentRegistry } from '../utils/trackInstrumentRegistry';
 import type { Track, Region, MidiNote, TimeSignature } from '../types/daw';
 import type { TimeMarker } from '../types/marker';
@@ -19,6 +20,8 @@ import { DEFAULT_BPM, DEFAULT_TIME_SIGNATURE } from '../types/daw';
 import { InstrumentCategory } from '@/shared/constants/instruments';
 import { isSafari, isWebKit } from '@/shared/utils/webkitCompat';
 import { debounce } from 'lodash';
+
+import { SocketMessageQueue } from '@/shared/utils/SocketMessageQueue';
 
 export type RegionDragUpdatePayload = {
   regionId: string;
@@ -36,6 +39,7 @@ export class DAWSyncService {
   private effectChainDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingInstrumentLoads: { tracks: Track[]; synthStates: Record<string, SynthState> } | null = null;
   private userInteractionListener: (() => void) | null = null;
+  private messageQueue: SocketMessageQueue | null = null;
 
   // Debounced effect chain update (500ms)
   private debouncedEffectChainUpdate = debounce(
@@ -59,13 +63,13 @@ export class DAWSyncService {
     this.roomId = roomId;
     this.userId = userId;
     this.username = username;
-    console.log('🎵 DAW Sync Service initialized', {
-      roomId,
-      userId,
-      username,
-      socketId: socket.id,
-      socketNamespace: (socket as any).nsp,
+    
+    // Initialize message queue for high-frequency updates
+    this.messageQueue = new SocketMessageQueue(() => this.socket, {
+      batchInterval: 16, // ~60fps
+      maxQueueSize: 50,
     });
+
     this.setupEventListeners();
   }
 
@@ -79,6 +83,12 @@ export class DAWSyncService {
     this.debouncedEffectChainUpdate.cancel();
     this.removeEventListeners();
     this.cleanupUserInteractionListener();
+    
+    if (this.messageQueue) {
+      this.messageQueue.clear();
+      this.messageQueue = null;
+    }
+
     this.pendingInstrumentLoads = null;
     this.socket = null;
     this.roomId = null;
@@ -117,8 +127,6 @@ export class DAWSyncService {
       this.pendingInstrumentLoads = null;
       this.cleanupUserInteractionListener();
       
-      console.log(`🎵 Loading instruments for ${Object.keys(pending.synthStates).length} tracks`);
-      
       for (const [trackId, synthState] of Object.entries(pending.synthStates)) {
         const track = pending.tracks.find((t) => t.id === trackId);
         if (!track || track.type !== 'midi') {
@@ -131,7 +139,6 @@ export class DAWSyncService {
             instrumentCategory: track.instrumentCategory,
           });
           await engine.updateSynthParams(synthState);
-          console.log(`✅ Loaded instrument for track ${track.name}`);
         } catch (error) {
           console.warn('Failed to apply synced synth parameters', {
             trackId,
@@ -143,10 +150,8 @@ export class DAWSyncService {
     
     // For WebKit browsers, wait for user interaction
     if (isWebKitBrowser) {
-      console.log('🍎 WebKit detected: Deferring instrument loading until user interaction');
       
       this.userInteractionListener = () => {
-        console.log('🍎 User interaction detected, loading deferred instruments...');
         void loadInstruments();
       };
       
@@ -165,7 +170,6 @@ export class DAWSyncService {
           const ctx = await AudioContextManager.getInstrumentContext();
           
           if (ctx.state === 'running') {
-            console.log('🍎 AudioContext already running, loading instruments immediately');
             void loadInstruments();
           }
         } catch {
@@ -271,7 +275,6 @@ export class DAWSyncService {
    * Outgoing updates are still sent so other users can continue working
    */
   pauseSync(): void {
-    console.log('🎵 DAW Sync paused (incoming updates blocked)');
     this.isPaused = true;
   }
 
@@ -279,7 +282,6 @@ export class DAWSyncService {
    * Resume incoming sync updates and request latest state from server
    */
   resumeSync(): void {
-    console.log('🎵 DAW Sync resumed (requesting latest state)');
     this.isPaused = false;
     this.requestState();
   }
@@ -428,11 +430,20 @@ export class DAWSyncService {
    */
   syncSynthParams(trackId: string, params: Partial<SynthState>): void {
     if (!this.socket || !this.roomId || this.isSyncing) return;
-    this.socket.emit('arrange:synth_params_update', {
-      roomId: this.roomId,
-      trackId,
-      params,
-    });
+    
+    if (this.messageQueue) {
+      this.messageQueue.enqueue('arrange:synth_params_update', {
+        roomId: this.roomId,
+        trackId,
+        params,
+      });
+    } else {
+      this.socket.emit('arrange:synth_params_update', {
+        roomId: this.roomId,
+        trackId,
+        params,
+      });
+    }
   }
 
   /**
@@ -554,41 +565,36 @@ export class DAWSyncService {
     this.isSyncing = true;
     try {
       // Clear existing state
-      useTrackStore.getState().clearTracks();
-      useRegionStore.getState().clearSelection();
-      useSynthStore.getState().clearSynthStates();
+      TrackService.clearTracks();
+      RegionService.clearSelection();
+      SynthService.clearSynthStates();
 
       // Set tracks using sync handler
-      useTrackStore.getState().syncSetTracks(data.tracks);
+      TrackService.syncSetTracks(data.tracks);
 
       // Set regions using sync handler
-      console.log('State sync - received regions:', data.regions.map(r => ({
-        id: r.id,
-        type: r.type,
-        audioUrl: r.type === 'audio' ? (r as any).audioUrl : undefined,
-      })));
-      useRegionStore.getState().syncSetRegions(data.regions);
+      RegionService.syncSetRegions(data.regions);
 
       // Set synth states
       if (data.synthStates) {
-        useSynthStore.getState().setAllSynthStates(data.synthStates);
+        SynthService.setAllSynthStates(data.synthStates);
       }
 
       // Set markers
       if (data.markers) {
-        useMarkerStore.getState().syncSetMarkers(data.markers);
+        MarkerService.syncSetMarkers(data.markers);
       }
 
-      const arrangeUserStore = useArrangeUserStateStore.getState();
+      const arrangeUserStore = ArrangeUserStateService;
       arrangeUserStore.setVoiceStates(data.voiceStates ?? {});
 
-      const broadcastStore = useBroadcastStore.getState();
+      const broadcastStore = BroadcastService;
       broadcastStore.setBroadcastStates(data.broadcastStates ?? {});
 
       // Update project settings
-      const setBpm = useProjectStore.getState().setBpm;
-      const setTimeSignature = useProjectStore.getState().setTimeSignature;
-      const setProjectScale = useProjectStore.getState().setProjectScale;
+      const setBpm = ProjectService.setBpm;
+      const setTimeSignature = ProjectService.setTimeSignature;
+      const setProjectScale = ProjectService.setProjectScale;
       setBpm(data.bpm ?? DEFAULT_BPM);
       setTimeSignature(data.timeSignature ?? DEFAULT_TIME_SIGNATURE);
       if (data.projectScale) {
@@ -597,14 +603,14 @@ export class DAWSyncService {
 
       // Restore effect chains
       if (data.effectChains) {
-        const effectsStore = useEffectsStore.getState();
+        const effectsStore = EffectsService;
         Object.entries(data.effectChains).forEach(([chainType, effectChain]) => {
           effectsStore.syncUpdateEffectChain(chainType as any, effectChain);
         });
       }
 
       // Set locks (cast type to ensure it matches LockInfo)
-      useLockStore.getState().setLocks(
+      LockService.setLocks(
         data.locks.map((lock) => ({
           ...lock,
           type: lock.type as 'region' | 'track' | 'track_property',
@@ -630,7 +636,7 @@ export class DAWSyncService {
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
-      useTrackStore.getState().syncAddTrack(data.track);
+      TrackService.syncAddTrack(data.track);
     } finally {
       this.isSyncing = false;
     }
@@ -642,7 +648,7 @@ export class DAWSyncService {
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
-      useTrackStore.getState().syncUpdateTrack(data.trackId, data.updates);
+      TrackService.syncUpdateTrack(data.trackId, data.updates);
     } finally {
       this.isSyncing = false;
     }
@@ -654,7 +660,7 @@ export class DAWSyncService {
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
-      useTrackStore.getState().syncRemoveTrack(data.trackId);
+      TrackService.syncRemoveTrack(data.trackId);
     } finally {
       this.isSyncing = false;
     }
@@ -671,7 +677,7 @@ export class DAWSyncService {
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
-      useTrackStore.getState().syncSetTrackInstrument(
+      TrackService.syncSetTrackInstrument(
         data.trackId,
         data.instrumentId,
         data.instrumentCategory as any
@@ -687,7 +693,7 @@ export class DAWSyncService {
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
-      useTrackStore.getState().syncReorderTracks(data.trackIds);
+      TrackService.syncReorderTracks(data.trackIds);
     } finally {
       this.isSyncing = false;
     }
@@ -699,8 +705,8 @@ export class DAWSyncService {
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
-      useRegionStore.getState().syncAddRegion(data.region);
-      useRecordingStore.getState().removeRemoteRecordingPreview(data.userId);
+      RegionService.syncAddRegion(data.region);
+      RecordingService.removeRemoteRecordingPreview(data.userId);
     } finally {
       this.isSyncing = false;
     }
@@ -712,7 +718,7 @@ export class DAWSyncService {
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
-      useRegionStore.getState().syncUpdateRegion(data.regionId, data.updates);
+      RegionService.syncUpdateRegion(data.regionId, data.updates);
     } finally {
       this.isSyncing = false;
     }
@@ -724,7 +730,7 @@ export class DAWSyncService {
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
-      useRegionStore.getState().syncMoveRegion(data.regionId, data.newStart);
+      RegionService.syncMoveRegion(data.regionId, data.newStart);
     } finally {
       this.isSyncing = false;
     }
@@ -738,22 +744,22 @@ export class DAWSyncService {
 
     this.isSyncing = true;
     try {
-      const regionStore = useRegionStore.getState();
-      const trackStore = useTrackStore.getState();
+      // regionStore removed
+      // trackStore removed
 
       data.updates.forEach((update) => {
-        const region = regionStore.regions.find((r) => r.id === update.regionId);
+        const region = RegionService.getRegions().find((r) => r.id === update.regionId);
         if (!region) {
           return;
         }
 
         const nextTrackId = update.trackId ?? region.trackId;
         if (nextTrackId && nextTrackId !== region.trackId) {
-          trackStore.detachRegionFromTrack(region.trackId, region.id);
-          trackStore.attachRegionToTrack(nextTrackId, region.id);
+          TrackService.detachRegionFromTrack(region.trackId, region.id);
+          TrackService.attachRegionToTrack(nextTrackId, region.id);
         }
 
-        regionStore.syncUpdateRegion(region.id, {
+        RegionService.syncUpdateRegion(region.id, {
           start: Math.max(0, update.newStart),
           trackId: nextTrackId,
         });
@@ -769,7 +775,7 @@ export class DAWSyncService {
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
-      useRegionStore.getState().syncRemoveRegion(data.regionId);
+      RegionService.syncRemoveRegion(data.regionId);
     } finally {
       this.isSyncing = false;
     }
@@ -781,7 +787,7 @@ export class DAWSyncService {
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
-      usePianoRollStore.getState().syncAddNote(data.regionId, data.note);
+      PianoRollService.syncAddNote(data.regionId, data.note);
     } finally {
       this.isSyncing = false;
     }
@@ -793,7 +799,7 @@ export class DAWSyncService {
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
-      usePianoRollStore.getState().syncUpdateNote(data.regionId, data.noteId, data.updates);
+      PianoRollService.syncUpdateNote(data.regionId, data.noteId, data.updates);
     } finally {
       this.isSyncing = false;
     }
@@ -805,7 +811,7 @@ export class DAWSyncService {
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
-      usePianoRollStore.getState().syncDeleteNote(data.regionId, data.noteId);
+      PianoRollService.syncDeleteNote(data.regionId, data.noteId);
     } finally {
       this.isSyncing = false;
     }
@@ -822,7 +828,7 @@ export class DAWSyncService {
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
-      useEffectsStore.getState().syncUpdateEffectChain(
+      EffectsService.syncUpdateEffectChain(
         data.chainType as any,
         data.effectChain
       );
@@ -840,12 +846,12 @@ export class DAWSyncService {
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
-      const synthStore = useSynthStore.getState();
-      if (synthStore.synthStates[data.trackId]) {
-        synthStore.updateSynthState(data.trackId, data.params);
+      // synthStore removed
+      if (SynthService.getSynthStates()[data.trackId]) {
+        SynthService.updateSynthState(data.trackId, data.params);
       }
 
-      const track = useTrackStore.getState().tracks.find((t) => t.id === data.trackId);
+      const track = TrackService.getTracks().find((t) => t.id === data.trackId);
       if (track && track.type === 'midi') {
         void (async () => {
           try {
@@ -854,7 +860,7 @@ export class DAWSyncService {
               instrumentCategory: track.instrumentCategory,
             });
             await engine.updateSynthParams(data.params);
-            synthStore.setSynthState(track.id, engine.getSynthState());
+            SynthService.setSynthState(track.id, engine.getSynthState());
           } catch (error) {
             console.warn('Failed to apply remote synth params', {
               trackId: track.id,
@@ -876,7 +882,7 @@ export class DAWSyncService {
       return;
     }
 
-    const tracks = useTrackStore.getState().tracks;
+    const tracks = TrackService.getTracks();
 
     for (const track of tracks) {
       // Only apply to synth tracks
@@ -901,7 +907,6 @@ export class DAWSyncService {
         // Apply the saved synth parameters (isSyncing flag prevents broadcasts)
         await engine.updateSynthParams(synthState);
         
-        console.log(`Applied synth state to track ${track.name} from server project`);
       } catch (error) {
         console.warn(`Failed to apply synth state to track ${track.id}:`, error);
       }
@@ -913,7 +918,7 @@ export class DAWSyncService {
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
-      useProjectStore.getState().setBpm(data.bpm);
+      ProjectService.setBpm(data.bpm);
     } finally {
       this.isSyncing = false;
     }
@@ -927,7 +932,7 @@ export class DAWSyncService {
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
-      useProjectStore.getState().setTimeSignature(data.timeSignature);
+      ProjectService.setTimeSignature(data.timeSignature);
     } finally {
       this.isSyncing = false;
     }
@@ -942,7 +947,7 @@ export class DAWSyncService {
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
-      useProjectStore.getState().setProjectScale(data.rootNote, data.scale);
+      ProjectService.setProjectScale(data.rootNote, data.scale);
     } finally {
       this.isSyncing = false;
     }
@@ -962,7 +967,7 @@ export class DAWSyncService {
     elementId: string;
     lockInfo: { userId: string; username: string; type: string; timestamp: number };
   }): void {
-    useLockStore.getState().acquireLock(data.elementId, {
+    LockService.acquireLock(data.elementId, {
       ...data.lockInfo,
       type: data.lockInfo.type as 'region' | 'track' | 'track_property',
     });
@@ -970,10 +975,10 @@ export class DAWSyncService {
 
   private handleLockReleased(data: { elementId: string }): void {
     // Release lock (we don't know the userId, so we'll check in the store)
-    const lock = useLockStore.getState().isLocked(data.elementId);
+    const lock = LockService.isLocked(data.elementId);
     if (lock && lock.userId !== this.userId) {
       // Only release if it's not our lock (our own releases are handled locally)
-      useLockStore.getState().releaseLock(data.elementId, lock.userId);
+      LockService.releaseLock(data.elementId, lock.userId);
     }
   }
 
@@ -1004,7 +1009,7 @@ export class DAWSyncService {
     console.log(`🎵 Loading project from ${data.uploadedBy}:`, data.projectData.metadata?.name);
     
     // Set loading flag to trigger auto-fit zoom
-    useProjectStore.getState().setIsLoadingProject(true);
+    ProjectService.setIsLoadingProject(true);
     
     // Import the deserialize functions
     import('./projectSerializer').then(async ({ deserializeProject }) => {
@@ -1015,11 +1020,8 @@ export class DAWSyncService {
         
         // Load regions directly from projectData (they already have audioUrl set by the server)
         // Don't use deserializeRegions as it would overwrite the audioUrl
-        useRegionStore.setState({
-          regions: data.projectData.regions || [],
-          selectedRegionIds: [],
-          lastSelectedRegionId: null,
-        });
+        RegionService.clearSelection();
+        RegionService.syncSetRegions(data.projectData.regions || []);
 
         // Apply synth states to instrument engines
         await this.applySynthStatesFromProject(data.projectData);
@@ -1032,11 +1034,11 @@ export class DAWSyncService {
         
         // Clear loading flag after a short delay to allow auto-fit to trigger
         setTimeout(() => {
-          useProjectStore.getState().setIsLoadingProject(false);
+          ProjectService.setIsLoadingProject(false);
         }, 200);
       } catch (error) {
         console.error('Failed to load project from server:', error);
-        useProjectStore.getState().setIsLoadingProject(false);
+        ProjectService.setIsLoadingProject(false);
       } finally {
         this.isSyncing = false;
       }
@@ -1054,8 +1056,8 @@ export class DAWSyncService {
     };
   }): void {
     if (this.shouldBlockIncoming() || data.userId === this.userId) return;
-    const store = useRecordingStore.getState();
-    store.setRemoteRecordingPreview({
+    // store removed
+    RecordingService.setRemoteRecordingPreview({
       userId: data.userId,
       username: data.username,
       trackId: data.preview.trackId,
@@ -1067,7 +1069,7 @@ export class DAWSyncService {
 
   private handleRecordingPreviewEnd(data: { userId: string }): void {
     if (this.shouldBlockIncoming() || data.userId === this.userId) return;
-    useRecordingStore.getState().removeRemoteRecordingPreview(data.userId);
+    RecordingService.removeRemoteRecordingPreview(data.userId);
   }
 
   // ========== Marker sync methods ==========
@@ -1103,13 +1105,13 @@ export class DAWSyncService {
   syncFullStateUpdate(): void {
     if (!this.socket || !this.roomId || this.isSyncing) return;
     
-    const trackStore = useTrackStore.getState();
-    const regionStore = useRegionStore.getState();
-    const markerStore = useMarkerStore.getState();
-    const projectStore = useProjectStore.getState();
+    // trackStore removed
+    // regionStore removed
+    // markerStore removed
+    // projectStore removed
     
     // Sanitize regions to remove non-serializable data
-    const sanitizedRegions = regionStore.regions.map((region) => {
+    const sanitizedRegions = RegionService.getRegions().map((region) => {
       if (region.type === 'audio') {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { audioBuffer, audioBlob, ...rest } = region;
@@ -1121,11 +1123,11 @@ export class DAWSyncService {
     this.socket.emit('arrange:full_state_update', {
       roomId: this.roomId,
       state: {
-        tracks: trackStore.tracks,
+        tracks: TrackService.getTracks(),
         regions: sanitizedRegions,
-        markers: markerStore.markers,
-        bpm: projectStore.bpm,
-        timeSignature: projectStore.timeSignature,
+        markers: MarkerService.getMarkers(),
+        bpm: ProjectService.getBpm(),
+        timeSignature: ProjectService.getTimeSignature(),
       },
     });
   }
@@ -1135,7 +1137,7 @@ export class DAWSyncService {
 
     this.isSyncing = true;
     try {
-      useMarkerStore.getState().syncAddMarker(data.marker);
+      MarkerService.syncAddMarker(data.marker);
     } finally {
       this.isSyncing = false;
     }
@@ -1146,7 +1148,7 @@ export class DAWSyncService {
 
     this.isSyncing = true;
     try {
-      useMarkerStore.getState().syncUpdateMarker(data.markerId, data.updates);
+      MarkerService.syncUpdateMarker(data.markerId, data.updates);
     } finally {
       this.isSyncing = false;
     }
@@ -1157,7 +1159,7 @@ export class DAWSyncService {
     if (data.userId === this.userId) return;
     this.isSyncing = true;
     try {
-      useMarkerStore.getState().syncRemoveMarker(data.markerId);
+      MarkerService.syncRemoveMarker(data.markerId);
     } finally {
       this.isSyncing = false;
     }
@@ -1165,7 +1167,7 @@ export class DAWSyncService {
 
   private handleVoiceStateUpdate(data: { userId: string; isMuted: boolean }): void {
     if (!data?.userId) return;
-    useArrangeUserStateStore.getState().setVoiceState(data.userId, data.isMuted);
+    ArrangeUserStateService.setVoiceState(data.userId, data.isMuted);
   }
 
   private handleFullStateUpdate(data: {
@@ -1180,27 +1182,20 @@ export class DAWSyncService {
   }): void {
     if (this.shouldBlockIncoming() || data.userId === this.userId) return;
     
-    console.log('🔄 Received full state update from undo/redo', {
-      userId: data.userId,
-      tracks: data.state.tracks.length,
-      regions: data.state.regions.length,
-      markers: data.state.markers.length,
-    });
-    
     this.isSyncing = true;
     try {
       // Update tracks
-      useTrackStore.getState().syncSetTracks(data.state.tracks);
+      TrackService.syncSetTracks(data.state.tracks);
       
       // Update regions
-      useRegionStore.getState().syncSetRegions(data.state.regions);
+      RegionService.syncSetRegions(data.state.regions);
       
       // Update markers
-      useMarkerStore.getState().syncSetMarkers(data.state.markers);
+      MarkerService.syncSetMarkers(data.state.markers);
       
       // Update project settings
-      useProjectStore.getState().setBpm(data.state.bpm);
-      useProjectStore.getState().setTimeSignature(data.state.timeSignature);
+      ProjectService.setBpm(data.state.bpm);
+      ProjectService.setTimeSignature(data.state.timeSignature);
     } finally {
       this.isSyncing = false;
     }

@@ -16,18 +16,8 @@ import { InstrumentCategory } from '@/shared/constants/instruments';
  */
 export async function saveProjectAsZip(projectName: string): Promise<void> {
   try {
-    console.log('🔄 Starting project save...');
-    
     // 1. Serialize project data
-    console.log('📝 Serializing project data...');
     const projectData = serializeProject(projectName);
-    console.log('✅ Project data serialized:', {
-      tracks: projectData.tracks.length,
-      regions: projectData.regions.length,
-      effectChains: Object.keys(projectData.effectChains).length,
-      synthStates: Object.keys(projectData.synthStates || {}).length,
-      markers: projectData.markers?.length || 0,
-    });
 
     // Validate serialized data
     if (!projectData.tracks || !projectData.regions) {
@@ -35,22 +25,17 @@ export async function saveProjectAsZip(projectName: string): Promise<void> {
     }
 
     // 2. Extract audio files from regions
-    console.log('🎵 Extracting audio files...');
     const audioFiles = await extractAudioFiles(useRegionStore.getState().regions);
-    console.log('✅ Audio files extracted:', audioFiles.length);
 
     // 3. Create ZIP file
-    console.log('📦 Creating ZIP file...');
     const zip = new JSZip();
 
     // Add project.json with validation
-    console.log('📄 Adding project.json to ZIP...');
     let projectJson: string;
     try {
       projectJson = JSON.stringify(projectData, null, 2);
       // Validate it can be parsed back
       JSON.parse(projectJson);
-      console.log('✅ Project JSON validated, size:', (projectJson.length / 1024).toFixed(2), 'KB');
     } catch (jsonError) {
       console.error('❌ Failed to serialize project to JSON:', jsonError);
       throw new Error(`Invalid project data - cannot serialize to JSON: ${jsonError}`);
@@ -60,26 +45,20 @@ export async function saveProjectAsZip(projectName: string): Promise<void> {
 
     // Add audio files
     if (audioFiles.length > 0) {
-      console.log('🎵 Adding audio files to ZIP...');
       const audioFolder = zip.folder('audio');
       if (audioFolder) {
         for (const audioFile of audioFiles) {
-          console.log(`  Adding ${audioFile.fileName} (${(audioFile.blob.size / 1024).toFixed(2)} KB)...`);
           audioFolder.file(audioFile.fileName, audioFile.blob);
         }
       }
     }
 
     // 4. Generate ZIP blob with progress tracking
-    console.log('🗜️ Compressing ZIP file...');
     const zipBlob = await zip.generateAsync({
       type: 'blob',
       compression: 'DEFLATE',
       compressionOptions: { level: 6 },
-    }, (metadata) => {
-      console.log(`  Compression progress: ${metadata.percent.toFixed(1)}%`);
     });
-    console.log('✅ ZIP generated:', (zipBlob.size / 1024).toFixed(2), 'KB');
 
     // Validate ZIP size
     if (zipBlob.size === 0) {
@@ -88,16 +67,9 @@ export async function saveProjectAsZip(projectName: string): Promise<void> {
 
     // 5. Download the file
     const fileName = `${sanitizeFileName(projectName)}.collab`;
-    console.log('💾 Downloading file:', fileName);
     downloadBlob(zipBlob, fileName);
 
-    console.log(`✅ Project "${projectName}" saved successfully`);
   } catch (error) {
-    console.error('❌ Failed to save project:', error);
-    console.error('Error details:', {
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    });
     throw new Error(`Failed to save project: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
@@ -180,8 +152,6 @@ export async function loadProjectFromZip(file: File): Promise<void> {
     // 7. Apply synth states to instrument engines
     await applySynthStatesToEngines(projectData);
 
-    console.log(`Project "${projectData.metadata.name}" loaded successfully`);
-    
     // Clear loading flag after a short delay to allow auto-fit to trigger
     setTimeout(() => {
       useProjectStore.getState().setIsLoadingProject(false);
@@ -212,10 +182,7 @@ export async function saveProjectWithPicker(projectName: string): Promise<void> 
         ],
       });
 
-      console.log('🔄 Starting project save with file picker...');
-
       // Serialize and create ZIP
-      console.log('📝 Serializing project data...');
       const projectData = serializeProject(projectName);
       
       // Validate serialized data
@@ -223,19 +190,8 @@ export async function saveProjectWithPicker(projectName: string): Promise<void> 
         throw new Error('Invalid project data: missing tracks or regions');
       }
       
-      console.log('✅ Project data serialized:', {
-        tracks: projectData.tracks.length,
-        regions: projectData.regions.length,
-        effectChains: Object.keys(projectData.effectChains).length,
-        synthStates: Object.keys(projectData.synthStates || {}).length,
-        markers: projectData.markers?.length || 0,
-      });
-
-      console.log('🎵 Extracting audio files...');
       const audioFiles = await extractAudioFiles(useRegionStore.getState().regions);
-      console.log('✅ Audio files extracted:', audioFiles.length);
 
-      console.log('📦 Creating ZIP file...');
       const zip = new JSZip();
       
       // Validate JSON before adding to ZIP
@@ -243,7 +199,6 @@ export async function saveProjectWithPicker(projectName: string): Promise<void> 
       try {
         projectJson = JSON.stringify(projectData, null, 2);
         JSON.parse(projectJson); // Validate
-        console.log('✅ Project JSON validated, size:', (projectJson.length / 1024).toFixed(2), 'KB');
       } catch (jsonError) {
         console.error('❌ Failed to serialize project to JSON:', jsonError);
         throw new Error(`Invalid project data - cannot serialize to JSON: ${jsonError}`);
@@ -252,25 +207,19 @@ export async function saveProjectWithPicker(projectName: string): Promise<void> 
       zip.file('project.json', projectJson);
 
       if (audioFiles.length > 0) {
-        console.log('🎵 Adding audio files to ZIP...');
         const audioFolder = zip.folder('audio');
         if (audioFolder) {
           for (const audioFile of audioFiles) {
-            console.log(`  Adding ${audioFile.fileName} (${(audioFile.blob.size / 1024).toFixed(2)} KB)...`);
             audioFolder.file(audioFile.fileName, audioFile.blob);
           }
         }
       }
 
-      console.log('🗜️ Compressing ZIP file...');
       const zipBlob = await zip.generateAsync({
         type: 'blob',
         compression: 'DEFLATE',
         compressionOptions: { level: 6 },
-      }, (metadata) => {
-        console.log(`  Compression progress: ${metadata.percent.toFixed(1)}%`);
       });
-      console.log('✅ ZIP generated:', (zipBlob.size / 1024).toFixed(2), 'KB');
 
       // Validate ZIP size
       if (zipBlob.size === 0) {
@@ -278,15 +227,13 @@ export async function saveProjectWithPicker(projectName: string): Promise<void> 
       }
 
       // Write to file
-      console.log('💾 Writing to file...');
       const writable = await handle.createWritable();
       await writable.write(zipBlob);
       await writable.close();
 
-      console.log(`✅ Project "${projectName}" saved successfully`);
     } catch (error) {
       if ((error as Error).name === 'AbortError') {
-        console.log('Save cancelled by user');
+        // console.log('Save cancelled by user');
         return;
       }
       console.error('❌ Failed to save project:', error);
@@ -323,7 +270,7 @@ export async function loadProjectWithPicker(): Promise<void> {
       await loadProjectFromZip(file);
     } catch (error) {
       if ((error as Error).name === 'AbortError') {
-        console.log('Load cancelled by user');
+        // console.log('Load cancelled by user');
         return;
       }
       throw error;
@@ -392,7 +339,6 @@ async function applySynthStatesToEngines(projectData: SerializedProject): Promis
       // Apply the saved synth parameters (without triggering sync)
       await engine.updateSynthParams(synthState);
       
-      console.log(`Applied synth state to track ${track.name}`, synthState);
     } catch (error) {
       console.warn(`Failed to apply synth state to track ${track.id}:`, error);
     }
@@ -432,7 +378,6 @@ export async function autoSaveToIndexedDB(projectName: string): Promise<void> {
       timestamp: Date.now(),
     });
 
-    console.log('Auto-save completed');
   } catch (error) {
     console.error('Auto-save failed:', error);
   }
@@ -474,7 +419,6 @@ export async function recoverFromAutoSave(): Promise<boolean> {
 
           deserializeRegions(saved.projectData.regions, audioBuffers);
 
-          console.log('Project recovered from auto-save');
           resolve(true);
         } catch (error) {
           console.error('Failed to restore project:', error);

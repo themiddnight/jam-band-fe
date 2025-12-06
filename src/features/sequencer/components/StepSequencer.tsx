@@ -1,5 +1,4 @@
 import { memo, useMemo, useCallback, useState, useEffect } from "react";
-import { Socket } from "socket.io-client";
 import { useSequencer } from "../hooks/useSequencer";
 import { useSequencerStore } from "../stores/sequencerStore";
 import { DEFAULT_MELODIC_PRESETS } from "../constants/defaultPresets";
@@ -25,7 +24,6 @@ import type { EditMode, SequencerStep } from "../types";
 import type { CSSProperties } from "react";
 
 interface StepSequencerProps {
-  socket: Socket | null;
   currentCategory: string;
   availableSamples?: string[];
   scaleNotes?: string[];
@@ -40,7 +38,6 @@ interface StepSequencerProps {
 
 export const StepSequencer = memo(
   ({
-    socket,
     currentCategory,
     availableSamples = [],
     scaleNotes = [],
@@ -52,7 +49,6 @@ export const StepSequencer = memo(
     onEditModeChange,
   }: StepSequencerProps) => {
     const sequencer = useSequencer({
-      socket,
       currentCategory,
       onPlayNotes,
       onStopNotes,

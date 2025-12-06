@@ -8,6 +8,7 @@ import { debounce } from "lodash";
 interface InstrumentPreferences {
   instrument: string;
   category: InstrumentCategory;
+  synthParams?: any;
 }
 
 interface InstrumentPreferencesState {
@@ -16,6 +17,7 @@ interface InstrumentPreferencesState {
     instrumentId: string,
     instrument: string,
     category: InstrumentCategory,
+    synthParams?: any,
   ) => void;
   getPreferences: (instrumentId: string) => InstrumentPreferences;
   clearPreferences: (instrumentId?: string) => void;
@@ -56,11 +58,12 @@ export const useInstrumentPreferencesStore =
           instrumentId: string,
           instrument: string,
           category: InstrumentCategory,
+          synthParams?: any,
         ) => {
           set((state) => {
             const newPreferences = {
               ...state.preferences,
-              [instrumentId]: { instrument, category },
+              [instrumentId]: { instrument, category, synthParams },
             };
             // Save to API (debounced)
             debouncedSavePreferences(newPreferences);

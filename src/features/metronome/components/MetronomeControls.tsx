@@ -4,16 +4,20 @@ import { formatBpm, validateBpm } from "../utils";
 import { AnchoredPopup } from "@/features/ui";
 import React, { useState } from "react";
 import { Socket } from "socket.io-client";
+import { useRoomSocketContext } from "@/features/rooms/hooks/useRoomSocketContext";
 
 interface MetronomeControlsProps {
-  socket: Socket | null;
+  socket?: Socket | null;
   canEdit: boolean; // Whether user can edit metronome (room owner or band member)
 }
 
 export const MetronomeControls: React.FC<MetronomeControlsProps> = ({
-  socket,
+  socket: propSocket,
   canEdit,
 }) => {
+  const { socket: contextSocket } = useRoomSocketContext();
+  const socket = propSocket ?? contextSocket;
+
   const {
     bpm,
     isMuted,

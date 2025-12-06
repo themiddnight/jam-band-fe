@@ -4,7 +4,7 @@ import { useDeepLinkHandler } from "./shared/hooks/useDeepLinkHandler";
 import { usePresetSync } from "./shared/hooks/usePresetSync";
 import { useAuth } from "./shared/hooks/useAuth";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useEffect, useLayoutEffect } from "react";
+import { useEffect, useLayoutEffect, Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
 import { trackSessionStart } from "./shared/analytics/events";
 import { FeedbackPromptProvider } from "./features/feedback/context/FeedbackPromptProvider";
@@ -48,11 +48,13 @@ export default function App() {
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <FeedbackPromptProvider>
-          <Routes>
-            {routes.map(({ path, component: Component }: AppRoute) => (
-              <Route key={path} path={path} element={<Component />} />
-            ))}
-          </Routes>
+          <Suspense fallback={<div className="flex h-screen w-full items-center justify-center">Loading...</div>}>
+            <Routes>
+              {routes.map(({ path, component: Component }: AppRoute) => (
+                <Route key={path} path={path} element={<Component />} />
+              ))}
+            </Routes>
+          </Suspense>
           <PWAUpdatePrompt />
         </FeedbackPromptProvider>
       </QueryClientProvider>

@@ -83,19 +83,21 @@ export default function Lobby() {
   };
 
   return (
-    <div className="min-h-dvh bg-base-200 flex flex-col">
-      <div className="flex-1 p-3">
-        <div className="max-w-6xl mx-auto">
+    <div className="min-h-dvh xl:h-dvh xl:overflow-hidden bg-base-200 flex flex-col">
+      <div className="flex-1 p-3 flex flex-col min-h-0">
+        <div className="max-w-6xl mx-auto w-full flex-1 flex flex-col min-h-0">
           {/* Header */}
-          <LobbyHeader
-            connectionState={connectionState}
-            isConnecting={isConnecting}
-            isConnected={isConnected}
-            activeSocket={activeSocket}
-            onGuestButtonClick={handleGuestButtonClick}
-          />
+          <div className="flex-none">
+            <LobbyHeader
+              connectionState={connectionState}
+              isConnecting={isConnecting}
+              isConnected={isConnected}
+              activeSocket={activeSocket}
+              onGuestButtonClick={handleGuestButtonClick}
+            />
+          </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 h-full">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 flex-1 min-h-0 mt-4">
             {/* Available Rooms Section */}
             <AvailableRoomsSection
               rooms={rooms}

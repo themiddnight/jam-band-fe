@@ -43,12 +43,12 @@ export function RoomItem({
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="font-semibold">{room.name}</h3>
               <span
-                className={`badge badge-sm ${room.roomType === "perform" ? "badge-primary" : "badge-secondary"}`}
+                className={`badge badge-soft badge-sm ${room.roomType === "perform" ? "badge-primary" : "badge-secondary"}`}
               >
                 {room.roomType === "perform" ? "Perform" : "Arrange"}
               </span>
               {room.isPrivate && (
-                <span className="badge badge-warning badge-sm">Private</span>
+                <span className="badge badge-soft badge-warning badge-sm">Private</span>
               )}
               {room.isHidden && (
                 <span className="badge badge-neutral badge-sm">Hidden</span>
@@ -81,7 +81,7 @@ export function RoomItem({
               <div className="tooltip" data-tip={room.isBroadcasting ? "Join as audience" : "Broadcast not active"}>
                 <button
                   onClick={handleAudienceJoin}
-                  className={`btn btn-xs ${room.isBroadcasting ? "btn-success" : "btn-outline btn-disabled"}`}
+                  className={`btn btn-outline btn-xs ${room.isBroadcasting ? "btn-success" : "btn-disabled"}`}
                   disabled={
                     !room.isBroadcasting ||
                     isConnecting || 

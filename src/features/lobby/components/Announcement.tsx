@@ -12,7 +12,7 @@ export function Announcement({
   highlight,
 }: AnnouncementProps) {
   return (
-    <div className="card bg-gradient-to-br from-secondary/20 to-primary/20 shadow-xl border border-primary/30">
+    <div className="card bg-linear-to-br from-secondary/20 to-primary/20 shadow-xl border border-primary/30">
       <div className="card-body p-4">
         <div className="flex items-start gap-3">
           <div className="text-2xl">{emoji}</div>

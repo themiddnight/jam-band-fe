@@ -1,15 +1,17 @@
-import Invite from "../../pages/Invite";
-import Lobby from "../../pages/Lobby";
-import PerformRoom from "../../pages/PerformRoom";
-import ArrangeRoom from "../../pages/ArrangeRoom";
-import AudienceRoom from "../../pages/AudienceRoom";
-import Login from "../../pages/Login";
-import Register from "../../pages/Register";
-import VerifyEmail from "../../pages/VerifyEmail";
-import ForgotPassword from "../../pages/ForgotPassword";
-import ResetPassword from "../../pages/ResetPassword";
-import AccountSettings from "../../pages/AccountSettings";
-import AuthCallback from "../../pages/AuthCallback";
+import { lazy } from "react";
+
+const Invite = lazy(() => import("../../pages/Invite"));
+const Lobby = lazy(() => import("../../pages/Lobby"));
+const PerformRoom = lazy(() => import("../../pages/PerformRoom"));
+const ArrangeRoom = lazy(() => import("../../pages/ArrangeRoom"));
+const AudienceRoom = lazy(() => import("../../pages/AudienceRoom"));
+const Login = lazy(() => import("../../pages/Login"));
+const Register = lazy(() => import("../../pages/Register"));
+const VerifyEmail = lazy(() => import("../../pages/VerifyEmail"));
+const ForgotPassword = lazy(() => import("../../pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("../../pages/ResetPassword"));
+const AccountSettings = lazy(() => import("../../pages/AccountSettings"));
+const AuthCallback = lazy(() => import("../../pages/AuthCallback"));
 
 export const routes = [
   { path: "/", component: Lobby },
@@ -17,7 +19,8 @@ export const routes = [
   { path: "/perform/:roomId/audience", component: AudienceRoom },
   { path: "/arrange/:roomId", component: ArrangeRoom },
   { path: "/invite/:roomId", component: Invite },
-  { path: "/room/:roomId", component: PerformRoom }, // Legacy redirect support
+  // Legacy redirect support
+  { path: "/room/:roomId", component: PerformRoom },
   // Auth routes
   { path: "/login", component: Login },
   { path: "/register", component: Register },
@@ -31,5 +34,5 @@ export const routes = [
 
 export type AppRoute = {
   path: string;
-  component: React.ComponentType;
+  component: React.ComponentType<any>;
 };
