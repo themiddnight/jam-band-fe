@@ -668,64 +668,70 @@ const PianoRollComponent = () => {
   // Auto-scroll to first note or C5 when region is selected
   const prevActiveRegionIdRef = useRef<string | null>(null);
   useEffect(() => {
-    // Only trigger when region changes (not on initial mount if already set)
-    if (activeRegionId && activeRegionId !== prevActiveRegionIdRef.current && midiRegion) {
-      const scrollToPosition = () => {
-        if (!noteScrollRef.current || !keyScrollRef.current) {
-          return;
-        }
-
-        // Horizontal scroll: scroll to first note or region start
-        if (midiRegion.notes.length > 0) {
-          // Find the first note (earliest start time)
-          const firstNote = midiRegion.notes.reduce((earliest, note) => 
-            note.start < earliest.start ? note : earliest
-          );
-          
-          // Scroll to show the first note with some padding
-          const noteAbsoluteStart = midiRegion.start + firstNote.start;
-          const padding = 2; // beats of padding
-          const scrollX = Math.max(0, (noteAbsoluteStart - padding) * pixelsPerBeat * zoom);
-          noteScrollRef.current.scrollLeft = scrollX;
-          
-          // Vertical scroll: scroll to show the first note's pitch
-          const midiNumber = firstNote.pitch;
-          const noteIndex = visibleMidiNumbers.indexOf(midiNumber);
-          if (noteIndex !== -1) {
-            // Center the note vertically
-            const noteY = noteIndex * NOTE_HEIGHT;
-            const viewportHeight = noteScrollRef.current.clientHeight;
-            const scrollY = Math.max(0, noteY - viewportHeight / 2 + NOTE_HEIGHT / 2);
-            noteScrollRef.current.scrollTop = scrollY;
-            keyScrollRef.current.scrollTop = scrollY;
-          }
-        } else {
-          // Empty region: scroll to C5 (MIDI 72)
-          const c5MidiNumber = 72;
-          const noteIndex = visibleMidiNumbers.indexOf(c5MidiNumber);
-          
-          if (noteIndex !== -1) {
-            // Center C5 vertically
-            const c5Y = noteIndex * NOTE_HEIGHT;
-            const viewportHeight = noteScrollRef.current.clientHeight;
-            const scrollY = Math.max(0, c5Y - viewportHeight / 2 + NOTE_HEIGHT / 2);
-            noteScrollRef.current.scrollTop = scrollY;
-            keyScrollRef.current.scrollTop = scrollY;
-          }
-          
-          // Scroll horizontally to region start
-          const scrollX = Math.max(0, midiRegion.start * pixelsPerBeat * zoom);
-          noteScrollRef.current.scrollLeft = scrollX;
-        }
-      };
-
-      // Delay to ensure viewport and zoom are ready
-      const timer = setTimeout(scrollToPosition, 50);
-      return () => clearTimeout(timer);
+    // Only trigger when activeRegionId changes (not when region content changes)
+    if (activeRegionId === prevActiveRegionIdRef.current) {
+      return;
+    }
+    prevActiveRegionIdRef.current = activeRegionId;
+    
+    if (!activeRegionId || !midiRegion) {
+      return;
     }
     
-    prevActiveRegionIdRef.current = activeRegionId;
-  }, [activeRegionId, midiRegion, visibleMidiNumbers, zoom, pixelsPerBeat]);
+    const scrollToPosition = () => {
+      if (!noteScrollRef.current || !keyScrollRef.current) {
+        return;
+      }
+
+      // Horizontal scroll: scroll to first note or region start
+      if (midiRegion.notes.length > 0) {
+        // Find the first note (earliest start time)
+        const firstNote = midiRegion.notes.reduce((earliest, note) => 
+          note.start < earliest.start ? note : earliest
+        );
+        
+        // Scroll to show the first note with some padding
+        const noteAbsoluteStart = midiRegion.start + firstNote.start;
+        const padding = 2; // beats of padding
+        const scrollX = Math.max(0, (noteAbsoluteStart - padding) * pixelsPerBeat * zoom);
+        noteScrollRef.current.scrollLeft = scrollX;
+        
+        // Vertical scroll: scroll to show the first note's pitch
+        const midiNumber = firstNote.pitch;
+        const noteIndex = visibleMidiNumbers.indexOf(midiNumber);
+        if (noteIndex !== -1) {
+          // Center the note vertically
+          const noteY = noteIndex * NOTE_HEIGHT;
+          const viewportHeight = noteScrollRef.current.clientHeight;
+          const scrollY = Math.max(0, noteY - viewportHeight / 2 + NOTE_HEIGHT / 2);
+          noteScrollRef.current.scrollTop = scrollY;
+          keyScrollRef.current.scrollTop = scrollY;
+        }
+      } else {
+        // Empty region: scroll to C5 (MIDI 72)
+        const c5MidiNumber = 72;
+        const noteIndex = visibleMidiNumbers.indexOf(c5MidiNumber);
+        
+        if (noteIndex !== -1) {
+          // Center C5 vertically
+          const c5Y = noteIndex * NOTE_HEIGHT;
+          const viewportHeight = noteScrollRef.current.clientHeight;
+          const scrollY = Math.max(0, c5Y - viewportHeight / 2 + NOTE_HEIGHT / 2);
+          noteScrollRef.current.scrollTop = scrollY;
+          keyScrollRef.current.scrollTop = scrollY;
+        }
+        
+        // Scroll horizontally to region start
+        const scrollX = Math.max(0, midiRegion.start * pixelsPerBeat * zoom);
+        noteScrollRef.current.scrollLeft = scrollX;
+      }
+    };
+
+    // Delay to ensure viewport and zoom are ready
+    const timer = setTimeout(scrollToPosition, 50);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRegionId]);
 
   if (!midiRegion) {
     return (
@@ -872,8 +878,8 @@ const PianoRollComponent = () => {
         </div>
       </div>
       <div className="grid grid-cols-[auto_1fr] border-b border-base-300">
-        <div className="h-full w-[80px] border-r border-base-300 bg-base-100">
-          <div className="h-[32px] border-b border-base-300 bg-base-200/60" />
+        <div className="h-full w-20 border-r border-base-300 bg-base-100">
+          <div className="h-8 border-b border-base-300 bg-base-200/60" />
         </div>
         <div className="overflow-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]" style={{ height: `${RULER_HEIGHT}px` }}>
           <PianoRollRuler
