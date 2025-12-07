@@ -17,6 +17,8 @@ import { LoopToggle } from '../transport/LoopToggle';
 import { useDAWCollaborationContext } from '../../contexts/useDAWCollaborationContext';
 import { InfoTooltip } from '../common/InfoTooltip';
 import { useTouchGestures } from '../../hooks/useTouchGestures';
+import { AiGenerationPopup } from '../../../ai/components/AiGenerationPopup';
+import type { AiNote } from '../../../../shared/api/aiGeneration';
 
 export const MultitrackView = () => {
   const tracks = useTrackStore((state) => state.tracks);
@@ -380,6 +382,83 @@ export const MultitrackView = () => {
     }, 0) || TRACK_HEIGHT;
   }, [tracks, trackHeights]);
 
+  // AI Generation Context
+  const projectScale = useProjectStore((state) => state.projectScale);
+  const bpm = useProjectStore((state) => state.bpm);
+  
+  // Find the selected region (single)
+  const selectedRegion = useMemo(() => {
+    if (selectedRegionIds.length === 1) {
+      return regions.find(r => r.id === selectedRegionIds[0]);
+    }
+    return null;
+  }, [selectedRegionIds, regions]);
+
+  const aiContext = useMemo(() => {
+    const context: any = {
+      bpm,
+      scale: projectScale,
+      loopLength: selectedRegion ? selectedRegion.length : 4,
+    };
+
+    if (selectedRegion && selectedRegion.type === 'midi' && selectedRegion.notes && selectedRegion.notes.length > 0) {
+      context.existingNotes = selectedRegion.notes.map(n => ({
+        pitch: n.pitch,
+        start: n.start,
+        duration: n.duration,
+        velocity: n.velocity
+      }));
+    }
+
+    return context;
+  }, [bpm, projectScale, selectedRegion]);
+
+  const extraContext = useMemo(() => ({
+    tracks: tracks.map(t => ({ name: t.name, category: t.instrumentCategory }))
+  }), [tracks]);
+
+  const handleAiGenerate = useCallback((notes: AiNote[]) => {
+    if (!selectedTrackId) return;
+    const track = tracks.find(t => t.id === selectedTrackId);
+    if (!track || track.type !== 'midi') return;
+
+    let targetRegionId: string | null = null;
+    
+    // Case: Region Selected (single)
+    // Check if the selected region belongs to the selected track to be safe
+    if (selectedRegion && selectedRegion.trackId === track.id) {
+        targetRegionId = selectedRegion.id;
+    }
+
+    const midiNotes = notes.map(n => ({
+      id: crypto.randomUUID(),
+      pitch: Math.round(n.pitch),
+      start: n.start,
+      duration: n.duration,
+      velocity: Math.round(n.velocity)
+    }));
+
+    if (targetRegionId) {
+      // Update existing region: Replace notes completely
+      handleRegionUpdate(targetRegionId, { notes: midiNotes });
+    } else {
+      // Case: No Region Selected -> Create new region
+      // Calculate required length from generated notes
+      const maxEnd = notes.reduce((max, n) => Math.max(max, n.start + n.duration), 0);
+      const newLength = Math.max(4, Math.ceil(maxEnd));
+
+      // Create region at playhead
+      const region = handleRegionAdd(track.id, playhead);
+      
+      if (region) {
+        handleRegionUpdate(region.id, { 
+          length: newLength,
+          notes: midiNotes 
+        });
+      }
+    }
+  }, [selectedTrackId, tracks, playhead, handleRegionAdd, handleRegionUpdate, selectedRegion]);
+
   return (
     <section className="flex h-full flex-col overflow-hidden rounded-lg border border-base-300 bg-base-100 shadow-sm">
       <div className="flex items-center justify-between border-b border-base-300 px-2 sm:px-4 py-1.5 sm:py-2">
@@ -387,6 +466,18 @@ export const MultitrackView = () => {
           <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-wide text-base-content/70">
             Tracks
           </h2>
+          <AiGenerationPopup
+            onGenerate={handleAiGenerate}
+            context={aiContext}
+            extraContext={extraContext}
+            showContextToggle={true}
+            contextToggleLabel="Track Context"
+            trigger={
+              <button className="btn btn-xs btn-secondary btn-outline gap-1" disabled={!selectedTrackId}>
+                <span>✨</span> AI
+              </button>
+            }
+          />
           <LoopToggle />
           <button
             type="button"
@@ -426,7 +517,7 @@ export const MultitrackView = () => {
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1">
             <AddAudioClipButton />
-            <div className='divider divider-horizontal !m-0' />
+            <div className='divider divider-horizontal m-0!' />
             <button
               type="button"
               className="btn btn-xs btn-ghost"
@@ -503,7 +594,7 @@ export const MultitrackView = () => {
           <AddTrackMenu />
           <MarkerEditToggle />
         </div>
-        <div className="relative flex-1 h-[36px] overflow-hidden">
+        <div className="relative flex-1 h-9 overflow-hidden">
           <TimeRuler
             totalBeats={totalBeats}
             pixelsPerBeat={PIXELS_PER_BEAT}

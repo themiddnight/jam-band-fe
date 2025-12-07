@@ -45,7 +45,7 @@ export const useKeyboardShortcuts = () => {
 
       const hasCtrl = event.ctrlKey || event.metaKey;
 
-      if (hasCtrl && !event.shiftKey && event.key.toLowerCase() === 'p') {
+      if (hasCtrl && !event.shiftKey && event.key.toLowerCase() === 'w') {
         event.preventDefault();
         if (transportState === 'playing' || transportState === 'recording') {
           setTransportState('paused');
@@ -55,10 +55,20 @@ export const useKeyboardShortcuts = () => {
       } else if (hasCtrl && !event.shiftKey && event.key.toLowerCase() === 'r') {
         event.preventDefault();
         toggleRecording();
-      } else if (hasCtrl && !event.shiftKey && event.key === ',') {
+      } else if (hasCtrl && !event.shiftKey && event.key.toLowerCase() === 'q') {
         event.preventDefault();
         setPlayhead(0);
         setTransportState('stopped');
+        if (isRecording) {
+          toggleRecording(false);
+        }
+      } else if (hasCtrl && !event.shiftKey && event.key.toLowerCase() === 'e') {
+        event.preventDefault();
+        setTransportState('stopped');
+        setPlayhead(0);
+        if (isRecording) {
+          toggleRecording(false);
+        }
       } else if (event.key === 'Escape') {
         setTransportState('stopped');
       } else if (event.key === 'Delete' || event.key === 'Backspace') {

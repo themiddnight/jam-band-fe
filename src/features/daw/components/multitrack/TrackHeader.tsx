@@ -388,7 +388,7 @@ export const TrackHeader = ({
       {/* Output Meter */}
       <div className="relative h-[3px] -mt-1 mb-1 w-full rounded-full bg-base-300 overflow-hidden">
         <div
-          className="h-full bg-gradient-to-r from-green-500 via-yellow-500 to-red-500 transition-all duration-75"
+          className="h-full bg-linear-to-r from-green-500 via-yellow-500 to-red-500 transition-all duration-75"
           style={{ width: `${outputLevel * 100}%` }}
         />
       </div>

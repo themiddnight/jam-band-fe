@@ -60,14 +60,22 @@ export const TransportControls = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isMod = isMac ? e.metaKey : e.ctrlKey;
+      const key = e.key.toLowerCase();
 
-      if (isMod && e.key === ',') {
+      if (!isMod) {
+        return;
+      }
+
+      if (key === '1') {
         e.preventDefault();
         handleBackToStart();
-      } else if (isMod && e.key === 'p') {
+      } else if (key === '2') {
         e.preventDefault();
         handlePlayPause();
-      } else if (isMod && e.key === 'r') {
+      } else if (key === '3') {
+        e.preventDefault();
+        handleStop();
+      } else if (key === '4') {
         e.preventDefault();
         handleRecordToggle();
       }
@@ -75,7 +83,7 @@ export const TransportControls = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleBackToStart, handlePlayPause, handleRecordToggle, isMac]);
+  }, [handleBackToStart, handlePlayPause, handleRecordToggle, handleStop, isMac]);
 
   return (
     <div className="flex items-center gap-1 sm:gap-2">
@@ -85,10 +93,10 @@ export const TransportControls = () => {
             type="button"
             onClick={handleBackToStart}
             className="btn btn-outline btn-xs"
-            title={`Return to start (${modifierKey}+,)`}
+            title={`Return to start (${modifierKey}+1)`}
             aria-label="Return to start"
           >
-            <kbd className="kbd kbd-xs hidden sm:inline">{`${modifierKey}+,`}</kbd>
+            <kbd className="kbd kbd-xs hidden sm:inline">{`${modifierKey}+1`}</kbd>
             ⏮
           </button>
         </div>
@@ -97,10 +105,10 @@ export const TransportControls = () => {
             type="button"
             onClick={handlePlayPause}
             className={`btn btn-xs ${isPlaying ? 'btn-primary' : 'btn-success'}`}
-            title={`${isPlaying ? 'Pause' : 'Play'} (${modifierKey}+P)`}
+            title={`${isPlaying ? 'Pause' : 'Play'} (${modifierKey}+2)`}
             aria-label={isPlaying ? 'Pause' : 'Play'}
           >
-            <kbd className="kbd kbd-xs hidden sm:inline">{`${modifierKey}+P`}</kbd>
+            <kbd className="kbd kbd-xs hidden sm:inline">{`${modifierKey}+2`}</kbd>
             <PlayIcon isPlaying={isPlaying} />
           </button>
         </div>
@@ -108,9 +116,10 @@ export const TransportControls = () => {
           type="button"
           onClick={handleStop}
           className="btn btn-outline btn-xs btn-ghost"
-          title='Stop'
+          title={`Stop (${modifierKey}+3)`}
           aria-label="Stop"
         >
+          <kbd className="kbd kbd-xs hidden sm:inline">{`${modifierKey}+3`}</kbd>
           ■
         </button>
       </div>
@@ -119,9 +128,10 @@ export const TransportControls = () => {
           type="button"
           onClick={handleRecordToggle}
           className={`btn btn-outline btn-xs ${isRecording ? 'btn-error text-white' : 'btn-ghost'}`}
-          title={`Record (${modifierKey}+R)`}
+          title={`Record (${modifierKey}+4)`}
           aria-label="Record"
         >
+          <kbd className="kbd kbd-xs hidden sm:inline">{`${modifierKey}+4`}</kbd>
           <kbd className="kbd kbd-xs hidden sm:inline">{`${modifierKey}+R`}</kbd>
           <p className="text-red-500">
             {isRecording ? '●' : '○'}
