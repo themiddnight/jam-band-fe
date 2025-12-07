@@ -34,6 +34,14 @@ export const endpoints = {
   // Feedback state
   getFeedbackState: `${apiURL}/user/feedback-state`,
   updateFeedbackState: `${apiURL}/user/feedback-state`,
+  // AI Settings
+  aiSettings: `${apiURL}/user/ai-settings`,
+  // AI Generation
+  aiGeneration: {
+    generate: `${apiURL}/ai/generate`,
+    cancel: `${apiURL}/ai/queue/cancel`,
+    status: `${apiURL}/ai/queue/status`,
+  },
   // Saved projects
   getUserProjects: `${apiURL}/projects`,
   saveProject: `${apiURL}/projects`,

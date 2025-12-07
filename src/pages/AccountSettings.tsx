@@ -14,6 +14,7 @@ import { useUserStore as useUserStoreForRoom } from "../shared/stores/userStore"
 import { uploadProjectToRoom } from "../features/daw/services/projectUploader";
 import { updateUsername } from "../shared/api/auth";
 import JSZip from "jszip";
+import { AiSettingsSection } from "../features/ai/components/AiSettingsSection";
 
 export default function AccountSettings() {
   const navigate = useNavigate();
@@ -93,10 +94,10 @@ export default function AccountSettings() {
 
       // Create .collab file from project data and upload to room
       const zip = new JSZip();
-      
+
       // Add project.json
       zip.file("project.json", JSON.stringify(projectData, null, 2));
-      
+
       // Add audio files
       if (audioFiles && audioFiles.length > 0) {
         const audioFolder = zip.folder("audio");
@@ -113,24 +114,24 @@ export default function AccountSettings() {
           }
         }
       }
-      
+
       // Generate ZIP blob
       const zipBlob = await zip.generateAsync({
         type: "blob",
         compression: "DEFLATE",
         compressionOptions: { level: 6 },
       });
-      
+
       // Create File object
       const projectFile = new File([zipBlob], `${selectedProject.name}.collab`, {
         type: "application/zip",
       });
-      
+
       // Set loading state before navigating (will be used by ArrangeRoom)
       // Import useProjectStore dynamically to avoid circular dependency
       const { useProjectStore } = await import("@/features/daw/stores/projectStore");
       useProjectStore.getState().setIsLoadingProject(true);
-      
+
       // Upload project to room
       await uploadProjectToRoom({
         roomId: room.id,
@@ -138,7 +139,7 @@ export default function AccountSettings() {
         userId,
         username,
       });
-      
+
       // Navigate to the room
       // The loading state will be cleared by ArrangeRoom when project is loaded
       navigate(`/arrange/${room.id}`);
@@ -408,35 +409,34 @@ export default function AccountSettings() {
               {/* App Settings Section */}
               <div className="divider"></div>
               <div>
-                <h3 className="text-lg font-semibold mb-2">App Settings</h3>
-                <p className="text-sm text-base-content/70">
-                  App settings and preferences will be available here in the
-                  future.
-                </p>
+                <AiSettingsSection />
               </div>
 
-              {/* Logout */}
               <div className="divider"></div>
-              <div>
-                <button
-                  onClick={handleLogout}
-                  className="btn btn-error btn-outline"
-                >
-                  Logout
-                </button>
+
+              <div className="flex align-center justify-between flex-wrap gap-3">
+                {/* Back to Lobby */}
+                <Link to="/" className="btn btn-ghost">
+                  Back to Lobby
+                </Link>
+
+                {/* Logout */}
+                <div>
+                  <button
+                    onClick={handleLogout}
+                    className="btn btn-error btn-outline"
+                  >
+                    Logout
+                  </button>
+                </div>
+
+                {error && (
+                  <div className="alert alert-error">
+                    <span>{error}</span>
+                  </div>
+                )}
               </div>
 
-              {error && (
-                <div className="alert alert-error">
-                  <span>{error}</span>
-                </div>
-              )}
-            </div>
-
-            <div className="card-actions justify-end mt-4">
-              <Link to="/" className="btn btn-ghost">
-                Back to Lobby
-              </Link>
             </div>
           </div>
         </div>

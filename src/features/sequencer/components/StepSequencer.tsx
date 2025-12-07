@@ -22,6 +22,9 @@ import {
 import { PresetManager } from "@/shared/components";
 import type { EditMode, SequencerStep } from "../types";
 import type { CSSProperties } from "react";
+import { AiGenerationPopup } from "../../ai/components/AiGenerationPopup";
+import type { AiNote } from "../../../shared/api/aiGeneration";
+import { Frequency } from "tone";
 
 interface StepSequencerProps {
   currentCategory: string;
@@ -132,6 +135,53 @@ export const StepSequencer = memo(
         setSelectedSteps(new Set());
       }
     }, []);
+
+    // AI Context
+    const aiContext = useMemo(() => {
+      const context: any = {
+        bpm: sequencer.currentBPM,
+        scale: {
+          rootNote: rootNote || 'C',
+          scale: currentCategory === 'drum_beat' ? 'Drum' : 'Major'
+        },
+        instrument: {
+          name: currentCategory,
+          category: currentCategory
+        },
+        loopLength: settings.length / 4
+      };
+
+      // Add existing notes to context if any
+      if (currentBankSteps.length > 0) {
+        context.existingNotes = currentBankSteps.map(step => ({
+          pitch: Frequency(step.note).toMidi(),
+          start: step.beat / 4,
+          duration: (step.gate || 1) / 4,
+          velocity: Math.round((step.velocity || 0.8) * 127)
+        }));
+      }
+
+      return context;
+    }, [sequencer.currentBPM, rootNote, currentCategory, settings.length, currentBankSteps]);
+
+    // Handle AI Generation
+    const handleAiGenerate = useCallback((notes: AiNote[]) => {
+      sequencer.handleClearBank();
+
+      notes.forEach(note => {
+        const noteName = Frequency(note.pitch, "midi").toNote();
+        const stepIndex = Math.round(note.start * 4);
+
+        if (stepIndex >= 0 && stepIndex < settings.length) {
+          sequencer.handleStepAdd(
+            stepIndex,
+            noteName,
+            Math.min(1, note.velocity / 127),
+            Math.max(1, Math.round(note.duration * 4))
+          );
+        }
+      });
+    }, [sequencer, settings.length]);
 
     const handlePlayPause = () => {
       if (isPlaying) {
@@ -273,14 +323,27 @@ export const StepSequencer = memo(
 
           {/* Preset Controls */}
           <div className="flex items-center justify-between gap-4 flex-wrap">
-            {/* Select Mode Toggle and Sliders */}
-            <SelectModeControls
-              selectMode={selectMode}
-              onSelectModeChange={handleSelectModeChange}
-              selectedSteps={selectedSteps}
-              onUpdateSelectedSteps={handleUpdateSelectedSteps}
-              getStepData={getStepDataMemo}
-            />
+            <div className="flex items-center gap-2">
+              {/* AI Generation */}
+              <AiGenerationPopup
+                onGenerate={handleAiGenerate}
+                context={aiContext}
+                trigger={
+                  <button className="btn btn-xs btn-secondary btn-outline gap-2">
+                    <span>✨</span> AI
+                  </button>
+                }
+              />
+
+              {/* Select Mode Toggle and Sliders */}
+              <SelectModeControls
+                selectMode={selectMode}
+                onSelectModeChange={handleSelectModeChange}
+                selectedSteps={selectedSteps}
+                onUpdateSelectedSteps={handleUpdateSelectedSteps}
+                getStepData={getStepDataMemo}
+              />
+            </div>
 
             <PresetManager
               storageKey="sequencer-presets"
