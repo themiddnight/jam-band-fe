@@ -31,7 +31,8 @@ import { ProjectMenu } from "@/features/daw/components/ProjectMenu";
 import { PerformanceSettingsModal } from "@/features/daw/components/PerformanceSettingsModal";
 import { useRoom } from "@/features/rooms";
 import { useWebRTCVoice, useCombinedLatency } from "@/features/audio";
-import { ToastNotification, useToastNotification } from "@/shared/components/ToastNotification";
+import { ToastNotification } from "@/shared/components/ToastNotification";
+import { useToastNotification } from "@/shared/hooks/useToastNotification";
 import { DAWCollaborationProvider } from "@/features/daw/contexts/DAWCollaborationContext";
 import { RoomSocketProvider } from "@/features/rooms/contexts/RoomSocketProvider";
 import { KickUserModal, RoomSettingsModal } from "@/features/rooms";
@@ -410,7 +411,7 @@ export default function ArrangeRoom() {
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [roomId, isConnected]);
+  }, [roomId, isConnected, showError]);
 
   const handleKickConfirm = useCallback(() => {
     if (userToKick) {
@@ -441,7 +442,7 @@ export default function ArrangeRoom() {
         trackInviteSent(roomAnalyticsContext, role, "copy");
       }
     },
-    [roomId, generateInviteUrl, roomAnalyticsContext]
+    [roomId, generateInviteUrl, roomAnalyticsContext, showError]
   );
 
   // Room settings handlers
@@ -474,7 +475,7 @@ export default function ArrangeRoom() {
         setIsUpdatingRoomSettings(false);
       }
     },
-    [handleUpdateRoomSettings]
+    [handleUpdateRoomSettings, showError]
   );
 
   useArrangeRoomScaleStore();

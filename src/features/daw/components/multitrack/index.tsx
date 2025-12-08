@@ -19,6 +19,7 @@ import { InfoTooltip } from '../common/InfoTooltip';
 import { useTouchGestures } from '../../hooks/useTouchGestures';
 import { AiGenerationPopup } from '../../../ai/components/AiGenerationPopup';
 import type { AiNote } from '../../../../shared/api/aiGeneration';
+import { getAiSettings } from '../../../../shared/api/aiSettings';
 
 export const MultitrackView = () => {
   const tracks = useTrackStore((state) => state.tracks);
@@ -61,6 +62,20 @@ export const MultitrackView = () => {
   // Refs for stable wheel handler
   const zoomRef = useRef(zoom);
   const scrollLeftRef = useRef(scrollLeft);
+  
+  // AI enabled state
+  const [isAiEnabled, setIsAiEnabled] = useState(false);
+
+  // Check if AI is enabled
+  useEffect(() => {
+    getAiSettings()
+      .then(({ settings }) => {
+        setIsAiEnabled(settings.enabled && settings.hasApiKey);
+      })
+      .catch(() => {
+        setIsAiEnabled(false);
+      });
+  }, []);
   
   // Keep refs in sync with state
   useEffect(() => {
@@ -473,7 +488,11 @@ export const MultitrackView = () => {
             showContextToggle={true}
             contextToggleLabel="Track Context"
             trigger={
-              <button className="btn btn-xs btn-secondary btn-outline gap-1" disabled={!selectedTrackId}>
+              <button 
+                className="btn btn-xs btn-secondary btn-outline gap-1" 
+                disabled={!selectedTrackId || !isAiEnabled}
+                title={!isAiEnabled ? "Enable AI Features in Account Settings" : (!selectedTrackId ? "Select a track first" : "AI Composer")}
+              >
                 <span>✨</span> AI
               </button>
             }

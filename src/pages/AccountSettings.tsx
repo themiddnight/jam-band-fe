@@ -238,7 +238,7 @@ export default function AccountSettings() {
   return (
     <div className="min-h-dvh bg-base-200 p-4">
       <div className="max-w-4xl mx-auto space-y-4">
-        <h2 className="text-2xl font-bold">Account Settings</h2>
+        <h2 className="text-2xl font-bold">Settings</h2>
 
         {/* Account Settings Card */}
         <div className="card bg-base-100 shadow-xl">

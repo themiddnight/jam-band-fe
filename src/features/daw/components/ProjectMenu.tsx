@@ -16,7 +16,7 @@ import { useProjectSave } from '@/features/projects/hooks/useProjectSave';
 import { getArrangeRoomProjectData } from '@/features/projects/utils/projectDataHelpers';
 import { useProjectStore } from '../stores/projectStore';
 import { saveProjectAsZip } from '../services/projectFileManager';
-import { useToastNotification } from '@/shared/components/ToastNotification';
+import { useToastNotification } from '@/shared/hooks/useToastNotification';
 
 type ProjectMenuProps = {
   canLoadProject?: boolean;
@@ -286,7 +286,7 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
       {/* Menu Bar */}
       <div className="menu-bar flex flex-wrap items-center gap-1 sm:gap-2 p-1 sm:p-2 bg-base-200 rounded-lg">
         <button 
-          className="btn btn-xs btn-soft btn-primary" 
+          className="btn btn-xs btn-primary" 
           onClick={handleSave} 
           disabled={(isSaving || isSavingProject) || isMixingDown || isRestricted}
           title={isRestricted ? getRestrictionMessage() : undefined}
@@ -302,7 +302,7 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
             className="btn btn-xs btn-soft btn-secondary" 
             onClick={handleLoad} 
             disabled={isLoading || isMixingDown || isRestricted}
-            title={isRestricted ? getRestrictionMessage() : (!isPremium ? "Premium users can import projects. Please upgrade to access this feature." : undefined)}
+            title={isRestricted ? getRestrictionMessage() : (!isPremium ? "Only premium users can import project in the future." : undefined)}
           >
             <span className="hidden sm:inline">{isLoading ? 'Importing...' : 'Import'}</span>
             <span className="sm:hidden">{isLoading ? 'Loading...' : 'Load'}</span>
@@ -314,7 +314,7 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
             className="btn btn-xs btn-soft btn-accent" 
             onClick={handleExport} 
             disabled={isLoading || isMixingDown || isRestricted}
-            title={isRestricted ? getRestrictionMessage() : (!isPremium ? "Premium users can export projects. Please upgrade to access this feature." : "Export project as .collab file")}
+            title={isRestricted ? getRestrictionMessage() : (!isPremium ? "Only premium users can export project in the future." : "Export project as .collab file")}
           >
             <span>Export</span>
           </button>
