@@ -38,7 +38,8 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
   const { currentRoom, currentUser } = useRoom();
   const { isAuthenticated, userType } = useUserStore();
   const isGuest = userType === "GUEST" || !isAuthenticated;
-  const isPremium = userType === "PREMIUM";
+  // const isPremium = userType === "PREMIUM";
+  const isPremium = true
   const isRegisteredOrPremium = userType === "REGISTERED" || userType === "PREMIUM";
   const [showRecoverDialog, setShowRecoverDialog] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -260,7 +261,7 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
       {/* Menu Bar */}
       <div className="menu-bar flex flex-wrap items-center gap-1 sm:gap-2 p-1 sm:p-2 bg-base-200 rounded-lg">
         <button 
-          className="btn btn-xs btn-soft btn-secondary" 
+          className="btn btn-xs btn-soft btn-primary" 
           onClick={handleSave} 
           disabled={(isSaving || isSavingProject) || isMixingDown || !isRegisteredOrPremium}
           title={!isRegisteredOrPremium ? "Registered and premium users can save projects. Please sign up to access this feature." : undefined}
@@ -268,15 +269,17 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
           <span className="hidden sm:inline">{(isSaving || isSavingProject) ? 'Saving...' : 'Save Project'}</span>
           <span className="sm:hidden">{(isSaving || isSavingProject) ? 'Saving...' : 'Save'}</span>
         </button>
+
+        <div className='divider divider-horizontal m-0!' />
         
         {canLoadProject && (
           <button 
-            className="btn btn-xs btn-soft btn-accent" 
+            className="btn btn-xs btn-soft btn-secondary" 
             onClick={handleLoad} 
             disabled={isLoading || isMixingDown || !isPremium}
             title={!isPremium ? "Premium users can import projects. Please upgrade to access this feature." : undefined}
           >
-            <span className="hidden sm:inline">{isLoading ? 'Importing...' : 'Import Project'}</span>
+            <span className="hidden sm:inline">{isLoading ? 'Importing...' : 'Import'}</span>
             <span className="sm:hidden">{isLoading ? 'Loading...' : 'Load'}</span>
           </button>
         )}
@@ -288,12 +291,11 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
             disabled={isLoading || isMixingDown || !isPremium}
             title={!isPremium ? "Premium users can export projects. Please upgrade to access this feature." : "Export project as .collab file"}
           >
-            <span className="hidden sm:inline">Export Project</span>
-            <span className="sm:hidden">Export</span>
+            <span>Export</span>
           </button>
         )}
 
-        <div className='divider divider-horizontal !m-0' />
+        <div className='divider divider-horizontal m-0!' />
 
         <button
           className="btn btn-xs btn-soft btn-info"
