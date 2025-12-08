@@ -9,6 +9,7 @@ import { getRoomContext } from '@/shared/analytics/context';
 import { trackProjectExport, trackProjectSave } from '@/shared/analytics/events';
 import { trackEvent } from '@/shared/analytics/client';
 import { useUserStore } from '@/shared/stores/userStore';
+import { isUserRestricted, getRestrictionMessage } from '@/shared/utils/userPermissions';
 import { SaveProjectModal } from '@/features/projects/components/SaveProjectModal';
 import { ProjectLimitModal } from '@/features/projects/components/ProjectLimitModal';
 import { useProjectSave } from '@/features/projects/hooks/useProjectSave';
@@ -36,11 +37,10 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
   });
 
   const { currentRoom, currentUser } = useRoom();
-  const { isAuthenticated, userType } = useUserStore();
-  const isGuest = userType === "GUEST" || !isAuthenticated;
-  // const isPremium = userType === "PREMIUM";
-  const isPremium = true
-  const isRegisteredOrPremium = userType === "REGISTERED" || userType === "PREMIUM";
+  const { userType } = useUserStore();
+  const isGuest = userType === "GUEST";
+  const isPremium = userType === "PREMIUM";
+  const isRestricted = isUserRestricted();
   const [showRecoverDialog, setShowRecoverDialog] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const analyticsContext = useMemo(() => getRoomContext(currentRoom), [currentRoom]);
@@ -263,8 +263,8 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
         <button 
           className="btn btn-xs btn-soft btn-primary" 
           onClick={handleSave} 
-          disabled={(isSaving || isSavingProject) || isMixingDown || !isRegisteredOrPremium}
-          title={!isRegisteredOrPremium ? "Registered and premium users can save projects. Please sign up to access this feature." : undefined}
+          disabled={(isSaving || isSavingProject) || isMixingDown || isRestricted}
+          title={isRestricted ? getRestrictionMessage() : undefined}
         >
           <span className="hidden sm:inline">{(isSaving || isSavingProject) ? 'Saving...' : 'Save Project'}</span>
           <span className="sm:hidden">{(isSaving || isSavingProject) ? 'Saving...' : 'Save'}</span>
@@ -276,8 +276,8 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
           <button 
             className="btn btn-xs btn-soft btn-secondary" 
             onClick={handleLoad} 
-            disabled={isLoading || isMixingDown || !isPremium}
-            title={!isPremium ? "Premium users can import projects. Please upgrade to access this feature." : undefined}
+            disabled={isLoading || isMixingDown || isRestricted}
+            title={isRestricted ? getRestrictionMessage() : (!isPremium ? "Premium users can import projects. Please upgrade to access this feature." : undefined)}
           >
             <span className="hidden sm:inline">{isLoading ? 'Importing...' : 'Import'}</span>
             <span className="sm:hidden">{isLoading ? 'Loading...' : 'Load'}</span>
@@ -288,8 +288,8 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
           <button 
             className="btn btn-xs btn-soft btn-accent" 
             onClick={handleExport} 
-            disabled={isLoading || isMixingDown || !isPremium}
-            title={!isPremium ? "Premium users can export projects. Please upgrade to access this feature." : "Export project as .collab file"}
+            disabled={isLoading || isMixingDown || isRestricted}
+            title={isRestricted ? getRestrictionMessage() : (!isPremium ? "Premium users can export projects. Please upgrade to access this feature." : "Export project as .collab file")}
           >
             <span>Export</span>
           </button>
@@ -300,8 +300,8 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
         <button
           className="btn btn-xs btn-soft btn-info"
           onClick={handleMixdownClick}
-          disabled={isMixingDown || !isRegisteredOrPremium}
-          title={!isRegisteredOrPremium ? "Registered and premium users can export mixdown. Please sign up to access this feature." : "Export project as WAV file"}
+          disabled={isMixingDown || isRestricted}
+          title={isRestricted ? getRestrictionMessage() : "Export project as WAV file"}
         >
           Mixdown
         </button>

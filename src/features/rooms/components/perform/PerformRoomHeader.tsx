@@ -3,6 +3,7 @@ import { PingDisplay } from "@/features/audio";
 import { AnchoredPopup } from "@/features/ui";
 import { useDeepLinkHandler } from "@/shared/hooks/useDeepLinkHandler";
 import { trackInviteSent } from "@/shared/analytics/events";
+import { isUserRestricted, getRestrictionMessage } from "@/shared/utils/userPermissions";
 import type { Room, RoomUser } from "@/shared/types";
 
 // Helper function to format recording duration
@@ -24,7 +25,6 @@ interface PerformRoomHeaderProps {
   recordingDuration: number;
   isBroadcasting: boolean;
   isBroadcastStarting: boolean;
-  isRegisteredOrPremium: boolean;
   roomAnalyticsContext: any;
   
   // Actions
@@ -49,7 +49,6 @@ export const PerformRoomHeader = ({
   recordingDuration,
   isBroadcasting,
   isBroadcastStarting,
-  isRegisteredOrPremium,
   roomAnalyticsContext,
   handleOpenRoomSettings,
   handleLeaveRoomClick,
@@ -283,8 +282,8 @@ export const PerformRoomHeader = ({
                 }
               }}
               className={`btn btn-xs ${isRecording ? 'btn-error' : 'btn-soft btn-error'}`}
-              title={isRecording ? `Recording... ${formatDuration(recordingDuration)}` : (!isRegisteredOrPremium ? 'Registered and premium users can record. Please sign up to access this feature.' : 'Start recording')}
-              disabled={!isRegisteredOrPremium}
+              title={isRecording ? `Recording... ${formatDuration(recordingDuration)}` : (isUserRestricted() ? getRestrictionMessage() : 'Start recording')}
+              disabled={isUserRestricted()}
             >
               {isRecording ? 'Stop' : 'Record'}
               {isRecording && (
@@ -341,8 +340,8 @@ export const PerformRoomHeader = ({
             <button
               onClick={toggleBroadcast}
               className={`btn btn-xs ${isBroadcasting ? 'btn-success' : 'btn-soft btn-success'}`}
-              title={isBroadcasting ? 'Stop broadcasting to audience' : (!isRegisteredOrPremium ? 'Registered and premium users can broadcast. Please sign up to access this feature.' : 'Start broadcasting to audience')}
-              disabled={isBroadcastStarting || !isRegisteredOrPremium}
+              title={isBroadcasting ? 'Stop broadcasting to audience' : (isUserRestricted() ? getRestrictionMessage() : 'Start broadcasting to audience')}
+              disabled={isBroadcastStarting || isUserRestricted()}
             >
               {isBroadcastStarting ? (
                 <span className="loading loading-spinner loading-xs"></span>

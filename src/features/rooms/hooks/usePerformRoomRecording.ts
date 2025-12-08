@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import * as Tone from 'tone';
-import { useUserStore } from '@/shared/stores/userStore';
+import { isUserRestricted, getRestrictionMessage } from '@/shared/utils/userPermissions';
 
 interface UsePerformRoomRecordingOptions {
   localVoiceStream?: MediaStream | null;
@@ -24,11 +24,9 @@ export function usePerformRoomRecording(options: UsePerformRoomRecordingOptions 
   const currentLocalStreamRef = useRef<MediaStream | null>(null); // Track current stream for comparison
 
   const startRecording = useCallback(async () => {
-    // Guest users cannot record
-    const { isAuthenticated, userType } = useUserStore.getState();
-    const isGuest = userType === "GUEST" || !isAuthenticated;
-    if (isGuest) {
-      throw new Error("Guest users cannot record. Please sign up to access this feature.");
+    // Guest users and unverified registered users cannot record
+    if (isUserRestricted()) {
+      throw new Error(getRestrictionMessage());
     }
 
     try {

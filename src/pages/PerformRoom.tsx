@@ -48,8 +48,7 @@ import { RoomSocketProvider } from "@/features/rooms/contexts/RoomSocketProvider
  */
 const PerformRoom = memo(() => {
   const navigate = useNavigate();
-  const { isAuthenticated, userType } = useUserStore();
-  const isRegisteredOrPremium = userType === "REGISTERED" || userType === "PREMIUM";
+  const { isAuthenticated } = useUserStore();
   // Instrument mute state (defined before useRoom)
   const { isMuted: isInstrumentMuted, setMuted: setInstrumentMuted } =
     useInstrumentMute(false);
@@ -799,7 +798,6 @@ const PerformRoom = memo(() => {
             recordingDuration={recordingDuration}
             isBroadcasting={isBroadcasting}
             isBroadcastStarting={isBroadcastStarting}
-            isRegisteredOrPremium={isRegisteredOrPremium}
             roomAnalyticsContext={roomAnalyticsContext}
             handleOpenRoomSettings={handleOpenRoomSettings}
             handleLeaveRoomClick={handleLeaveRoomClick}
