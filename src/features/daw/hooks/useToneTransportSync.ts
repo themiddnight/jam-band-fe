@@ -9,6 +9,7 @@ export const useToneTransportSync = () => {
   const timeSignature = useProjectStore((state) => state.timeSignature);
   const transportState = useProjectStore((state) => state.transportState);
   const loop = useProjectStore((state) => state.loop);
+  const isMixingDown = useProjectStore((state) => state.isMixingDown);
   const playhead = useProjectStore((state) => state.playhead);
   const setTransportState = useProjectStore((state) => state.setTransportState);
   const setPlayhead = useProjectStore((state) => state.setPlayhead);
@@ -22,7 +23,14 @@ export const useToneTransportSync = () => {
   }, [timeSignature]);
   
   // Sync loop settings with Tone.Transport
+  // Disable looping during mixdown to ensure the export completes
   useEffect(() => {
+    // Always disable looping during mixdown
+    if (isMixingDown) {
+      Tone.Transport.loop = false;
+      return;
+    }
+    
     Tone.Transport.loop = loop.enabled;
     
     if (loop.enabled) {
@@ -37,7 +45,7 @@ export const useToneTransportSync = () => {
       const endBeats = loop.end % beatsInBar;
       Tone.Transport.loopEnd = `${endBars}:${endBeats}:0`;
     }
-  }, [loop.enabled, loop.start, loop.end, timeSignature.numerator]);
+  }, [loop.enabled, loop.start, loop.end, timeSignature.numerator, isMixingDown]);
 
   useEffect(() => {
     const handleStop = () => {
@@ -58,7 +66,8 @@ export const useToneTransportSync = () => {
     if ((transportState === 'playing' || transportState === 'recording') && Tone.Transport.state !== 'started') {
       initializeAudioEngine().then(() => {
         if (Tone.Transport.state !== 'started') {
-          const shouldSnapToLoopStart = loop.enabled && (transportState === 'playing' || transportState === 'recording');
+          // Don't snap to loop start during mixdown
+          const shouldSnapToLoopStart = loop.enabled && !isMixingDown && (transportState === 'playing' || transportState === 'recording');
 
           if (shouldSnapToLoopStart) {
             const beatsInBar = timeSignature.numerator || 4;
@@ -80,6 +89,6 @@ export const useToneTransportSync = () => {
       Tone.Transport.stop(0);
       Tone.Transport.position = 0;
     }
-  }, [transportState, loop.enabled, loop.start, playhead, timeSignature.numerator, setPlayhead]);
+  }, [transportState, loop.enabled, loop.start, playhead, timeSignature.numerator, isMixingDown, setPlayhead]);
 };
 

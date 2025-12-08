@@ -31,6 +31,7 @@ import { ProjectMenu } from "@/features/daw/components/ProjectMenu";
 import { PerformanceSettingsModal } from "@/features/daw/components/PerformanceSettingsModal";
 import { useRoom } from "@/features/rooms";
 import { useWebRTCVoice, useCombinedLatency } from "@/features/audio";
+import { ToastNotification, useToastNotification } from "@/shared/components/ToastNotification";
 import { DAWCollaborationProvider } from "@/features/daw/contexts/DAWCollaborationContext";
 import { RoomSocketProvider } from "@/features/rooms/contexts/RoomSocketProvider";
 import { KickUserModal, RoomSettingsModal } from "@/features/rooms";
@@ -294,14 +295,17 @@ export default function ArrangeRoom() {
       enabled: Boolean(userId),
     });
 
+  const { showError } = useToastNotification();
+
   useEffect(() => {
     if (effectsError) {
+      showError("Failed to initialize audio effects. Some effects may not work properly.");
       console.error(
         "🎛️ Effects integration error (Arrange Room):",
         effectsError
       );
     }
-  }, [effectsError, isEffectsInitialized]);
+  }, [effectsError, isEffectsInitialized, showError]);
 
   // Update MIDI status in store
   useEffect(() => {
@@ -388,6 +392,10 @@ export default function ArrangeRoom() {
 
         console.log('✅ Project state loaded successfully');
       } catch (error) {
+        const errorMessage = error instanceof Error 
+          ? error.message 
+          : 'Failed to load project state';
+        showError(`Failed to load project: ${errorMessage}`);
         console.error('Failed to load project state:', error);
         if (isMounted) {
           useProjectStore.getState().setIsLoadingProject(false);
@@ -423,6 +431,7 @@ export default function ArrangeRoom() {
         await navigator.clipboard.writeText(inviteUrl);
         didCopy = true;
       } catch (error) {
+        showError("Failed to copy invite URL. Please try again.");
         console.error("Failed to copy invite URL:", error);
       }
 
@@ -456,8 +465,11 @@ export default function ArrangeRoom() {
         await handleUpdateRoomSettings(settings);
         // Modal will be closed by the component after successful save
       } catch (error) {
+        const errorMessage = error instanceof Error
+          ? error.message
+          : "Failed to update room settings";
+        showError(`Failed to update room settings: ${errorMessage}`);
         console.error("Failed to update room settings:", error);
-        // You could add a toast notification here
       } finally {
         setIsUpdatingRoomSettings(false);
       }
@@ -562,6 +574,7 @@ export default function ArrangeRoom() {
         </div>
       )}
       
+      <ToastNotification />
       <div className="min-h-dvh bg-base-200 flex flex-col">
         <div className="flex-1 pt-3 px-3">
           <div className="">

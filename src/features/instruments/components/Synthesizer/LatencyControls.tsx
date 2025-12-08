@@ -79,7 +79,7 @@ export const LatencyControls: React.FC<LatencyControlsProps> = ({
                     }
                     className="range range-sm range-primary flex-1"
                   />
-                  <span className="label-text-alt text-xs min-w-[3rem]">
+                  <span className="label-text-alt text-xs min-w-12">
                     {(config.TONE_CONTEXT.lookAhead * 1000).toFixed(0)}ms
                   </span>
                 </div>
@@ -110,7 +110,7 @@ export const LatencyControls: React.FC<LatencyControlsProps> = ({
                     }
                     className="range range-sm range-primary flex-1"
                   />
-                  <span className="label-text-alt text-xs min-w-[3rem]">
+                  <span className="label-text-alt text-xs min-w-12">
                     {(config.TONE_CONTEXT.updateInterval * 1000).toFixed(0)}
                     ms
                   </span>
@@ -175,7 +175,7 @@ export const LatencyControls: React.FC<LatencyControlsProps> = ({
                     }
                     className="range range-sm range-primary flex-1"
                   />
-                  <span className="label-text-alt text-xs min-w-[3rem]">
+                  <span className="label-text-alt text-xs min-w-12">
                     {config.SYNTHESIZER.noteRetriggerDelay}ms
                   </span>
                 </div>
@@ -206,7 +206,7 @@ export const LatencyControls: React.FC<LatencyControlsProps> = ({
                     }
                     className="range range-sm range-primary flex-1"
                   />
-                  <span className="label-text-alt text-xs min-w-[3rem]">
+                  <span className="label-text-alt text-xs min-w-12">
                     {(config.SYNTHESIZER.envelopeAttackMin * 1000).toFixed(1)}
                     ms
                   </span>

@@ -16,6 +16,7 @@ import { useProjectSave } from '@/features/projects/hooks/useProjectSave';
 import { getArrangeRoomProjectData } from '@/features/projects/utils/projectDataHelpers';
 import { useProjectStore } from '../stores/projectStore';
 import { saveProjectAsZip } from '../services/projectFileManager';
+import { useToastNotification } from '@/shared/components/ToastNotification';
 
 type ProjectMenuProps = {
   canLoadProject?: boolean;
@@ -49,6 +50,9 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
   // Mixdown state
   const { isMixingDown, progress, error: mixdownError, startMixdown, abortMixdown } = useMixdown();
   const [showMixdownSettings, setShowMixdownSettings] = useState(false);
+  
+  // Toast notifications
+  const { showError, showSuccess } = useToastNotification();
 
   // Save project modal state
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -114,6 +118,8 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
           source: 'project_menu',
         });
       } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to save project';
+        showError(`Failed to save project: ${errorMessage}`);
         console.error('Save failed:', err);
       }
       return;
@@ -125,6 +131,8 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
         // Save over existing project without showing modal (projectName not needed)
         await checkAndSave(undefined, savedProjectId);
       } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to save project';
+        showError(`Failed to save project: ${errorMessage}`);
         console.error('Save failed:', err);
       }
       return;
@@ -158,6 +166,8 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
         await loadProject();
       }
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load project';
+      showError(`Failed to load project: ${errorMessage}`);
       console.error('Load failed:', err);
     } finally {
       setUploadProgress(0);
@@ -173,6 +183,8 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
         source: 'project_menu',
       });
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to export project';
+      showError(`Failed to export project: ${errorMessage}`);
       console.error('Export failed:', err);
     }
   };
@@ -223,7 +235,7 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
       
       // Show notification that project state was reloaded
       console.log('✅ Mixdown complete! Project state reloaded from server.');
-      // You could add a toast notification here if you have a toast system
+      showSuccess('Mixdown complete! Audio file downloaded.');
       return;
     }
 
@@ -255,6 +267,19 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
     };
     checkAutoSave();
   }, []);
+
+  // Show errors as toast notifications
+  useEffect(() => {
+    if (error) {
+      showError(`Project error: ${error}`);
+    }
+  }, [error, showError]);
+
+  useEffect(() => {
+    if (mixdownError) {
+      showError(`Mixdown error: ${mixdownError}`);
+    }
+  }, [mixdownError, showError]);
 
   return (
     <div className="project-menu">
@@ -316,20 +341,6 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
           <span className="text-warning ml-1 sm:ml-2 text-sm sm:text-base" title="Unsaved changes">●</span>
         )}
       </div>
-
-      {/* Error Display */}
-      {error && (
-        <div className="alert alert-error m-1 sm:m-2 text-xs sm:text-sm">
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* Mixdown Error Display */}
-      {mixdownError && (
-        <div className="alert alert-error m-1 sm:m-2 text-xs sm:text-sm">
-          <span>Mixdown error: {mixdownError}</span>
-        </div>
-      )}
 
       {/* Recover Dialog */}
       {showRecoverDialog && (
