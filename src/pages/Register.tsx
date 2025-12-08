@@ -78,6 +78,25 @@ export default function Register() {
             </div>
 
             <div className="flex flex-col gap-2">
+              <label className="label">Password</label>
+              <input
+                type="password"
+                className="input w-full"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={8}
+                disabled={loading}
+              />
+              <label className="label">
+                <span className="label-text-alt">
+                  Must be at least 8 characters
+                </span>
+              </label>
+            </div>
+
+            <div className="flex flex-col gap-2">
               <label className="label">Username</label>
               <input
                 type="text"
@@ -93,25 +112,6 @@ export default function Register() {
               <label className="label">
                 <span className="label-text-alt">
                   Must be 3-30 characters
-                </span>
-              </label>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="label">Password</label>
-              <input
-                type="password"
-                className="input w-full"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={8}
-                disabled={loading}
-              />
-              <label className="label">
-                <span className="label-text-alt">
-                  Must be at least 8 characters
                 </span>
               </label>
             </div>
