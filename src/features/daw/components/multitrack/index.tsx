@@ -432,6 +432,14 @@ export const MultitrackView = () => {
     tracks: tracks.map(t => ({ name: t.name, category: t.instrumentCategory }))
   }), [tracks]);
 
+  // Check if selected track is audio track
+  const selectedTrack = useMemo(() => {
+    if (!selectedTrackId) return null;
+    return tracks.find(t => t.id === selectedTrackId) || null;
+  }, [selectedTrackId, tracks]);
+  
+  const isSelectedAudioTrack = selectedTrack?.type === 'audio';
+
   const handleAiGenerate = useCallback((notes: AiNote[]) => {
     if (!selectedTrackId) return;
     const track = tracks.find(t => t.id === selectedTrackId);
@@ -490,8 +498,16 @@ export const MultitrackView = () => {
             trigger={
               <button 
                 className="btn btn-xs btn-secondary btn-outline gap-1" 
-                disabled={!selectedTrackId || !isAiEnabled}
-                title={!isAiEnabled ? "Enable AI Features in Account Settings" : (!selectedTrackId ? "Select a track first" : "AI Composer")}
+                disabled={!selectedTrackId || !isAiEnabled || isSelectedAudioTrack}
+                title={
+                  !isAiEnabled 
+                    ? "Enable AI Features in Account Settings" 
+                    : !selectedTrackId 
+                    ? "Select a track first" 
+                    : isSelectedAudioTrack
+                    ? "AI generation is only available for MIDI tracks"
+                    : "AI Composer"
+                }
               >
                 <span>✨</span> AI
               </button>

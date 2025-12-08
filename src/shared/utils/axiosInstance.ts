@@ -57,13 +57,51 @@ axiosInstance.interceptors.response.use(
 
       const refreshToken = localStorage.getItem("refresh_token");
       if (!refreshToken) {
-        // No refresh token, logout user
+        // No refresh token - user is either guest or not authenticated
+        // Check if user is a guest by checking userStore state
+        let isGuest = false;
+        try {
+          const userStore = localStorage.getItem("user-store");
+          if (userStore) {
+            const parsed = JSON.parse(userStore);
+            // Zustand persist stores state directly, check both possible structures
+            const userType = parsed.state?.userType || parsed.userType;
+            const isAuthenticated = parsed.state?.isAuthenticated ?? parsed.isAuthenticated;
+            isGuest = userType === "GUEST" || isAuthenticated === false;
+          }
+        } catch {
+          // If we can't parse user store, check if on room page (likely a guest)
+          const isOnRoomPage = window.location.pathname.includes('/perform/') || 
+                              window.location.pathname.includes('/arrange/') ||
+                              window.location.pathname.includes('/room/');
+          if (isOnRoomPage) {
+            // If on room page without refresh token, likely a guest - don't redirect
+            isGuest = true;
+          }
+        }
+        
+        // If user is a guest, don't redirect to login - let them continue
+        if (isGuest) {
+          localStorage.removeItem("auth_token");
+          localStorage.removeItem("refresh_token");
+          processQueue(new Error("No refresh token"), null);
+          isRefreshing = false;
+          // Don't redirect guest users to login
+          return Promise.reject(error);
+        }
+        
+        // No refresh token and not a guest - logout user
         localStorage.removeItem("auth_token");
         localStorage.removeItem("refresh_token");
         processQueue(new Error("No refresh token"), null);
         isRefreshing = false;
-        // Redirect to login only if not already on login page
-        if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/auth/callback')) {
+        // Redirect to login only if not already on login page and not on room pages
+        const isOnRoomPage = window.location.pathname.includes('/perform/') || 
+                            window.location.pathname.includes('/arrange/') ||
+                            window.location.pathname.includes('/room/');
+        if (!window.location.pathname.includes('/login') && 
+            !window.location.pathname.includes('/auth/callback') &&
+            !isOnRoomPage) {
           window.location.href = "/login";
         }
         return Promise.reject(error);
@@ -87,8 +125,13 @@ axiosInstance.interceptors.response.use(
         localStorage.removeItem("refresh_token");
         processQueue(refreshError, null);
         isRefreshing = false;
-        // Redirect to login only if not already on login page
-        if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/auth/callback')) {
+        // Redirect to login only if not already on login page and not on room pages
+        const isOnRoomPage = window.location.pathname.includes('/perform/') || 
+                            window.location.pathname.includes('/arrange/') ||
+                            window.location.pathname.includes('/room/');
+        if (!window.location.pathname.includes('/login') && 
+            !window.location.pathname.includes('/auth/callback') &&
+            !isOnRoomPage) {
           window.location.href = "/login";
         }
         return Promise.reject(refreshError);
