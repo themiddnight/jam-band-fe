@@ -36,29 +36,48 @@ export const createWebKitCompatibleAudioContext =
     // Chrome/Edge can use 'interactive' for lower latency
     const contextOptions = isSafari()
       ? {
-          sampleRate: 48000,
-          latencyHint: 'playback' as AudioContextLatencyCategory, // More stable on Safari
-        }
+        sampleRate: 48000,
+        latencyHint: 'playback' as AudioContextLatencyCategory, // More stable on Safari
+      }
       : {
-          sampleRate: 48000,
-          latencyHint: 'interactive' as AudioContextLatencyCategory,
-        };
+        sampleRate: 48000,
+        latencyHint: 'interactive' as AudioContextLatencyCategory,
+      };
 
     const context = new AudioContextClass(contextOptions);
 
     // Safari requires explicit resume after user gesture - multiple attempts may be needed
+    // We wrap resume in a timeout because in some Safari versions/states, the promise may hang indefinitely
+    const safeResume = async (ctx: AudioContext, timeoutMs = 1000): Promise<void> => {
+      return new Promise<void>((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          reject(new Error(`AudioContext resume timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+
+        ctx.resume()
+          .then(() => {
+            clearTimeout(timeoutId);
+            resolve();
+          })
+          .catch((err) => {
+            clearTimeout(timeoutId);
+            reject(err);
+          });
+      });
+    };
+
     let attempts = 0;
     const maxAttempts = 3;
     let currentState: AudioContextState = context.state;
-    
+
     while (currentState === "suspended" && attempts < maxAttempts) {
       try {
-        await context.resume();
+        await safeResume(context, 2000);
         // Wait a bit to ensure state change propagates
         await new Promise((resolve) => setTimeout(resolve, 100));
         attempts++;
         currentState = context.state;
-        
+
         if (currentState === "running") {
           break;
         }
@@ -66,16 +85,23 @@ export const createWebKitCompatibleAudioContext =
         console.warn(`Resume attempt ${attempts + 1} failed:`, error);
         attempts++;
         currentState = context.state;
-        
+
+        // If we timed out or failed, wait a bit before retry
+        await new Promise((resolve) => setTimeout(resolve, 200));
+
         if (attempts >= maxAttempts) {
-          throw error;
+          // Don't throw here, let the final check decide
+          // This allows us to return the context even if suspended (user can resume later)
+          break;
         }
       }
     }
-    
+
     // Final check after all attempts
     if (context.state !== "running" && context.state !== "closed") {
-      throw new Error(`Failed to resume AudioContext after multiple attempts. Current state: ${context.state}`);
+      console.warn(`Failed to resume AudioContext after multiple attempts. Current state: ${context.state}. Returning context anyway as user interaction handles recovery.`);
+      // We DO NOT throw here anymore, because throwing prevents the UI from getting the context
+      // and showing the "Initialize Audio" button which is the actual fix (getting a user gesture).
     }
 
     // Ensure AudioDestinationNode is properly initialized in Safari
@@ -116,24 +142,24 @@ export const handleSafariAudioError = (
   if (isSafari() && error.name === "EncodingError") {
     return new Error(
       `Safari audio decoding failed for ${instrumentName}. ` +
-        `This instrument may use an unsupported audio format (Safari only supports MP3, AAC, WAV, and ALAC). ` +
-        `Try switching to a different instrument or use Chrome/Edge for full compatibility.`,
+      `This instrument may use an unsupported audio format (Safari only supports MP3, AAC, WAV, and ALAC). ` +
+      `Try switching to a different instrument or use Chrome/Edge for full compatibility.`,
     );
   }
 
   if (isSafari() && error.message?.includes("decoding")) {
     return new Error(
       `Safari audio decoding error for ${instrumentName}: ${error.message}. ` +
-        `This may be due to Safari's stricter audio format requirements. ` +
-        `Try refreshing the page or switching to a different instrument.`,
+      `This may be due to Safari's stricter audio format requirements. ` +
+      `Try refreshing the page or switching to a different instrument.`,
     );
   }
 
   if (isSafari() && error.message?.includes("format")) {
     return new Error(
       `Safari cannot decode audio format for ${instrumentName}. ` +
-        `Safari has limited codec support compared to Chrome/Edge. ` +
-        `Please try a different instrument or switch to Chrome/Edge.`,
+      `Safari has limited codec support compared to Chrome/Edge. ` +
+      `Please try a different instrument or switch to Chrome/Edge.`,
     );
   }
 
@@ -162,12 +188,12 @@ export const getWebKitTouchStyles = (): React.CSSProperties => {
 // Safari-specific instrument loading timeouts (Safari needs more time for audio decoding)
 export const getSafariLoadTimeout = (baseTimeout: number = 10000): number => {
   if (!isSafari()) return baseTimeout;
-  
+
   // Safari desktop vs mobile have different performance characteristics
   if (isSafariMobile()) {
     return baseTimeout * 2.0; // Mobile Safari needs even more time
   }
-  
+
   return baseTimeout * 1.5; // Desktop Safari
 };
 
@@ -242,7 +268,7 @@ export const initSafariCompatibility = () => {
     if (hasSafariAudioIssues()) {
       console.warn(
         "This Safari version has known Web Audio API issues. " +
-          "Some instruments may not load properly.",
+        "Some instruments may not load properly.",
       );
     }
   }

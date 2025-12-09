@@ -85,11 +85,11 @@ const TrackCanvasComponent = ({
 }: TrackCanvasProps) => {
   const lockMap = useLockStore((state) => state.locks);
   const currentUserId = useUserStore((state) => state.userId);
-  
+
   // Full content width (for wrapper div and positioning calculations)
   const width = totalBeats * pixelsPerBeat * zoom;
   const beatWidth = pixelsPerBeat * zoom;
-  
+
   // Virtualized Stage: only render viewport + buffer, not full width
   const stageBuffer = 200;
   const stageWidth = Math.min(width, viewportWidth + stageBuffer * 2);
@@ -197,12 +197,12 @@ const TrackCanvasComponent = ({
   });
 
   return (
-    <div 
-      className="relative" 
-      style={{ 
-        width, 
+    <div
+      className="relative"
+      style={{
+        width,
         height,
-        touchAction: 'pan-x pan-y',
+        touchAction: 'none',
       }}
     >
       {/* Stage Content */}
@@ -277,8 +277,8 @@ const TrackCanvasComponent = ({
             stageOffsetX={stageOffsetX}
           />
 
-          <MarqueeOverlay 
-            marqueeState={marqueeState} 
+          <MarqueeOverlay
+            marqueeState={marqueeState}
             stageOffsetX={stageOffsetX}
           />
         </Stage>

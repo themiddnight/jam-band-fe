@@ -121,13 +121,13 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
     if (cursorX !== undefined) {
       // Calculate focus point in beats
       const focusPoint = (scrollLeft + cursorX) / (PIXELS_PER_BEAT * zoomX);
-      
+
       // Calculate new scroll position to keep focus point at same position
       const newFocusPixels = focusPoint * PIXELS_PER_BEAT * clampedZoom;
       const newScrollLeft = newFocusPixels - cursorX;
-      
+
       setZoomX(clampedZoom);
-      
+
       requestAnimationFrame(() => {
         if (waveformRef.current) {
           waveformRef.current.scrollLeft = Math.max(0, newScrollLeft);
@@ -279,7 +279,7 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
       window.addEventListener('pointerup', handlePointerUp);
       window.addEventListener('keydown', handleKeyDown);
       window.addEventListener('keyup', handleKeyUp);
-      
+
       return () => {
         waveform.removeEventListener('pointerdown', handlePointerDown);
         window.removeEventListener('pointermove', handlePointerMove);
@@ -295,10 +295,10 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
     const handleWheel = (e: WheelEvent) => {
       if (e.ctrlKey || e.metaKey) {
         e.preventDefault();
-        
+
         const delta = -e.deltaY;
         const zoomSpeed = 0.01;
-        
+
         // Shift key for Y zoom, otherwise X zoom
         if (e.shiftKey) {
           const newZoomY = Math.max(1, Math.min(20, zoomY + delta * zoomSpeed));
@@ -306,21 +306,21 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
         } else {
           const scrollContainer = waveformRef.current;
           if (!scrollContainer) return;
-          
+
           const currentZoom = zoomX;
           // Clamp directly here to avoid stale callback issues
           const newZoom = Math.max(minZoomX, Math.min(maxZoomX, currentZoom + delta * zoomSpeed));
-          
+
           // Convert global playhead to position relative to region start
           const relativePlayhead = playhead - region.start;
           const viewportWidthPx = scrollContainer.clientWidth;
-          
+
           // Calculate new scroll position to keep playhead centered in viewport
           const playheadPixels = relativePlayhead * PIXELS_PER_BEAT * newZoom;
           const newScrollLeft = playheadPixels - viewportWidthPx / 2;
-          
+
           setZoomX(newZoom);
-          
+
           requestAnimationFrame(() => {
             if (waveformRef.current) {
               waveformRef.current.scrollLeft = Math.max(0, newScrollLeft);
@@ -341,16 +341,16 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
   const handleTouchZoomChange = useCallback((newZoom: number, centerX: number) => {
     const clampedZoom = clampZoomX(newZoom);
     const currentScrollLeft = waveformRef.current?.scrollLeft ?? 0;
-    
+
     // Calculate focus point in beats
     const focusPoint = (currentScrollLeft + centerX) / (PIXELS_PER_BEAT * zoomX);
-    
+
     // Calculate new scroll position to keep focus point at same position
     const newFocusPixels = focusPoint * PIXELS_PER_BEAT * clampedZoom;
     const newScrollLeft = newFocusPixels - centerX;
-    
+
     setZoomX(clampedZoom);
-    
+
     requestAnimationFrame(() => {
       if (waveformRef.current) {
         waveformRef.current.scrollLeft = Math.max(0, newScrollLeft);
@@ -525,7 +525,7 @@ export const AudioEditor = ({ region }: AudioEditorProps) => {
             touchContainerRef(node);
           }
         }}
-        className="flex-1 overflow-x-auto overflow-y-hidden touch-pan-y"
+        className="flex-1 overflow-x-auto overflow-y-hidden touch-none"
         onScroll={handleWaveformScroll}
       >
         <WaveformCanvas

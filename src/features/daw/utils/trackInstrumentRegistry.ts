@@ -142,23 +142,38 @@ const instantiateEngine = async (
   });
 
   const context = await AudioContextManager.getInstrumentContext();
-  
+
   // Try to resume context if suspended (required for Safari/WebKit)
   if (context.state === 'suspended') {
     try {
-      await context.resume();
+      // Create a promise that rejects after timeout
+      const resumeWithTimeout = new Promise<void>((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          reject(new Error('AudioContext resume timed out'));
+        }, 2000);
+
+        context.resume().then(() => {
+          clearTimeout(timeoutId);
+          resolve();
+        }, (err) => {
+          clearTimeout(timeoutId);
+          reject(err);
+        });
+      });
+
+      await resumeWithTimeout;
       // Wait a bit for state to propagate on WebKit
       await new Promise(resolve => setTimeout(resolve, 50));
     } catch (err) {
       console.warn('Failed to resume AudioContext (may require user interaction):', err);
     }
   }
-  
+
   // Check if context is ready - Safari/WebKit may still not be ready without user interaction
   if (context.state !== 'running') {
     throw new Error(`AudioContext not ready (state: ${context.state}). User interaction may be required.`);
   }
-  
+
   // Initialize engine - this may fail if AudioContext isn't running
   await engine.initialize(context);
 

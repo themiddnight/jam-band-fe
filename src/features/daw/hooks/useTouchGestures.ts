@@ -124,18 +124,11 @@ const getTouchPoints = (touches: TouchList, containerRect?: DOMRect): TouchPoint
 };
 
 export const useTouchGestures = (options: UseTouchGesturesOptions): UseTouchGesturesReturn => {
-  const {
-    zoom,
-    onZoomChange,
-    onPan,
-    onDoubleTap,
-    minZoom = 0.1,
-    maxZoom = 10,
-    doubleTapThreshold = 300,
-    doubleTapDistance = 30,
-    preventDefault = true,
-    enabled = true,
-  } = options;
+  // Use a ref to store current options to avoid re-creating event handlers
+  const optionsRef = useRef(options);
+  useEffect(() => {
+    optionsRef.current = options;
+  });
 
   const containerRef = useRef<HTMLElement | null>(null);
   const pinchStateRef = useRef<PinchState | null>(null);
@@ -150,6 +143,15 @@ export const useTouchGestures = (options: UseTouchGesturesOptions): UseTouchGest
 
   const handleTouchStart = useCallback(
     (e: TouchEvent | React.TouchEvent) => {
+      const {
+        enabled = true,
+        preventDefault = true,
+        zoom,
+        onDoubleTap,
+        doubleTapThreshold = 300,
+        doubleTapDistance = 30,
+      } = optionsRef.current;
+
       if (!enabled) return;
 
       const touches = 'nativeEvent' in e ? e.nativeEvent.touches : e.touches;
@@ -214,15 +216,24 @@ export const useTouchGestures = (options: UseTouchGesturesOptions): UseTouchGest
         }
       }
     },
-    [enabled, zoom, onDoubleTap, doubleTapThreshold, doubleTapDistance, preventDefault]
+    []
   );
 
   const handleTouchMove = useCallback(
     (e: TouchEvent | React.TouchEvent) => {
+      const {
+        enabled = true,
+        preventDefault = true,
+        onZoomChange,
+        onPan,
+        minZoom = 0.1,
+        maxZoom = 10,
+      } = optionsRef.current;
+
       if (!enabled) return;
 
       const touches = 'nativeEvent' in e ? e.nativeEvent.touches : e.touches;
-      
+
       if (touches.length !== 2) {
         return;
       }
@@ -248,23 +259,23 @@ export const useTouchGestures = (options: UseTouchGesturesOptions): UseTouchGest
       if (panStateRef.current && onPan) {
         const deltaX = panStateRef.current.lastX - center.x;
         const deltaY = panStateRef.current.lastY - center.y;
-        
+
         if (deltaX !== 0 || deltaY !== 0) {
           onPan(deltaX, deltaY);
         }
-        
+
         panStateRef.current = {
           lastX: center.x,
           lastY: center.y,
         };
       }
     },
-    [enabled, onZoomChange, onPan, minZoom, maxZoom, preventDefault]
+    []
   );
 
   const handleTouchEnd = useCallback(
     (e: TouchEvent | React.TouchEvent) => {
-      if (!enabled) return;
+      if (!optionsRef.current.enabled) return;
 
       const touches = 'nativeEvent' in e ? e.nativeEvent.touches : e.touches;
       touchCountRef.current = touches.length;
@@ -276,10 +287,11 @@ export const useTouchGestures = (options: UseTouchGesturesOptions): UseTouchGest
         panStateRef.current = null;
       }
     },
-    [enabled]
+    []
   );
 
   // Attach native event listeners for preventDefault to work
+  // This ref callback is stable and won't cause re-attachment unless component unmounts
   const setContainerRef = useCallback(
     (element: HTMLElement | null) => {
       // Remove old listeners
@@ -292,13 +304,13 @@ export const useTouchGestures = (options: UseTouchGesturesOptions): UseTouchGest
       containerRef.current = element;
 
       // Add new listeners with passive: false to allow preventDefault
-      if (element && enabled) {
+      if (element) {
         element.addEventListener('touchstart', handleTouchStart as EventListener, { passive: false });
         element.addEventListener('touchmove', handleTouchMove as EventListener, { passive: false });
         element.addEventListener('touchend', handleTouchEnd as EventListener, { passive: false });
       }
     },
-    [enabled, handleTouchStart, handleTouchMove, handleTouchEnd]
+    [handleTouchStart, handleTouchMove, handleTouchEnd] // Dependencies are now stable
   );
 
   // Cleanup on unmount
