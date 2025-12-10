@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { v4 as uuidv4 } from 'uuid';
 
 import { useTrackStore } from './trackStore';
 import type {
@@ -55,7 +56,7 @@ const createRegion = (
   customId?: string
 ): MidiRegion => {
   const id =
-    customId ?? (typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-${index}`);
+    customId ?? uuidv4();
   const track = useTrackStore.getState().tracks.find((t) => t.id === trackId);
 
   return {
@@ -83,7 +84,7 @@ const createAudioRegion = (
   customId?: string
 ): AudioRegion => {
   const id =
-    customId ?? (typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-${index}`);
+    customId ?? uuidv4();
   const track = useTrackStore.getState().tracks.find((t) => t.id === trackId);
 
   return {
@@ -170,9 +171,9 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
       regions: state.regions.map((region) =>
         region.id === regionId
           ? {
-              ...region,
-              start: Math.max(0, region.start + deltaBeats),
-            }
+            ...region,
+            start: Math.max(0, region.start + deltaBeats),
+          }
           : region
       ),
     })),
@@ -182,9 +183,9 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
         regions: state.regions.map((region) =>
           regionIds.includes(region.id)
             ? {
-                ...region,
-                start: Math.max(0, region.start + deltaBeats),
-              }
+              ...region,
+              start: Math.max(0, region.start + deltaBeats),
+            }
             : region
         ),
       };
@@ -224,10 +225,10 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
       regions: state.regions.map((region) =>
         region.id === regionId
           ? {
-              ...region,
-              loopEnabled,
-              loopIterations: Math.max(loopIterations, 1),
-            }
+            ...region,
+            loopEnabled,
+            loopIterations: Math.max(loopIterations, 1),
+          }
           : region
       ),
     })),
@@ -286,10 +287,10 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
       return null;
     }
     const newStart = Math.max(0, region.start + offsetBeats);
-    const newId = typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-copy`;
-    
+    const newId = uuidv4();
+
     let duplicated: Region;
-    
+
     if (region.type === 'midi') {
       duplicated = {
         ...region,
@@ -298,13 +299,13 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
         // Notes are region-relative, so keep same relative positions (just new IDs)
         notes: region.notes.map((note) => ({
           ...note,
-          id: typeof crypto !== 'undefined' ? crypto.randomUUID() : `${note.id}-copy`,
+          id: uuidv4(),
           // Don't add offset - notes are already region-relative
         })),
         // Sustain events are also region-relative
         sustainEvents: region.sustainEvents.map((event) => ({
           ...event,
-          id: typeof crypto !== 'undefined' ? crypto.randomUUID() : `${event.id}-copy`,
+          id: uuidv4(),
           // Don't add offset - events are already region-relative
         })),
       };
@@ -318,7 +319,7 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
         audioFileId, // Keep reference to original audio file
       };
     }
-    
+
     set((state) => ({
       regions: [...state.regions, duplicated],
       selectedRegionIds: [duplicated.id],
@@ -332,26 +333,26 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
     const newRegions: Region[] = [];
     const regionsToRemove: RegionId[] = [];
     const newSelectedIds: RegionId[] = [];
-    
+
     regionIds.forEach((regionId) => {
       const region = state.regions.find((r) => r.id === regionId);
       if (!region) return;
-      
+
       // Check if split position is within the region bounds
       const regionEnd = region.start + region.length;
       if (splitPosition <= region.start || splitPosition >= regionEnd) {
         // Split position is outside region, skip
         return;
       }
-      
+
       // Calculate lengths for the two new regions
       const leftLength = splitPosition - region.start;
       const rightLength = regionEnd - splitPosition;
-      
+
       // Create IDs for the new regions
-      const leftId = typeof crypto !== 'undefined' ? crypto.randomUUID() : `${regionId}-left`;
-      const rightId = typeof crypto !== 'undefined' ? crypto.randomUUID() : `${regionId}-right`;
-      
+      const leftId = uuidv4();
+      const rightId = uuidv4();
+
       if (region.type === 'midi') {
         // Split MIDI region
         const leftNotes = region.notes.filter((note) => note.start < leftLength);
@@ -359,20 +360,20 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
           .filter((note) => note.start >= leftLength)
           .map((note) => ({
             ...note,
-            id: typeof crypto !== 'undefined' ? crypto.randomUUID() : `${note.id}-right`,
+            id: uuidv4(),
             start: note.start - leftLength, // Adjust to be relative to new region start
           }));
-        
+
         const leftSustainEvents = region.sustainEvents.filter((event) => event.start < leftLength);
         const rightSustainEvents = region.sustainEvents
           .filter((event) => event.start >= leftLength)
           .map((event) => ({
             ...event,
-            id: typeof crypto !== 'undefined' ? crypto.randomUUID() : `${event.id}-right`,
+            id: uuidv4(),
             start: event.start - leftLength,
             end: event.end - leftLength,
           }));
-        
+
         const leftRegion: MidiRegion = {
           ...region,
           id: leftId,
@@ -382,7 +383,7 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
           loopEnabled: false, // Disable loop on split regions
           loopIterations: 1,
         };
-        
+
         const rightRegion: MidiRegion = {
           ...region,
           id: rightId,
@@ -393,17 +394,17 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
           loopEnabled: false,
           loopIterations: 1,
         };
-        
+
         newRegions.push(leftRegion, rightRegion);
         newSelectedIds.push(leftId, rightId);
       } else {
         // Split Audio region
         const leftTrimStart = region.trimStart || 0;
         const rightTrimStart = leftTrimStart + leftLength;
-        
+
         // Preserve audioFileId to reference the same audio file
         const audioFileId = region.audioFileId || region.id;
-        
+
         const leftRegion: AudioRegion = {
           ...region,
           id: leftId,
@@ -414,7 +415,7 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
           loopEnabled: false,
           loopIterations: 1,
         };
-        
+
         const rightRegion: AudioRegion = {
           ...region,
           id: rightId,
@@ -426,18 +427,18 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
           loopEnabled: false,
           loopIterations: 1,
         };
-        
+
         newRegions.push(leftRegion, rightRegion);
         newSelectedIds.push(leftId, rightId);
       }
-      
+
       regionsToRemove.push(regionId);
-      
+
       // Attach new regions to track
       useTrackStore.getState().attachRegionToTrack(region.trackId, leftId);
       useTrackStore.getState().attachRegionToTrack(region.trackId, rightId);
     });
-    
+
     // Remove old regions and add new split regions
     set((state) => ({
       regions: [
@@ -446,7 +447,7 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
       ],
       selectedRegionIds: newSelectedIds,
     }));
-    
+
     // Detach old regions from track
     regionsToRemove.forEach((regionId) => {
       const region = state.regions.find((r) => r.id === regionId);
@@ -505,9 +506,9 @@ export const useRegionStore = create<RegionStoreState>((set, get) => ({
       regions: state.regions.map((region) =>
         region.id === regionId
           ? {
-              ...region,
-              start: Math.max(0, newStart),
-            }
+            ...region,
+            start: Math.max(0, newStart),
+          }
           : region
       ),
     })),

@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, memo, useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { Layer, Line, Rect, Stage, Text } from 'react-konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import * as Tone from 'tone';
@@ -41,7 +42,7 @@ const TimeRulerComponent = ({
   const setLoop = useProjectStore((state) => state.setLoop);
   const [isDragging, setIsDragging] = useState(false);
   const [loopDragState, setLoopDragState] = useState<'start' | 'end' | null>(null);
-  
+
   // Marker state
   const markers = useMarkerStore((state) => state.markers);
   const selectedMarkerId = useMarkerStore((state) => state.selectedMarkerId);
@@ -52,54 +53,54 @@ const TimeRulerComponent = ({
   const [lastClickTime, setLastClickTime] = useState(0);
   const [lastClickX, setLastClickX] = useState(0);
   const [draggingMarkerId, setDraggingMarkerId] = useState<string | null>(null);
-  
+
   const { handleMarkerAdd, handleMarkerUpdate, handleMarkerUpdateFlush, handleMarkerDelete } = useDAWCollaborationContext();
-  
+
   // Full content width
   const fullWidth = totalBeats * pixelsPerBeat * zoom;
   const beatWidth = pixelsPerBeat * zoom;
   const beatsInBar = beatsPerBar(timeSignature);
-  
+
   // Virtualized Stage: only render viewport + buffer, not full width
   // This prevents massive canvas allocation at high zoom levels
   const stageBuffer = 100;
   const stageWidth = Math.min(fullWidth, viewportWidth + stageBuffer * 2);
   const stageOffsetX = Math.max(0, Math.min(scrollLeft - stageBuffer, fullWidth - stageWidth));
-  
+
   // Dynamic grid division based on zoom level
   const dynamicGridDivision = useMemo(() => getGridDivisionForZoom(zoom), [zoom]);
   const gridInterval = useMemo(() => getGridInterval(dynamicGridDivision), [dynamicGridDivision]);
-  
+
   const updatePlayheadFromPointer = useCallback((pointer: { x: number; y: number }) => {
     // pointer.x is relative to the Stage, add offset for virtualized stage
     const absoluteX = pointer.x + stageOffsetX;
     let clickedBeat = Math.max(0, Math.min(absoluteX / beatWidth, totalBeats));
-    
+
     // Snap to global grid if enabled - use same function as region dragging
     if (snapToGrid) {
       clickedBeat = snapValueToGrid(clickedBeat, dynamicGridDivision);
     }
-    
+
     // Update store
     setPlayhead(clickedBeat);
-    
+
     // Update Tone.js Transport position without stopping playback
     const bars = Math.floor(clickedBeat / beatsInBar);
     const beats = clickedBeat % beatsInBar;
-    
+
     Tone.Transport.position = `${bars}:${beats}:0`;
   }, [beatWidth, beatsInBar, setPlayhead, totalBeats, snapToGrid, dynamicGridDivision, stageOffsetX]);
-  
+
   const updateLoopHandleFromPointer = useCallback((pointer: { x: number; y: number }, handle: 'start' | 'end') => {
     // Add offset for virtualized stage
     const absoluteX = pointer.x + stageOffsetX;
     let clickedBeat = Math.max(0, Math.min(absoluteX / beatWidth, totalBeats));
-    
+
     // Snap to global grid if enabled
     if (snapToGrid) {
       clickedBeat = snapValueToGrid(clickedBeat, dynamicGridDivision);
     }
-    
+
     // Prevent overlap
     if (handle === 'start') {
       // Start can't go beyond end - 1 beat minimum
@@ -113,11 +114,11 @@ const TimeRulerComponent = ({
       setLoop({ end: clickedBeat });
     }
   }, [beatWidth, totalBeats, snapToGrid, dynamicGridDivision, loop.start, loop.end, setLoop, stageOffsetX]);
-  
+
   const handlePointerDown = (event: KonvaEventObject<PointerEvent>) => {
     const target = event.target;
     const targetName = target.name();
-    
+
     // Check if clicking on loop handles
     if (targetName === 'loop-start-handle') {
       setLoopDragState('start');
@@ -127,7 +128,7 @@ const TimeRulerComponent = ({
       setLoopDragState('end');
       return;
     }
-    
+
     // Check if clicking on a marker (check both target and parent)
     let markerName = targetName;
     if (!markerName || !markerName.startsWith('marker-')) {
@@ -137,7 +138,7 @@ const TimeRulerComponent = ({
         markerName = parent.name();
       }
     }
-    
+
     if (markerName && markerName.startsWith('marker-')) {
       const markerId = markerName.replace('marker-', '');
       if (isEditMode) {
@@ -147,7 +148,7 @@ const TimeRulerComponent = ({
         return;
       }
     }
-    
+
     // In edit mode, don't set playhead - only handle marker operations
     if (isEditMode) {
       const stage = event.target.getStage();
@@ -158,40 +159,40 @@ const TimeRulerComponent = ({
       if (!pointer) {
         return;
       }
-      
+
       // Handle double-click for adding markers
       const now = Date.now();
       const timeDiff = now - lastClickTime;
       const xDiff = Math.abs(pointer.x - lastClickX);
-      
+
       if (timeDiff < 300 && xDiff < 10) {
         // Double click detected - show dialog to add marker with description
         let clickedBeat = Math.max(0, Math.min(pointer.x / beatWidth, totalBeats));
         if (snapToGrid) {
           clickedBeat = snapValueToGrid(clickedBeat, dynamicGridDivision);
         }
-        
+
         const newMarker: TimeMarker = {
-          id: crypto.randomUUID(),
+          id: uuidv4(),
           position: clickedBeat,
           description: '', // Will be set in dialog
           color: '#3b82f6',
         };
-        
+
         // Show dialog to set description
         setEditingMarker(newMarker);
         setClickCount(0);
         return;
       }
-      
+
       setClickCount(clickCount + 1);
       setLastClickTime(now);
       setLastClickX(pointer.x);
-      
+
       // Don't set playhead in edit mode
       return;
     }
-    
+
     // Normal mode - set playhead
     const stage = event.target.getStage();
     if (!stage) {
@@ -201,11 +202,11 @@ const TimeRulerComponent = ({
     if (!pointer) {
       return;
     }
-    
+
     setIsDragging(true);
     updatePlayheadFromPointer(pointer);
   };
-  
+
   const handlePointerMove = (event: KonvaEventObject<PointerEvent>) => {
     const stage = event.target.getStage();
     if (!stage) {
@@ -215,7 +216,7 @@ const TimeRulerComponent = ({
     if (!pointer) {
       return;
     }
-    
+
     if (draggingMarkerId) {
       // Dragging a marker
       const absoluteX = pointer.x + stageOffsetX;
@@ -230,7 +231,7 @@ const TimeRulerComponent = ({
       updatePlayheadFromPointer(pointer);
     }
   };
-  
+
   const handlePointerUp = () => {
     if (draggingMarkerId) {
       handleMarkerUpdateFlush();
@@ -252,7 +253,7 @@ const TimeRulerComponent = ({
     if (editingMarker) {
       // Check if this is a new marker (not yet in the store)
       const existingMarker = markers.find(m => m.id === editingMarker.id);
-      
+
       if (existingMarker) {
         // Editing existing marker
         handleMarkerUpdate(editingMarker.id, { description });
@@ -299,7 +300,7 @@ const TimeRulerComponent = ({
     // Start from the nearest grid interval before visible range
     const startBeat = Math.floor(visibleStartBeat / gridInterval) * gridInterval;
     const endBeat = Math.min(visibleEndBeat, totalBeats);
-    
+
     for (let beat = startBeat; beat <= endBeat; beat += gridInterval) {
       const x = beat * beatWidth;
       const isBar = isBarLine(beat, beatsInBar);
@@ -327,158 +328,158 @@ const TimeRulerComponent = ({
       <div className="relative overflow-hidden border-b border-base-300 bg-base-200">
         {/* Virtualized Stage: offset by -scrollLeft to follow canvas, positioned at stageOffsetX */}
         <div style={{ position: 'relative', left: -scrollLeft, width: fullWidth, height }}>
-        <div style={{ position: 'absolute', left: stageOffsetX, top: 0 }}>
-          <Stage
-            width={stageWidth}
-            height={height}
-            perfectDrawEnabled={false}
-            onPointerDown={handlePointerDown}
-            onTouchStart={(e) => handlePointerDown(e as unknown as KonvaEventObject<PointerEvent>)}
-            onPointerMove={handlePointerMove}
-            onTouchMove={(e) => handlePointerMove(e as unknown as KonvaEventObject<PointerEvent>)}
-            onPointerUp={handlePointerUp}
-            onTouchEnd={handlePointerUp}
-          >
-          <Layer x={-stageOffsetX}>
-          {/* Clickable background */}
-          <Rect
-            x={0}
-            y={0}
-            width={fullWidth}
-            height={height}
-            fill="transparent"
-          />
-          {/* Bottom border */}
-          <Line
-            points={[0, height - 1, fullWidth, height - 1]}
-            stroke="#a1a1aa"
-            strokeWidth={1}
-            listening={false}
-            perfectDrawEnabled={false}
-          />
-          {/* Beat/bar grid markers */}
-          {gridMarkers.map((marker) => {
-            // Bar lines: full height, thick, dark
-            if (marker.isBar) {
-              return (
-                <Line
-                  key={`marker-${marker.x}`}
-                  points={[marker.x, height, marker.x, 0]}
-                  stroke="#52525b"
-                  strokeWidth={2}
-                  listening={false}
-                  perfectDrawEnabled={false}
+          <div style={{ position: 'absolute', left: stageOffsetX, top: 0 }}>
+            <Stage
+              width={stageWidth}
+              height={height}
+              perfectDrawEnabled={false}
+              onPointerDown={handlePointerDown}
+              onTouchStart={(e) => handlePointerDown(e as unknown as KonvaEventObject<PointerEvent>)}
+              onPointerMove={handlePointerMove}
+              onTouchMove={(e) => handlePointerMove(e as unknown as KonvaEventObject<PointerEvent>)}
+              onPointerUp={handlePointerUp}
+              onTouchEnd={handlePointerUp}
+            >
+              <Layer x={-stageOffsetX}>
+                {/* Clickable background */}
+                <Rect
+                  x={0}
+                  y={0}
+                  width={fullWidth}
+                  height={height}
+                  fill="transparent"
                 />
-              );
-            }
-            // Beat lines: medium height, medium weight
-            if (marker.isBeat) {
-              return (
+                {/* Bottom border */}
                 <Line
-                  key={`marker-${marker.x}`}
-                  points={[marker.x, height, marker.x, height * 0.35]}
+                  points={[0, height - 1, fullWidth, height - 1]}
                   stroke="#a1a1aa"
                   strokeWidth={1}
                   listening={false}
                   perfectDrawEnabled={false}
                 />
-              );
-            }
-            // Sub-beat lines: short height, thin, light
-            return (
-              <Line
-                key={`marker-${marker.x}`}
-                points={[marker.x, height, marker.x, height * 0.6]}
-                stroke="#d4d4d8"
-                strokeWidth={1}
-                opacity={0.5}
-                listening={false}
-                perfectDrawEnabled={false}
-              />
-            );
-          })}
-          {/* Bar labels */}
-          {gridMarkers
-            .filter((marker) => marker.isBar && marker.label !== null)
-            .map((marker) => (
-              <Text
-                key={`label-${marker.x}`}
-                text={`${marker.label}`}
-                x={marker.x + 4}
-                y={4}
-                fontSize={12}
-                fill="#52525b"
-                listening={false}
-                perfectDrawEnabled={false}
-              />
-            ))}
-          
-          {/* Time markers - only render visible ones */}
-          {markers
-            .filter((marker) => marker.position >= visibleStartBeat && marker.position <= visibleEndBeat)
-            .map((marker) => (
-            <TimeRulerMarker
-              key={marker.id}
-              marker={marker}
-              pixelsPerBeat={pixelsPerBeat}
-              zoom={zoom}
-              height={height}
-              isEditMode={isEditMode}
-              isSelected={marker.id === selectedMarkerId}
-              onDoubleClick={handleMarkerDoubleClick}
-            />
-          ))}
-          {/* Loop region highlight */}
-          {loop.enabled && (
-            <Rect
-              x={loop.start * beatWidth}
-              y={0}
-              width={(loop.end - loop.start) * beatWidth}
-              height={height}
-              fill="#fbbf24"
-              opacity={0.25}
-              listening={false}
-            />
-          )}
-          
-          {/* Loop start handle */}
-          {loop.enabled && (
-            <Rect
-              name="loop-start-handle"
-              x={loop.start * beatWidth - 3}
-              y={0}
-              width={6}
-              height={height}
-              fill="#fbbf24"
-              stroke="#f59e0b"
-              strokeWidth={1}
-            />
-          )}
-          
-          {/* Loop end handle */}
-          {loop.enabled && (
-            <Rect
-              name="loop-end-handle"
-              x={loop.end * beatWidth - 3}
-              y={0}
-              width={6}
-              height={height}
-              fill="#fbbf24"
-              stroke="#f59e0b"
-              strokeWidth={1}
-            />
-          )}
-          
-          {/* Playhead indicator */}
-          <Line
-            points={[playheadX, 0, playheadX, height]}
-            stroke="#3b82f6"
-            strokeWidth={2}
-            listening={false}
-          />
-          </Layer>
-          </Stage>
-        </div>
+                {/* Beat/bar grid markers */}
+                {gridMarkers.map((marker) => {
+                  // Bar lines: full height, thick, dark
+                  if (marker.isBar) {
+                    return (
+                      <Line
+                        key={`marker-${marker.x}`}
+                        points={[marker.x, height, marker.x, 0]}
+                        stroke="#52525b"
+                        strokeWidth={2}
+                        listening={false}
+                        perfectDrawEnabled={false}
+                      />
+                    );
+                  }
+                  // Beat lines: medium height, medium weight
+                  if (marker.isBeat) {
+                    return (
+                      <Line
+                        key={`marker-${marker.x}`}
+                        points={[marker.x, height, marker.x, height * 0.35]}
+                        stroke="#a1a1aa"
+                        strokeWidth={1}
+                        listening={false}
+                        perfectDrawEnabled={false}
+                      />
+                    );
+                  }
+                  // Sub-beat lines: short height, thin, light
+                  return (
+                    <Line
+                      key={`marker-${marker.x}`}
+                      points={[marker.x, height, marker.x, height * 0.6]}
+                      stroke="#d4d4d8"
+                      strokeWidth={1}
+                      opacity={0.5}
+                      listening={false}
+                      perfectDrawEnabled={false}
+                    />
+                  );
+                })}
+                {/* Bar labels */}
+                {gridMarkers
+                  .filter((marker) => marker.isBar && marker.label !== null)
+                  .map((marker) => (
+                    <Text
+                      key={`label-${marker.x}`}
+                      text={`${marker.label}`}
+                      x={marker.x + 4}
+                      y={4}
+                      fontSize={12}
+                      fill="#52525b"
+                      listening={false}
+                      perfectDrawEnabled={false}
+                    />
+                  ))}
+
+                {/* Time markers - only render visible ones */}
+                {markers
+                  .filter((marker) => marker.position >= visibleStartBeat && marker.position <= visibleEndBeat)
+                  .map((marker) => (
+                    <TimeRulerMarker
+                      key={marker.id}
+                      marker={marker}
+                      pixelsPerBeat={pixelsPerBeat}
+                      zoom={zoom}
+                      height={height}
+                      isEditMode={isEditMode}
+                      isSelected={marker.id === selectedMarkerId}
+                      onDoubleClick={handleMarkerDoubleClick}
+                    />
+                  ))}
+                {/* Loop region highlight */}
+                {loop.enabled && (
+                  <Rect
+                    x={loop.start * beatWidth}
+                    y={0}
+                    width={(loop.end - loop.start) * beatWidth}
+                    height={height}
+                    fill="#fbbf24"
+                    opacity={0.25}
+                    listening={false}
+                  />
+                )}
+
+                {/* Loop start handle */}
+                {loop.enabled && (
+                  <Rect
+                    name="loop-start-handle"
+                    x={loop.start * beatWidth - 3}
+                    y={0}
+                    width={6}
+                    height={height}
+                    fill="#fbbf24"
+                    stroke="#f59e0b"
+                    strokeWidth={1}
+                  />
+                )}
+
+                {/* Loop end handle */}
+                {loop.enabled && (
+                  <Rect
+                    name="loop-end-handle"
+                    x={loop.end * beatWidth - 3}
+                    y={0}
+                    width={6}
+                    height={height}
+                    fill="#fbbf24"
+                    stroke="#f59e0b"
+                    strokeWidth={1}
+                  />
+                )}
+
+                {/* Playhead indicator */}
+                <Line
+                  points={[playheadX, 0, playheadX, height]}
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  listening={false}
+                />
+              </Layer>
+            </Stage>
+          </div>
         </div>
       </div>
     </>

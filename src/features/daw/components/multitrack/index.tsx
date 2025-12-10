@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 
 import { Playhead } from './Playhead';
 import { TimeRuler } from './TimeRuler';
@@ -459,7 +460,7 @@ export const MultitrackView = () => {
     }
 
     const midiNotes = notes.map(n => ({
-      id: crypto.randomUUID(),
+      id: uuidv4(),
       pitch: Math.round(n.pitch),
       start: n.start,
       duration: n.duration,

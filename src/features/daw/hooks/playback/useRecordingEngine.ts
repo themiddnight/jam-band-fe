@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import * as Tone from 'tone';
 
 import { InstrumentCategory } from '@/shared/constants/instruments';
@@ -104,7 +105,7 @@ export const useRecordingEngine = () => {
         const regionLength = Math.max(4, Math.ceil(Math.max(maxNoteEnd, maxSustainEnd)));
 
         const resolvedNotes: MidiNote[] = notes.map((note) => ({
-          id: typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-${note.tempId}`,
+          id: uuidv4(),
           pitch: note.pitch,
           start: note.start,
           duration: note.duration,
@@ -112,7 +113,7 @@ export const useRecordingEngine = () => {
         }));
 
         const resolvedSustainEvents: SustainEvent[] = sustainEvents.map((event) => ({
-          id: typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}-${event.tempId}`,
+          id: uuidv4(),
           start: event.start,
           end: event.end,
         }));
@@ -138,7 +139,7 @@ export const useRecordingEngine = () => {
       activeNotesRef.current.clear();
       setIsMidiRecordingActive(false);
       stopRecordingPreview();
-      
+
       // Reset sustain pedal state
       if (trackId) {
         const track = tracks.find((t) => t.id === trackId);
@@ -182,24 +183,24 @@ export const useRecordingEngine = () => {
         }
         const currentBeat = getCurrentBeat();
         const relativeBeat = currentBeat - regionStartBeat;
-        
+
         // Sustain pedal pressed (value >= 64 means on)
         if (typeof message.value === 'number' && message.value >= 64) {
           setSustainPedal(track, true).catch((error) => {
             console.error('Failed to set sustain pedal:', error);
           });
-          
+
           // If sustain wasn't already active, start a new sustain event
           if (activeSustainStartBeatRef.current === null) {
             activeSustainStartBeatRef.current = relativeBeat;
           }
-        } 
+        }
         // Sustain pedal released (value < 64 means off)
         else if (typeof message.value === 'number' && message.value < 64) {
           setSustainPedal(track, false).catch((error) => {
             console.error('Failed to release sustain pedal:', error);
           });
-          
+
           // If sustain was active, record the sustain event
           if (activeSustainStartBeatRef.current !== null) {
             recordedSustainEventsRef.current.push({

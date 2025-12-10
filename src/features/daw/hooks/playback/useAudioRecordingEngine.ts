@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import * as Tone from 'tone';
 import { useProjectStore } from '../../stores/projectStore';
 import { useTrackStore } from '../../stores/trackStore';
@@ -131,10 +132,7 @@ export const useAudioRecordingEngine = (options?: UseAudioRecordingEngineOptions
             return;
           }
 
-          const regionId =
-            typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-              ? crypto.randomUUID()
-              : `${Date.now()}`;
+          const regionId = uuidv4();
 
           try {
             const response = await uploadAudioRegion({

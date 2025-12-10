@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { v4 as uuidv4 } from 'uuid';
 
 import { useRegionStore } from './regionStore';
 import type {
@@ -91,20 +92,20 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
     if (!region || region.type !== 'midi') {
       return null;
     }
-    
+
     // Check if new note would overlap with existing notes
     if (checkNoteOverlap(region.notes, '', note.start, note.duration, note.pitch)) {
       return null; // Don't create if it would overlap
     }
-    
-    const id = typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}`;
+
+    const id = uuidv4();
     useRegionStore.setState((state) => ({
       regions: state.regions.map((r) =>
         r.id === regionId && r.type === 'midi'
           ? {
-              ...r,
-              notes: [...r.notes, { ...note, id }],
-            }
+            ...r,
+            notes: [...r.notes, { ...note, id }],
+          }
           : r
       ),
     }));
@@ -119,11 +120,11 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
       regions: state.regions.map((region) =>
         region.id === regionId && region.type === 'midi'
           ? {
-              ...region,
-              notes: region.notes.map((note) =>
-                note.id === noteId ? { ...note, ...updates } : note
-              ),
-            }
+            ...region,
+            notes: region.notes.map((note) =>
+              note.id === noteId ? { ...note, ...updates } : note
+            ),
+          }
           : region
       ),
     }));
@@ -144,11 +145,11 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
       regions: state.regions.map((region) =>
         region.id === regionId && region.type === 'midi'
           ? {
-              ...region,
-              notes: region.notes.map((note) =>
-                updatesById[note.id] ? { ...note, ...updatesById[note.id] } : note
-              ),
-            }
+            ...region,
+            notes: region.notes.map((note) =>
+              updatesById[note.id] ? { ...note, ...updatesById[note.id] } : note
+            ),
+          }
           : region
       ),
     }));
@@ -162,9 +163,9 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
       regions: state.regions.map((region) =>
         region.id === regionId && region.type === 'midi'
           ? {
-              ...region,
-              notes: region.notes.filter((note) => note.id !== noteId),
-            }
+            ...region,
+            notes: region.notes.filter((note) => note.id !== noteId),
+          }
           : region
       ),
     }));
@@ -185,9 +186,9 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
       regions: state.regions.map((region) =>
         region.id === regionId && region.type === 'midi'
           ? {
-              ...region,
-              notes: region.notes.filter((note) => !selected.includes(note.id)),
-            }
+            ...region,
+            notes: region.notes.filter((note) => !selected.includes(note.id)),
+          }
           : region
       ),
     }));
@@ -222,7 +223,7 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
     if (!region || region.type !== 'midi') {
       return;
     }
-    
+
     // Check if any note would overlap after move
     const wouldOverlap = region.notes
       .filter((note) => noteIds.includes(note.id))
@@ -231,12 +232,12 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
         const newPitch = Math.min(127, Math.max(0, note.pitch + deltaPitch));
         return checkNoteOverlap(region.notes, note.id, newStart, note.duration, newPitch);
       });
-    
+
     // If overlap detected, don't move
     if (wouldOverlap) {
       return;
     }
-    
+
     const updates = region.notes
       .filter((note) => noteIds.includes(note.id))
       .map((note) => ({
@@ -264,7 +265,7 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
     if (!region || region.type !== 'midi') {
       return;
     }
-    
+
     // Check if any duplicate would overlap
     const wouldOverlap = region.notes
       .filter((note) => noteIds.includes(note.id))
@@ -274,12 +275,12 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
         // Use empty string as noteId since this is a new note
         return checkNoteOverlap(region.notes, '', newStart, note.duration, newPitch);
       });
-    
+
     // If overlap detected, don't duplicate
     if (wouldOverlap) {
       return;
     }
-    
+
     const newNoteIds: NoteId[] = [];
     region.notes
       .filter((note) => noteIds.includes(note.id))
@@ -312,7 +313,7 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
     if (!region || region.type !== 'midi') {
       return;
     }
-    
+
     // Check if any note would overlap after resize
     const wouldOverlap = region.notes
       .filter((note) => noteIds.includes(note.id))
@@ -320,12 +321,12 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
         const newDuration = Math.max(0.25, note.duration + deltaBeats);
         return checkNoteOverlap(region.notes, note.id, note.start, newDuration, note.pitch);
       });
-    
+
     // If overlap detected, don't resize
     if (wouldOverlap) {
       return;
     }
-    
+
     const updates = region.notes
       .filter((note) => noteIds.includes(note.id))
       .map((note) => ({
@@ -357,27 +358,27 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
     if (!regionId) {
       return;
     }
-    
+
     const { regions } = useRegionStore.getState();
     const region = regions.find((r) => r.id === regionId);
     if (!region || region.type !== 'midi') {
       return;
     }
-    
+
     // Calculate quantize grid size in beats
     const gridSize = 4 / quantizeSize; // e.g., 4/16 = 0.25 beats for 16th notes
-    
+
     const updates: Array<{ id: NoteId; updates: Partial<MidiNote> }> = [];
-    
+
     noteIds.forEach((noteId) => {
       const note = region.notes.find((n) => n.id === noteId);
       if (!note) {
         return;
       }
-      
+
       // Quantize start time to nearest grid position
       const quantizedStart = Math.round(note.start / gridSize) * gridSize;
-      
+
       // Check if quantized position would cause overlap
       if (!checkNoteOverlap(region.notes, noteId, quantizedStart, note.duration, note.pitch)) {
         updates.push({
@@ -386,7 +387,7 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
         });
       }
     });
-    
+
     if (updates.length > 0) {
       get().updateNotes(updates);
     }
@@ -396,13 +397,13 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
     if (!regionId) {
       return;
     }
-    
+
     const { regions } = useRegionStore.getState();
     const region = regions.find((r) => r.id === regionId);
     if (!region || region.type !== 'midi') {
       return;
     }
-    
+
     // Quantize all notes
     const allNoteIds = region.notes.map((n) => n.id);
     get().quantizeNotes(allNoteIds, quantizeSize);
@@ -412,14 +413,14 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
     if (!regionId) {
       return null;
     }
-    const id = typeof crypto !== 'undefined' ? crypto.randomUUID() : `${Date.now()}`;
+    const id = uuidv4();
     useRegionStore.setState((state) => ({
       regions: state.regions.map((region) =>
         region.id === regionId && region.type === 'midi'
           ? {
-              ...region,
-              sustainEvents: [...region.sustainEvents, { ...event, id }],
-            }
+            ...region,
+            sustainEvents: [...region.sustainEvents, { ...event, id }],
+          }
           : region
       ),
     }));
@@ -434,11 +435,11 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
       regions: state.regions.map((region) =>
         region.id === regionId && region.type === 'midi'
           ? {
-              ...region,
-              sustainEvents: region.sustainEvents.map((event) =>
-                event.id === eventId ? { ...event, ...updates } : event
-              ),
-            }
+            ...region,
+            sustainEvents: region.sustainEvents.map((event) =>
+              event.id === eventId ? { ...event, ...updates } : event
+            ),
+          }
           : region
       ),
     }));
@@ -452,9 +453,9 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
       regions: state.regions.map((region) =>
         region.id === regionId && region.type === 'midi'
           ? {
-              ...region,
-              sustainEvents: region.sustainEvents.filter((event) => event.id !== eventId),
-            }
+            ...region,
+            sustainEvents: region.sustainEvents.filter((event) => event.id !== eventId),
+          }
           : region
       ),
     }));
@@ -496,9 +497,9 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
       regions: state.regions.map((r) =>
         r.id === regionId && r.type === 'midi'
           ? {
-              ...r,
-              notes: [...r.notes, note],
-            }
+            ...r,
+            notes: [...r.notes, note],
+          }
           : r
       ),
     }));
@@ -508,11 +509,11 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
       regions: state.regions.map((region) =>
         region.id === regionId && region.type === 'midi'
           ? {
-              ...region,
-              notes: region.notes.map((note) =>
-                note.id === noteId ? { ...note, ...updates } : note
-              ),
-            }
+            ...region,
+            notes: region.notes.map((note) =>
+              note.id === noteId ? { ...note, ...updates } : note
+            ),
+          }
           : region
       ),
     }));
@@ -522,9 +523,9 @@ export const usePianoRollStore = create<PianoRollStoreState>((set, get) => ({
       regions: state.regions.map((region) =>
         region.id === regionId && region.type === 'midi'
           ? {
-              ...region,
-              notes: region.notes.filter((note) => note.id !== noteId),
-            }
+            ...region,
+            notes: region.notes.filter((note) => note.id !== noteId),
+          }
           : region
       ),
     }));

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { v4 as uuidv4 } from 'uuid';
 
 import {
   DEFAULT_INSTRUMENT_ID,
@@ -57,10 +58,7 @@ interface TrackStoreState {
 
 const createTrack = (index: number, overrides?: Partial<Track>): Track => {
   const generateId = () => {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-      return crypto.randomUUID();
-    }
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+    return uuidv4();
   };
   const id = overrides?.id ?? generateId();
   const color = overrides?.color ?? TRACK_COLORS[index % TRACK_COLORS.length] ?? DEFAULT_TRACK_COLOR;

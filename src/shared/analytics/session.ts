@@ -1,11 +1,9 @@
+import { v4 as uuidv4 } from 'uuid';
 let cachedSessionId: string | null = null;
 const SESSION_STORAGE_KEY = "jb-analytics-session-id";
 
 function generateSessionId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.round(Math.random() * 1_000_000)}`;
+  return uuidv4();
 }
 
 export function getSessionId(): string | null {

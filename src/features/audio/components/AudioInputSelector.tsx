@@ -49,9 +49,9 @@ export const AudioInputSelector: React.FC<AudioInputSelectorProps> = ({
         )}
         <button
           onClick={() => requestAccess().then(() => refreshDevices())}
-          className="btn btn-sm btn-warning btn-outline"
+          className="btn btn-xs btn-warning btn-outline"
         >
-          Enable Microphone Access
+          Enable Mic Access
         </button>
       </div>
     );

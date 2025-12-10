@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { useDAWCollaborationContext } from '../../contexts/useDAWCollaborationContext';
 import { useProjectStore } from '../../stores/projectStore';
 import { useTrackStore } from '../../stores/trackStore';
@@ -51,7 +52,7 @@ export const AddAudioClipButton = ({ disabled }: AddAudioClipButtonProps) => {
 
     try {
       // Generate region ID
-      const regionId = crypto.randomUUID();
+      const regionId = uuidv4();
 
       // Prepare form data
       const formData = new FormData();
@@ -85,7 +86,7 @@ export const AddAudioClipButton = ({ disabled }: AddAudioClipButtonProps) => {
       // Decode audio for waveform (in background, non-blocking)
       const arrayBuffer = await file.arrayBuffer();
       setUploadProgress(80);
-      
+
       const audioContext = new AudioContext();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
       await audioContext.close();
@@ -111,12 +112,12 @@ export const AddAudioClipButton = ({ disabled }: AddAudioClipButtonProps) => {
       });
 
       setUploadProgress(100);
-      
+
       // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-      
+
       // Clear progress after a short delay
       setTimeout(() => {
         setUploadProgress(0);

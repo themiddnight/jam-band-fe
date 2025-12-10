@@ -16,6 +16,12 @@ export const useAudioDevices = () => {
       // Check if we have permission first
       // We can't query permission status directly for microphone in all browsers,
       // but listing devices usually returns empty labels if permission isn't granted.
+      if (!navigator.mediaDevices?.enumerateDevices) {
+        console.warn('Media devices API not available');
+        setDevices([]);
+        return;
+      }
+
       const deviceInfos = await navigator.mediaDevices.enumerateDevices();
 
       const formattedDevices: AudioDevice[] = deviceInfos.map(device => ({
@@ -44,15 +50,23 @@ export const useAudioDevices = () => {
       getDevices();
     };
 
-    navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+    if (navigator.mediaDevices?.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+    }
 
     return () => {
-      navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+      if (navigator.mediaDevices?.removeEventListener) {
+        navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+      }
     };
   }, [getDevices]);
 
   const requestAccess = async () => {
     try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        console.warn('getUserMedia API not available');
+        return false;
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       // Stop the stream immediately, getting permission is enough
       stream.getTracks().forEach(track => track.stop());
