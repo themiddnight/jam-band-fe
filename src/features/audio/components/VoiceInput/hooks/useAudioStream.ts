@@ -7,6 +7,7 @@ interface UseAudioStreamProps {
   gain: number;
   cleanMode: boolean;
   autoGain: boolean;
+  deviceId?: string | null;
   onStreamReady?: (stream: MediaStream) => void;
   onStreamRemoved?: () => void;
 }
@@ -27,6 +28,7 @@ export const useAudioStream = ({
   gain,
   cleanMode,
   autoGain,
+  deviceId,
   onStreamReady,
   onStreamRemoved,
 }: UseAudioStreamProps): UseAudioStreamReturn => {
@@ -57,13 +59,17 @@ export const useAudioStream = ({
     } catch {
       console.warn('🎤 getSupportedConstraints not available, using fallback constraints');
     }
-    
+
     const supports = (constraint: string) =>
       Boolean((supported as Record<string, unknown>)[constraint]);
     const capabilities = browserCapabilitiesRef.current;
     const audioConstraints: MediaTrackConstraints & Record<string, unknown> = {
       channelCount: 1,
     };
+
+    if (deviceId) {
+      audioConstraints.deviceId = { exact: deviceId };
+    }
 
     if (supports("echoCancellation")) {
       audioConstraints.echoCancellation = !cleanMode;
@@ -127,7 +133,7 @@ export const useAudioStream = ({
     }
 
     return audioConstraints;
-  }, [autoGain, cleanMode]);
+  }, [autoGain, cleanMode, deviceId]);
 
   // Initialize audio context and stream
   const initializeAudioStream = useCallback(async () => {
@@ -136,16 +142,16 @@ export const useAudioStream = ({
       console.log('🎤 Already reinitializing, skipping...');
       return;
     }
-    
+
     isReinitializingRef.current = true;
-    
+
     try {
       // Save the previous track enabled state before cleanup
       const wasPreviouslyEnabled = mediaStreamRef.current
         ? mediaStreamRef.current.getAudioTracks()[0]?.enabled ?? false
         : false;
       previousTrackEnabledRef.current = wasPreviouslyEnabled;
-      
+
       // Clean up any existing resources first
       if (mediaStreamRef.current) {
         mediaStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -202,12 +208,12 @@ export const useAudioStream = ({
         // Fallback: Create dedicated ultra-low latency context for voice
         // Use browser-specific optimal sample rate to avoid resampling latency
         const { optimalSampleRate } = browserCapabilitiesRef.current;
-        
+
         audioContextRef.current = new (window.AudioContext ||
           (window as any).webkitAudioContext)({
-          sampleRate: optimalSampleRate,
-          latencyHint: "interactive", // Lowest latency hint available
-        });
+            sampleRate: optimalSampleRate,
+            latencyHint: "interactive", // Lowest latency hint available
+          });
         console.log(
           `🎤 Created fallback AudioContext (${audioContextRef.current.sampleRate}Hz, optimized for ${browserCapabilitiesRef.current.browserType})`,
         );
@@ -317,20 +323,20 @@ export const useAudioStream = ({
       // Always reset the reinitializing flag
       isReinitializingRef.current = false;
     }
-  }, [gain, cleanMode, autoGain, onStreamReady, buildAudioConstraints]);
+  }, [gain, cleanMode, autoGain, deviceId, onStreamReady, buildAudioConstraints]);
 
   // Cleanup function
   const cleanup = useCallback(() => {
-    
+
     if (mediaStreamRef.current) {
-      
+
       mediaStreamRef.current.getTracks().forEach((track) => track.stop());
       mediaStreamRef.current = null;
       onStreamRemoved?.();
     }
 
     if (originalStreamRef.current) {
-      
+
       originalStreamRef.current.getTracks().forEach((track) => track.stop());
       originalStreamRef.current = null;
     }
@@ -365,7 +371,7 @@ export const useAudioStream = ({
     if (isReinitializingRef.current || !originalStreamRef.current || !micPermissionRef.current) {
       return;
     }
-    
+
     // When cleanMode or autoGain changes, reinitialize the stream with new constraints
     // This is necessary because:
     // 1. Chrome doesn't always apply constraints immediately via applyConstraints()
@@ -374,7 +380,7 @@ export const useAudioStream = ({
     console.log('🎤 Audio settings changed (cleanMode or autoGain), reinitializing stream...');
     initializeAudioStream();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cleanMode, autoGain]);
+  }, [cleanMode, autoGain, deviceId]);
 
   // Cleanup on unmount
   useEffect(() => {

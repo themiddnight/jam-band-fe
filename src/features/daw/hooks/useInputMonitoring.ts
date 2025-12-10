@@ -2,86 +2,113 @@ import { useEffect, useState, useRef } from 'react';
 import * as Tone from 'tone';
 import { getOrCreateUserMedia, isUserMediaAvailable } from '../utils/audioInput';
 import { getOrCreateGlobalMixer } from '@/features/audio/utils/effectsArchitecture';
-
-let meter: Tone.Meter | null = null;
+import { useAudioDeviceStore } from '@/features/audio/stores/audioDeviceStore';
 
 // Threshold for updating state - only update if level changes by this amount
-// This prevents unnecessary re-renders when the level is stable
-const LEVEL_UPDATE_THRESHOLD = 0.02; // 2% change required to trigger update
+const LEVEL_UPDATE_THRESHOLD = 0.02;
 
 export const useInputMonitoring = (
   trackId: string | null,
   showMeter: boolean,
   enableFeedback: boolean
 ) => {
+  const dawInputDeviceId = useAudioDeviceStore((state) => state.dawInputDeviceId);
   const [level, setLevel] = useState(0);
   const intervalRef = useRef<number | null>(null);
   const lastLevelRef = useRef<number>(0);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const dataArrayRef = useRef<Uint8Array | null>(null);
+  const meterSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
   useEffect(() => {
-    if (!trackId || !showMeter) {
-      // Stop monitoring
+    // Cleanup function helper
+    const cleanupMonitoring = () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+
+      if (meterSourceRef.current && analyserRef.current) {
+        try {
+          meterSourceRef.current.disconnect(analyserRef.current);
+        } catch { }
+      }
+      meterSourceRef.current = null;
+
+      if (analyserRef.current) {
+        try { analyserRef.current.disconnect(); } catch { }
+        analyserRef.current = null;
+      }
       lastLevelRef.current = 0;
       setLevel(0);
+    };
+
+    if (!trackId || !showMeter) {
+      cleanupMonitoring();
       return;
     }
 
-    // Start monitoring
     const setupMonitoring = async () => {
       try {
-        // Get shared UserMedia instance
-        const userMedia = await getOrCreateUserMedia();
+        // Run cleanup first to ensure clean slate
+        cleanupMonitoring();
 
-        // Initialize Meter if not already done
-        if (!meter) {
-          meter = new Tone.Meter({ normalRange: true, smoothing: 0.8 });
-          userMedia.connect(meter);
-        }
+        // Get MediaStreamAudioSourceNode with selected device
+        const sourceNode = await getOrCreateUserMedia(dawInputDeviceId || undefined);
+        meterSourceRef.current = sourceNode;
+
+        // Create native AnalyserNode
+        const context = Tone.getContext().rawContext as AudioContext;
+        analyserRef.current = context.createAnalyser();
+        analyserRef.current.fftSize = 256;
+        analyserRef.current.smoothingTimeConstant = 0.8;
+
+        // Create data array for level detection
+        dataArrayRef.current = new Uint8Array(analyserRef.current.fftSize);
+
+        // Connect: source -> analyser
+        sourceNode.connect(analyserRef.current);
 
         // Update level at regular intervals
-        // Reduced from 50ms (20 FPS) to 100ms (10 FPS) for better performance
-        // 10 FPS is still smooth enough for VU meter visualization
         intervalRef.current = window.setInterval(() => {
-          // Only update if mic is actually available and active
-          if (meter && isUserMediaAvailable()) {
-            const value = meter.getValue();
-            const levelValue = typeof value === 'number' ? value : Math.max(...value);
-            const newLevel = Math.max(0, Math.min(1, levelValue));
-            
-            // Only update state if the level has changed significantly
-            // This prevents unnecessary re-renders when the level is stable
+          if (analyserRef.current && dataArrayRef.current && isUserMediaAvailable()) {
+            // Get time domain data (byte values 0-255, 128 = silence)
+            (analyserRef.current.getByteTimeDomainData as (array: Uint8Array) => void)(dataArrayRef.current);
+
+            // Calculate RMS level from byte data
+            let sum = 0;
+            for (let i = 0; i < dataArrayRef.current.length; i++) {
+              // Convert 0-255 to -1 to 1 range (128 = 0)
+              const value = (dataArrayRef.current[i] - 128) / 128;
+              sum += value * value;
+            }
+            const rms = Math.sqrt(sum / dataArrayRef.current.length);
+
+            // Convert to 0-1 range
+            const newLevel = Math.min(1, rms * 1.5);
+
             const levelDiff = Math.abs(newLevel - lastLevelRef.current);
             if (levelDiff >= LEVEL_UPDATE_THRESHOLD || newLevel === 0) {
               lastLevelRef.current = newLevel;
               setLevel(newLevel);
             }
           } else {
-            // Mic not available, set level to 0
             if (lastLevelRef.current !== 0) {
               lastLevelRef.current = 0;
               setLevel(0);
             }
           }
-        }, 100); // Update every 100ms (10 FPS) - smooth enough for meter
+        }, 100);
 
       } catch (error) {
-        console.error('Failed to setup input monitoring:', error);
+        console.error('useInputMonitoring: Failed to setup input monitoring:', error);
       }
     };
 
     setupMonitoring();
 
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    };
-  }, [trackId, showMeter]);
+    return cleanupMonitoring;
+  }, [trackId, showMeter, dawInputDeviceId]);
 
   // Handle feedback monitoring (hearing yourself) through track's effect chain
   useEffect(() => {
@@ -89,51 +116,34 @@ export const useInputMonitoring = (
       return;
     }
 
-    let trackChannelRef: any = null;
+    let inputGainRef: GainNode | null = null;
+    let sourceNodeRef: MediaStreamAudioSourceNode | null = null;
 
     const setupFeedback = async () => {
       try {
-        const userMedia = await getOrCreateUserMedia();
-        const mixer = await getOrCreateGlobalMixer();
+        const sourceNode = await getOrCreateUserMedia(dawInputDeviceId || undefined);
+        sourceNodeRef = sourceNode;
 
         if (enableFeedback) {
+          const mixer = await getOrCreateGlobalMixer();
+
           // Get the track's channel which has the track-specific effect chain
-          // For track effects, the channel ID is the track ID itself
           let trackChannel = mixer.getChannel(trackId);
-          
+
           if (!trackChannel) {
             // Create the track channel if it doesn't exist
             mixer.createUserChannel(trackId, `Track ${trackId}`);
             trackChannel = mixer.getChannel(trackId);
           }
-          
+
           if (trackChannel) {
-            // Store reference for cleanup
-            trackChannelRef = trackChannel.inputGain;
-            
-            // Connect to the track's channel input, which will route through effects
+            // Connect to the track's channel input (GainNode), which will route through effects
+            inputGainRef = trackChannel.inputGain;
             try {
-              userMedia.connect(trackChannel.inputGain);
-              console.log(`🎤 Input monitoring connected through track ${trackId} effect chain`);
+              sourceNode.connect(trackChannel.inputGain);
             } catch (error) {
-              console.warn('Failed to connect to track channel, falling back to direct connection:', error);
-              // Fallback: connect directly to destination
-              userMedia.connect(Tone.getDestination());
-              trackChannelRef = Tone.getDestination();
+              console.warn('Failed to route monitoring to track channel:', error);
             }
-          } else {
-            // Fallback: connect directly to destination if channel creation failed
-            userMedia.connect(Tone.getDestination());
-            trackChannelRef = Tone.getDestination();
-            console.log('🎤 Input monitoring connected directly (no effect chain)');
-          }
-        } else {
-          // Disconnect only from output destinations, keep meter connected
-          try {
-            // Try to disconnect from destination
-            userMedia.disconnect(Tone.getDestination());
-          } catch {
-            // Already disconnected, ignore
           }
         }
       } catch (error) {
@@ -144,23 +154,18 @@ export const useInputMonitoring = (
     setupFeedback();
 
     return () => {
-      getOrCreateUserMedia().then((userMedia) => {
+      // Clean up connection
+      if (sourceNodeRef && inputGainRef) {
         try {
-          // Disconnect only from the specific output, not from meter
-          if (trackChannelRef) {
-            userMedia.disconnect(trackChannelRef);
-          } else {
-            userMedia.disconnect(Tone.getDestination());
-          }
+          sourceNodeRef.disconnect(inputGainRef);
         } catch {
-          // Already disconnected, ignore
+          // Already disconnected or invalid
         }
-      }).catch(() => {
-        // Ignore errors on cleanup
-      });
+      }
+      sourceNodeRef = null;
+      inputGainRef = null;
     };
-  }, [trackId, enableFeedback]);
+  }, [trackId, enableFeedback, dawInputDeviceId]);
 
   return level;
 };
-

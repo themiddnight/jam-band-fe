@@ -14,6 +14,7 @@ import { uploadAudioRegion } from '../../services/audioRegionApi';
 import { useRoomStore } from '@/features/rooms';
 import { useDAWCollaborationContext } from '../../contexts/useDAWCollaborationContext';
 import type { DAWCollaborationContextValue } from '../../contexts/useDAWCollaborationContext';
+import { useAudioDeviceStore } from '@/features/audio/stores/audioDeviceStore';
 
 const resolveAudioUrl = (url: string): string => {
   if (!url) {
@@ -44,6 +45,7 @@ export const useAudioRecordingEngine = (options?: UseAudioRecordingEngineOptions
   const stopRecordingPreview = useRecordingStore((state) => state.stopRecording);
   const currentRoomId = useRoomStore((state) => state.currentRoom?.id);
   const currentUserId = useRoomStore((state) => state.currentUser?.id);
+  const dawInputDeviceId = useAudioDeviceStore((state) => state.dawInputDeviceId);
 
   const isRecordingRef = useRef(false);
   const recordingStartBeatRef = useRef(0);
@@ -51,10 +53,10 @@ export const useAudioRecordingEngine = (options?: UseAudioRecordingEngineOptions
   const durationUpdateIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
-    requestMicrophoneAccess().catch((error) => {
+    requestMicrophoneAccess(dawInputDeviceId || undefined).catch((error) => {
       console.error('Failed to request microphone access:', error);
     });
-  }, []);
+  }, [dawInputDeviceId]);
 
   useEffect(() => {
     const selectedTrack = tracks.find((t) => t.id === selectedTrackId);
@@ -78,7 +80,7 @@ export const useAudioRecordingEngine = (options?: UseAudioRecordingEngineOptions
         updateRecordingDuration(durationBeats);
       }, 50);
 
-      startRecording(playhead).catch((error) => {
+      startRecording(playhead, dawInputDeviceId || undefined).catch((error) => {
         console.error('Failed to start recording:', error);
         isRecordingRef.current = false;
         stopRecordingPreview();
@@ -116,7 +118,7 @@ export const useAudioRecordingEngine = (options?: UseAudioRecordingEngineOptions
             });
             if (region) {
               // Store both audioBuffer and audioBlob for better save quality
-              updateRegionStore(region.id, { 
+              updateRegionStore(region.id, {
                 audioBuffer: result.audioBuffer,
                 audioBlob: result.audioBlob, // Preserve original opus/webm format
               });
@@ -156,7 +158,7 @@ export const useAudioRecordingEngine = (options?: UseAudioRecordingEngineOptions
 
             if (region) {
               // Store both audioBuffer and audioBlob for better save quality
-              updateRegionStore(region.id, { 
+              updateRegionStore(region.id, {
                 audioBuffer: result.audioBuffer,
                 audioBlob: result.audioBlob, // Preserve original opus/webm format
               });

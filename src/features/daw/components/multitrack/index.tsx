@@ -20,6 +20,8 @@ import { useTouchGestures } from '../../hooks/useTouchGestures';
 import { AiGenerationPopup } from '../../../ai/components/AiGenerationPopup';
 import type { AiNote } from '../../../../shared/api/aiGeneration';
 import { getAiSettings } from '../../../../shared/api/aiSettings';
+import { useAudioDeviceStore } from '@/features/audio/stores/audioDeviceStore';
+import { AudioInputSelector } from '@/features/audio/components/AudioInputSelector';
 
 export const MultitrackView = () => {
   const tracks = useTrackStore((state) => state.tracks);
@@ -27,7 +29,7 @@ export const MultitrackView = () => {
   const selectTrack = useTrackStore((state) => state.selectTrack);
   const regions = useRegionStore((state) => state.regions);
   const selectedRegionIds = useRegionStore((state) => state.selectedRegionIds);
-  
+
   // Use collaboration handlers if available
   const {
     handleRegionAdd,
@@ -49,6 +51,9 @@ export const MultitrackView = () => {
   const timeSignature = useProjectStore((state) => state.timeSignature);
   const setActiveRegion = usePianoRollStore((state) => state.setActiveRegion);
 
+  const dawInputDeviceId = useAudioDeviceStore((state) => state.dawInputDeviceId);
+  const setDawInputDeviceId = useAudioDeviceStore((state) => state.setDawInputDeviceId);
+
   const headerRef = useRef<HTMLDivElement | null>(null);
   const canvasScrollRef = useRef<HTMLDivElement | null>(null);
   const [scrollLeft, setScrollLeft] = useState(0);
@@ -62,7 +67,7 @@ export const MultitrackView = () => {
   // Refs for stable wheel handler
   const zoomRef = useRef(zoom);
   const scrollLeftRef = useRef(scrollLeft);
-  
+
   // AI enabled state
   const [isAiEnabled, setIsAiEnabled] = useState(false);
 
@@ -76,12 +81,12 @@ export const MultitrackView = () => {
         setIsAiEnabled(false);
       });
   }, []);
-  
+
   // Keep refs in sync with state
   useEffect(() => {
     zoomRef.current = zoom;
   }, [zoom]);
-  
+
   useEffect(() => {
     scrollLeftRef.current = scrollLeft;
   }, [scrollLeft]);
@@ -122,7 +127,7 @@ export const MultitrackView = () => {
     }
 
     // Use cursor position if provided, otherwise use playhead
-    const focusPoint = cursorX !== undefined 
+    const focusPoint = cursorX !== undefined
       ? (currentScrollLeft + cursorX) / (PIXELS_PER_BEAT * currentZoom)
       : playhead;
 
@@ -159,42 +164,42 @@ export const MultitrackView = () => {
   useEffect(() => {
     const canvas = canvasScrollRef.current;
     if (!canvas) return;
-    
+
     const handleWheel = (e: WheelEvent) => {
       // Only handle zoom when Ctrl/Meta is pressed
       if (!(e.ctrlKey || e.metaKey)) {
         return; // Let native scroll happen
       }
-      
+
       e.preventDefault();
-      
+
       // Cancel any pending zoom update
       if (zoomRafRef.current !== null) {
         cancelAnimationFrame(zoomRafRef.current);
       }
-      
+
       // Batch zoom updates using requestAnimationFrame
       zoomRafRef.current = requestAnimationFrame(() => {
         const scrollContainer = canvasScrollRef.current;
         if (!scrollContainer) return;
-        
+
         const delta = -e.deltaY;
         const zoomSpeed = 0.001;
         const currentZoom = zoomRef.current;
         const newZoom = currentZoom + delta * zoomSpeed;
         // Clamp directly here to avoid stale callback issues
         const clampedZoom = Math.max(minTimelineZoom, Math.min(maxTimelineZoom, newZoom));
-        
+
         // Get current playhead position for centering
         const currentPlayhead = playhead;
         const viewportWidth = scrollContainer.clientWidth;
-        
+
         // Calculate new scroll position to keep playhead centered in viewport
         const playheadPixels = currentPlayhead * PIXELS_PER_BEAT * clampedZoom;
         const newScrollLeft = playheadPixels - viewportWidth / 2;
-        
+
         setZoom(clampedZoom);
-        
+
         requestAnimationFrame(() => {
           if (canvasScrollRef.current) {
             canvasScrollRef.current.scrollLeft = Math.max(0, newScrollLeft);
@@ -218,16 +223,16 @@ export const MultitrackView = () => {
   const handleTouchZoomChange = useCallback((newZoom: number, centerX: number) => {
     const clampedZoom = clampTimelineZoom(newZoom);
     const currentScrollLeft = canvasScrollRef.current?.scrollLeft ?? 0;
-    
+
     // Calculate focus point in beats
     const focusPoint = (currentScrollLeft + centerX) / (PIXELS_PER_BEAT * zoom);
-    
+
     // Calculate new scroll position to keep focus point at same position
     const newFocusPixels = focusPoint * PIXELS_PER_BEAT * clampedZoom;
     const newScrollLeft = newFocusPixels - centerX;
-    
+
     setZoom(clampedZoom);
-    
+
     requestAnimationFrame(() => {
       if (canvasScrollRef.current) {
         canvasScrollRef.current.scrollLeft = Math.max(0, newScrollLeft);
@@ -316,14 +321,14 @@ export const MultitrackView = () => {
   const isLoadingProject = useProjectStore((state) => state.isLoadingProject);
   const prevRegionsLengthRef = useRef(regions.length);
   const prevIsLoadingProjectRef = useRef(isLoadingProject);
-  
+
   useEffect(() => {
     // Only auto-fit if:
     // 1. A project is being loaded (isLoadingProject flag is true)
     // 2. Regions were added (went from 0 to more than 0)
     const hadNoRegions = prevRegionsLengthRef.current === 0;
     const hasRegionsNow = regions.length > 0;
-    
+
     if (isLoadingProject && hadNoRegions && hasRegionsNow) {
       // Delay to ensure viewport is ready
       const timer = setTimeout(() => {
@@ -331,7 +336,7 @@ export const MultitrackView = () => {
       }, 100);
       return () => clearTimeout(timer);
     }
-    
+
     prevRegionsLengthRef.current = regions.length;
     prevIsLoadingProjectRef.current = isLoadingProject;
   }, [regions.length, isLoadingProject, handleFitToRegions]);
@@ -357,18 +362,18 @@ export const MultitrackView = () => {
     if (!canvasScrollRef.current) {
       return;
     }
-    
+
     // Sync header scroll immediately for visual consistency
     const { scrollTop: currentScrollTop } = canvasScrollRef.current;
     if (headerRef.current && headerRef.current.scrollTop !== currentScrollTop) {
       headerRef.current.scrollTop = currentScrollTop;
     }
-    
+
     // Throttle scrollLeft state updates using RAF
     if (scrollRafRef.current !== null) {
       return; // Already scheduled, skip
     }
-    
+
     scrollRafRef.current = requestAnimationFrame(() => {
       if (!canvasScrollRef.current) {
         scrollRafRef.current = null;
@@ -400,7 +405,7 @@ export const MultitrackView = () => {
   // AI Generation Context
   const projectScale = useProjectStore((state) => state.projectScale);
   const bpm = useProjectStore((state) => state.bpm);
-  
+
   // Find the selected region (single)
   const selectedRegion = useMemo(() => {
     if (selectedRegionIds.length === 1) {
@@ -437,7 +442,7 @@ export const MultitrackView = () => {
     if (!selectedTrackId) return null;
     return tracks.find(t => t.id === selectedTrackId) || null;
   }, [selectedTrackId, tracks]);
-  
+
   const isSelectedAudioTrack = selectedTrack?.type === 'audio';
 
   const handleAiGenerate = useCallback((notes: AiNote[]) => {
@@ -446,11 +451,11 @@ export const MultitrackView = () => {
     if (!track || track.type !== 'midi') return;
 
     let targetRegionId: string | null = null;
-    
+
     // Case: Region Selected (single)
     // Check if the selected region belongs to the selected track to be safe
     if (selectedRegion && selectedRegion.trackId === track.id) {
-        targetRegionId = selectedRegion.id;
+      targetRegionId = selectedRegion.id;
     }
 
     const midiNotes = notes.map(n => ({
@@ -472,11 +477,11 @@ export const MultitrackView = () => {
 
       // Create region at playhead
       const region = handleRegionAdd(track.id, playhead);
-      
+
       if (region) {
-        handleRegionUpdate(region.id, { 
+        handleRegionUpdate(region.id, {
           length: newLength,
-          notes: midiNotes 
+          notes: midiNotes
         });
       }
     }
@@ -496,17 +501,17 @@ export const MultitrackView = () => {
             showContextToggle={true}
             contextToggleLabel="Track Context"
             trigger={
-              <button 
-                className="btn btn-xs btn-secondary btn-outline gap-1" 
+              <button
+                className="btn btn-xs btn-secondary btn-outline gap-1"
                 disabled={!selectedTrackId || !isAiEnabled || isSelectedAudioTrack}
                 title={
-                  !isAiEnabled 
-                    ? "Enable AI Features in Account Settings" 
-                    : !selectedTrackId 
-                    ? "Select a track first" 
-                    : isSelectedAudioTrack
-                    ? "AI generation is only available for MIDI tracks"
-                    : "AI Composer"
+                  !isAiEnabled
+                    ? "Enable AI Features in Account Settings"
+                    : !selectedTrackId
+                      ? "Select a track first"
+                      : isSelectedAudioTrack
+                        ? "AI generation is only available for MIDI tracks"
+                        : "AI Composer"
                 }
               >
                 <span>✨</span> AI
@@ -514,6 +519,17 @@ export const MultitrackView = () => {
             }
           />
           <LoopToggle />
+          <label className="label text-xs hidden md:block">
+            <span className="label-text">Audio Input:</span>
+          </label>
+          <div className="w-32">
+            <AudioInputSelector
+              value={dawInputDeviceId}
+              onChange={setDawInputDeviceId}
+              showLabel={false}
+              className="w-full"
+            />
+          </div>
           <button
             type="button"
             className="btn btn-xs btn-ghost"
@@ -689,7 +705,7 @@ export const MultitrackView = () => {
           }}
           onScroll={handleCanvasScroll}
           className="relative flex-1 overflow-auto bg-base-200/40 touch-pan-y"
-          style={{ 
+          style={{
             willChange: 'scroll-position',
             contain: 'strict',
             overscrollBehavior: 'contain',
