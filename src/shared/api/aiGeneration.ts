@@ -12,6 +12,7 @@ export interface AiGenerationRequest {
   prompt: string;
   context: any;
   maxTokens?: number;
+  model?: string;
 }
 
 export interface AiGenerationResponse {

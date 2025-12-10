@@ -25,6 +25,7 @@ export interface ProjectStoreState {
   projectScale: { rootNote: string; scale: 'major' | 'minor' };
   isLoadingProject: boolean;
   isSavingProject: boolean;
+  isMixingDown: boolean;
   setBpm: (bpm: number) => void;
   setTimeSignature: (timeSignature: TimeSignature) => void;
   setTransportState: (state: TransportState) => void;
@@ -38,12 +39,13 @@ export interface ProjectStoreState {
   setProjectScale: (rootNote: string, scale: 'major' | 'minor') => void;
   setIsLoadingProject: (isLoading: boolean) => void;
   setIsSavingProject: (isSaving: boolean) => void;
+  setIsMixingDown: (isMixingDown: boolean) => void;
   reset: () => void;
 }
 
 const initialState: Omit<
   ProjectStoreState,
-  'setBpm' | 'setTimeSignature' | 'setTransportState' | 'setPlayhead' | 'setGridDivision' | 'setLoop' | 'toggleLoop' | 'toggleMetronome' | 'toggleRecording' | 'toggleSnap' | 'setProjectScale' | 'setIsLoadingProject' | 'setIsSavingProject' | 'reset'
+  'setBpm' | 'setTimeSignature' | 'setTransportState' | 'setPlayhead' | 'setGridDivision' | 'setLoop' | 'toggleLoop' | 'toggleMetronome' | 'toggleRecording' | 'toggleSnap' | 'setProjectScale' | 'setIsLoadingProject' | 'setIsSavingProject' | 'setIsMixingDown' | 'reset'
 > = {
   bpm: DEFAULT_BPM,
   timeSignature: DEFAULT_TIME_SIGNATURE,
@@ -61,6 +63,7 @@ const initialState: Omit<
   projectScale: { rootNote: 'C', scale: 'major' },
   isLoadingProject: false,
   isSavingProject: false,
+  isMixingDown: false,
 };
 
 type PersistedState = Pick<ProjectStoreState, 'bpm' | 'timeSignature' | 'gridDivision' | 'loop' | 'isMetronomeEnabled'>;
@@ -80,7 +83,8 @@ export const useProjectStore = create<ProjectStoreState>()(
         set((current) => {
           const updates: Partial<ProjectStoreState> = { transportState: state };
 
-          if ((state === 'playing' || state === 'recording') && current.loop.enabled) {
+          // Don't snap to loop start during mixdown
+          if ((state === 'playing' || state === 'recording') && current.loop.enabled && !current.isMixingDown) {
             updates.playhead = current.loop.start;
           }
 
@@ -118,7 +122,8 @@ export const useProjectStore = create<ProjectStoreState>()(
 
           if (nextIsRecording) {
             updates.transportState = 'recording';
-            if (state.loop.enabled) {
+            // Don't snap to loop start during mixdown
+            if (state.loop.enabled && !state.isMixingDown) {
               updates.playhead = state.loop.start;
             }
           } else {
@@ -136,6 +141,7 @@ export const useProjectStore = create<ProjectStoreState>()(
         set({ projectScale: { rootNote, scale } }),
       setIsLoadingProject: (isLoading) => set({ isLoadingProject: isLoading }),
       setIsSavingProject: (isSaving) => set({ isSavingProject: isSaving }),
+      setIsMixingDown: (isMixingDown) => set({ isMixingDown }),
       reset: () => set(() => ({ ...initialState })),
     }),
     {

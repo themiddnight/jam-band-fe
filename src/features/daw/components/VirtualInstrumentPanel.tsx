@@ -100,6 +100,20 @@ export const VirtualInstrumentPanel = memo(({ onRecordMidiMessage }: VirtualInst
       setIsLoadingInstrument(true);
       setLoadError(null);
 
+      // Safety timeout to prevent indefinite loading state
+      const safetyTimeoutId = setTimeout(() => {
+        if (!cancelled) {
+          setIsLoadingInstrument((isLoading) => {
+            if (isLoading) {
+              setLoadError("Instrument loading timed out. Click to retry.");
+              console.warn("Instrument loading forced timeout by UI safety net");
+              return false;
+            }
+            return isLoading;
+          });
+        }
+      }, 15000); // 15 seconds safety net
+
       try {
         const { engine } = await trackInstrumentRegistry.ensureEngine(selectedTrack, {
           instrumentId: selectedTrack.instrumentId,
@@ -111,7 +125,7 @@ export const VirtualInstrumentPanel = memo(({ onRecordMidiMessage }: VirtualInst
         if (selectedTrack.instrumentCategory === InstrumentCategory.DrumBeat) {
           // For drum machines, wait for samples to load
           let samples = engine.getAvailableSamples?.() ?? [];
-          
+
           // If no samples are available yet, wait for them
           if (samples.length === 0) {
             try {
@@ -120,7 +134,7 @@ export const VirtualInstrumentPanel = memo(({ onRecordMidiMessage }: VirtualInst
               console.warn("Timeout waiting for drum samples", error);
             }
           }
-          
+
           if (!cancelled) {
             setAvailableSamples(samples);
           }
@@ -134,6 +148,7 @@ export const VirtualInstrumentPanel = memo(({ onRecordMidiMessage }: VirtualInst
           setAvailableSamples([]);
         }
       } finally {
+        clearTimeout(safetyTimeoutId);
         if (!cancelled) {
           setIsLoadingInstrument(false);
         }
@@ -181,7 +196,7 @@ export const VirtualInstrumentPanel = memo(({ onRecordMidiMessage }: VirtualInst
             timeStamp: performance.now(),
           } as unknown as MIDIMessageEvent,
         };
-        
+
         // Always send to handler (for both recording and broadcasting)
         onRecordMidiMessage(message);
 
@@ -280,7 +295,7 @@ export const VirtualInstrumentPanel = memo(({ onRecordMidiMessage }: VirtualInst
             timeStamp: performance.now(),
           } as unknown as MIDIMessageEvent,
         };
-        
+
         // Always send to handler (for both recording and broadcasting)
         onRecordMidiMessage(message);
       });
@@ -448,35 +463,35 @@ export const VirtualInstrumentPanel = memo(({ onRecordMidiMessage }: VirtualInst
                   // Import AudioContextManager and Tone dynamically
                   const { AudioContextManager } = await import('@/features/audio/constants/audioConfig');
                   const Tone = await import('tone');
-                  
+
                   // Get and start the audio context
                   const context = await AudioContextManager.getInstrumentContext();
-                  
+
                   // Ensure context is running
                   if (context.state !== 'running') {
                     await context.resume();
                   }
-                  
+
                   // Start Tone.js transport (required for some instruments)
                   if (Tone.getContext().state !== 'running') {
                     await Tone.start();
                   }
-                  
+
                   // Wait a bit for audio to fully initialize
                   await new Promise(resolve => setTimeout(resolve, 100));
-                  
+
                   // Verify context is actually running now
                   if (context.state !== 'running') {
                     throw new Error('AudioContext failed to start. Please try clicking again.');
                   }
-                  
+
                   // Retry loading the instrument
                   if (selectedTrack && selectedTrack.type === 'midi') {
                     const { engine } = await trackInstrumentRegistry.ensureEngine(selectedTrack, {
                       instrumentId: selectedTrack.instrumentId,
                       instrumentCategory: selectedTrack.instrumentCategory,
                     });
-                    
+
                     if (selectedTrack.instrumentCategory === InstrumentCategory.DrumBeat) {
                       let samples = engine.getAvailableSamples?.() ?? [];
                       if (samples.length === 0) {

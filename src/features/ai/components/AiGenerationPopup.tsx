@@ -1,8 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import AnchoredPopup from "../../ui/components/shared/AnchoredPopup";
 import { getAiSettings } from "../../../shared/api/aiSettings";
 import { generateNotes, cancelGeneration, type AiNote } from "../../../shared/api/aiGeneration";
 import { formatAiError } from "../utils/errorFormatter";
+import { getModelsForProvider } from "../constants/models";
+import { useAiPreferencesStore } from "../stores/aiPreferencesStore";
 
 export interface AiGenerationPopupProps {
   onGenerate: (notes: AiNote[]) => void;
@@ -30,23 +32,27 @@ export function AiGenerationPopup({
   const [enabled, setEnabled] = useState(false);
   const [checkingSettings, setCheckingSettings] = useState(false);
   const [includeExtraContext, setIncludeContext] = useState(false);
+  const [provider, setProvider] = useState<string>("");
+  const [model, setModel] = useState<string>("");
   
   const anchorRef = useRef<HTMLDivElement>(null);
+  
+  // Zustand store for persisting model preferences
+  const { getModel: getStoredModel, setModel: setStoredModel } = useAiPreferencesStore();
 
-  // Check if AI is enabled when opening
-  useEffect(() => {
-    if (isOpen) {
-      checkAiEnabled();
-    }
-  }, [isOpen]);
-
-  const checkAiEnabled = async () => {
+  const checkAiEnabled = useCallback(async () => {
     setCheckingSettings(true);
     try {
       const { settings } = await getAiSettings();
       setEnabled(settings.enabled && settings.hasApiKey);
+      setProvider(settings.provider);
+      
+      // Load stored model preference or use default for provider
+      const storedModel = getStoredModel(settings.provider);
+      setModel(storedModel);
+      
       if (!settings.enabled) {
-        setError("AI features are disabled in Account Settings");
+        setError("AI features are disabled in Settings");
       } else if (!settings.hasApiKey) {
         setError("API Key is missing in Account Settings");
       } else {
@@ -59,7 +65,22 @@ export function AiGenerationPopup({
     } finally {
       setCheckingSettings(false);
     }
-  };
+  }, [getStoredModel]);
+
+  // Check if AI is enabled when opening
+  useEffect(() => {
+    if (isOpen) {
+      checkAiEnabled();
+    }
+  }, [isOpen, checkAiEnabled]);
+
+  // Update model when provider changes - use stored preference or default
+  useEffect(() => {
+    if (provider) {
+      const storedModel = getStoredModel(provider);
+      setModel(storedModel);
+    }
+  }, [provider, getStoredModel]);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -76,6 +97,7 @@ export function AiGenerationPopup({
       const response = await generateNotes({
         prompt,
         context: finalContext,
+        model: model || undefined,
       });
 
       if (response.processedNotes && response.processedNotes.length > 0) {
@@ -119,7 +141,7 @@ export function AiGenerationPopup({
         onClose={() => !loading && setIsOpen(false)}
         anchorRef={anchorRef}
         placement={placement.includes("bottom") ? "bottom" : "top"} // Map to closest supported placement
-        className="w-80 p-4 z-50"
+        className="w-80 p-4 z-50 shadow"
       >
         <div className="flex flex-col gap-3">
           <h3 className="font-bold text-lg flex items-center gap-2">
@@ -149,6 +171,38 @@ export function AiGenerationPopup({
                   disabled={loading}
                   autoFocus
                 ></textarea>
+              </div>
+
+              <div className="form-control">
+                <label className="label">
+                  <span className="label-text text-xs">Model</span>
+                </label>
+                <select
+                  className="select select-bordered select-xs w-full text-xs"
+                  value={model}
+                  onChange={(e) => {
+                    const newModel = e.target.value;
+                    setModel(newModel);
+                    // Save to store for persistence
+                    if (provider) {
+                      setStoredModel(provider, newModel);
+                    }
+                  }}
+                  disabled={loading || !enabled}
+                >
+                  {getModelsForProvider(provider).map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+                {getModelsForProvider(provider).find(m => m.value === model)?.description && (
+                  <label className="label text-xs">
+                    <span className="label-text-alt text-base-content/60 text-xs">
+                      {getModelsForProvider(provider).find(m => m.value === model)?.description}
+                    </span>
+                  </label>
+                )}
               </div>
 
               {showContextToggle && (

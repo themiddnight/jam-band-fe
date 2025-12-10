@@ -237,16 +237,18 @@ export default function AccountSettings() {
 
   return (
     <div className="min-h-dvh bg-base-200 p-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="card bg-base-100 shadow-xl">
-          <div className="card-body">
-            <h2 className="card-title text-2xl mb-4">Account Settings</h2>
+      <div className="max-w-4xl mx-auto space-y-4">
+        <h2 className="text-2xl font-bold">Settings</h2>
 
-            {/* Profile Section */}
+        {/* Account Settings Card */}
+        <div className="card bg-base-100 shadow-xl">
+          <div className="card-body p-3 sm:p-3 lg:p-4 xl:p-5">
+            <h3 className="card-title text-lg mb-4">🧑🏻‍💻 Account Settings</h3>
             <div className="space-y-4">
+              {/* Profile Section */}
               <div>
-                <h3 className="text-lg font-semibold mb-2">Profile</h3>
-                <div className="space-y-2">
+                <h4 className="text-md font-semibold mb-2">Profile</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="label">
                       <span className="label-text">Email</span>
@@ -323,7 +325,7 @@ export default function AccountSettings() {
                           value={username}
                           disabled
                         />
-                        <div className="flex items-center justify-between mt-2">
+                        <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
                           <label className="label">
                             <span className="label-text-alt">
                               Your username for this account
@@ -344,102 +346,108 @@ export default function AccountSettings() {
 
               {/* Password Section */}
               <div className="divider"></div>
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Password</h3>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h4 className="text-md font-semibold mb-2">Password</h4>
                 <Link to="/forgot-password" className="btn btn-outline">
                   Change Password
                 </Link>
               </div>
-
-              {/* Saved Projects Section */}
-              <div className="divider"></div>
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Saved Projects</h3>
-                {loadingProjects ? (
-                  <div className="flex items-center gap-2">
-                    <span className="loading loading-spinner loading-sm"></span>
-                    <span>Loading projects...</span>
-                  </div>
-                ) : projects.length === 0 ? (
-                  <p className="text-sm text-base-content/70">
-                    You don't have any saved projects yet. Save a project from a perform or arrange room to get started.
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {projects.map((project) => (
-                      <div
-                        key={project.id}
-                        className="flex items-center justify-between p-3 bg-base-200 rounded-lg"
-                      >
-                        <div className="flex-1">
-                          <div className="font-medium">{project.name}</div>
-                          <div className="text-sm text-base-content/60">
-                            {project.roomType === "perform" ? "Perform Room" : "Arrange Room"} •{" "}
-                            {new Date(project.updatedAt).toLocaleDateString()}
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            className="btn btn-sm btn-primary"
-                            onClick={() => {
-                              setSelectedProject(project);
-                              setShowOpenModal(true);
-                            }}
-                          >
-                            Open
-                          </button>
-                          <button
-                            className="btn btn-sm btn-error"
-                            onClick={() => handleDeleteProject(project.id)}
-                            disabled={deletingId === project.id}
-                          >
-                            {deletingId === project.id ? (
-                              <span className="loading loading-spinner loading-xs"></span>
-                            ) : (
-                              "Delete"
-                            )}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* App Settings Section */}
-              <div className="divider"></div>
-              <div>
-                <AiSettingsSection />
-              </div>
-
-              <div className="divider"></div>
-
-              <div className="flex align-center justify-between flex-wrap gap-3">
-                {/* Back to Lobby */}
-                <Link to="/" className="btn btn-ghost">
-                  Back to Lobby
-                </Link>
-
-                {/* Logout */}
-                <div>
-                  <button
-                    onClick={handleLogout}
-                    className="btn btn-error btn-outline"
-                  >
-                    Logout
-                  </button>
-                </div>
-
-                {error && (
-                  <div className="alert alert-error">
-                    <span>{error}</span>
-                  </div>
-                )}
-              </div>
-
             </div>
           </div>
         </div>
+
+        {/* Saved Projects Card */}
+        <div className="card bg-base-100 shadow-xl">
+          <div className="card-body p-3 sm:p-3 lg:p-4 xl:p-5">
+            <h3 className="card-title text-lg mb-4">💾 Saved Projects</h3>
+            {loadingProjects ? (
+              <div className="flex items-center gap-2">
+                <span className="loading loading-spinner loading-sm"></span>
+                <span>Loading projects...</span>
+              </div>
+            ) : projects.length === 0 ? (
+              <p className="text-sm text-base-content/70">
+                You don't have any saved projects yet. Save a project from a perform or arrange room to get started.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {projects.map((project) => (
+                  <div
+                    key={project.id}
+                    className="flex items-center justify-between p-3 bg-base-200 rounded-lg"
+                  >
+                    <div className="flex-1">
+                      <div className="font-medium">{project.name}</div>
+                      <div className="text-sm text-base-content/60">
+                        {project.roomType === "perform" ? "Perform Room" : "Arrange Room"} •{" "}
+                        {new Date(project.updatedAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        className="btn btn-sm btn-primary"
+                        onClick={() => {
+                          setSelectedProject(project);
+                          setShowOpenModal(true);
+                        }}
+                      >
+                        Open
+                      </button>
+                      <button
+                        className="btn btn-sm btn-error"
+                        onClick={() => handleDeleteProject(project.id)}
+                        disabled={deletingId === project.id}
+                      >
+                        {deletingId === project.id ? (
+                          <span className="loading loading-spinner loading-xs"></span>
+                        ) : (
+                          "Delete"
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* AI Assistant Settings Card */}
+        <div className="card bg-base-100 shadow-xl">
+          <div className="card-body p-3 sm:p-3 lg:p-4 xl:p-5">
+            <h3 className="card-title text-lg mb-4">✨ AI Assistant Settings</h3>
+            <p className="text-sm text-base-content/70 mb-4">
+              Configure AI provider to enable note generation features in Arrange and Perform rooms.
+              Your API key is encrypted and stored securely.
+            </p>
+            <AiSettingsSection inline={true} />
+          </div>
+        </div>
+      </div>
+
+      <div className="divider"></div>
+
+      <div className="flex align-center justify-between flex-wrap gap-3 max-w-4xl mx-auto">
+        {/* Back to Lobby */}
+        <Link to="/" className="btn btn-accent btn-soft">
+          Back to Lobby
+        </Link>
+
+        {/* Logout */}
+        <div>
+          <button
+            onClick={handleLogout}
+            className="btn btn-error btn-ghost"
+          >
+            Logout
+          </button>
+        </div>
+
+        {error && (
+          <div className="alert alert-error">
+            <span>{error}</span>
+          </div>
+        )}
       </div>
 
       {/* Open Project Modal */}

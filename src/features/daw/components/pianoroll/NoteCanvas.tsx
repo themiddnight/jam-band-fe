@@ -91,12 +91,13 @@ interface HoldState {
 
 const HOLD_DURATION = 400; // ms - duration to hold before starting marquee
 const HOLD_MOVE_THRESHOLD = 10; // pixels - max movement during hold
+const TAP_THRESHOLD = 10; // pixels
 
 // Memoized playhead component - needs layer offset for virtualized stage
 const PlayheadIndicator = React.memo<{ x: number; height: number; width: number; layerOffset?: number }>(
   ({ x, height, width, layerOffset = 0 }) => {
     if (x < 0 || x > width) return null;
-    
+
     return (
       <Layer listening={false} x={layerOffset}>
         <Line
@@ -137,35 +138,35 @@ export const NoteCanvas = ({
   const viewMode = usePianoRollStore((state) => state.viewMode);
   const rootNote = useArrangeRoomScaleStore((state) => state.rootNote);
   const scale = useArrangeRoomScaleStore((state) => state.scale);
-  
+
   // Import the scale checking function
   const { isNoteOutOfScale: checkIsNoteOutOfScale } = useMemo(() => {
     return {
       isNoteOutOfScale: (midiNumber: number) => {
         // Only check if in scale-keys mode
         if (viewMode !== 'scale-keys') return false;
-        
+
         const noteInOctave = midiNumber % 12;
         const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
         const SCALES = {
           major: [0, 2, 4, 5, 7, 9, 11],
           minor: [0, 2, 3, 5, 7, 8, 10],
         } as const;
-        
+
         const rootIndex = NOTE_NAMES.indexOf(rootNote);
         const scaleIntervals = SCALES[scale];
-        
+
         for (const interval of scaleIntervals) {
           if ((rootIndex + interval) % 12 === noteInOctave) {
             return false; // In scale
           }
         }
-        
+
         return true; // Out of scale
       }
     };
   }, [viewMode, rootNote, scale]);
-  
+
   // Get visible MIDI numbers based on view mode
   const visibleMidiNumbers = useMemo(() => {
     return getVisibleMidiNumbers(
@@ -177,7 +178,7 @@ export const NoteCanvas = ({
       HIGHEST_MIDI
     );
   }, [viewMode, rootNote, scale, notes]);
-  
+
   // Create a map from MIDI number to row index for positioning
   const midiToRowIndex = useMemo(() => {
     const map = new Map<number, number>();
@@ -186,7 +187,7 @@ export const NoteCanvas = ({
     });
     return map;
   }, [visibleMidiNumbers]);
-  
+
   // Helper function to get Y position for a pitch
   const getNoteY = useCallback((pitch: number) => {
     const rowIndex = midiToRowIndex.get(pitch);
@@ -196,7 +197,7 @@ export const NoteCanvas = ({
     }
     return rowIndex * NOTE_HEIGHT;
   }, [midiToRowIndex]);
-  
+
   // Helper function to get pitch from Y position
   const getPitchFromY = useCallback((y: number) => {
     const rowIndex = Math.floor(y / NOTE_HEIGHT);
@@ -205,20 +206,20 @@ export const NoteCanvas = ({
     }
     return visibleMidiNumbers[rowIndex];
   }, [visibleMidiNumbers]);
-  
+
   // Full content dimensions
   const fullWidth = totalBeats * pixelsPerBeat * zoom;
   const height = visibleMidiNumbers.length * NOTE_HEIGHT;
   const beatWidth = pixelsPerBeat * zoom;
   // Since notes are now in absolute positions, playhead should also be absolute
   const playheadX = playheadBeats * beatWidth;
-  
+
   // Virtualized Stage: only render viewport + buffer, not full width
   // This prevents massive canvas allocation at high zoom levels
   const stageBuffer = 200;
   const stageWidth = Math.min(fullWidth, viewportWidth + stageBuffer * 2);
   const stageOffsetX = Math.max(0, Math.min(scrollLeft - stageBuffer, fullWidth - stageWidth));
-  
+
   // Dynamic grid division based on zoom level
   const dynamicGridDivision = useMemo(() => getGridDivisionForZoom(zoom), [zoom]);
   const gridInterval = useMemo(() => getGridInterval(dynamicGridDivision), [dynamicGridDivision]);
@@ -226,19 +227,19 @@ export const NoteCanvas = ({
     (value: number) => (snapToGridEnabled ? snapToGrid(value, dynamicGridDivision) : value),
     [dynamicGridDivision, snapToGridEnabled]
   );
-  
+
   // Viewport culling - calculate visible range considering zoom
   const { visibleStartBeat, visibleEndBeat } = useMemo(() => {
     const buffer = 16; // Larger buffer to ensure all notes are rendered at high zoom
     const startBeat = Math.max(0, (scrollLeft / beatWidth) - buffer);
     const endBeat = Math.min(totalBeats, ((scrollLeft + viewportWidth) / beatWidth) + buffer);
-    
+
     return {
       visibleStartBeat: startBeat,
       visibleEndBeat: endBeat
     };
   }, [scrollLeft, beatWidth, viewportWidth, totalBeats]);
-  
+
   // Filter notes to only visible ones (always include selected)
   const visibleNotes = useMemo(() => {
     return notes.filter(note => {
@@ -262,6 +263,22 @@ export const NoteCanvas = ({
         clearTimeout(holdTimerRef.current);
       }
     };
+  }, []);
+
+  // Refs for touch interactions
+  const potentialSelectionRef = useRef<string | null>(null);
+  const potentialDeselectionRef = useRef<string | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  // Helper to get client coordinates
+  const getClientCoords = useCallback((evt: any) => {
+    const isTouch = evt.type.startsWith('touch');
+    if (isTouch && evt.touches && evt.touches.length > 0) {
+      return { x: evt.touches[0].clientX, y: evt.touches[0].clientY };
+    } else if (isTouch && evt.changedTouches && evt.changedTouches.length > 0) {
+      return { x: evt.changedTouches[0].clientX, y: evt.changedTouches[0].clientY };
+    }
+    return { x: evt.clientX, y: evt.clientY };
   }, []);
 
   const getPointerData = useCallback(
@@ -304,27 +321,62 @@ export const NoteCanvas = ({
 
   const handleNotePointerDown = useCallback(
     (note: MidiNote, event: KonvaEventObject<PointerEvent>) => {
+      const isTouch = event.evt.type.startsWith('touch') || event.evt.pointerType === 'touch';
+
+      // Reset touch refs
+      potentialSelectionRef.current = null;
+      potentialDeselectionRef.current = null;
+      touchStartRef.current = null;
+
+      if (isTouch) {
+        const clientCoords = getClientCoords(event.evt);
+        touchStartRef.current = clientCoords;
+
+        const isSelected = selectedNoteIds.includes(note.id);
+
+        if (!isSelected) {
+          // Case: Touch on Unselected Note -> Prepare for Pan or potential Select
+          event.cancelBubble = true;
+          potentialSelectionRef.current = note.id;
+
+          if (onPan) {
+            setPanState({
+              startX: clientCoords.x,
+              startY: clientCoords.y,
+            });
+          }
+          return;
+        } else {
+          // Case: Touch on Selected Note -> Prepare for Drag or potential Deselect
+          potentialDeselectionRef.current = note.id;
+        }
+      }
+
       event.cancelBubble = true;
-      
+
       // Ctrl+drag for panning
-      if (event.evt.ctrlKey || event.evt.metaKey) {
+      if (!isTouch && (event.evt.ctrlKey || event.evt.metaKey)) {
         const data = getPointerData(event);
-        if (data) {
+        if (data && onPan) {
+          const clientCoords = getClientCoords(event.evt);
           setPanState({
-            startX: data.pointer.x,
-            startY: data.pointer.y,
+            startX: clientCoords.x,
+            startY: clientCoords.y,
           });
         }
         return;
       }
-      
-      if (event.evt.shiftKey) {
-        onToggleNoteSelection(note.id);
-      } else if (!selectedNoteIds.includes(note.id)) {
-        onSetSelectedNotes([note.id]);
+
+      if (!isTouch) {
+        if (event.evt.shiftKey) {
+          onToggleNoteSelection(note.id);
+        } else if (!selectedNoteIds.includes(note.id)) {
+          onSetSelectedNotes([note.id]);
+        }
       }
+
       const noteIds =
-        event.evt.shiftKey || selectedNoteIds.includes(note.id)
+        (event.evt.shiftKey || selectedNoteIds.includes(note.id))
           ? Array.from(new Set([...selectedNoteIds, note.id]))
           : [note.id];
       const data = getPointerData(event);
@@ -351,7 +403,7 @@ export const NoteCanvas = ({
         ),
       });
     },
-    [getPointerData, notes, onSetSelectedNotes, onToggleNoteSelection, selectedNoteIds, snapBeat]
+    [getPointerData, notes, onSetSelectedNotes, onToggleNoteSelection, selectedNoteIds, snapBeat, getClientCoords, onPan]
   );
 
   const handleResizeHandleDown = useCallback(
@@ -383,6 +435,15 @@ export const NoteCanvas = ({
 
   const handlePointerMove = useCallback(
     (event: KonvaEventObject<PointerEvent>) => {
+      const touches = event.evt && 'touches' in event.evt ? (event.evt as any).touches : null;
+      if (touches && touches.length > 1) {
+        if (holdTimerRef.current !== null) {
+          clearTimeout(holdTimerRef.current);
+          holdTimerRef.current = null;
+        }
+        if (holdState) setHoldState(null);
+      }
+
       // Cancel hold if pointer moves significantly during hold
       if (holdState) {
         const stage = event.target.getStage();
@@ -402,7 +463,7 @@ export const NoteCanvas = ({
           }
         }
       }
-      
+
       if (dragState) {
         const data = getPointerData(event);
         if (!data) {
@@ -411,6 +472,12 @@ export const NoteCanvas = ({
         const pointerBeat = snapBeat(data.beat);
         const deltaBeats = pointerBeat - dragState.originBeat;
         const deltaPitch = clampPitch(data.pitch) - dragState.originPitch;
+
+        // Update potential Deselection if dragged
+        if ((deltaBeats !== 0 || deltaPitch !== 0) && potentialDeselectionRef.current) {
+          potentialDeselectionRef.current = null;
+        }
+
         const minStart = dragState.noteIds.reduce((minValue, id) => {
           const { start } = dragState.initial[id];
           return Math.min(minValue, start);
@@ -450,10 +517,10 @@ export const NoteCanvas = ({
         setDragState((prev) =>
           prev
             ? {
-                ...prev,
-                deltaBeats: clampedDeltaBeats,
-                deltaPitch: clampedDeltaPitch,
-              }
+              ...prev,
+              deltaBeats: clampedDeltaBeats,
+              deltaPitch: clampedDeltaPitch,
+            }
             : prev
         );
       } else if (resizeState) {
@@ -490,10 +557,10 @@ export const NoteCanvas = ({
         setResizeState((prev) =>
           prev
             ? {
-                ...prev,
-                deltaBeats,
-                previewDurations,
-              }
+              ...prev,
+              deltaBeats,
+              previewDurations,
+            }
             : prev
         );
       } else if (marqueeState) {
@@ -509,27 +576,29 @@ export const NoteCanvas = ({
         setMarqueeState((prev) =>
           prev
             ? {
-                ...prev,
-                currentX: pointer.x + stageOffsetX,
-                currentY: pointer.y,
-              }
+              ...prev,
+              currentX: pointer.x + stageOffsetX,
+              currentY: pointer.y,
+            }
             : prev
         );
       } else if (panState && onPan) {
-        const stage = event.target.getStage();
-        if (!stage) {
-          return;
+        const clientCoords = getClientCoords(event.evt);
+        const deltaX = panState.startX - clientCoords.x;
+        const deltaY = panState.startY - clientCoords.y;
+
+        // Update potential selection if moved significantly
+        if (potentialSelectionRef.current) {
+          const moveDist = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+          if (moveDist > TAP_THRESHOLD) {
+            potentialSelectionRef.current = null;
+          }
         }
-        const pointer = stage.getPointerPosition();
-        if (!pointer) {
-          return;
-        }
-        const deltaX = panState.startX - pointer.x;
-        const deltaY = panState.startY - pointer.y;
+
         onPan(deltaX, deltaY);
         setPanState({
-          startX: pointer.x,
-          startY: pointer.y,
+          startX: clientCoords.x,
+          startY: clientCoords.y,
         });
       }
     },
@@ -544,74 +613,87 @@ export const NoteCanvas = ({
       resizeState,
       snapBeat,
       stageOffsetX,
+      getClientCoords
     ]
   );
 
   const handlePointerUp = useCallback(() => {
-      let didFlushRealtime = false;
-      if (dragState) {
-        if (onRealtimeNotesFlush && !didFlushRealtime) {
-          onRealtimeNotesFlush();
-          didFlushRealtime = true;
+    let didFlushRealtime = false;
+    if (dragState) {
+      if (onRealtimeNotesFlush && !didFlushRealtime) {
+        onRealtimeNotesFlush();
+        didFlushRealtime = true;
+      }
+      if (dragState.deltaBeats !== 0 || dragState.deltaPitch !== 0) {
+        if (dragState.isDuplicate) {
+          // Alt+drag: Duplicate notes
+          onDuplicateNotes(dragState.noteIds, dragState.deltaBeats, dragState.deltaPitch);
+        } else {
+          // Normal drag: Move notes
+          onMoveNotes(dragState.noteIds, dragState.deltaBeats, dragState.deltaPitch);
         }
-        if (dragState.deltaBeats !== 0 || dragState.deltaPitch !== 0) {
-          if (dragState.isDuplicate) {
-            // Alt+drag: Duplicate notes
-            onDuplicateNotes(dragState.noteIds, dragState.deltaBeats, dragState.deltaPitch);
-          } else {
-            // Normal drag: Move notes
-            onMoveNotes(dragState.noteIds, dragState.deltaBeats, dragState.deltaPitch);
-          }
-        }
-        setDragState(null);
       }
-      if (panState) {
-        setPanState(null);
+      setDragState(null);
+    }
+    if (panState) {
+      setPanState(null);
+    }
+    if (resizeState) {
+      if (onRealtimeNotesFlush && !didFlushRealtime) {
+        onRealtimeNotesFlush();
+        didFlushRealtime = true;
       }
-      if (resizeState) {
-        if (onRealtimeNotesFlush && !didFlushRealtime) {
-          onRealtimeNotesFlush();
-          didFlushRealtime = true;
-        }
-        if (resizeState.deltaBeats !== 0) {
-          onResizeNotes(resizeState.noteIds, resizeState.deltaBeats);
-        }
-        setResizeState(null);
+      if (resizeState.deltaBeats !== 0) {
+        onResizeNotes(resizeState.noteIds, resizeState.deltaBeats);
       }
-      if (marqueeState) {
-        const x1 = Math.min(marqueeState.originX, marqueeState.currentX);
-        const x2 = Math.max(marqueeState.originX, marqueeState.currentX);
-        const y1 = Math.min(marqueeState.originY, marqueeState.currentY);
-        const y2 = Math.max(marqueeState.originY, marqueeState.currentY);
-        const selected = notes
-          .filter((note) => {
-            const noteX = note.start * beatWidth;
-            const noteWidth = note.duration * beatWidth;
-            const noteY = getNoteY(note.pitch);
-            return (
-              noteX < x2 &&
-              noteX + noteWidth > x1 &&
-              noteY < y2 &&
-              noteY + NOTE_HEIGHT > y1
-            );
-          })
-          .map((note) => note.id);
-        const combined = marqueeState.additive
-          ? Array.from(new Set([...selectedNoteIds, ...selected]))
-          : selected;
-        onSetSelectedNotes(combined);
-        setMarqueeState(null);
-      }
-      
-      // Clean up hold state and timer
-      if (holdTimerRef.current !== null) {
-        clearTimeout(holdTimerRef.current);
-        holdTimerRef.current = null;
-      }
-      if (holdState) {
-        setHoldState(null);
-      }
-    },
+      setResizeState(null);
+    }
+    if (marqueeState) {
+      const x1 = Math.min(marqueeState.originX, marqueeState.currentX);
+      const x2 = Math.max(marqueeState.originX, marqueeState.currentX);
+      const y1 = Math.min(marqueeState.originY, marqueeState.currentY);
+      const y2 = Math.max(marqueeState.originY, marqueeState.currentY);
+      const selected = notes
+        .filter((note) => {
+          const noteX = note.start * beatWidth;
+          const noteWidth = note.duration * beatWidth;
+          const noteY = getNoteY(note.pitch);
+          return (
+            noteX < x2 &&
+            noteX + noteWidth > x1 &&
+            noteY < y2 &&
+            noteY + NOTE_HEIGHT > y1
+          );
+        })
+        .map((note) => note.id);
+      const combined = marqueeState.additive
+        ? Array.from(new Set([...selectedNoteIds, ...selected]))
+        : selected;
+      onSetSelectedNotes(combined);
+      setMarqueeState(null);
+    }
+
+    // Clean up hold state and timer
+    if (holdTimerRef.current !== null) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    if (holdState) {
+      setHoldState(null);
+    }
+
+    // Handle Tap on Unselected Note
+    if (potentialSelectionRef.current) {
+      onSetSelectedNotes([potentialSelectionRef.current]);
+      potentialSelectionRef.current = null;
+    }
+
+    // Handle Tap on Selected Note (Deselect)
+    if (potentialDeselectionRef.current) {
+      onToggleNoteSelection(potentialDeselectionRef.current);
+      potentialDeselectionRef.current = null;
+    }
+  },
     [
       beatWidth,
       dragState,
@@ -624,6 +706,7 @@ export const NoteCanvas = ({
       onResizeNotes,
       onRealtimeNotesFlush,
       onSetSelectedNotes,
+      onToggleNoteSelection,
       panState,
       resizeState,
       selectedNoteIds,
@@ -645,37 +728,42 @@ export const NoteCanvas = ({
       if (!pointer) {
         return;
       }
-      
+
       // Convert to absolute coordinates for virtualized stage
       const absoluteX = pointer.x + stageOffsetX;
-      
+      const clientCoords = getClientCoords(event.evt);
+
       // Ctrl+drag for panning
       if (event.evt.ctrlKey || event.evt.metaKey) {
-        setPanState({
-          startX: pointer.x,
-          startY: pointer.y,
-        });
+        if (onPan) {
+          setPanState({
+            startX: clientCoords.x,
+            startY: clientCoords.y,
+          });
+        }
         return;
       }
-      
+
       // Check if this is a touch event
-      const isTouch = event.evt.pointerType === 'touch' || 
-                      'touches' in event.evt;
-      
+      const isTouch = event.evt.pointerType === 'touch' ||
+        'touches' in event.evt;
+
       if (isTouch) {
         // For touch on empty space: start panning immediately with single finger
         // Also start hold timer - if user holds without moving, switch to marquee
-        setPanState({
-          startX: pointer.x,
-          startY: pointer.y,
-        });
-        
+        if (onPan) {
+          setPanState({
+            startX: clientCoords.x,
+            startY: clientCoords.y,
+          });
+        }
+
         setHoldState({
-          x: pointer.x,
+          x: pointer.x, // Hold logic still uses stage coords for distance check inside Stage
           y: pointer.y,
           startTime: Date.now(),
         });
-        
+
         holdTimerRef.current = window.setTimeout(() => {
           // After hold duration without significant movement, start marquee selection
           // The panState will be cleared when marquee starts
@@ -701,7 +789,7 @@ export const NoteCanvas = ({
         });
       }
     },
-    [stageOffsetX]
+    [stageOffsetX, onPan, getClientCoords]
   );
 
   const dragOffsets = useMemo(() => {
@@ -729,7 +817,7 @@ export const NoteCanvas = ({
 
 
   return (
-    <div style={{ position: 'relative', width: fullWidth, height }}>
+    <div style={{ position: 'relative', width: fullWidth, height, touchAction: 'none' }}>
       {/* Virtualized Stage - positioned at stageOffsetX within the full-width wrapper */}
       <div style={{ position: 'absolute', left: stageOffsetX, top: 0 }}>
         <Stage
@@ -763,7 +851,7 @@ export const NoteCanvas = ({
               rootNote={rootNote}
             />
           </Layer>
-      
+
           {/* Dynamic Layer: Notes and interactive elements - offset by -stageOffsetX */}
           <Layer
             x={-stageOffsetX}
@@ -771,7 +859,7 @@ export const NoteCanvas = ({
               // Event delegation: find which element was clicked
               const target = event.target;
               const targetName = target.name();
-              
+
               if (targetName && targetName.startsWith('note-')) {
                 const noteId = targetName.replace('note-', '');
                 const note = visibleNotes.find((n) => n.id === noteId);
@@ -797,13 +885,13 @@ export const NoteCanvas = ({
               const dragOffset = isDuplicating ? undefined : dragOffsets[note.id];
               const previewDuration = previewDurations[note.id];
               const isSelected = selectedNoteIds.includes(note.id);
-              
+
               // Check if note is out of scale (considering drag offset)
-              const effectivePitch = dragOffset 
+              const effectivePitch = dragOffset
                 ? clampPitch(note.pitch + dragOffset.pitch)
                 : note.pitch;
               const isOutOfScale = checkIsNoteOutOfScale(effectivePitch);
-              
+
               return (
                 <BaseNote
                   key={note.id}
@@ -824,7 +912,7 @@ export const NoteCanvas = ({
               .map((note) => {
                 const dragOffset = dragOffsets[note.id];
                 const previewDuration = previewDurations[note.id];
-                
+
                 return (
                   <NoteResizeHandle
                     key={`handle-${note.id}`}
@@ -836,7 +924,7 @@ export const NoteCanvas = ({
                   />
                 );
               })}
-            
+
             {/* Duplicate previews when Alt+dragging */}
             {dragState?.isDuplicate && visibleNotes
               .filter(note => dragState.noteIds.includes(note.id))
@@ -845,11 +933,11 @@ export const NoteCanvas = ({
                 if (!dragOffset) {
                   return null;
                 }
-                
+
                 // Check if the duplicated note will be out of scale at its new position
                 const newPitch = clampPitch(note.pitch + dragOffset.pitch);
                 const isOutOfScale = checkIsNoteOutOfScale(newPitch);
-                
+
                 return (
                   <DuplicateNotePreview
                     key={`duplicate-preview-${note.id}`}
@@ -861,7 +949,7 @@ export const NoteCanvas = ({
                   />
                 );
               })}
-            
+
             {marqueeState && (
               <MarqueeSelection
                 originX={marqueeState.originX}
@@ -871,7 +959,7 @@ export const NoteCanvas = ({
               />
             )}
           </Layer>
-          
+
           {/* Playhead Layer: Separate memoized component with layer offset */}
           <PlayheadIndicator x={playheadX} height={height} width={fullWidth} layerOffset={-stageOffsetX} />
         </Stage>

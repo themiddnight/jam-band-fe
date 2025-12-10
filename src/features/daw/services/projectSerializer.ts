@@ -84,7 +84,7 @@ export function serializeProject(projectName: string): SerializedProject {
   // Collect all effect chains (including track-specific ones)
   // Sanitize effect chains to ensure they're serializable
   const effectChains: Record<string, EffectChain> = {};
-  
+
   Object.entries(effectsState.chains).forEach(([chainType, chain]) => {
     // Only save chains that have effects
     if (chain && chain.effects && chain.effects.length > 0) {
@@ -117,7 +117,7 @@ export function serializeProject(projectName: string): SerializedProject {
       }
     }
   });
-  
+
   console.log(`✅ Effect chains processed: ${Object.keys(effectChains).length}`);
 
   // Sanitize synth states to remove any non-serializable data
@@ -249,28 +249,28 @@ export async function extractAudioFiles(
   for (const region of regions) {
     if (region.type === 'audio') {
       const audioRegion = region as AudioRegion;
-      
+
       // Use audioFileId for deduplication (falls back to region.id for backward compatibility)
       const audioFileId = audioRegion.audioFileId || region.id;
-      
+
       // Skip if we've already processed this audio file
       if (processedFileIds.has(audioFileId)) {
         console.log(`  Skipping region ${region.id} - audio file ${audioFileId} already processed`);
         continue;
       }
-      
+
       console.log(`  Processing audio region ${region.id} (file: ${audioFileId})...`);
-      
+
       // Priority order:
       // 1. audioBlob (original recorded format - opus/webm, best quality/size)
       // 2. audioUrl (for server-hosted files)
       // 3. audioBuffer (fallback - converts to WAV, larger files)
-      
+
       if (audioRegion.audioBlob) {
         console.log(`    Using original blob (${audioRegion.audioBlob.type})...`);
         if (audioRegion.audioBlob.size > 0) {
-          const extension = audioRegion.audioBlob.type.includes('webm') ? 'webm' : 
-                           audioRegion.audioBlob.type.includes('ogg') ? 'ogg' : 'audio';
+          const extension = audioRegion.audioBlob.type.includes('webm') ? 'webm' :
+            audioRegion.audioBlob.type.includes('ogg') ? 'ogg' : 'audio';
           console.log(`    ✅ Original blob: ${(audioRegion.audioBlob.size / 1024).toFixed(2)} KB`);
           audioFiles.push({
             regionId: audioFileId, // Use audioFileId instead of region.id
@@ -306,7 +306,7 @@ export async function extractAudioFiles(
           console.error(`    ❌ Error fetching audio for region ${region.id}:`, error);
         }
       }
-      
+
       // Fallback to AudioBuffer conversion if no blob was saved
       if (!processedFileIds.has(audioFileId)) {
         if (audioRegion.audioBuffer) {
@@ -352,9 +352,9 @@ function audioBufferToWav(audioBuffer: AudioBuffer): Blob {
   const numberOfChannels = audioBuffer.numberOfChannels;
   const length = audioBuffer.length * numberOfChannels * 2; // 16-bit samples
   const sampleRate = audioBuffer.sampleRate;
-  
+
   console.log(`    Converting AudioBuffer: ${numberOfChannels} channels, ${audioBuffer.length} samples, ${sampleRate} Hz`);
-  
+
   const buffer = new ArrayBuffer(44 + length);
   const view = new DataView(buffer);
 
@@ -395,7 +395,7 @@ function audioBufferToWav(audioBuffer: AudioBuffer): Blob {
   }
 
   const blob = new Blob([buffer], { type: 'audio/wav' });
-  
+
   if (blob.size === 0) {
     console.error('Generated WAV blob is empty!');
     throw new Error('Failed to generate WAV blob');
@@ -429,7 +429,7 @@ export function deserializeProject(data: SerializedProject): void {
 
   // Clear existing tracks and regions
   useTrackStore.getState().clearTracks();
-  
+
   // Restore tracks
   data.tracks.forEach((track) => {
     useTrackStore.setState((state: any) => ({
@@ -439,18 +439,7 @@ export function deserializeProject(data: SerializedProject): void {
 
   // Restore effect chains
   if (data.effectChains) {
-    const effectsStore = useEffectsStore.getState();
-    Object.entries(data.effectChains).forEach(([chainType, chain]) => {
-      // Ensure the chain exists in the store
-      effectsStore.ensureChain(chainType as any);
-      // Set the chain state
-      useEffectsStore.setState((state) => ({
-        chains: {
-          ...state.chains,
-          [chainType]: chain,
-        },
-      }));
-    });
+    useEffectsStore.getState().setChainsFromState(data.effectChains);
   }
 
   // Restore synth states
@@ -493,7 +482,7 @@ export function deserializeRegions(
       // Use audioFileId to look up the audio buffer (falls back to region.id for backward compatibility)
       const audioFileId = region.audioFileId || region.id;
       const audioBuffer = audioBuffers.get(audioFileId);
-      
+
       // Preserve audioUrl from serialized data (server path) if no buffer is provided
       const audioRegion = region as any;
       return {

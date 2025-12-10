@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import * as Tone from 'tone';
 import type { Socket } from 'socket.io-client';
+import { isUserRestricted, getRestrictionMessage } from '@/shared/utils/userPermissions';
 
 interface UseBroadcastStreamOptions {
   socket: Socket | null;
@@ -33,6 +34,12 @@ export function useBroadcastStream({
   const startBroadcast = useCallback(async () => {
     if (!socket || !enabled) {
       setError('Socket not connected');
+      return;
+    }
+
+    // Guest users and unverified registered users cannot broadcast
+    if (isUserRestricted()) {
+      setError(getRestrictionMessage());
       return;
     }
 

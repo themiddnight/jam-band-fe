@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { v4 as uuidv4 } from 'uuid';
 
 import {
   DEFAULT_INSTRUMENT_ID,
@@ -56,7 +57,10 @@ interface TrackStoreState {
 }
 
 const createTrack = (index: number, overrides?: Partial<Track>): Track => {
-  const id = overrides?.id ?? (typeof crypto !== 'undefined' ? crypto.randomUUID() : String(Date.now()));
+  const generateId = () => {
+    return uuidv4();
+  };
+  const id = overrides?.id ?? generateId();
   const color = overrides?.color ?? TRACK_COLORS[index % TRACK_COLORS.length] ?? DEFAULT_TRACK_COLOR;
   const type = overrides?.type ?? 'midi';
   const trackName = overrides?.name ?? `${type === 'audio' ? 'Audio' : 'MIDI'} ${index + 1}`;
@@ -184,11 +188,11 @@ export const useTrackStore = create<TrackStoreState>((set, get) => ({
       tracks: state.tracks.map((track) =>
         track.id === trackId
           ? {
-              ...track,
-              instrumentId,
-              instrumentCategory:
-                instrumentCategory ?? track.instrumentCategory,
-            }
+            ...track,
+            instrumentId,
+            instrumentCategory:
+              instrumentCategory ?? track.instrumentCategory,
+          }
           : track
       ),
     })),
@@ -205,9 +209,9 @@ export const useTrackStore = create<TrackStoreState>((set, get) => ({
       tracks: state.tracks.map((track) =>
         track.id === trackId
           ? {
-              ...track,
-              regionIds: track.regionIds.filter((id) => id !== regionId),
-            }
+            ...track,
+            regionIds: track.regionIds.filter((id) => id !== regionId),
+          }
           : track
       ),
     })),
@@ -244,11 +248,11 @@ export const useTrackStore = create<TrackStoreState>((set, get) => ({
       tracks: state.tracks.map((track) =>
         track.id === trackId
           ? {
-              ...track,
-              instrumentId,
-              instrumentCategory:
-                instrumentCategory ?? track.instrumentCategory,
-            }
+            ...track,
+            instrumentId,
+            instrumentCategory:
+              instrumentCategory ?? track.instrumentCategory,
+          }
           : track
       ),
     })),
@@ -260,11 +264,11 @@ export const useTrackStore = create<TrackStoreState>((set, get) => ({
       const reorderedTracks = trackIds
         .map((id) => trackMap.get(id))
         .filter((track): track is Track => track !== undefined);
-      
+
       // Add any tracks that weren't in the reorder list (shouldn't happen, but safety check)
       const existingIds = new Set(trackIds);
       const remainingTracks = state.tracks.filter((track) => !existingIds.has(track.id));
-      
+
       return { ...state, tracks: [...reorderedTracks, ...remainingTracks] };
     }),
 }));

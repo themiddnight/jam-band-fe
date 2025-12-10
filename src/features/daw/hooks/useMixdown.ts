@@ -65,6 +65,9 @@ export const useMixdown = () => {
       setIsMixingDown(true);
       setError(null);
       abortControllerRef.current = new AbortController();
+      
+      // Set mixdown flag in project store
+      useProjectStore.getState().setIsMixingDown(true);
 
       try {
         // Ensure Tone.js is ready
@@ -259,11 +262,13 @@ export const useMixdown = () => {
         }
 
         setIsMixingDown(false);
+        useProjectStore.getState().setIsMixingDown(false);
         return wavBlob;
       } catch (err) {
         console.error('Mixdown error:', err);
         setError(err instanceof Error ? err.message : 'Unknown error occurred');
         setIsMixingDown(false);
+        useProjectStore.getState().setIsMixingDown(false);
 
         // Clean up
         if (mediaRecorderRef.current?.state === 'recording') {
@@ -329,6 +334,7 @@ export const useMixdown = () => {
 
     setIsMixingDown(false);
     setError(null);
+    useProjectStore.getState().setIsMixingDown(false);
   }, []);
 
   return {

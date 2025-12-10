@@ -50,7 +50,7 @@ export function LobbyHeader({
         {isAuthenticated ? (
           <button
             onClick={() => navigate("/account")}
-            className="btn btn-sm btn-primary"
+            className="btn btn-sm btn-primary btn-soft"
             title="Account Settings"
           >
             {username || "Account"} ⚙️

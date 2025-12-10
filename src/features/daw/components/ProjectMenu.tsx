@@ -9,12 +9,14 @@ import { getRoomContext } from '@/shared/analytics/context';
 import { trackProjectExport, trackProjectSave } from '@/shared/analytics/events';
 import { trackEvent } from '@/shared/analytics/client';
 import { useUserStore } from '@/shared/stores/userStore';
+import { isUserRestricted, getRestrictionMessage } from '@/shared/utils/userPermissions';
 import { SaveProjectModal } from '@/features/projects/components/SaveProjectModal';
 import { ProjectLimitModal } from '@/features/projects/components/ProjectLimitModal';
 import { useProjectSave } from '@/features/projects/hooks/useProjectSave';
 import { getArrangeRoomProjectData } from '@/features/projects/utils/projectDataHelpers';
 import { useProjectStore } from '../stores/projectStore';
 import { saveProjectAsZip } from '../services/projectFileManager';
+import { useToastNotification } from '@/shared/hooks/useToastNotification';
 
 type ProjectMenuProps = {
   canLoadProject?: boolean;
@@ -36,18 +38,21 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
   });
 
   const { currentRoom, currentUser } = useRoom();
-  const { isAuthenticated, userType } = useUserStore();
-  const isGuest = userType === "GUEST" || !isAuthenticated;
+  const { userType } = useUserStore();
+  const isGuest = userType === "GUEST";
   const isPremium = userType === "PREMIUM";
-  const isRegisteredOrPremium = userType === "REGISTERED" || userType === "PREMIUM";
+  const isRestricted = isUserRestricted();
   const [showRecoverDialog, setShowRecoverDialog] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const analyticsContext = useMemo(() => getRoomContext(currentRoom), [currentRoom]);
   const setIsSavingProject = useProjectStore((state) => state.setIsSavingProject);
-  
+
   // Mixdown state
   const { isMixingDown, progress, error: mixdownError, startMixdown, abortMixdown } = useMixdown();
   const [showMixdownSettings, setShowMixdownSettings] = useState(false);
+
+  // Toast notifications
+  const { showError, showSuccess } = useToastNotification();
 
   // Save project modal state
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -113,6 +118,8 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
           source: 'project_menu',
         });
       } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to save project';
+        showError(`Failed to save project: ${errorMessage}`);
         console.error('Save failed:', err);
       }
       return;
@@ -124,6 +131,8 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
         // Save over existing project without showing modal (projectName not needed)
         await checkAndSave(undefined, savedProjectId);
       } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to save project';
+        showError(`Failed to save project: ${errorMessage}`);
         console.error('Save failed:', err);
       }
       return;
@@ -157,6 +166,8 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
         await loadProject();
       }
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load project';
+      showError(`Failed to load project: ${errorMessage}`);
       console.error('Load failed:', err);
     } finally {
       setUploadProgress(0);
@@ -172,6 +183,8 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
         source: 'project_menu',
       });
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to export project';
+      showError(`Failed to export project: ${errorMessage}`);
       console.error('Export failed:', err);
     }
   };
@@ -199,9 +212,9 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
       },
     });
     const startedAt = performance.now();
-    
+
     const blob = await startMixdown(settings);
-    
+
     if (blob) {
       const durationMs = performance.now() - startedAt;
       trackProjectExport(analyticsContext, {
@@ -219,10 +232,10 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
+
       // Show notification that project state was reloaded
       console.log('✅ Mixdown complete! Project state reloaded from server.');
-      // You could add a toast notification here if you have a toast system
+      showSuccess('Mixdown complete! Audio file downloaded.');
       return;
     }
 
@@ -255,51 +268,67 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
     checkAutoSave();
   }, []);
 
+  // Show errors as toast notifications
+  useEffect(() => {
+    if (error) {
+      showError(`Project error: ${error}`);
+    }
+  }, [error, showError]);
+
+  useEffect(() => {
+    if (mixdownError) {
+      showError(`Mixdown error: ${mixdownError}`);
+    }
+  }, [mixdownError, showError]);
+
   return (
     <div className="project-menu">
       {/* Menu Bar */}
       <div className="menu-bar flex flex-wrap items-center gap-1 sm:gap-2 p-1 sm:p-2 bg-base-200 rounded-lg">
-        <button 
-          className="btn btn-xs btn-soft btn-secondary" 
-          onClick={handleSave} 
-          disabled={(isSaving || isSavingProject) || isMixingDown || !isRegisteredOrPremium}
-          title={!isRegisteredOrPremium ? "Registered and premium users can save projects. Please sign up to access this feature." : undefined}
+        <button
+          className="btn btn-xs btn-primary"
+          onClick={handleSave}
+          disabled={(isSaving || isSavingProject) || isMixingDown || isRestricted}
+          title={isRestricted ? getRestrictionMessage() : undefined}
         >
           <span className="hidden sm:inline">{(isSaving || isSavingProject) ? 'Saving...' : 'Save Project'}</span>
           <span className="sm:hidden">{(isSaving || isSavingProject) ? 'Saving...' : 'Save'}</span>
         </button>
-        
+
         {canLoadProject && (
-          <button 
-            className="btn btn-xs btn-soft btn-accent" 
-            onClick={handleLoad} 
-            disabled={isLoading || isMixingDown || !isPremium}
-            title={!isPremium ? "Premium users can import projects. Please upgrade to access this feature." : undefined}
+          <div className='divider divider-horizontal m-0!' />
+        )}
+
+        {canLoadProject && (
+          <button
+            className="btn btn-xs btn-soft btn-secondary"
+            onClick={handleLoad}
+            disabled={isLoading || isMixingDown || isRestricted}
+            title={isRestricted ? getRestrictionMessage() : (!isPremium ? "Only premium users can import project in the future." : undefined)}
           >
-            <span className="hidden sm:inline">{isLoading ? 'Importing...' : 'Import Project'}</span>
+            <span className="hidden sm:inline">{isLoading ? 'Importing...' : 'Import'}</span>
             <span className="sm:hidden">{isLoading ? 'Loading...' : 'Load'}</span>
           </button>
         )}
 
         {canLoadProject && (
-          <button 
-            className="btn btn-xs btn-soft btn-accent" 
-            onClick={handleExport} 
-            disabled={isLoading || isMixingDown || !isPremium}
-            title={!isPremium ? "Premium users can export projects. Please upgrade to access this feature." : "Export project as .collab file"}
+          <button
+            className="btn btn-xs btn-soft btn-accent"
+            onClick={handleExport}
+            disabled={isLoading || isMixingDown || isRestricted}
+            title={isRestricted ? getRestrictionMessage() : (!isPremium ? "Only premium users can export project in the future." : "Export project as .collab file")}
           >
-            <span className="hidden sm:inline">Export Project</span>
-            <span className="sm:hidden">Export</span>
+            <span>Export</span>
           </button>
         )}
 
-        <div className='divider divider-horizontal !m-0' />
+        <div className='divider divider-horizontal m-0!' />
 
         <button
           className="btn btn-xs btn-soft btn-info"
           onClick={handleMixdownClick}
-          disabled={isMixingDown || !isRegisteredOrPremium}
-          title={!isRegisteredOrPremium ? "Registered and premium users can export mixdown. Please sign up to access this feature." : "Export project as WAV file"}
+          disabled={isMixingDown || isRestricted}
+          title={isRestricted ? getRestrictionMessage() : "Export project as WAV file"}
         >
           Mixdown
         </button>
@@ -314,20 +343,6 @@ export function ProjectMenu({ canLoadProject = true }: ProjectMenuProps) {
           <span className="text-warning ml-1 sm:ml-2 text-sm sm:text-base" title="Unsaved changes">●</span>
         )}
       </div>
-
-      {/* Error Display */}
-      {error && (
-        <div className="alert alert-error m-1 sm:m-2 text-xs sm:text-sm">
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* Mixdown Error Display */}
-      {mixdownError && (
-        <div className="alert alert-error m-1 sm:m-2 text-xs sm:text-sm">
-          <span>Mixdown error: {mixdownError}</span>
-        </div>
-      )}
 
       {/* Recover Dialog */}
       {showRecoverDialog && (

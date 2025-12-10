@@ -47,7 +47,8 @@ const PianoRollComponent = () => {
   const setPianoRollRecording = usePianoRollStore((state) => state.setPianoRollRecording);
   const rootNote = useArrangeRoomScaleStore((state) => state.rootNote);
   const scale = useArrangeRoomScaleStore((state) => state.scale);
-  
+  const pixelsPerBeat = 64;
+
   // Use collaboration handlers if available
   const {
     handleNoteAdd,
@@ -85,7 +86,7 @@ const PianoRollComponent = () => {
   const addSustainEvent = usePianoRollStore((state) => state.addSustainEvent);
   const updateSustainEvent = usePianoRollStore((state) => state.updateSustainEvent);
   const removeSustainEvent = usePianoRollStore((state) => state.removeSustainEvent);
-  
+
   const regions = useRegionStore((state) => state.regions);
   const tracks = useTrackStore((state) => state.tracks);
   const timeSignature = useProjectStore((state) => state.timeSignature);
@@ -95,7 +96,7 @@ const PianoRollComponent = () => {
   const regionPreviewStarts = usePianoRollStore((state) => state.regionPreviewStarts);
 
   const region = regions.find((item) => item.id === activeRegionId);
-  
+
   // Piano roll only works with MIDI regions
   const midiRegion = region?.type === 'midi' ? region : null;
   const track = useMemo(() => {
@@ -155,16 +156,16 @@ const PianoRollComponent = () => {
   // Refs for stable wheel handler
   const zoomRef = useRef(zoom);
   const scrollLeftRef = useRef(scrollLeft);
-  
+
   // Keep refs in sync with state
   useEffect(() => {
     zoomRef.current = zoom;
   }, [zoom]);
-  
+
   useEffect(() => {
     scrollLeftRef.current = scrollLeft;
   }, [scrollLeft]);
-  
+
   // Track viewport width for performance culling (horizontal only)
   useEffect(() => {
     const updateViewportSize = () => {
@@ -172,11 +173,31 @@ const PianoRollComponent = () => {
         setViewportWidth(noteScrollRef.current.clientWidth);
       }
     };
-    
+
     updateViewportSize();
     window.addEventListener('resize', updateViewportSize);
     return () => window.removeEventListener('resize', updateViewportSize);
   }, []);
+
+  // Jump to region start when active region changes
+  // Jump to region start when active region changes
+  const prevRegionIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeRegionId && activeRegionId !== prevRegionIdRef.current) {
+      if (midiRegion && noteScrollRef.current) {
+        const currentZoom = zoomRef.current;
+        // Scroll to the start of the region
+        const startPixel = midiRegion.start * pixelsPerBeat * currentZoom;
+
+        noteScrollRef.current.scrollLeft = startPixel;
+        if (laneScrollRef.current) {
+          laneScrollRef.current.scrollLeft = startPixel;
+        }
+        setScrollLeft(startPixel);
+      }
+    }
+    prevRegionIdRef.current = activeRegionId;
+  }, [activeRegionId, midiRegion, pixelsPerBeat]);
 
   const handleRealtimeNoteUpdates = useCallback(
     (updates: Array<{ noteId: string; updates: Partial<MidiNote> }>) => {
@@ -322,7 +343,7 @@ const PianoRollComponent = () => {
       // Get current note values before update
       const region = useRegionStore.getState().regions.find((r) => r.id === midiRegion.id);
       if (!region || region.type !== 'midi') return;
-      
+
       const notesToUpdate = region.notes.filter((note) => noteIds.includes(note.id));
       // Update locally first
       moveNotes(noteIds, deltaBeats, deltaPitch);
@@ -344,7 +365,7 @@ const PianoRollComponent = () => {
       // Get current note values before update
       const region = useRegionStore.getState().regions.find((r) => r.id === midiRegion.id);
       if (!region || region.type !== 'midi') return;
-      
+
       const notesToUpdate = region.notes.filter((note) => noteIds.includes(note.id));
       // Update locally first
       resizeNotes(noteIds, deltaBeats);
@@ -428,7 +449,7 @@ const PianoRollComponent = () => {
     }
   }, [midiRegion, selectedNoteIds]);
 
-  const pixelsPerBeat = 64;
+
 
   // Dynamic zoom limits based on content length
   // Max zoom is fixed, min zoom allows fitting entire content in viewport
@@ -458,16 +479,16 @@ const PianoRollComponent = () => {
     }
 
     // Use cursor position if provided, otherwise use playhead
-    const focusPoint = cursorX !== undefined 
+    const focusPoint = cursorX !== undefined
       ? (currentScrollLeft + cursorX) / (pixelsPerBeat * currentZoom)
       : playhead;
-    
+
     // Calculate focus point position in pixels before zoom change
     const oldFocusPixels = focusPoint * pixelsPerBeat * currentZoom;
-    
+
     // Calculate how far focus point is from left edge of viewport
     const focusOffsetInViewport = cursorX !== undefined ? cursorX : oldFocusPixels - currentScrollLeft;
-    
+
     // Calculate focus point position in pixels after zoom change
     const newFocusPixels = focusPoint * pixelsPerBeat * clampedZoom;
 
@@ -498,42 +519,42 @@ const PianoRollComponent = () => {
   useEffect(() => {
     const noteCanvas = noteScrollRef.current;
     if (!noteCanvas) return;
-    
+
     const handleWheel = (e: WheelEvent) => {
       // Only handle zoom when Ctrl/Meta is pressed
       if (!(e.ctrlKey || e.metaKey)) {
         return; // Let native scroll happen
       }
-      
+
       e.preventDefault();
-      
+
       // Cancel any pending zoom update
       if (zoomRafRef.current !== null) {
         cancelAnimationFrame(zoomRafRef.current);
       }
-      
+
       // Batch zoom updates using requestAnimationFrame
       zoomRafRef.current = requestAnimationFrame(() => {
         const scrollContainer = noteScrollRef.current;
         if (!scrollContainer) return;
-        
+
         const delta = -e.deltaY;
         const zoomSpeed = 0.001;
         const currentZoom = zoomRef.current;
         const newZoom = currentZoom + delta * zoomSpeed;
         // Clamp directly here to avoid stale callback issues
         const clampedZoom = Math.max(minZoom, Math.min(maxZoom, newZoom));
-        
+
         // Get current playhead position for centering
         const currentPlayhead = playhead;
         const viewportWidthPx = scrollContainer.clientWidth;
-        
+
         // Calculate new scroll position to keep playhead centered in viewport
         const playheadPixels = currentPlayhead * pixelsPerBeat * clampedZoom;
         const newScrollLeft = playheadPixels - viewportWidthPx / 2;
-        
+
         setZoom(clampedZoom);
-        
+
         requestAnimationFrame(() => {
           if (noteScrollRef.current) {
             noteScrollRef.current.scrollLeft = Math.max(0, newScrollLeft);
@@ -560,16 +581,16 @@ const PianoRollComponent = () => {
   const handleTouchZoomChange = useCallback((newZoom: number, centerX: number) => {
     const clampedZoom = clampZoom(newZoom);
     const currentScrollLeft = noteScrollRef.current?.scrollLeft ?? 0;
-    
+
     // Calculate focus point in beats
     const focusPoint = (currentScrollLeft + centerX) / (pixelsPerBeat * zoom);
-    
+
     // Calculate new scroll position to keep focus point at same position
     const newFocusPixels = focusPoint * pixelsPerBeat * clampedZoom;
     const newScrollLeft = newFocusPixels - centerX;
-    
+
     setZoom(clampedZoom);
-    
+
     requestAnimationFrame(() => {
       if (noteScrollRef.current) {
         noteScrollRef.current.scrollLeft = Math.max(0, newScrollLeft);
@@ -598,7 +619,7 @@ const PianoRollComponent = () => {
     maxZoom,
     enabled: true,
   });
-  
+
   // Convert notes to absolute positions for display
   const absoluteNotes = useMemo(() => {
     if (!midiRegion) {
@@ -612,7 +633,7 @@ const PianoRollComponent = () => {
       // but keep original duration/pitch
     }));
   }, [midiRegion, regionPreviewStarts]);
-  
+
   // Convert sustain events to absolute positions for display
   const absoluteSustainEvents = useMemo(() => {
     if (!midiRegion) {
@@ -630,7 +651,7 @@ const PianoRollComponent = () => {
     if (!noteScrollRef.current || !keyScrollRef.current || !laneScrollRef.current) {
       return;
     }
-    
+
     // Sync other scroll containers immediately for visual consistency
     const { scrollLeft: currentScrollLeft, scrollTop: currentScrollTop } = noteScrollRef.current;
     if (keyScrollRef.current.scrollTop !== currentScrollTop) {
@@ -639,7 +660,7 @@ const PianoRollComponent = () => {
     if (laneScrollRef.current.scrollLeft !== currentScrollLeft) {
       laneScrollRef.current.scrollLeft = currentScrollLeft;
     }
-    
+
     // Update scrollLeft immediately for ruler alignment
     // The ruler uses this state for positioning since it's in overflow:hidden
     setScrollLeft(currentScrollLeft);
@@ -654,7 +675,7 @@ const PianoRollComponent = () => {
       noteScrollRef.current.scrollTop = currentScrollTop;
     }
   }, []);
-  
+
   const handleLaneScroll = useCallback(() => {
     if (!noteScrollRef.current || !laneScrollRef.current) {
       return;
@@ -673,11 +694,11 @@ const PianoRollComponent = () => {
       return;
     }
     prevActiveRegionIdRef.current = activeRegionId;
-    
+
     if (!activeRegionId || !midiRegion) {
       return;
     }
-    
+
     const scrollToPosition = () => {
       if (!noteScrollRef.current || !keyScrollRef.current) {
         return;
@@ -686,16 +707,16 @@ const PianoRollComponent = () => {
       // Horizontal scroll: scroll to first note or region start
       if (midiRegion.notes.length > 0) {
         // Find the first note (earliest start time)
-        const firstNote = midiRegion.notes.reduce((earliest, note) => 
+        const firstNote = midiRegion.notes.reduce((earliest, note) =>
           note.start < earliest.start ? note : earliest
         );
-        
+
         // Scroll to show the first note with some padding
         const noteAbsoluteStart = midiRegion.start + firstNote.start;
         const padding = 2; // beats of padding
         const scrollX = Math.max(0, (noteAbsoluteStart - padding) * pixelsPerBeat * zoom);
         noteScrollRef.current.scrollLeft = scrollX;
-        
+
         // Vertical scroll: scroll to show the first note's pitch
         const midiNumber = firstNote.pitch;
         const noteIndex = visibleMidiNumbers.indexOf(midiNumber);
@@ -711,7 +732,7 @@ const PianoRollComponent = () => {
         // Empty region: scroll to C5 (MIDI 72)
         const c5MidiNumber = 72;
         const noteIndex = visibleMidiNumbers.indexOf(c5MidiNumber);
-        
+
         if (noteIndex !== -1) {
           // Center C5 vertically
           const c5Y = noteIndex * NOTE_HEIGHT;
@@ -720,7 +741,7 @@ const PianoRollComponent = () => {
           noteScrollRef.current.scrollTop = scrollY;
           keyScrollRef.current.scrollTop = scrollY;
         }
-        
+
         // Scroll horizontally to region start
         const scrollX = Math.max(0, midiRegion.start * pixelsPerBeat * zoom);
         noteScrollRef.current.scrollLeft = scrollX;
@@ -912,8 +933,8 @@ const PianoRollComponent = () => {
             touchContainerRef(node);
           }}
           onScroll={handleNoteScroll}
-          className="relative flex-1 overflow-auto bg-base-200/40 touch-pan-y"
-          style={{ 
+          className="relative flex-1 overflow-auto bg-base-200/40 touch-none"
+          style={{
             willChange: 'scroll-position',
             contain: 'strict',
             overscrollBehavior: 'contain',
@@ -960,18 +981,16 @@ const PianoRollComponent = () => {
         <div className="flex flex-col border-r border-base-300 bg-base-100" style={{ width: KEYBOARD_WIDTH }}>
           <button
             type="button"
-            className={`flex-1 text-xs font-medium transition-colors ${
-              laneMode === 'velocity' ? 'bg-primary text-white' : 'bg-base-200 hover:bg-base-300'
-            }`}
+            className={`flex-1 text-xs font-medium transition-colors ${laneMode === 'velocity' ? 'bg-primary text-white' : 'bg-base-200 hover:bg-base-300'
+              }`}
             onClick={() => setLaneMode('velocity')}
           >
             Velocity
           </button>
           <button
             type="button"
-            className={`flex-1 text-xs font-medium transition-colors ${
-              laneMode === 'sustain' ? 'bg-primary text-white' : 'bg-base-200 hover:bg-base-300'
-            }`}
+            className={`flex-1 text-xs font-medium transition-colors ${laneMode === 'sustain' ? 'bg-primary text-white' : 'bg-base-200 hover:bg-base-300'
+              }`}
             onClick={() => setLaneMode('sustain')}
           >
             Sustain

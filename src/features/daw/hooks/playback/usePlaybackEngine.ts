@@ -37,6 +37,7 @@ export const usePlaybackEngine = () => {
   const bpm = useProjectStore((state) => state.bpm);
   const timeSignature = useProjectStore((state) => state.timeSignature);
   const loop = useProjectStore((state) => state.loop);
+  const isMixingDown = useProjectStore((state) => state.isMixingDown);
   const setPlayhead = useProjectStore((state) => state.setPlayhead);
   const tracks = useTrackStore((state) => state.tracks);
   const regions = useRegionStore((state) => state.regions);
@@ -130,8 +131,9 @@ export const usePlaybackEngine = () => {
 
     const currentPlayhead = useProjectStore.getState().playhead;
 
+    // During mixdown, ignore looping - use current beat or playhead
     const anchorBeat = isTransportStarted
-      ? loop.enabled
+      ? (loop.enabled && !isMixingDown)
         ? loop.start
         : currentBeat
       : currentPlayhead;
@@ -209,7 +211,7 @@ export const usePlaybackEngine = () => {
         }
       })
     );
-  }, [bpm, clearParts, ensureToneReady, loop.enabled, loop.start, regions, timeSignature]);
+  }, [bpm, clearParts, ensureToneReady, isMixingDown, loop.enabled, loop.start, regions, timeSignature]);
 
   useEffect(() => {
     if (transportState === 'playing' || transportState === 'recording') {
@@ -278,7 +280,8 @@ export const usePlaybackEngine = () => {
 
   useEffect(() => {
     const handleLoop = () => {
-      if (!loop.enabled) {
+      // Ignore looping during mixdown
+      if (!loop.enabled || isMixingDown) {
         return;
       }
       // When transport loops back to the start, reschedule all parts
@@ -295,7 +298,7 @@ export const usePlaybackEngine = () => {
     return () => {
       Tone.Transport.off('loop', handleLoop);
     };
-  }, [loop.enabled, scheduleParts]);
+  }, [loop.enabled, isMixingDown, scheduleParts]);
 
   // Update audio lookahead when performance settings change
   useEffect(() => {

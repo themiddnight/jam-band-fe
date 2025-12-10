@@ -6,17 +6,36 @@ let recordingMediaStream: MediaStream | null = null;
 let recordingStartTime: number = 0;
 let recordingStartBeat: number = 0;
 
-export const requestMicrophoneAccess = async (): Promise<MediaStream> => {
+export const requestMicrophoneAccess = async (deviceId?: string): Promise<MediaStream> => {
   try {
-    if (!recordingMediaStream) {
-      recordingMediaStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-        },
-      });
+    // If we have a stream, check if it matches the requested device (if any)
+    const currentTrack = recordingMediaStream?.getAudioTracks()[0];
+    const currentDeviceId = currentTrack?.getSettings().deviceId;
+
+    // If stream exists and (no specific device requested OR matches requested device), return it
+    if (recordingMediaStream && recordingMediaStream.active && (!deviceId || currentDeviceId === deviceId)) {
+      return recordingMediaStream;
     }
+
+    // Stop existing stream if any
+    if (recordingMediaStream) {
+      recordingMediaStream.getTracks().forEach(t => t.stop());
+    }
+
+    const constraints: MediaTrackConstraints = {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+    };
+
+    if (deviceId) {
+      constraints.deviceId = { exact: deviceId };
+    }
+
+    recordingMediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: constraints,
+    });
+
     return recordingMediaStream;
   } catch (error) {
     console.error('Failed to access microphone:', error);
@@ -24,9 +43,16 @@ export const requestMicrophoneAccess = async (): Promise<MediaStream> => {
   }
 };
 
-export const startRecording = async (startBeat: number): Promise<void> => {
+export const startRecording = async (startBeat: number, deviceId?: string): Promise<void> => {
   if (!recordingMediaStream) {
-    await requestMicrophoneAccess();
+    await requestMicrophoneAccess(deviceId);
+  } else if (deviceId) {
+    // Check if current stream matches deviceId
+    const currentTrack = recordingMediaStream.getAudioTracks()[0];
+    const currentDeviceId = currentTrack?.getSettings().deviceId;
+    if (currentDeviceId !== deviceId) {
+      await requestMicrophoneAccess(deviceId);
+    }
   }
 
   if (!recordingMediaStream) {

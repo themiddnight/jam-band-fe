@@ -31,6 +31,8 @@ import { ProjectMenu } from "@/features/daw/components/ProjectMenu";
 import { PerformanceSettingsModal } from "@/features/daw/components/PerformanceSettingsModal";
 import { useRoom } from "@/features/rooms";
 import { useWebRTCVoice, useCombinedLatency } from "@/features/audio";
+import { ToastNotification } from "@/shared/components/ToastNotification";
+import { useToastNotification } from "@/shared/hooks/useToastNotification";
 import { DAWCollaborationProvider } from "@/features/daw/contexts/DAWCollaborationContext";
 import { RoomSocketProvider } from "@/features/rooms/contexts/RoomSocketProvider";
 import { KickUserModal, RoomSettingsModal } from "@/features/rooms";
@@ -294,14 +296,17 @@ export default function ArrangeRoom() {
       enabled: Boolean(userId),
     });
 
+  const { showError } = useToastNotification();
+
   useEffect(() => {
     if (effectsError) {
+      showError("Failed to initialize audio effects. Some effects may not work properly.");
       console.error(
         "🎛️ Effects integration error (Arrange Room):",
         effectsError
       );
     }
-  }, [effectsError, isEffectsInitialized]);
+  }, [effectsError, isEffectsInitialized, showError]);
 
   // Update MIDI status in store
   useEffect(() => {
@@ -376,7 +381,7 @@ export default function ArrangeRoom() {
 
         // Load effect chains
         if (project.effectChains) {
-          useEffectsStore.setState({ chains: project.effectChains });
+          useEffectsStore.getState().setChainsFromState(project.effectChains);
         }
 
         // Clear loading flag
@@ -388,6 +393,10 @@ export default function ArrangeRoom() {
 
         console.log('✅ Project state loaded successfully');
       } catch (error) {
+        const errorMessage = error instanceof Error
+          ? error.message
+          : 'Failed to load project state';
+        showError(`Failed to load project: ${errorMessage}`);
         console.error('Failed to load project state:', error);
         if (isMounted) {
           useProjectStore.getState().setIsLoadingProject(false);
@@ -402,7 +411,7 @@ export default function ArrangeRoom() {
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [roomId, isConnected]);
+  }, [roomId, isConnected, showError]);
 
   const handleKickConfirm = useCallback(() => {
     if (userToKick) {
@@ -423,6 +432,7 @@ export default function ArrangeRoom() {
         await navigator.clipboard.writeText(inviteUrl);
         didCopy = true;
       } catch (error) {
+        showError("Failed to copy invite URL. Please try again.");
         console.error("Failed to copy invite URL:", error);
       }
 
@@ -432,7 +442,7 @@ export default function ArrangeRoom() {
         trackInviteSent(roomAnalyticsContext, role, "copy");
       }
     },
-    [roomId, generateInviteUrl, roomAnalyticsContext]
+    [roomId, generateInviteUrl, roomAnalyticsContext, showError]
   );
 
   // Room settings handlers
@@ -456,13 +466,16 @@ export default function ArrangeRoom() {
         await handleUpdateRoomSettings(settings);
         // Modal will be closed by the component after successful save
       } catch (error) {
+        const errorMessage = error instanceof Error
+          ? error.message
+          : "Failed to update room settings";
+        showError(`Failed to update room settings: ${errorMessage}`);
         console.error("Failed to update room settings:", error);
-        // You could add a toast notification here
       } finally {
         setIsUpdatingRoomSettings(false);
       }
     },
-    [handleUpdateRoomSettings]
+    [handleUpdateRoomSettings, showError]
   );
 
   useArrangeRoomScaleStore();
@@ -528,356 +541,357 @@ export default function ArrangeRoom() {
         enabled={isCollaborationEnabled}
         value={collaborationValue}
       >
-      <TrackAudioParamsBridge />
-      <KeyboardShortcutsBridge />
-      <RecordingEngineBridge onHandlerReady={setRecordingHandlerBase} />
-      
-      {/* Loading Overlay */}
-      {isLoadingProject && (
-        <div className="fixed inset-0 bg-base-100/80 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="card bg-base-200 shadow-xl p-8">
-            <div className="card-body items-center text-center">
-              <span className="loading loading-spinner loading-lg text-primary"></span>
-              <h3 className="card-title mt-4">Loading Project</h3>
-              <p className="text-base-content/70">
-                Please wait while we load the project...
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+        <TrackAudioParamsBridge />
+        <KeyboardShortcutsBridge />
+        <RecordingEngineBridge onHandlerReady={setRecordingHandlerBase} />
 
-      {/* Saving Overlay */}
-      {isSavingProject && (
-        <div className="fixed inset-0 bg-base-100/80 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="card bg-base-200 shadow-xl p-8">
-            <div className="card-body items-center text-center">
-              <span className="loading loading-spinner loading-lg text-primary"></span>
-              <h3 className="card-title mt-4">Saving Project</h3>
-              <p className="text-base-content/70">
-                Please wait while we save the project...
-              </p>
+        {/* Loading Overlay */}
+        {isLoadingProject && (
+          <div className="fixed inset-0 bg-base-100/80 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="card bg-base-200 shadow-xl p-8">
+              <div className="card-body items-center text-center">
+                <span className="loading loading-spinner loading-lg text-primary"></span>
+                <h3 className="card-title mt-4">Loading Project</h3>
+                <p className="text-base-content/70">
+                  Please wait while we load the project...
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-      
-      <div className="min-h-dvh bg-base-200 flex flex-col">
-        <div className="flex-1 pt-3 px-3">
-          <div className="">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-lg sm:text-xl font-bold text-secondary">
-                  Arrange
-                </h2>
-                <span className="badge badge-xs sm:badge-sm badge-primary">
-                  {currentRoom?.name}
-                </span>
-                <div className='divider divider-horizontal m-0!' />
-                <span className="text-xs">
-                  {currentUser?.username}
-                </span>
-                <span className="text-xs text-base-content/70">
-                  {currentUser?.role === "room_owner"
-                    ? "Room Owner"
-                    : "Band Member"}
-                </span>
-                {/* Room Settings Button - Only for room owner */}
-                {isRoomOwner && (
-                  <button
-                    onClick={handleOpenRoomSettings}
-                    className="btn btn-xs btn-ghost"
-                    title="Room Settings"
-                  >
-                    ⚙️
-                  </button>
-                )}
-                {/* Performance Settings Button */}
-                <button
-                  onClick={handleOpenPerformanceSettings}
-                  className="btn btn-xs btn-ghost"
-                  title={`Performance Settings (Quality: ${performanceSettings.waveformQuality}, Lookahead: ${performanceSettings.audioLookahead}s)`}
-                >
-                  ⚡
-                </button>
-                <button
-                  onClick={() => handleCopyInviteUrl("band_member")}
-                  className={`btn btn-xs btn-ghost ${copiedRole === "band_member" ? "btn-success" : ""}`}
-                  title="Copy invite link"
-                >
-                  {copiedRole === "band_member" ? "✓ Copied!" : "📋"}
-                </button>
-                {!isConnected && (
-                  <span className="badge badge-xs sm:badge-sm badge-warning">
-                    Connecting...
-                  </span>
-                )}
+        )}
+
+        {/* Saving Overlay */}
+        {isSavingProject && (
+          <div className="fixed inset-0 bg-base-100/80 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="card bg-base-200 shadow-xl p-8">
+              <div className="card-body items-center text-center">
+                <span className="loading loading-spinner loading-lg text-primary"></span>
+                <h3 className="card-title mt-4">Saving Project</h3>
+                <p className="text-base-content/70">
+                  Please wait while we save the project...
+                </p>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <ProjectMenu canLoadProject={isRoomOwner} />
-                {/* Pending notification button for room owner */}
-                {isRoomOwner && (
-                  <div className="relative">
+            </div>
+          </div>
+        )}
+
+        <ToastNotification />
+        <div className="min-h-dvh bg-base-200 flex flex-col">
+          <div className="flex-1 pt-3 px-3">
+            <div className="">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-lg sm:text-xl font-bold text-secondary">
+                    Arrange
+                  </h2>
+                  <span className="badge badge-xs sm:badge-sm badge-primary">
+                    {currentRoom?.name}
+                  </span>
+                  <div className='divider divider-horizontal m-0!' />
+                  <span className="text-xs">
+                    {currentUser?.username}
+                  </span>
+                  <span className="text-xs text-base-content/70">
+                    {currentUser?.role === "room_owner"
+                      ? "Room Owner"
+                      : "Band Member"}
+                  </span>
+                  {/* Room Settings Button - Only for room owner */}
+                  {isRoomOwner && (
                     <button
-                      ref={pendingBtnRef}
-                      aria-label="Pending member requests"
-                      className="btn btn-ghost btn-xs relative"
-                      onClick={() => setIsPendingPopupOpen((v) => !v)}
-                      title={
-                        pendingCount > 0
-                          ? `${pendingCount} pending requests`
-                          : "No pending requests"
-                      }
+                      onClick={handleOpenRoomSettings}
+                      className="btn btn-xs btn-ghost"
+                      title="Room Settings"
                     >
-                      🔔
-                      {pendingCount > 0 && (
-                        <span className="badge badge-error text-white badge-xs absolute -top-1 -right-1">
-                          {pendingCount}
-                        </span>
-                      )}
+                      ⚙️
                     </button>
-                    <AnchoredPopup
-                      open={isPendingPopupOpen}
-                      onClose={() => setIsPendingPopupOpen(false)}
-                      anchorRef={pendingBtnRef}
-                      placement="bottom"
-                      className="w-72 sm:w-80"
-                    >
-                      <div className="p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <h4 className="font-semibold text-sm">
-                            Pending Members
-                          </h4>
-                          {pendingCount > 0 && (
-                            <span className="badge badge-ghost badge-sm">
-                              {pendingCount}
-                            </span>
+                  )}
+                  {/* Performance Settings Button */}
+                  <button
+                    onClick={handleOpenPerformanceSettings}
+                    className="btn btn-xs btn-ghost"
+                    title={`Performance Settings (Quality: ${performanceSettings.waveformQuality}, Lookahead: ${performanceSettings.audioLookahead}s)`}
+                  >
+                    ⚡
+                  </button>
+                  <button
+                    onClick={() => handleCopyInviteUrl("band_member")}
+                    className={`btn btn-xs btn-ghost ${copiedRole === "band_member" ? "btn-success" : ""}`}
+                    title="Copy invite link"
+                  >
+                    {copiedRole === "band_member" ? "✓ Copied!" : "📋"}
+                  </button>
+                  {!isConnected && (
+                    <span className="badge badge-xs sm:badge-sm badge-warning">
+                      Connecting...
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <ProjectMenu canLoadProject={isRoomOwner} />
+                  {/* Pending notification button for room owner */}
+                  {isRoomOwner && (
+                    <div className="relative">
+                      <button
+                        ref={pendingBtnRef}
+                        aria-label="Pending member requests"
+                        className="btn btn-ghost btn-xs relative"
+                        onClick={() => setIsPendingPopupOpen((v) => !v)}
+                        title={
+                          pendingCount > 0
+                            ? `${pendingCount} pending requests`
+                            : "No pending requests"
+                        }
+                      >
+                        🔔
+                        {pendingCount > 0 && (
+                          <span className="badge badge-error text-white badge-xs absolute -top-1 -right-1">
+                            {pendingCount}
+                          </span>
+                        )}
+                      </button>
+                      <AnchoredPopup
+                        open={isPendingPopupOpen}
+                        onClose={() => setIsPendingPopupOpen(false)}
+                        anchorRef={pendingBtnRef}
+                        placement="bottom"
+                        className="w-72 sm:w-80"
+                      >
+                        <div className="p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-semibold text-sm">
+                              Pending Members
+                            </h4>
+                            {pendingCount > 0 && (
+                              <span className="badge badge-ghost badge-sm">
+                                {pendingCount}
+                              </span>
+                            )}
+                          </div>
+                          {pendingCount === 0 ? (
+                            <div className="text-sm text-base-content/70">
+                              No pending requests
+                            </div>
+                          ) : (
+                            <ul className="menu bg-base-100 w-full p-0">
+                              {currentRoom!.pendingMembers.map((user) => (
+                                <div
+                                  key={user.id}
+                                  className="flex items-center justify-between gap-2 px-0"
+                                >
+                                  <div className="flex items-center gap-2 px-2 py-1">
+                                    <span className="font-medium text-sm">
+                                      {user.username}
+                                    </span>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <button
+                                      className="btn btn-xs btn-success"
+                                      onClick={() => handleApproveMember(user.id)}
+                                    >
+                                      ✓
+                                    </button>
+                                    <button
+                                      className="btn btn-xs btn-error"
+                                      onClick={() => handleRejectMember(user.id)}
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </ul>
                           )}
                         </div>
-                        {pendingCount === 0 ? (
-                          <div className="text-sm text-base-content/70">
-                            No pending requests
-                          </div>
-                        ) : (
-                          <ul className="menu bg-base-100 w-full p-0">
-                            {currentRoom!.pendingMembers.map((user) => (
-                              <div
-                                key={user.id}
-                                className="flex items-center justify-between gap-2 px-0"
-                              >
-                                <div className="flex items-center gap-2 px-2 py-1">
-                                  <span className="font-medium text-sm">
-                                    {user.username}
-                                  </span>
-                                </div>
-                                <div className="flex gap-2">
-                                  <button
-                                    className="btn btn-xs btn-success"
-                                    onClick={() => handleApproveMember(user.id)}
-                                  >
-                                    ✓
-                                  </button>
-                                  <button
-                                    className="btn btn-xs btn-error"
-                                    onClick={() => handleRejectMember(user.id)}
-                                  >
-                                    ✕
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    </AnchoredPopup>
-                  </div>
-                )}
-                <button
-                  onClick={handleLeaveRoomClick}
-                  className="btn btn-outline btn-xs sm:btn-xs"
-                >
-                  <span className="hidden sm:inline">Leave Room</span>
-                  <span className="sm:hidden">Leave</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Main Content */}
-            <div className="flex flex-col">
-              <TransportToolbar />
-              <div className="flex flex-col xl:flex-row xl:h-[calc(100vh-10rem)]">
-                {/* Main content area */}
-                <main className="flex flex-1 flex-col gap-2 p-1 overflow-y-auto min-w-0">
-                  {/* Resizable Multitrack Section */}
-                  <div className="relative">
-                    <div
-                      style={{ height: `${multitrackHeight}px` }}
-                      className="overflow-hidden"
-                    >
-                      <MultitrackView />
+                      </AnchoredPopup>
                     </div>
+                  )}
+                  <button
+                    onClick={handleLeaveRoomClick}
+                    className="btn btn-outline btn-xs sm:btn-xs"
+                  >
+                    <span className="hidden sm:inline">Leave Room</span>
+                    <span className="sm:hidden">Leave</span>
+                  </button>
+                </div>
+              </div>
 
-                    {/* Resize Handle */}
-                    <div
-                      ref={attachMultitrackHandleRef}
-                      onMouseDown={handleMultitrackMouseDown}
-                      onTouchStart={handleMultitrackMouseDown}
-                      className={`
+              {/* Main Content */}
+              <div className="flex flex-col">
+                <TransportToolbar />
+                <div className="flex flex-col xl:flex-row xl:h-[calc(100vh-10rem)]">
+                  {/* Main content area */}
+                  <main className="flex flex-1 flex-col gap-2 p-1 overflow-y-auto min-w-0">
+                    {/* Resizable Multitrack Section */}
+                    <div className="relative">
+                      <div
+                        style={{ height: `${multitrackHeight}px` }}
+                        className="overflow-hidden"
+                      >
+                        <MultitrackView />
+                      </div>
+
+                      {/* Resize Handle */}
+                      <div
+                        ref={attachMultitrackHandleRef}
+                        onMouseDown={handleMultitrackMouseDown}
+                        onTouchStart={handleMultitrackMouseDown}
+                        className={`
                         h-2 w-full cursor-ns-resize
                         flex items-center justify-center
                         hover:bg-primary/20 active:bg-primary/30
                         transition-colors
                         ${isMultitrackResizing ? "bg-primary/30" : "bg-base-300"}
                       `}
-                      style={{ touchAction: "none" }}
-                      title="Drag to resize"
-                    >
-                      <div className="w-12 h-1 bg-base-content/30 rounded-full" />
-                    </div>
-                  </div>
-
-                  {/* Resizable Region Editor Section */}
-                  <div className="relative">
-                    <div
-                      style={{ height: `${regionEditorHeight}px` }}
-                      className="overflow-hidden"
-                    >
-                      <RegionEditor />
+                        style={{ touchAction: "none" }}
+                        title="Drag to resize"
+                      >
+                        <div className="w-12 h-1 bg-base-content/30 rounded-full" />
+                      </div>
                     </div>
 
-                    {/* Resize Handle */}
-                    <div
-                      ref={attachRegionEditorHandleRef}
-                      onMouseDown={handleRegionEditorMouseDown}
-                      onTouchStart={handleRegionEditorMouseDown}
-                      className={`
+                    {/* Resizable Region Editor Section */}
+                    <div className="relative">
+                      <div
+                        style={{ height: `${regionEditorHeight}px` }}
+                        className="overflow-hidden"
+                      >
+                        <RegionEditor />
+                      </div>
+
+                      {/* Resize Handle */}
+                      <div
+                        ref={attachRegionEditorHandleRef}
+                        onMouseDown={handleRegionEditorMouseDown}
+                        onTouchStart={handleRegionEditorMouseDown}
+                        className={`
                         h-2 w-full cursor-ns-resize
                         flex items-center justify-center
                         hover:bg-primary/20 active:bg-primary/30
                         transition-colors
                         ${isRegionEditorResizing ? "bg-primary/30" : "bg-base-300"}
                       `}
-                      style={{ touchAction: "none" }}
-                      title="Drag to resize"
-                    >
-                      <div className="w-12 h-1 bg-base-content/30 rounded-full" />
+                        style={{ touchAction: "none" }}
+                        title="Drag to resize"
+                      >
+                        <div className="w-12 h-1 bg-base-content/30 rounded-full" />
+                      </div>
                     </div>
+
+                    <SynthControlsPanel />
+
+                    <VirtualInstrumentPanel
+                      onRecordMidiMessage={recordingHandler}
+                    />
+                  </main>
+
+                  {/* Sidebar: Right on desktop, bottom on mobile */}
+                  <div className="flex flex-col xl:flex-row gap-2">
+                    <Sidebar
+                      collaboratorsProps={useMemo(
+                        () => ({
+                          isVoiceEnabled,
+                          canTransmitVoice,
+                          onStreamReady: addLocalStream,
+                          onStreamRemoved: removeLocalStream,
+                          rtcLatency: currentLatency,
+                          rtcLatencyActive,
+                          browserAudioLatency,
+                          meshLatency,
+                          isConnecting: isVoiceConnecting,
+                          connectionError: !!voiceConnectionError,
+                          onConnectionRetry: () => window.location.reload(),
+                          userCount: currentRoom?.users?.length || 0,
+                          roomUsers: currentRoom?.users || [],
+                          voiceUsers,
+                          broadcastUsers: getBroadcastUsers(),
+                          voiceMuteStates,
+                          onMuteStateChange: handleVoiceMuteStateChange,
+                          onBroadcastChange: handleBroadcastToggle,
+                        }),
+                        [
+                          isVoiceEnabled,
+                          canTransmitVoice,
+                          addLocalStream,
+                          removeLocalStream,
+                          currentLatency,
+                          rtcLatencyActive,
+                          browserAudioLatency,
+                          meshLatency,
+                          isVoiceConnecting,
+                          voiceConnectionError,
+                          currentRoom?.users,
+                          voiceUsers,
+                          getBroadcastUsers,
+                          voiceMuteStates,
+                          handleVoiceMuteStateChange,
+                          handleBroadcastToggle,
+                        ]
+                      )}
+                    />
                   </div>
-
-                  <SynthControlsPanel />
-
-                  <VirtualInstrumentPanel
-                    onRecordMidiMessage={recordingHandler}
-                  />
-                </main>
-
-                {/* Sidebar: Right on desktop, bottom on mobile */}
-                <div className="flex flex-col xl:flex-row gap-2">
-                  <Sidebar
-                    collaboratorsProps={useMemo(
-                      () => ({
-                        isVoiceEnabled,
-                        canTransmitVoice,
-                        onStreamReady: addLocalStream,
-                        onStreamRemoved: removeLocalStream,
-                        rtcLatency: currentLatency,
-                        rtcLatencyActive,
-                        browserAudioLatency,
-                        meshLatency,
-                        isConnecting: isVoiceConnecting,
-                        connectionError: !!voiceConnectionError,
-                        onConnectionRetry: () => window.location.reload(),
-                        userCount: currentRoom?.users?.length || 0,
-                        roomUsers: currentRoom?.users || [],
-                        voiceUsers,
-                        broadcastUsers: getBroadcastUsers(),
-                        voiceMuteStates,
-                        onMuteStateChange: handleVoiceMuteStateChange,
-                        onBroadcastChange: handleBroadcastToggle,
-                      }),
-                      [
-                        isVoiceEnabled,
-                        canTransmitVoice,
-                        addLocalStream,
-                        removeLocalStream,
-                        currentLatency,
-                        rtcLatencyActive,
-                        browserAudioLatency,
-                        meshLatency,
-                        isVoiceConnecting,
-                        voiceConnectionError,
-                        currentRoom?.users,
-                        voiceUsers,
-                        getBroadcastUsers,
-                        voiceMuteStates,
-                        handleVoiceMuteStateChange,
-                        handleBroadcastToggle,
-                      ]
-                    )}
-                  />
                 </div>
               </div>
             </div>
           </div>
-        </div>
-        <Footer />
+          <Footer />
 
-        {/* Modals */}
-        {showLeaveConfirmModal && (
-          <div className="modal modal-open">
-            <div className="modal-box">
-              <h3 className="font-bold text-lg">Leave Room?</h3>
-              <p className="py-4">Are you sure you want to leave this room?</p>
-              <div className="modal-action">
-                <button
-                  onClick={() => setShowLeaveConfirmModal(false)}
-                  className="btn"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleLeaveRoomConfirm}
-                  className="btn btn-primary"
-                >
-                  Leave
-                </button>
+          {/* Modals */}
+          {showLeaveConfirmModal && (
+            <div className="modal modal-open">
+              <div className="modal-box">
+                <h3 className="font-bold text-lg">Leave Room?</h3>
+                <p className="py-4">Are you sure you want to leave this room?</p>
+                <div className="modal-action">
+                  <button
+                    onClick={() => setShowLeaveConfirmModal(false)}
+                    className="btn"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleLeaveRoomConfirm}
+                    className="btn btn-primary"
+                  >
+                    Leave
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {showKickModal && (
-          <KickUserModal
-            open={showKickModal}
-            onClose={() => {
-              setShowKickModal(false);
-              setUserToKick(null);
-            }}
-            targetUser={userToKick}
-            onConfirm={handleKickConfirm}
+          {showKickModal && (
+            <KickUserModal
+              open={showKickModal}
+              onClose={() => {
+                setShowKickModal(false);
+                setUserToKick(null);
+              }}
+              targetUser={userToKick}
+              onConfirm={handleKickConfirm}
+            />
+          )}
+
+          {/* Room Settings Modal */}
+          <RoomSettingsModal
+            open={showRoomSettingsModal}
+            onClose={handleCloseRoomSettings}
+            onSave={handleSaveRoomSettings}
+            room={currentRoom}
+            isLoading={isUpdatingRoomSettings}
           />
-        )}
 
-        {/* Room Settings Modal */}
-        <RoomSettingsModal
-          open={showRoomSettingsModal}
-          onClose={handleCloseRoomSettings}
-          onSave={handleSaveRoomSettings}
-          room={currentRoom}
-          isLoading={isUpdatingRoomSettings}
-        />
-
-        {/* Performance Settings Modal */}
-        <PerformanceSettingsModal
-          open={showPerformanceSettingsModal}
-          onClose={handleClosePerformanceSettings}
-          onSave={handleSavePerformanceSettings}
-          currentSettings={performanceSettings}
-        />
-      </div>
-    </DAWCollaborationProvider>
-  </RoomSocketProvider>
+          {/* Performance Settings Modal */}
+          <PerformanceSettingsModal
+            open={showPerformanceSettingsModal}
+            onClose={handleClosePerformanceSettings}
+            onSave={handleSavePerformanceSettings}
+            currentSettings={performanceSettings}
+          />
+        </div>
+      </DAWCollaborationProvider>
+    </RoomSocketProvider>
   );
 }
 

@@ -16,8 +16,11 @@ import type {
   HoldState
 } from "../components/multitrack/types";
 
+
+
 const HOLD_DURATION = 400; // ms
 const HOLD_MOVE_THRESHOLD = 10; // pixels
+const TAP_THRESHOLD = 10; // pixels
 
 interface UseTrackInteractionsProps {
   tracks: Track[];
@@ -28,7 +31,7 @@ interface UseTrackInteractionsProps {
   snapToGrid: boolean;
   stageOffsetX: number;
   trackYPositions: Record<string, { y: number; height: number }>;
-  
+
   onSelectTrack: (trackId: string) => void;
   onSelectRegion: (regionId: RegionId, additive?: boolean) => void;
   onToggleRegionSelection: (regionId: RegionId) => void;
@@ -86,7 +89,24 @@ export const useTrackInteractions = ({
   const [marqueeState, setMarqueeState] = useState<MarqueeState | null>(null);
   const [panState, setPanState] = useState<PanState | null>(null);
   const [holdState, setHoldState] = useState<HoldState | null>(null);
+
   const holdTimerRef = useRef<number | null>(null);
+
+  // Refs for touch interactions
+  const potentialSelectionRef = useRef<string | null>(null);
+  const potentialDeselectionRef = useRef<string | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  // Helper to get client coordinates
+  const getClientCoords = useCallback((evt: any) => {
+    const isTouch = evt.type.startsWith('touch');
+    if (isTouch && evt.touches && evt.touches.length > 0) {
+      return { x: evt.touches[0].clientX, y: evt.touches[0].clientY };
+    } else if (isTouch && evt.changedTouches && evt.changedTouches.length > 0) {
+      return { x: evt.changedTouches[0].clientX, y: evt.changedTouches[0].clientY };
+    }
+    return { x: evt.clientX, y: evt.clientY };
+  }, []);
 
   // Clean up hold timer
   useEffect(() => {
@@ -167,26 +187,64 @@ export const useTrackInteractions = ({
 
   const handleRegionPointerDown = useCallback(
     (region: Region, event: KonvaEventObject<PointerEvent>) => {
+      const isTouch = event.evt.type.startsWith('touch') || event.evt.pointerType === 'touch';
+
+      // Reset touch refs
+      potentialSelectionRef.current = null;
+      potentialDeselectionRef.current = null;
+      touchStartRef.current = null;
+
+      if (isTouch) {
+        const clientCoords = getClientCoords(event.evt);
+        touchStartRef.current = clientCoords;
+
+        const isSelected = selectedRegionIds.includes(region.id);
+
+        if (!isSelected) {
+          // Case: Touch on Unselected Region -> Prepare for Pan or potential Select
+          event.cancelBubble = true; // Still capture to manage logic ourselves
+          potentialSelectionRef.current = region.id;
+
+          // Initiate Pan
+          if (onPan) {
+            setPanState({
+              startX: clientCoords.x,
+              startY: clientCoords.y,
+            });
+          }
+          return;
+        } else {
+          // Case: Touch on Selected Region -> Prepare for Drag or potential Deselect
+          potentialDeselectionRef.current = region.id;
+          // Continue to drag initiation...
+        }
+      }
+
       event.cancelBubble = true;
 
-      if (event.evt.ctrlKey || event.evt.metaKey) {
+      // Handle Modifier Keys (Desktop/Mouse)
+      if (!isTouch && (event.evt.ctrlKey || event.evt.metaKey)) {
         const data = getPointerData(event);
-        if (data) {
+        if (data && onPan) {
+          const clientCoords = getClientCoords(event.evt);
           setPanState({
-            startX: data.pointer.x,
-            startY: data.pointer.y,
+            startX: clientCoords.x,
+            startY: clientCoords.y,
           });
         }
         return;
       }
 
-      if (event.evt.shiftKey) {
-        onToggleRegionSelection(region.id);
-      } else if (!selectedRegionIds.includes(region.id)) {
-        onSelectRegion(region.id);
+      // Handle Selection
+      if (!isTouch) {
+        if (event.evt.shiftKey) {
+          onToggleRegionSelection(region.id);
+        } else if (!selectedRegionIds.includes(region.id)) {
+          onSelectRegion(region.id);
+        }
       }
 
-      const regionIds = event.evt.shiftKey || selectedRegionIds.includes(region.id)
+      const regionIds = (event.evt.shiftKey || selectedRegionIds.includes(region.id))
         ? Array.from(new Set([...selectedRegionIds, region.id]))
         : [region.id];
 
@@ -196,7 +254,7 @@ export const useTrackInteractions = ({
       const snappedBeat = snapToGrid ? snapValueToGrid(data.beat, dynamicGridDivision) : data.beat;
       const initialPositions: Record<RegionId, number> = {};
       const initialTrackIds: Record<RegionId, string> = {};
-      
+
       regionIds.forEach((id) => {
         const regionData = regions.find((r) => r.id === id);
         if (regionData) {
@@ -211,7 +269,7 @@ export const useTrackInteractions = ({
       setDragState({
         regionIds,
         originBeat: snappedBeat,
-        originY: data.pointer.y,
+        originY: data.pointer.y, // Keep internal Y for track jumping
         delta: 0,
         targetTrackId: null,
         isDuplicate: event.evt.altKey,
@@ -237,6 +295,8 @@ export const useTrackInteractions = ({
       onRegionDragStart,
       activePianoRegionId,
       setRegionPreviewStart,
+      onPan,
+      getClientCoords
     ]
   );
 
@@ -273,7 +333,7 @@ export const useTrackInteractions = ({
 
       const regionIds = selectedRegionIds.includes(region.id) ? selectedRegionIds : [region.id];
       const baseIterations = region.loopEnabled ? region.loopIterations : 1;
-      
+
       setLoopState({
         regionIds,
         baseIterations,
@@ -329,25 +389,30 @@ export const useTrackInteractions = ({
       if (!pointer) return;
 
       const absoluteX = pointer.x + stageOffsetX;
+      const clientCoords = getClientCoords(event.evt);
 
       if (event.evt.ctrlKey || event.evt.metaKey) {
-        setPanState({
-          startX: pointer.x,
-          startY: pointer.y,
-        });
+        if (onPan) {
+          setPanState({
+            startX: clientCoords.x,
+            startY: clientCoords.y,
+          });
+        }
         return;
       }
 
       const isTouch = event.evt.pointerType === 'touch' || 'touches' in event.evt;
 
       if (isTouch) {
-        setPanState({
-          startX: pointer.x,
-          startY: pointer.y,
-        });
-        
+        if (onPan) {
+          setPanState({
+            startX: clientCoords.x,
+            startY: clientCoords.y,
+          });
+        }
+
         setHoldState({
-          x: pointer.x,
+          x: pointer.x, // Hold logic still uses stage coords for distance check inside Stage
           y: pointer.y,
           startTime: Date.now(),
         });
@@ -374,11 +439,21 @@ export const useTrackInteractions = ({
         });
       }
     },
-    [stageOffsetX]
+    [stageOffsetX, onPan, getClientCoords]
   );
 
   const handlePointerMove = useCallback(
     (event: KonvaEventObject<PointerEvent>) => {
+      const touches = event.evt && 'touches' in event.evt ? (event.evt as any).touches : null;
+      if (touches && touches.length > 1) {
+        // If multiple touches, cancel hold immediately
+        if (holdTimerRef.current !== null) {
+          clearTimeout(holdTimerRef.current);
+          holdTimerRef.current = null;
+        }
+        if (holdState) setHoldState(null);
+      }
+
       if (holdState) {
         const stage = event.target.getStage();
         if (stage) {
@@ -404,7 +479,12 @@ export const useTrackInteractions = ({
 
         const beat = snapToGrid ? snapValueToGrid(data.beat, dynamicGridDivision) : data.beat;
         let delta = beat - dragState.originBeat;
-        
+
+        // Update potential Deselection if dragged
+        if (delta !== 0 && potentialDeselectionRef.current) {
+          potentialDeselectionRef.current = null;
+        }
+
         const minPossible = dragState.regionIds.reduce((minValue, regionId) => {
           const start = dragState.initialPositions[regionId];
           return Math.min(minValue, start);
@@ -542,6 +622,17 @@ export const useTrackInteractions = ({
             const currentTrimStart = r.trimStart ?? 0;
             const actualDelta = newStart - r.start;
             (update.updates as Partial<AudioRegion>).trimStart = Math.max(0, currentTrimStart + actualDelta);
+          } else if (r.type === 'midi') {
+            const actualDelta = newStart - r.start;
+            (update.updates as any).notes = r.notes.map((note: any) => ({
+              ...note,
+              start: note.start - actualDelta,
+            }));
+            (update.updates as any).sustainEvents = r.sustainEvents.map((event: any) => ({
+              ...event,
+              start: event.start - actualDelta,
+              end: event.end - actualDelta,
+            }));
           }
 
           realtimeUpdates.push(update);
@@ -567,7 +658,7 @@ export const useTrackInteractions = ({
         const pointerX = pointer.x + stageOffsetX;
         const deltaPixels = pointerX - loopState.startX;
         const unitWidth = loopState.targetLength * beatWidth;
-        
+
         if (unitWidth === 0) return;
 
         const deltaIterations = Math.round(deltaPixels / unitWidth);
@@ -599,17 +690,22 @@ export const useTrackInteractions = ({
         } : prev);
 
       } else if (panState && onPan) {
-        const stage = event.target.getStage();
-        if (!stage) return;
-        const pointer = stage.getPointerPosition();
-        if (!pointer) return;
+        const clientCoords = getClientCoords(event.evt);
+        const deltaX = panState.startX - clientCoords.x;
+        const deltaY = panState.startY - clientCoords.y;
 
-        const deltaX = panState.startX - pointer.x;
-        const deltaY = panState.startY - pointer.y;
+        // Update potential selection if moved significantly
+        if (potentialSelectionRef.current) {
+          const moveDist = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+          if (moveDist > TAP_THRESHOLD) {
+            potentialSelectionRef.current = null;
+          }
+        }
+
         onPan(deltaX, deltaY);
         setPanState({
-          startX: pointer.x,
-          startY: pointer.y,
+          startX: clientCoords.x,
+          startY: clientCoords.y,
         });
       }
     },
@@ -618,7 +714,7 @@ export const useTrackInteractions = ({
       headResizeState, holdState, loopState, marqueeState, onPan,
       panState, regions, resizeState, snapToGrid, stageOffsetX,
       onRegionDragRealtime, onRegionRealtimeUpdates, activePianoRegionId,
-      setRegionPreviewStart
+      setRegionPreviewStart, getClientCoords
     ]
   );
 
@@ -650,7 +746,7 @@ export const useTrackInteractions = ({
           onMoveRegions(dragState.regionIds, dragState.delta);
         }
       }
-      
+
       setDragState(null);
       if (activePianoRegionId && dragState.regionIds.includes(activePianoRegionId)) {
         clearRegionPreview(activePianoRegionId);
@@ -746,6 +842,18 @@ export const useTrackInteractions = ({
       setMarqueeState(null);
     }
 
+    // Handle Tap on Unselected Region
+    if (potentialSelectionRef.current) {
+      onSelectRegion(potentialSelectionRef.current);
+      potentialSelectionRef.current = null;
+    }
+
+    // Handle Tap on Selected Region (Deselect)
+    if (potentialDeselectionRef.current) {
+      onToggleRegionSelection(potentialDeselectionRef.current);
+      potentialDeselectionRef.current = null;
+    }
+
     if (holdTimerRef.current !== null) {
       clearTimeout(holdTimerRef.current);
       holdTimerRef.current = null;
@@ -757,7 +865,7 @@ export const useTrackInteractions = ({
     onHeadResizeRegion, onMarqueeSelect, onMoveRegions, onMoveRegionsToTrack,
     onResizeRegion, onSetLoopIterations, onRegionDragEnd, onRegionRealtimeFlush,
     panState, regions, resizeState, trackYPositions, tracks, activePianoRegionId,
-    clearRegionPreview
+    clearRegionPreview, onSelectRegion, onToggleRegionSelection
   ]);
 
   return {
@@ -768,7 +876,7 @@ export const useTrackInteractions = ({
     marqueeState,
     panState,
     dragOffsets,
-    
+
     handleStageDoubleClick,
     handleBackgroundClick,
     handleRegionPointerDown,

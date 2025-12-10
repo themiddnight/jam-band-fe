@@ -5,8 +5,10 @@ import {
   useVoiceControls,
 } from "./hooks";
 import { useVoiceStateStore } from "./stores/voiceStateStore";
+import { useAudioDeviceStore } from '@/features/audio/stores/audioDeviceStore';
 import { RTCLatencyDisplay, AdaptiveAudioStatus } from "@/features/audio";
 import { AnchoredPopup, Modal } from "@/features/ui";
+import { AudioInputSelector } from "@/features/audio/components/AudioInputSelector";
 import React, { useState, useRef, useEffect, useCallback, memo } from "react";
 
 interface VoiceInputProps {
@@ -81,6 +83,10 @@ const VoiceInputComponent: React.FC<VoiceInputProps> = ({
   const setCleanMode = useVoiceStateStore((state) => state.setCleanMode);
   const setAutoGain = useVoiceStateStore((state) => state.setAutoGain);
 
+  // Global Audio Device State
+  const voiceInputDeviceId = useAudioDeviceStore((state) => state.voiceInputDeviceId);
+  const setVoiceInputDeviceId = useAudioDeviceStore((state) => state.setVoiceInputDeviceId);
+
   // Create a voiceState object for compatibility with existing code
   const voiceState: VoiceState = React.useMemo(() => ({
     isMuted,
@@ -115,6 +121,7 @@ const VoiceInputComponent: React.FC<VoiceInputProps> = ({
     gain: voiceState.gain,
     cleanMode: voiceState.cleanMode,
     autoGain: voiceState.autoGain,
+    deviceId: voiceInputDeviceId,
     onStreamReady,
     onStreamRemoved,
   });
@@ -533,6 +540,15 @@ const VoiceInputComponent: React.FC<VoiceInputProps> = ({
                 >
                   {voiceState.autoGain ? "🤖" : "👤"}
                 </button>
+              </div>
+
+              {/* Input Device Selector */}
+              <div className="mb-4">
+                <AudioInputSelector
+                  value={voiceInputDeviceId}
+                  onChange={setVoiceInputDeviceId}
+                  className="w-full"
+                />
               </div>
 
               {/* Professional Input Gain Control */}

@@ -25,6 +25,7 @@ import type { CSSProperties } from "react";
 import { AiGenerationPopup } from "../../ai/components/AiGenerationPopup";
 import type { AiNote } from "../../../shared/api/aiGeneration";
 import { Frequency } from "tone";
+import { getAiSettings } from "../../../shared/api/aiSettings";
 
 interface StepSequencerProps {
   currentCategory: string;
@@ -119,6 +120,20 @@ export const StepSequencer = memo(
     // Selection state for select mode
     const [selectMode, setSelectMode] = useState(false);
     const [selectedSteps, setSelectedSteps] = useState<Set<string>>(new Set());
+
+    // AI enabled state
+    const [isAiEnabled, setIsAiEnabled] = useState(false);
+
+    // Check if AI is enabled
+    useEffect(() => {
+      getAiSettings()
+        .then(({ settings }) => {
+          setIsAiEnabled(settings.enabled && settings.hasApiKey);
+        })
+        .catch(() => {
+          setIsAiEnabled(false);
+        });
+    }, []);
 
     // Handle updating selected steps (gate/velocity)
     const handleUpdateSelectedSteps = useCallback((updates: Partial<SequencerStep>) => {
@@ -329,7 +344,11 @@ export const StepSequencer = memo(
                 onGenerate={handleAiGenerate}
                 context={aiContext}
                 trigger={
-                  <button className="btn btn-xs btn-secondary btn-outline gap-2">
+                  <button 
+                    className="btn btn-xs btn-secondary btn-outline gap-2"
+                    disabled={!isAiEnabled}
+                    title={!isAiEnabled ? "Enable AI Features in Account Settings" : "AI Composer"}
+                  >
                     <span>✨</span> AI
                   </button>
                 }
