@@ -13,8 +13,8 @@ export default defineConfig(({ mode }) => ({
   // สามารถ override ด้วย: VITE_MODE=development npm run build
   mode: process.env.VITE_MODE || mode,
   plugins: [
-    react(), 
-    tailwindcss(), 
+    react(),
+    tailwindcss(),
     // ใช้ HTTPS เฉพาะ local development, Railway จัดการ HTTPS เอง
     ...(process.env.RAILWAY_ENVIRONMENT ? [] : [mkcert()]),
     VitePWA({
@@ -84,6 +84,6 @@ export default defineConfig(({ mode }) => ({
     port: parseInt(process.env.PORT || '3000'),
     host: '0.0.0.0',
     strictPort: true,
-    allowedHosts: ['.railway.app']
+    allowedHosts: ['.railway.app', '.themiddnight.dev', '.boniolabs.com']
   }
 }))
